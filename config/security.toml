@@ -1,0 +1,19 @@
+[permissions]
+require_approval = ["filesystem.write", "network.external", "process.spawn"]
+auto_approve = ["filesystem.read", "memory.read", "memory.write"]
+blocked = ["system.shutdown", "system.format"]
+
+[approval]
+timeout_seconds = 30
+default_action = "deny"
+
+[privacy]
+log_user_data = false
+store_transcripts = false
+analytics_enabled = false
+data_retention_days = 30
+
+[safety]
+max_file_size_mb = 50
+max_network_concurrent = 5
+blocked_domains = ["malware.com"]

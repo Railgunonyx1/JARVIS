@@ -1,0 +1,16 @@
+{
+  "name": "Window Manager",
+  "version": "1.0.0",
+  "description": "Manage window positions and states",
+  "capabilities": [
+    "window.manage",
+    "window.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.window_manager:window_manager"
+}

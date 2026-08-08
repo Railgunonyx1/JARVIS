@@ -1,0 +1,19 @@
+{
+  "name": "Web Browser",
+  "version": "1.0.0",
+  "description": "Web search and browser control",
+  "capabilities": [
+    "web.search",
+    "web.open",
+    "web.scrape"
+  ],
+  "permissions": [
+    "external.network.read"
+  ],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.browser_control:browser_control"
+}

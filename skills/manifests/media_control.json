@@ -1,0 +1,16 @@
+{
+  "name": "Media Control",
+  "version": "1.0.0",
+  "description": "Control media playback and volume",
+  "capabilities": [
+    "media.control",
+    "media.volume"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.media_control:media_control"
+}

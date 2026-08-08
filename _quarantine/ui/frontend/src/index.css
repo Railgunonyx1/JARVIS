@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-accent-cyan: #00d4ff;
+  --color-accent-blue: #0066ff;
+  --color-accent-purple: #7b2ff7;
+  --color-accent-orange: #ff6b35;
+  --color-text-primary: #c8d6e5;
+  --color-text-secondary: #8888aa;
+  --color-text-muted: #555577;
+  --color-success: #00ff88;
+  --color-warning: #ffaa00;
+  --color-error: #ff3355;
+  --font-mono: 'JetBrains Mono', 'Segoe UI', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #05080f;
+}
+
+body {
+  font-family: 'JetBrains Mono', 'Segoe UI', -apple-system, BlinkMacSystemFont, monospace;
+  background: #05080f;
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.08), transparent);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.3); border-radius: 2px; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes wave {
+  0% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+  100% { transform: scaleY(0.3); }
+}

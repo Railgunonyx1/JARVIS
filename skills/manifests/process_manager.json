@@ -1,0 +1,15 @@
+{
+  "name": "Process Manager",
+  "version": "1.0.0",
+  "description": "List and manage running processes",
+  "capabilities": [
+    "process.list",
+    "process.kill"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.process_manager:process_manager"
+}

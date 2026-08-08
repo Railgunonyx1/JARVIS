@@ -1,0 +1,72 @@
+[router]
+default_provider = "groq"
+fallback_chain = ["groq", "gemini", "openrouter", "opencode_zen", "ollama"]
+max_retries = 2
+timeout_seconds = 30
+
+[groq]
+model = "llama-3.1-8b-instant"
+max_tokens = 4096
+temperature = 0.7
+requests_per_minute = 30
+requests_per_day = 14400
+priority = 1
+
+[groq.fallback]
+model = "llama-3.3-70b-versatile"
+max_tokens = 4096
+temperature = 0.7
+
+[gemini]
+model = "gemini-2.5-flash"
+max_tokens = 8192
+temperature = 0.7
+requests_per_minute = 15
+requests_per_day = 1500
+priority = 2
+
+[gemini.fallback]
+model = "gemini-2.0-flash"
+max_tokens = 8192
+temperature = 0.7
+
+[openrouter]
+model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://openrouter.ai/api/v1"
+requests_per_minute = 20
+requests_per_day = 200
+priority = 3
+
+[openrouter.fallback]
+model = "nvidia/nemotron-3-super-120b-a12b:free"
+max_tokens = 4096
+temperature = 0.7
+
+[opencode_zen]
+model = "nemotron-3-ultra-free"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://opencode.ai/zen/v1"
+requests_per_minute = 60
+requests_per_day = 500
+priority = 4
+
+[opencode_zen.fallback]
+model = "deepseek-v4-flash-free"
+max_tokens = 4096
+temperature = 0.7
+
+[ollama]
+model = "qwen2.5:1.5b"
+max_tokens = 2048
+temperature = 0.7
+base_url = "http://127.0.0.1:11434"
+num_ctx = 4096
+priority = 4
+
+[ollama.fallback]
+model = "gemma3:1b"
+max_tokens = 2048
+temperature = 0.7

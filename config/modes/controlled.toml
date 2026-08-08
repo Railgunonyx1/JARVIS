@@ -1,0 +1,46 @@
+[mode]
+name = "controlled"
+
+[permissions]
+allowed = [
+    "app.launch",
+    "app.close",
+    "media.control",
+    "system.volume",
+    "clipboard.read",
+    "clipboard.write",
+    "browser.open",
+    "browser.search",
+    "window.manage",
+    "screen.capture",
+    "time.query",
+    "weather.query",
+    "calculator",
+    "notifications.send",
+]
+
+blocked = [
+    "shell.execute",
+    "filesystem.delete",
+    "filesystem.modify",
+    "filesystem.write",
+    "registry.read",
+    "registry.write",
+    "system.shutdown",
+    "system.restart",
+    "system.sleep",
+    "network.modify",
+    "process.kill",
+    "service.modify",
+    "task.schedule",
+    "startup.modify",
+    "package.install",
+    "package.remove",
+    "browser.download",
+    "terminal.execute",
+]
+
+confirmation_required = []
+
+[ui]
+description = "Daily driver mode — safe actions only, no confirmations needed"

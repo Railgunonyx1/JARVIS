@@ -1,0 +1,19 @@
+{
+  "name": "App Control",
+  "version": "1.0.0",
+  "description": "Launch and manage applications",
+  "capabilities": [
+    "app.launch",
+    "app.close",
+    "app.list"
+  ],
+  "permissions": [
+    "system.query"
+  ],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.open_app:open_app"
+}

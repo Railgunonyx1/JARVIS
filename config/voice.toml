@@ -1,0 +1,34 @@
+[stt]
+primary_provider = "groq"
+fallback_provider = "local"
+groq_model = "whisper-large-v3"
+local_model = "tiny"  # faster-whisper model size
+sample_rate = 16000
+chunk_duration_ms = 30
+
+[tts]
+primary_provider = "piper"
+fallback_provider = "edge"
+default_voice = "en_US-lessac-medium"
+sample_rate = 22050
+
+[piper]
+model_dir = "~/.jarvis/models/piper"
+default_speaker = "lessac"
+
+[edge]
+default_voice = "en-GB-RyanNeural"
+rate = "-5%"
+volume = "+0%"
+
+[wake_word]
+enabled = true
+model = "hey_jarvis"
+sensitivity = 0.5
+timeout_seconds = 10
+
+[vad]
+enabled = true
+energy_threshold = 300
+silence_duration_ms = 800
+min_speech_duration_ms = 200

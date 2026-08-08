@@ -1,0 +1,49 @@
+# JARVIS MK-X .gitignore
+
+# API keys and secrets
+config/api_keys.json
+config/.env
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Logs
+logs/
+*.log
+
+# Memory / databases
+memory/*.db
+memory/*.db-journal
+memory/sessions/
+core/patterns.json
+core/suggestions.json
+
+# Voice packs (large binary files)
+voice_packs/
+
+# Temporary
+scratch/
+*.tmp
+
+# IDE
+.kilocode/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Legacy (reference only, not active code)
+temp_extract/
+Jarvis-MK37-main/
+ultron-by-sagar-builds-main/
+.kilo/

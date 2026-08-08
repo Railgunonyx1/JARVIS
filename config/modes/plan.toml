@@ -1,0 +1,35 @@
+[mode]
+name = "plan"
+
+[permissions]
+allowed = [
+    "query.time",
+    "query.status",
+    "meta.greet",
+    "meta.thanks",
+    "meta.goodbye",
+    "action.search",
+    "filesystem.read",
+    "filesystem.list",
+    "memory.vector_query",
+    "process.list",
+    "network.info",
+    "disk.info",
+    "screen.capture",
+    "screen.analyze",
+    "web.search",
+    "system.query",
+]
+
+blocked = [
+    "filesystem.write",
+    "filesystem.delete",
+    "shell.execute",
+]
+
+confirmation_required = []
+
+sandbox = false
+
+[ui]
+description = "Read-only planning mode — inspect, analyze, and plan with zero writes"

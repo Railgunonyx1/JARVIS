@@ -1,0 +1,22 @@
+[jarvis]
+name = "MARK LXXXV"
+version = "10.0.0"
+codename = "MK-X"
+debug = false
+log_level = "INFO"
+
+[paths]
+data_dir = "~/.jarvis/data"
+memory_dir = "~/.jarvis/memory"
+logs_dir = "~/.jarvis/logs"
+plugins_dir = "~/.jarvis/plugins"
+
+[features]
+context_engine = true
+dialogue_state = true
+confidence_scoring = true
+speculative_execution = true
+personality_layer = true
+self_diagnostics = true
+privacy_controls = true
+developer_mode = false

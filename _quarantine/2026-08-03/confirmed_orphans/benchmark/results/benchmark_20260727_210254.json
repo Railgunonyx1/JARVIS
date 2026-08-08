@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-07-27T21:01:28.120447",
+  "python_version": "3.11.9",
+  "pid": 18356,
+  "rounds": 1,
+  "latency": {
+    "avg_ttft_ms": 699.7,
+    "p50_ttft_ms": 1.0,
+    "p95_ttft_ms": 4285.4,
+    "min_ttft_ms": 0.3,
+    "max_ttft_ms": 4285.4,
+    "avg_total_response_ms": 1851.3,
+    "avg_intent_classify_ms": 0.5,
+    "avg_tokens_per_sec": 458.2,
+    "provider_used": [
+      "unknown"
+    ],
+    "errors": [
+      "What's in my memory?: timeout",
+      "How much RAM am I using?: timeout"
+    ],
+    "sample_count": 8
+  }
+}

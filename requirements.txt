@@ -1,0 +1,50 @@
+# JARVIS MK-X Requirements
+# Cloud-first voice assistant with local fallback
+
+# === Core ===
+toml>=0.10.2
+aiohttp>=3.9.0
+asyncio-throttle>=1.0.2
+
+# === LLM Providers ===
+groq>=0.13.0
+google-generativeai>=0.8.0
+openai>=1.50.0
+ollama>=0.4.0
+
+# === Voice Pipeline ===
+piper-tts>=1.4.0
+edge-tts>=6.1.0
+sounddevice>=0.5.0
+numpy>=1.26.0
+
+# === Security ===
+pathvalidate>=3.2.0
+
+# === UI ===
+PyQt6>=6.7.0
+PyQt6-WebEngine>=6.7.0
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# === Utilities ===
+psutil>=6.0.0
+requests>=2.32.0
+pydantic>=2.9.0
+pyperclip>=1.8.0
+pyautogui>=0.9.50
+pywin32>=306
+screen-brightness-control>=0.22.0
+
+# === Vision ===
+mediapipe>=0.10.0
+opencv-contrib-python>=5.0.0
+mss>=10.0.0
+
+# === Browser Automation ===
+playwright>=1.45.0
+
+# === Optional (uncomment if needed) ===
+# faster-whisper>=1.1.0    # Local STT fallback (~200MB)
+# openwakeword>=0.6.0       # Wake word detection (~100MB)
+# silero-vad>=1.0.0         # VAD (~2GB torch)

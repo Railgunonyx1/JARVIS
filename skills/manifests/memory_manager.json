@@ -1,0 +1,18 @@
+{
+  "name": "Memory Manager",
+  "version": "1.0.0",
+  "description": "Store and recall facts from long-term memory",
+  "capabilities": [
+    "memory.recall",
+    "memory.store",
+    "memory.clear",
+    "memory.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "memory.memory_manager:MemoryManager"
+}

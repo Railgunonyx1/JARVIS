@@ -1,0 +1,80 @@
+[mode]
+name = "smart"
+
+[permissions]
+allowed = [
+    "app.launch",
+    "app.list",
+    "app.close",
+    "media.control",
+    "media.volume",
+    "system.volume",
+    "audio.list",
+    "audio.record",
+    "clipboard.read",
+    "clipboard.write",
+    "web.search",
+    "web.open",
+    "web.navigate",
+    "web.scrape",
+    "browser.control",
+    "window.list",
+    "window.focus",
+    "window.minimize",
+    "window.maximize",
+    "window.move",
+    "window.resize",
+    "screen.capture",
+    "screen.analyze",
+    "filesystem.read",
+    "filesystem.list",
+    "filesystem.write",
+    "process.list",
+    "process.start",
+    "service.list",
+    "network.info",
+    "network.status",
+    "system.query",
+    "terminal.list",
+    "memory.store",
+    "memory.recall",
+    "task.list",
+    "schedule.list",
+    "input.keyboard",
+    "input.mouse",
+    "desktop.control",
+    "display.manage",
+]
+
+blocked = [
+    "system.shutdown",
+    "system.restart",
+    "system.sleep",
+    "shell.run",
+    "shell.execute",
+    "terminal.write",
+    "filesystem.delete",
+    "registry.write",
+    "package.remove",
+    "network.modify",
+    "service.modify",
+    "task.delete",
+]
+
+confirmation_required = [
+    "filesystem.write",
+    "filesystem.copy",
+    "filesystem.move",
+    "process.kill",
+    "service.start",
+    "service.stop",
+    "service.restart",
+    "task.manage",
+    "schedule.create",
+    "schedule.delete",
+    "startup.manage",
+    "package.install",
+]
+
+[ui]
+description = "AI-assisted mode — most actions allowed, risky ones need confirmation"

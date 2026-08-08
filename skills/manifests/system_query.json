@@ -1,0 +1,19 @@
+{
+  "name": "System Query",
+  "version": "1.0.0",
+  "description": "Query system information (time, uptime, specs)",
+  "capabilities": [
+    "system.query",
+    "time.query",
+    "weather.query",
+    "calculator",
+    "system.info"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.system_settings:system_settings"
+}

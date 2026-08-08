@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-07-27T21:18:05.162353",
+  "python_version": "3.11.9",
+  "pid": 13400,
+  "rounds": 1,
+  "startup": {
+    "python_import_ms": 0.0,
+    "module_loads": {
+      "core.config": 51.84,
+      "core.jarvis": 147.16,
+      "core.intent_router": 0.01,
+      "core.context": 0.0,
+      "core.dialogue": 0.0,
+      "core.personality": 0.0,
+      "providers.router": 21.23,
+      "pipeline.stt": 382.63,
+      "pipeline.tts": 0.01,
+      "pipeline.vad": 0.0,
+      "pipeline.wake_word": 0.0,
+      "memory.store": 0.0,
+      "memory.vector_store": 11.26,
+      "security.engine": 57.43,
+      "web.server": 1327.39
+    },
+    "total_import_ms": 1999.2,
+    "construction_ms": 2959.98,
+    "provider_init_ms": 0.0,
+    "voice_init_ms": 0.0,
+    "startup_call_ms": 14759.45,
+    "total_cold_start_ms": 19718.63,
+    "rss_before_kb": 27404,
+    "rss_after_kb": 234544,
+    "rss_delta_kb": 207140,
+    "thread_count_before": 4,
+    "thread_count_after": 17
+  }
+}

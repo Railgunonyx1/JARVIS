@@ -1,0 +1,17 @@
+{
+  "name": "Screen Analyzer",
+  "version": "1.0.0",
+  "description": "Capture and analyze screen contents",
+  "capabilities": [
+    "screen.capture",
+    "screen.analyze",
+    "screen.find_element"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.screen_analyzer:screen_analyzer"
+}

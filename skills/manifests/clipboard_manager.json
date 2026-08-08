@@ -1,0 +1,17 @@
+{
+  "name": "Clipboard Manager",
+  "version": "1.0.0",
+  "description": "Read and write clipboard contents",
+  "capabilities": [
+    "clipboard.read",
+    "clipboard.write",
+    "clipboard.history"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.clipboard_manager:clipboard_manager"
+}

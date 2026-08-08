@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-07-27T21:04:23.192412",
+  "python_version": "3.11.9",
+  "pid": 20796,
+  "rounds": 1,
+  "voice": {
+    "tts_avg_synthesis_ms": 1724.5,
+    "tts_avg_first_chunk_ms": 1447.7,
+    "tts_warmup_ms": 7202.6,
+    "tts_precache_ms": 5743.9,
+    "stt_avg_transcription_ms": 0,
+    "vad_avg_detection_ms": 0,
+    "full_roundtrip_avg_ms": 0,
+    "tts_backend": "unknown",
+    "stt_backend": "unknown",
+    "errors": [
+      "STT init: SpeechToText.__init__() missing 2 required positional arguments: 'config' and 'api_keys'"
+    ]
+  }
+}

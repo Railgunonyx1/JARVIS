@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-08-03T00:00:00Z",
+  "environment": "Windows, pythonw, web/server.py via PYTHONPATH=repo root",
+  "boot_to_http_ok_ms": 3511,
+  "chat_stream_full_roundtrip_ms": 12810,
+  "chat_stream_result": "done event received",
+  "http_port": 8765,
+  "ws_port": 8766,
+  "health_checks": {
+    "api_status": "pass",
+    "chat_stream": "pass"
+  },
+  "quarantine_note": "Baseline captured BEFORE _quarantine/2026-08-03 moves. First chat request includes deferred warm-up (lazy startup)."
+}

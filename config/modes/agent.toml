@@ -1,0 +1,25 @@
+[mode]
+name = "agent"
+
+[permissions]
+allowed = [
+    "*"
+]
+
+blocked = []
+
+confirmation_required = [
+    "system.shutdown",
+    "system.restart",
+    "system.sleep",
+    "registry.write",
+    "network.modify",
+    "service.modify",
+    "external.write",
+    "package.remove",
+]
+
+sandbox = true
+
+[ui]
+description = "Autonomous mode — full access within sandbox, critical system changes need confirmation"

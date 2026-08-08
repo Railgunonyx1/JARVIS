@@ -1,0 +1,19 @@
+{
+  "name": "File System",
+  "version": "1.0.0",
+  "description": "Read, write, and manage files and directories",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.list",
+    "filesystem.search",
+    "filesystem.write",
+    "filesystem.delete",
+    "filesystem.move"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.file_manager:file_manager"
+}
