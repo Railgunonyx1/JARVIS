@@ -8,7 +8,9 @@ through a governed PowerShell/cmd path after policy validation.
 
 from __future__ import annotations
 
+import ast
 import os
+import shlex
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -30,10 +32,39 @@ def _default_cwd() -> str:
     return str(ProjectContext.discover().root_path)
 
 
+def _coerce_args(raw_args: Any) -> list[str] | None:
+    """Coerce model-supplied ``args`` to a list of strings.
+
+    Models sometimes emit ``args`` as a stringified list (e.g. the repr of a
+    Python list, or a shell-ish string). Return None when the value is not a
+    usable argument list.
+    """
+    if isinstance(raw_args, (list, tuple)):
+        return [str(a) for a in raw_args]
+    if isinstance(raw_args, str):
+        text = raw_args.strip()
+        if not text:
+            return []
+        try:
+            parsed = ast.literal_eval(text)
+            if isinstance(parsed, (list, tuple)):
+                return [str(a) for a in parsed]
+        except (ValueError, SyntaxError):
+            pass
+        return shlex.split(text, posix=os.name != "nt")
+    return None
+
+
 def shell_execute(args: Dict[str, Any]) -> ToolResult:
     command = (args.get("command") or "").strip()
     executable = (args.get("executable") or "").strip()
     raw_args = args.get("args") or []
+    coerced = _coerce_args(raw_args)
+    if coerced is None:
+        return ToolResult(
+            success=False,
+            error="'args' must be a list of strings (or a stringified list)",
+        )
 
     if command and executable:
         return ToolResult(
@@ -48,9 +79,6 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
     except (TypeError, ValueError):
         timeout = DEFAULT_TIMEOUT
 
-    if not isinstance(raw_args, (list, tuple)):
-        return ToolResult(success=False, error="'args' must be a list of strings")
-
     cwd = _default_cwd()
     if args.get("cwd"):
         resolved = Path(str(args["cwd"])).resolve()
@@ -61,7 +89,7 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
     req = ExecRequest(
         command=command,
         executable=executable,
-        args=[str(a) for a in raw_args],
+        args=coerced,
         shell=args.get("shell") or "",  # nosec B604 -- dataclass field, not a subprocess call
         cwd=cwd,
         timeout=timeout,

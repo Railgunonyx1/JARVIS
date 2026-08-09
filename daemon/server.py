@@ -295,8 +295,9 @@ class DaemonServer:
         except asyncio.CancelledError:
             raise
         except BaseException:
-            # A single hostile/broken client must not kill the daemon.
-            logger.exception("client connection failed")
+            # A client disconnect (EOF or a reset) is an ordinary event — it is
+            # not an error condition that needs a full traceback in the log.
+            logger.warning("client connection dropped: %r", sys.exc_info()[1])
         finally:
             self._connections.discard(transport)
             pending = self._tasks.pop(id(transport), set())
@@ -573,7 +574,31 @@ def _install_exception_logging() -> None:
     loop.set_exception_handler(_on_loop_error)
 
 
+def _repair_windows_env() -> None:
+    """Restore critical Windows vars lost when spawned via WMI.
+
+    ``Win32_Process.Create`` (the daemon's spawn path) builds the child
+    environment from the machine/user registry, which drops variables that an
+    interactive session normally inherits (``SystemRoot``, ``COMSPEC``, ...).
+    A missing ``SystemRoot`` in a process env block makes some child
+    ``CreateProcess`` calls fail with ``[WinError 87]`` and breaks tools that
+    read it directly.
+    """
+    if os.name != "nt":
+        return
+    windir = os.environ.get("WINDIR") or os.environ.get("SystemRoot")
+    if not windir:
+        return
+    os.environ.setdefault("SystemRoot", windir)
+    os.environ.setdefault("WINDIR", windir)
+    os.environ.setdefault("COMSPEC", os.path.join(windir, "System32", "cmd.exe"))
+    os.environ.setdefault(
+        "PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC"
+    )
+
+
 def _start_daemon(args) -> None:
+    _repair_windows_env()
     project_dir = args.project_dir or str(Path.cwd().resolve())
     existing = load_entry(project_id(Path(project_dir)))
     if existing:

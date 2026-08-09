@@ -327,6 +327,11 @@ class SecureExecutor:
     def _run(self, argv: List[str], req: ExecRequest, mode: ExecMode) -> ExecResult:
         start = time.time()
         cwd = self.policy.effective_cwd(req)
+        if not os.path.isdir(cwd):
+            logger.warning("Executor refused invalid working directory %r", cwd)
+            return ExecResult(success=False, exit_code=-1,
+                              stderr=f"Working directory is not a directory: {cwd}",
+                              mode=mode.value)
         env = sanitize_environment(req.env)
         creationflags = subprocess.CREATE_NO_WINDOW if _is_windows() else 0
         if _is_windows():
@@ -346,7 +351,8 @@ class SecureExecutor:
                 start_new_session=not _is_windows(),
             )
         except (OSError, ValueError) as e:
-            logger.error("Executor failed to start: %s", e)
+            logger.error("Executor failed to start (mode=%s, cwd=%r, argv=%r): %s",
+                         mode.value, cwd, argv, e)
             return ExecResult(success=False, exit_code=-1,
                               stderr=str(e), mode=mode.value)
 

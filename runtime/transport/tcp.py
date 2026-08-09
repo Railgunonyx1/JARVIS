@@ -42,7 +42,13 @@ class TCPTransport(Transport):
     async def receive(self) -> dict[str, Any] | None:
         if self._closed:
             return None
-        line = await self._reader.readline()
+        try:
+            line = await self._reader.readline()
+        except (ConnectionResetError, ConnectionError, OSError):
+            # A peer reset (WinError 64/10054) mid-frame is an ordinary
+            # disconnect, not a protocol failure — surface it as EOF.
+            await self.close()
+            return None
         if not line:
             await self.close()
             return None

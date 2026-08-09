@@ -79,7 +79,13 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "executable": {"type": "string", "description": "Executable path or name. Preferred over 'command'."},
-                    "args": {"type": "array", "items": {"type": "string"}, "description": "Argument list (structured, no shell)."},
+                    "args": {
+                        "oneOf": [
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "string"},
+                        ],
+                        "description": "Argument list (structured, no shell). May be a list or a stringified list.",
+                    },
                     "command": {"type": "string", "description": "A shell command string. Chaining/operators are blocked."},
                     "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell host for raw commands. Default powershell."},
                     "cwd": {"type": "string", "description": "Working directory. Defaults to project root."},
