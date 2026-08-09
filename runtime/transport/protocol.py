@@ -43,6 +43,7 @@ __all__ = [
     "MSG_RUN_RESULT",
     "MSG_ERROR",
     "MSG_BUSY",
+    "MAX_FRAME_SIZE",
     "Envelope",
     "make_envelope",
     "encode_line",
@@ -50,6 +51,8 @@ __all__ = [
 ]
 
 PROTOCOL_VERSION = 1
+
+MAX_FRAME_SIZE = 4 * 1024 * 1024
 
 # Request message types (client -> daemon)
 MSG_AUTH = "auth"
@@ -124,6 +127,10 @@ def encode_line(env) -> bytes:
 
 
 def decode_line(line: bytes) -> Envelope:
+    if len(line) > MAX_FRAME_SIZE:
+        raise ValueError(
+            f"frame too large: {len(line)} bytes (max {MAX_FRAME_SIZE})"
+        )
     data = _loads(line.decode("utf-8"))
     return Envelope(
         version=int(data.get("version", PROTOCOL_VERSION)),

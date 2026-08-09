@@ -1,6 +1,9 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+extend-exclude = [
+    "ui/*.tcss",  # Textual CSS — not Python
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "PLW"]
@@ -17,4 +20,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core", "web", "pipeline", "actions", "vision", "memory", "python"]
+known-first-party = ["core", "memory", "python"]

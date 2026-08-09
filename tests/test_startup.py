@@ -106,8 +106,8 @@ def test_startup_profiler_phases():
 
 
 def test_startup_profiler_emits_startup_trace():
-    from runtime.observability import get_tracer, reset_tracer
     from cli.startup_profile import StartupProfiler
+    from runtime.observability import get_tracer, reset_tracer
 
     reset_tracer()
     tracer = get_tracer()
@@ -130,8 +130,8 @@ def test_startup_profiler_emits_startup_trace():
 
 
 def test_startup_profiler_nested_trace_balanced():
-    from runtime.observability import get_tracer, reset_tracer
     from cli.startup_profile import StartupProfiler
+    from runtime.observability import get_tracer, reset_tracer
 
     reset_tracer()
     tracer = get_tracer()

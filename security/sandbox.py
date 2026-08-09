@@ -79,7 +79,8 @@ class Sandbox:
                 return False, f"Blocked command pattern: {blocked}"
 
         # Block dangerous shell operators
-        dangerous = ["&&", "||", "|", ">", ">>", "2>&1", ">&"]
+        dangerous = ["&&", "&", "||", "|", ">", ">>", "2>&1", ">&", "<", "^",
+                     "\n", "\r"]
         for d in dangerous:
             if d in cmd_lower:
                 # Allow common safe redirects
@@ -121,7 +122,7 @@ class Sandbox:
             exec_env.update(env)
 
         start_time = time.time()
-        proc_id = hashlib.md5(command.encode()).hexdigest()[:8]
+        proc_id = hashlib.sha256(command.encode()).hexdigest()[:8]
 
         try:
             # Use subprocess with timeout

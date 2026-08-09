@@ -17,8 +17,8 @@ profile its boot without importing the typer CLI.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator, List, Optional
 
 __all__ = ["StartupProfiler", "get_profiler", "startup_report"]
 
@@ -28,8 +28,8 @@ class StartupProfiler:
 
     def __init__(self) -> None:
         self._started: float = time.perf_counter()
-        self._phases: List[tuple[str, float, float]] = []  # (name, start, end)
-        self._stack: List[tuple[str, float, object]] = []  # (name, start, span)
+        self._phases: list[tuple[str, float, float]] = []  # (name, start, end)
+        self._stack: list[tuple[str, float, object]] = []  # (name, start, span)
         self._root: object = None
         self._trace_depth = 0
 
@@ -96,7 +96,7 @@ class StartupProfiler:
         finally:
             self.end(name)
 
-    def elapsed_ms(self, name: str) -> Optional[float]:
+    def elapsed_ms(self, name: str) -> float | None:
         for n, start, end in self._phases:
             if n == name:
                 return (end - start) * 1000.0

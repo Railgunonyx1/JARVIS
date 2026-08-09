@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from runtime.transport.base import Transport
-from runtime.transport.protocol import decode_line, encode_line
+from runtime.transport.protocol import MAX_FRAME_SIZE, decode_line, encode_line
 
 __all__ = ["TCPTransport", "open_connection", "start_server"]
 
@@ -116,4 +116,4 @@ async def start_server(handler: ServerHandler, host: str = "127.0.0.1",
             except BaseException:  # pragma: no cover - defensive
                 pass
 
-    return await asyncio.start_server(_on_client, host, port)
+    return await asyncio.start_server(_on_client, host, port, limit=MAX_FRAME_SIZE)

@@ -87,7 +87,34 @@ def _get_api_key() -> str:
             pass
     return ""
 
+
+def _generated_code_enabled() -> bool:
+    return os.environ.get("JARVIS_ENABLE_GENERATED_CODE", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+_FORBIDDEN_CODE_PATTERNS = (
+    "os.system", "os.popen", "subprocess", "eval(", "exec(",
+    "__import__", "importlib", "socket.", "requests", "urllib", "http.",
+)
+
+
+def _check_generated_code(code: str) -> None:
+    """Reject obviously dangerous constructs even when the tool is enabled."""
+    lowered = code.lower()
+    for pattern in _FORBIDDEN_CODE_PATTERNS:
+        if pattern in lowered:
+            raise RuntimeError(
+                f"Generated code rejected: forbidden pattern '{pattern}'."
+            )
+
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
+    if not _generated_code_enabled():
+        raise RuntimeError(
+            "The generated_code tool is disabled by default for security. "
+            "Set JARVIS_ENABLE_GENERATED_CODE=1 to explicitly allow it."
+        )
     import google.generativeai as genai
 
     if speak:
@@ -113,8 +140,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         system_instruction=(
             "You are an expert Python developer. "
             "Write clean, complete, working Python code. "
-            "Use standard library + common packages. "
-            "Install missing packages with subprocess + pip if needed. "
+            "Use only the standard library. "
+            "Do NOT install packages, download anything, or touch the network. "
             "Return ONLY the Python code. No explanation, no markdown, no backticks.\n\n"
             f"SYSTEM PATHS:\n"
             f"  Desktop   = r'{desktop}'\n"
@@ -131,6 +158,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         code = response.text.strip()
         code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
 
+        _check_generated_code(code)
+
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".py", delete=False, encoding="utf-8"
         ) as f:
@@ -142,7 +171,8 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         result = subprocess.run(
             [sys.executable, tmp_path],
             capture_output=True, text=True,
-            timeout=120, cwd=str(Path.home())
+            timeout=120, cwd=str(Path.home()),
+            check=False,
         )
 
         try:

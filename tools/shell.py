@@ -67,6 +67,7 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
             cwd=cwd,
             env=_sanitized_env(),
             creationflags=creationflags,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         return ToolResult(

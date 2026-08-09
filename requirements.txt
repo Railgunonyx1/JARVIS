@@ -1,50 +1,36 @@
 # JARVIS MK-X Requirements
-# Cloud-first voice assistant with local fallback
+# Direct dependencies of the active runtime (audit-verified 2026-08-08).
+# Generated from an AST scan of the active tree; versions pinned to the venv.
 
-# === Core ===
-toml>=0.10.2
-aiohttp>=3.9.0
-asyncio-throttle>=1.0.2
+# === Config ===
+toml==0.10.2
+PyYAML==6.0.3
 
 # === LLM Providers ===
-groq>=0.13.0
-google-generativeai>=0.8.0
-openai>=1.50.0
-ollama>=0.4.0
+groq==1.5.0
+google-generativeai==0.8.6
+openai==2.46.0
+ollama==0.6.2
 
-# === Voice Pipeline ===
-piper-tts>=1.4.0
-edge-tts>=6.1.0
-sounddevice>=0.5.0
-numpy>=1.26.0
+# === MCP ===
+mcp==1.28.1
 
-# === Security ===
-pathvalidate>=3.2.0
+# === Transport / HTTP ===
+httpx==0.28.1
+orjson==3.11.9
 
-# === UI ===
-PyQt6>=6.7.0
-PyQt6-WebEngine>=6.7.0
-flask>=3.0.0
-flask-cors>=4.0.0
+# === System ===
+psutil==7.2.2
+numpy==2.4.6
+filelock==3.32.0  # cross-process daemon single-instance lock
 
-# === Utilities ===
-psutil>=6.0.0
-requests>=2.32.0
-pydantic>=2.9.0
-pyperclip>=1.8.0
-pyautogui>=0.9.50
-pywin32>=306
-screen-brightness-control>=0.22.0
+# === CLI / UI ===
+typer==0.27.1
+rich==15.0.0
+textual==8.2.8
 
-# === Vision ===
-mediapipe>=0.10.0
-opencv-contrib-python>=5.0.0
-mss>=10.0.0
-
-# === Browser Automation ===
-playwright>=1.45.0
-
-# === Optional (uncomment if needed) ===
-# faster-whisper>=1.1.0    # Local STT fallback (~200MB)
-# openwakeword>=0.6.0       # Wake word detection (~100MB)
-# silero-vad>=1.0.0         # VAD (~2GB torch)
+# === Optional (lazy, guarded imports) ===
+# sentence-transformers==5.6.1   # memory embeddings (~2GB torch)
+# aiosqlite>=0.19.0              # runtime.telemetry persistence
+# sounddevice==0.5.5             # audio health check
+# pynvml>=11.0.0                 # GPU monitoring (core/resource_manager)

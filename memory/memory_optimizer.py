@@ -5,7 +5,7 @@ import logging
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger("jarvis.memory_engine.memory_optimizer")
 
@@ -46,10 +46,10 @@ class MemoryOptimizer:
     """Tracks memory allocations, profiles usage, and runs garbage collection."""
 
     def __init__(self):
-        self._allocations: Dict[str, int] = {}
+        self._allocations: dict[str, int] = {}
         self._limit_mb: int = 2048
         self._lock = threading.Lock()
-        self._profile_cache: Optional[dict] = None
+        self._profile_cache: dict | None = None
         self._profile_ts: float = 0.0
 
     def optimize(self) -> dict:
@@ -84,7 +84,7 @@ class MemoryOptimizer:
         if self._profile_cache is not None and (now - self._profile_ts) < 5.0:
             return self._profile_cache
 
-        profile: Dict[str, Any] = {}
+        profile: dict[str, Any] = {}
 
         if _PROCESS:
             mem_info = _PROCESS.memory_info()
@@ -111,15 +111,7 @@ class MemoryOptimizer:
             pass
         profile["sqlite_mb"] = sqlite_mb
 
-        cache_mb = 0.0
-        try:
-            from voice_engine.voice_optimizer import get_voice_optimizer
-            vo = get_voice_optimizer()
-            cache_data = getattr(vo, "_cache", {})
-            cache_mb = round(sum(sys.getsizeof(v) for v in cache_data.values()) / (1024 * 1024), 2)
-        except Exception:
-            pass
-        profile["cache_mb"] = cache_mb
+        profile["cache_mb"] = 0.0
 
         vector_mb = 0.0
         try:
@@ -142,9 +134,9 @@ class MemoryOptimizer:
         self._profile_ts = now
         return profile
 
-    def suggest_optimizations(self) -> List[dict]:
+    def suggest_optimizations(self) -> list[dict]:
         """Return actionable optimization suggestions with priority levels."""
-        suggestions: List[dict] = []
+        suggestions: list[dict] = []
         profile = self.get_memory_profile()
 
         rss = profile.get("rss_mb", 0)
@@ -152,7 +144,10 @@ class MemoryOptimizer:
             suggestions.append({
                 "priority": "high",
                 "category": "memory_limit",
-                "message": f"RSS ({rss} MB) is above 80% of limit ({self._limit_mb} MB). Consider reducing cache sizes.",
+                "message": (
+                    f"RSS ({rss} MB) is above 80% of limit ({self._limit_mb} MB). "
+                    "Consider reducing cache sizes."
+                ),
                 "action": "reduce_caches",
             })
 

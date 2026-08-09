@@ -627,6 +627,7 @@ def daemon_cli(argv) -> int:
         list_daemons,
         start_daemon,
         stop_daemon,
+        sweep_stale_entries,
     )
 
     parser = argparse.ArgumentParser(
@@ -638,6 +639,7 @@ def daemon_cli(argv) -> int:
     sub.add_parser("stop", help="stop the daemon for this project")
     sub.add_parser("status", help="show daemon status for this project")
     sub.add_parser("list", help="list all running daemons")
+    sub.add_parser("sweep", help="remove registry entries for dead/unreachable daemons")
     args = parser.parse_args(argv)
 
     project = _resolve_project_dir(None)
@@ -649,6 +651,15 @@ def daemon_cli(argv) -> int:
             return 1
         print(f"daemon running: pid={entry['pid']} port={entry['port']} "
               f"project={entry['project']}")
+        return 0
+    if args.action == "sweep":
+        removed = sweep_stale_entries()
+        if not removed:
+            print("no stale daemons to remove")
+            return 0
+        for entry in removed:
+            print(f"removed stale: {entry['project']}  pid={entry.get('pid')}  "
+                  f"port={entry.get('port')}")
         return 0
     if args.action == "stop":
         ok = stop_daemon(project)
@@ -724,12 +735,39 @@ def perf_cli(argv) -> int:
     return 0
 
 
+def tui_cli(argv) -> int:
+    """`jarvis tui` — launch the Textual dashboard, a client of the daemon.
+
+    Imported lazily so the default REPL keeps a tiny startup profile; the
+    TUI talks to the running daemon over TCP (or the named pipe) and falls
+    back to a mock provider when no daemon is up.
+    """
+    import argparse
+
+    from ui.tui import JarvisApp
+
+    parser = argparse.ArgumentParser(
+        prog="jarvis tui",
+        description="Textual dashboard for a running JARVIS daemon.",
+    )
+    parser.add_argument("--mock", action="store_true",
+                        help="force mock providers even if a daemon is reachable")
+    parser.add_argument("--url", default=None,
+                        help="daemon TCP URL override (default: auto-discover)")
+    args = parser.parse_args(argv)
+
+    JarvisApp(mock=args.mock, url=args.url).run()
+    return 0
+
+
 def entry() -> None:
-    """Console entry point: route `daemon`/`perf` before typer, else run the app."""
+    """Console entry point: route `daemon`/`perf`/`tui` before typer, else run the app."""
     if len(sys.argv) > 1 and sys.argv[1] == "daemon":
         sys.exit(daemon_cli(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "perf":
         sys.exit(perf_cli(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == "tui":
+        sys.exit(tui_cli(sys.argv[2:]))
     app()
 
 

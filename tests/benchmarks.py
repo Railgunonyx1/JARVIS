@@ -81,7 +81,7 @@ def test_cli_import_cold(benchmark):
     def _cold():
         r = subprocess.run(
             [sys.executable, "-c", "import cli.main"],
-            capture_output=True, text=True, cwd=root,
+            capture_output=True, text=True, cwd=root, check=False,
         )
         assert r.returncode == 0, r.stderr
 

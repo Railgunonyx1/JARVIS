@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import logging
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from knowledge_graph.graph import EntityType
 

@@ -33,9 +33,11 @@ from daemon.state import (
     LOG_PATH,
     PROTOCOL_VERSION,
     STATE_DIR,
+    acquire_instance_lock,
     generate_token,
     load_entry,
     pick_port,
+    release_instance_lock,
     remove_entry,
     save_entry,
 )
@@ -63,6 +65,10 @@ logger = logging.getLogger("jarvis.daemon")
 
 _MODES = ("plan", "controlled", "smart", "agent")
 KernelFactory = Callable[[str | None], Any]
+
+
+class DaemonAlreadyRunning(RuntimeError):
+    """A healthy daemon already owns this project; refusing to start a second."""
 
 
 def _env(type_: str, payload: dict[str, Any] | None = None,
@@ -119,6 +125,7 @@ class DaemonServer:
 
         self.kernel: Any = None
         self._server = None
+        self._pipe_server = None
         self._connections = set()
         self._tasks: dict[int, set] = {}
         self._run_lock = asyncio.Lock()
@@ -133,38 +140,70 @@ class DaemonServer:
     # ── lifecycle ──────────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        factory = self.kernel_factory or self._default_kernel_factory()
-        self.kernel = factory(project_dir=self.project_dir)
+        lock = acquire_instance_lock(self.project_id, self.registry_dir)
+        try:
+            self._ensure_single_instance()
+            factory = self.kernel_factory or self._default_kernel_factory()
+            self.kernel = factory(project_dir=self.project_dir)
 
-        thread = threading.Thread(target=self._safe_warm, daemon=True,
-                                  name="daemon-router-warm")
-        thread.start()
+            thread = threading.Thread(target=self._safe_warm, daemon=True,
+                                      name="daemon-router-warm")
+            thread.start()
 
-        for attempt in range(3):
+            for attempt in range(3):
+                try:
+                    self._server = await start_server(self._on_client, self.host, self.port)
+                    break
+                except OSError:
+                    if attempt == 2:
+                        raise
+                    self.port = pick_port()
+            bound = self._server.sockets[0].getsockname()
+            self.port = bound[1]
+
             try:
-                self._server = await start_server(self._on_client, self.host, self.port)
-                break
-            except OSError:
-                if attempt == 2:
-                    raise
-                self.port = pick_port()
-        bound = self._server.sockets[0].getsockname()
-        self.port = bound[1]
+                from runtime.transport.pipe import start_pipe_server
+                pipe_name = rf"\\.\pipe\jarvis-{self.project_id}"
+                self._pipe_server = await start_pipe_server(self._on_client, pipe_name)
+                logger.info("daemon %s listening on pipe %s", self.project_id, pipe_name)
+            except Exception as e:
+                logger.warning("Failed to start named pipe server: %s", e)
 
-        save_entry({
-            "project_id": self.project_id,
-            "project": self.project_dir,
-            "port": self.port,
-            "pid": os.getpid(),
-            "token": self.token,
-            "version": PROTOCOL_VERSION,
-            "started_at": self.started_at,
-            "last_active": time.time(),
-            "mode": self._mode(),
-        }, base_dir=self.registry_dir)
-        self._write_snapshot()
-        logger.info("daemon %s listening on %s:%s", self.project_id,
-                    self.host, self.port)
+            save_entry({
+                "project_id": self.project_id,
+                "project": self.project_dir,
+                "port": self.port,
+                "pid": os.getpid(),
+                "token": self.token,
+                "version": PROTOCOL_VERSION,
+                "started_at": self.started_at,
+                "last_active": time.time(),
+                "mode": self._mode(),
+            }, base_dir=self.registry_dir)
+            self._write_snapshot()
+            logger.info("daemon %s listening on %s:%s", self.project_id,
+                        self.host, self.port)
+        finally:
+            release_instance_lock(lock)
+
+    def _ensure_single_instance(self) -> None:
+        """Refuse to start a second daemon while a healthy one owns this project.
+
+        The CLI checks the registry before spawning; this second line closes
+        the window where two ``start`` processes pass that check before either
+        writes its entry (the instance lock serializes that window), and also
+        covers direct ``DaemonServer`` construction. Without it the duplicate
+        would quietly bind a fresh TCP port and fail its named-pipe bind —
+        two daemons for one project.
+        """
+        from daemon.lifecycle import entry_healthy
+
+        existing = load_entry(self.project_id, base_dir=self.registry_dir)
+        if existing is not None and entry_healthy(existing):
+            raise DaemonAlreadyRunning(
+                f"a healthy daemon already runs for project {self.project_id} "
+                f"(pid={existing['pid']}, port={existing['port']})"
+            )
 
     def _default_kernel_factory(self) -> KernelFactory:
         from runtime.kernel import build_kernel
@@ -200,6 +239,9 @@ class DaemonServer:
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
+        if self._pipe_server is not None:
+            self._pipe_server.close()
+            await self._pipe_server.wait_closed()
         for sender in list(self._senders):
             sender.cancel()
         for run in list(self._detached_runs):
@@ -561,6 +603,11 @@ def _start_daemon(args) -> None:
         _install_exception_logging()
         try:
             await server.start()
+        except DaemonAlreadyRunning as exc:
+            # A concurrent start won the race — this is not an error, the
+            # healthy daemon stays. Exit cleanly so callers see a success.
+            print(str(exc))
+            return
         except Exception as exc:
             print(f"daemon failed to start: {exc}")
             raise

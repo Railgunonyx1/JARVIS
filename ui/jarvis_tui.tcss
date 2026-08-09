@@ -1,0 +1,144 @@
+/* jarvis_tui.tcss
+   White/black engineering-console theme, green reserved for
+   active/healthy status only — matches the mockup exactly:
+   thin borders, monospace, dense panels, no decoration for
+   decoration's sake. */
+
+Screen {
+    background: white;
+    color: black;
+}
+
+/* ---- Top bar ---- */
+#topbar {
+    height: 3;
+    background: white;
+    color: black;
+    border-bottom: solid black;
+    padding: 0 2;
+}
+#topbar-title {
+    width: auto;
+    content-align: left middle;
+    text-style: bold;
+}
+#topbar-center {
+    width: 1fr;
+    content-align: center middle;
+    text-style: bold;
+}
+#topbar-clock {
+    width: auto;
+    content-align: right middle;
+}
+
+/* ---- Sidebar ---- */
+#sidebar {
+    width: 22;
+    background: white;
+    border-right: solid black;
+    padding: 1 1;
+}
+#sidebar ListItem {
+    padding: 0 1;
+    color: black;
+}
+#sidebar ListItem.-highlight, #sidebar ListItem:hover {
+    background: black 10%;
+}
+#sidebar ListView:focus > ListItem.--highlight {
+    background: #1DB954 25%;
+}
+#daemon-box {
+    border: solid black;
+    height: auto;
+    margin-top: 1;
+    padding: 1 1;
+}
+#daemon-box .status-dot {
+    color: #1DB954;
+    text-style: bold;
+}
+
+/* ---- Panels ---- */
+.panel {
+    border: solid black;
+    padding: 1 2;
+    background: white;
+}
+.panel-title {
+    text-style: bold;
+    color: black;
+}
+
+/* ---- Grid ---- */
+#dashboard-grid {
+    grid-size: 3 3;
+    grid-gutter: 1;
+    padding: 1;
+}
+#panel-overview { column-span: 1; row-span: 1; }
+#panel-cpu      { column-span: 1; row-span: 1; }
+#panel-mem      { column-span: 1; row-span: 1; }
+#panel-providers { column-span: 1; row-span: 1; }
+#panel-tasks     { column-span: 2; row-span: 1; }
+#panel-logs      { column-span: 1; row-span: 1; }
+#panel-tokens    { column-span: 2; row-span: 1; }
+
+/* ---- Status colors: green means active/healthy, nothing else ---- */
+.status-online { color: #1DB954; text-style: bold; }
+.status-offline { color: #B00020; text-style: bold; }
+.status-idle { color: #666666; }
+
+Sparkline {
+    color: #1DB954;
+    background: white;
+}
+Sparkline > .sparkline--min-color {
+    color: #1DB954 40%;
+}
+Sparkline > .sparkline--max-color {
+    color: #1DB954;
+}
+
+ProgressBar > .bar--bar {
+    color: #1DB954;
+}
+ProgressBar > .bar--complete {
+    color: #1DB954;
+}
+
+DataTable {
+    background: white;
+    color: black;
+}
+DataTable > .datatable--header {
+    text-style: bold;
+    background: white;
+    color: black;
+}
+
+Log {
+    background: white;
+    color: black;
+    scrollbar-color: black;
+}
+
+/* ---- Command bar ---- */
+#command-bar {
+    height: 3;
+    border-top: solid black;
+    padding: 0 1;
+}
+#command-input {
+    background: white;
+    color: black;
+    border: none;
+}
+#command-prompt {
+    color: #1DB954;
+    text-style: bold;
+    width: auto;
+    content-align: left middle;
+    padding-right: 1;
+}

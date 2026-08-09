@@ -29,7 +29,6 @@ import secrets
 import socket
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 __all__ = [
     "DEFAULT_PORT",
@@ -45,6 +44,8 @@ __all__ = [
     "generate_token",
     "pick_port",
     "touch_entry",
+    "acquire_instance_lock",
+    "release_instance_lock",
 ]
 
 DEFAULT_PORT = 47113
@@ -56,11 +57,11 @@ STATE_DIR = _HOME / "state"
 LOG_PATH = _HOME / "daemon.log"
 
 
-def registry_path(project_id: str, base_dir: Optional[Path] = None) -> Path:
+def registry_path(project_id: str, base_dir: Path | None = None) -> Path:
     return (base_dir or DAEMONS_DIR) / f"daemon-{project_id}.json"
 
 
-def load_entry(project_id: str, base_dir: Optional[Path] = None) -> Optional[Dict]:
+def load_entry(project_id: str, base_dir: Path | None = None) -> dict | None:
     """Read a daemon registry entry, or ``None`` when missing/corrupt."""
     path = registry_path(project_id, base_dir)
     try:
@@ -71,7 +72,7 @@ def load_entry(project_id: str, base_dir: Optional[Path] = None) -> Optional[Dic
     return data
 
 
-def save_entry(entry: Dict, base_dir: Optional[Path] = None) -> None:
+def save_entry(entry: dict, base_dir: Path | None = None) -> None:
     (base_dir or DAEMONS_DIR).mkdir(parents=True, exist_ok=True)
     data = dict(entry)
     data.pop("_path", None)
@@ -81,14 +82,14 @@ def save_entry(entry: Dict, base_dir: Optional[Path] = None) -> None:
     tmp.replace(path)
 
 
-def remove_entry(project_id: str, base_dir: Optional[Path] = None) -> None:
+def remove_entry(project_id: str, base_dir: Path | None = None) -> None:
     try:
         registry_path(project_id, base_dir).unlink(missing_ok=True)
     except OSError:
         pass
 
 
-def list_entries(base_dir: Optional[Path] = None) -> List[Dict]:
+def list_entries(base_dir: Path | None = None) -> list[dict]:
     base = base_dir or DAEMONS_DIR
     entries = []
     if not base.exists():
@@ -103,7 +104,7 @@ def list_entries(base_dir: Optional[Path] = None) -> List[Dict]:
     return entries
 
 
-def touch_entry(project_id: str, base_dir: Optional[Path] = None) -> None:
+def touch_entry(project_id: str, base_dir: Path | None = None) -> None:
     """Refresh ``last_active`` on an existing entry."""
     entry = load_entry(project_id, base_dir)
     if entry:
@@ -115,7 +116,7 @@ def generate_token() -> str:
     return secrets.token_hex(32)
 
 
-def pick_port(preferred: Optional[int] = None) -> int:
+def pick_port(preferred: int | None = None) -> int:
     """Return ``preferred`` if free, otherwise any free localhost port."""
     candidates = [preferred] if preferred else []
     candidates.append(DEFAULT_PORT)
@@ -128,6 +129,37 @@ def pick_port(preferred: Optional[int] = None) -> int:
         return sock.getsockname()[1]
     finally:
         sock.close()
+
+
+def acquire_instance_lock(project_id: str, base_dir: Path | None = None):
+    """Advisory cross-process lock held while a daemon registers itself.
+
+    Two racing ``daemon start`` processes for the same project can both pass
+    the pre-spawn registry check before either writes its entry; this lock
+    serializes the window so the second one sees the first's healthy entry
+    and refuses to start instead of duplicating on a fresh port. Uses
+    ``filelock`` (a tiny, already-installed dependency); when it is somehow
+    missing we degrade to no locking and rely on the registry check alone.
+    """
+    try:
+        from filelock import FileLock
+    except ImportError:
+        return None
+    base = base_dir or DAEMONS_DIR
+    base.mkdir(parents=True, exist_ok=True)
+    lock = FileLock(str(base / f"daemon-{project_id}.lock"))
+    lock.acquire()
+    return lock
+
+
+def release_instance_lock(lock) -> None:
+    """Release a lock returned by :func:`acquire_instance_lock` (safe for None)."""
+    if lock is None:
+        return
+    try:
+        lock.release()
+    except OSError:
+        pass
 
 
 def _port_free(port: int) -> bool:

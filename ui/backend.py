@@ -1,0 +1,211 @@
+"""TUI data backend — live daemon with mock/offline fallback.
+
+The dashboard is a *client* of the existing daemon (``daemon/client.py``
+over the TCP loopback transport). There is deliberately no second transport
+here — no IPC module, no named pipes, no second server. When no daemon is
+reachable the UI stays usable with local ``psutil`` stats and clearly
+marked mock rows, and it reconnects in the background the moment a daemon
+appears (e.g. ``jarvis daemon start`` in another terminal).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import psutil
+
+from ui.providers import MOCK_PROVIDERS, MOCK_TASKS, provider_rows
+
+__all__ = ["TuiDataSource"]
+
+EventCallback = Callable[[str, dict], None]
+
+
+class TuiDataSource:
+    """Owns the daemon connection, live samples, and mock fallback state."""
+
+    def __init__(self, project_dir: str | None = None,
+                 mock: bool = False, url: str | None = None) -> None:
+        self.project_dir = str(
+            Path(project_dir).resolve() if project_dir else Path.cwd().resolve())
+        self._force_mock = mock
+        self._url_override = url
+        self._client: Any = None
+        self._connected = False
+        self._last_error = ""
+        self._status: dict = {}
+        self._models: dict = {}
+        self._provider_rows: list[tuple[str, str, str, str, str]] = list(MOCK_PROVIDERS)
+        self._mock_providers = True
+        self._mock_tasks = True
+        self._cpu_history = [0.0] * 60
+        self._ram_history = [0.0] * 60
+        self._token_history = [5.0] * 48
+        psutil.cpu_percent(interval=None)
+
+    # ── connection ──────────────────────────────────────────────────────
+
+    async def connect(self) -> None:
+        """Resolve the project daemon entry and authenticate to it."""
+        if self._force_mock:
+            self._mark_offline("forced mock mode (--mock)")
+            return
+        from daemon.client import DaemonClient
+
+        if self._url_override:
+            client, err = self._client_from_url(self._url_override)
+            if err:
+                self._mark_offline(err)
+                return
+        else:
+            entry = await asyncio.to_thread(self._resolve_entry)
+            if entry is None:
+                self._mark_offline("no daemon for this project (run `jarvis daemon start`)")
+                return
+            client = DaemonClient(
+                host="127.0.0.1",
+                port=int(entry["port"]),
+                token=str(entry.get("token", "")),
+                project_id=entry.get("project_id", ""),
+            )
+        try:
+            await client.connect()
+        except Exception as exc:
+            self._mark_offline(str(exc))
+            return
+        self._client = client
+        self._connected = True
+        self._last_error = ""
+        await self.refresh()
+
+    @staticmethod
+    def _client_from_url(url: str) -> tuple[Any, str]:
+        from urllib.parse import parse_qs, urlparse
+
+        from daemon.client import DaemonClient
+
+        parsed = urlparse(url)
+        if parsed.scheme not in ("tcp", "http"):
+            return None, f"unsupported daemon url scheme: {parsed.scheme!r}"
+        qs = parse_qs(parsed.query)
+        return DaemonClient(
+            host=parsed.hostname or "127.0.0.1",
+            port=int(parsed.port or 0),
+            token=qs.get("token", [""])[0],
+            project_id=qs.get("project_id", [""])[0],
+        ), ""
+
+    def _resolve_entry(self) -> dict | None:
+        from daemon.lifecycle import find_matching
+
+        return find_matching(self.project_dir)
+
+    def _mark_offline(self, reason: str) -> None:
+        self._connected = False
+        self._client = None
+        self._last_error = reason
+        self._status = {}
+        self._models = {}
+        self._provider_rows = list(MOCK_PROVIDERS)
+        self._mock_providers = True
+
+    async def refresh(self) -> None:
+        """Pull status + provider health from the daemon."""
+        if not self._connected or self._client is None:
+            return
+        try:
+            self._status = await self._client.status()
+            self._models = await self._client.models()
+            rows = provider_rows(self._models)
+            self._provider_rows = rows if rows else list(MOCK_PROVIDERS)
+            self._mock_providers = not bool(rows)
+        except Exception as exc:
+            self._mark_offline(str(exc))
+
+    async def try_reconnect(self) -> None:
+        """Best-effort background reconnect when currently offline."""
+        if not self._connected:
+            await self.connect()
+
+    # ── commands ────────────────────────────────────────────────────────
+
+    async def run_goal(self, goal: str,
+                       on_event: EventCallback | None = None) -> dict:
+        """Submit a goal; stream observer events; return the result dict."""
+        if not self._connected or self._client is None:
+            return {"success": False,
+                    "error": self._last_error or "daemon not connected"}
+        try:
+            return await self._client.run(goal, on_event=on_event)
+        except Exception as exc:
+            self._connected = False
+            self._last_error = str(exc)
+            return {"success": False, "error": str(exc)}
+
+    # ── live samples (local psutil, no daemon needed) ───────────────────
+
+    def snapshot(self) -> dict[str, Any]:
+        cpu = psutil.cpu_percent(interval=None)
+        vm = psutil.virtual_memory()
+        du = psutil.disk_usage(Path(self.project_dir).anchor or "/")
+        self._cpu_history = self._cpu_history[1:] + [cpu]
+        self._ram_history = self._ram_history[1:] + [vm.percent]
+        return {
+            "cpu_percent": cpu,
+            "ram_percent": vm.percent,
+            "ram_used_gb": vm.used / (1024 ** 3),
+            "ram_total_gb": vm.total / (1024 ** 3),
+            "disk_used_gb": du.used / (1024 ** 3),
+            "disk_total_gb": du.total / (1024 ** 3),
+            "uptime_s": time.time() - psutil.boot_time(),
+            "active_tasks": 1 if self._status.get("busy") else 0,
+        }
+
+    def token_history(self) -> list[float]:
+        # MOCK — real per-hour token counts would come from perf.db.
+        self._token_history = self._token_history[1:] + [
+            max(0, self._token_history[-1] + 1.5)
+        ]
+        return self._token_history
+
+    # ── state for the UI ────────────────────────────────────────────────
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    @property
+    def last_error(self) -> str:
+        return self._last_error
+
+    @property
+    def status(self) -> dict:
+        return self._status
+
+    @property
+    def provider_rows(self) -> list[tuple[str, str, str, str, str]]:
+        return self._provider_rows
+
+    @property
+    def using_mock_providers(self) -> bool:
+        return self._mock_providers
+
+    @property
+    def task_rows(self) -> list[tuple[str, str, str, int, str]]:
+        return list(MOCK_TASKS)  # mock — daemon has no task endpoint yet
+
+    @property
+    def using_mock_tasks(self) -> bool:
+        return self._mock_tasks
+
+    @property
+    def cpu_history(self) -> list[float]:
+        return self._cpu_history
+
+    @property
+    def ram_history(self) -> list[float]:
+        return self._ram_history

@@ -26,6 +26,7 @@ __all__ = [
     "restart_daemon",
     "daemon_status",
     "list_daemons",
+    "sweep_stale_entries",
 ]
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -271,3 +272,28 @@ def list_daemons() -> list[dict]:
         )
         out.append({**entry, "healthy": healthy})
     return out
+
+
+def sweep_stale_entries(base_dir=None, ping_retries: int = 2) -> list[dict]:
+    """Remove registry entries whose daemon is dead or unreachable.
+
+    An entry is stale when its PID is gone, or it fails ``ping`` across a few
+    quick attempts (guarding against transient blips on a busy daemon). Healthy
+    entries are left untouched. Returns the removed entries.
+    """
+    removed = []
+    for entry in list_entries(base_dir):
+        if not _pid_alive(int(entry.get("pid", -1))):
+            remove_entry(entry["project_id"], base_dir)
+            removed.append(entry)
+            continue
+        response = None
+        for _ in range(max(1, ping_retries)):
+            response = _round_trip(entry, _env("ping"), timeout=1.0)
+            if response is not None and response.type == "pong":
+                break
+            time.sleep(0.2)
+        if response is None or response.type != "pong":
+            remove_entry(entry["project_id"], base_dir)
+            removed.append(entry)
+    return removed

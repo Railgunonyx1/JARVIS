@@ -91,8 +91,6 @@ def _load_system_prompt() -> str:
 # ── Phrase-level TTS chunking ─────────────────────────────────────────────────
 # Splits text into small chunks (5 words or natural pauses) so TTS starts sooner.
 
-import re
-
 _MIN_PHRASE_WORDS = 5
 _MIN_PHRASE_CHARS = 20
 # Natural pause characters that justify a TTS break
