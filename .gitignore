@@ -13,6 +13,12 @@ dist/
 build/
 *.spec
 
+# Virtual environments (never commit these - they are huge)
+venv/
+.venv/
+env/
+.env/
+
 # Logs
 logs/
 *.log
