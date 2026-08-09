@@ -2,24 +2,24 @@
 chcp 65001 >nul 2>&1
 title JARVIS MK-X
 color 0B
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 cls
 echo.
 echo   JARVIS MK-X
 echo   MARK LXXXV - Cloud-First AI Assistant
-echo.
 echo ---------------------------------------------------------
 echo.
 echo   What would you like to do?
 echo.
-echo     [1]  Full Mode     Desktop + Voice + Camera + Gestures
-echo     [2]  Desktop       Arc Reactor HUD with voice control
-echo     [3]  Voice         Microphone input + Speaker output
-echo     [4]  Text          Terminal chat, no voice
-echo     [5]  Health        Run system diagnostics
-echo     [6]  Install       Install or update dependencies
-echo     [Q]  Quit          Exit JARVIS
+echo     [1]  Chat       Interactive terminal chat
+echo     [2]  Dashboard  Textual system dashboard
+echo     [3]  One-shot   Type a goal, get one answer
+echo     [4]  Daemon     Start the background kernel daemon
+echo     [5]  Perf       Show persisted performance data
+echo     [6]  Tests      Run the test suite
+echo     [7]  Install    Install or update dependencies
+echo     [Q]  Quit       Exit JARVIS
 echo.
 echo ---------------------------------------------------------
 echo.
@@ -27,12 +27,13 @@ echo.
 set /p choice="  jarvis> "
 
 if "%choice%"=="" exit /b
-if /i "%choice%"=="1" goto full
-if /i "%choice%"=="2" goto desktop
-if /i "%choice%"=="3" goto voice
-if /i "%choice%"=="4" goto text
-if /i "%choice%"=="5" goto health
-if /i "%choice%"=="6" goto install
+if /i "%choice%"=="1" goto chat
+if /i "%choice%"=="2" goto dashboard
+if /i "%choice%"=="3" goto oneshot
+if /i "%choice%"=="4" goto daemon
+if /i "%choice%"=="5" goto perf
+if /i "%choice%"=="6" goto tests
+if /i "%choice%"=="7" goto install
 if /i "%choice%"=="q" goto quit
 
 echo.
@@ -40,35 +41,48 @@ echo   Invalid option. Try again.
 timeout /t 2 >nul
 exit /b
 
-:full
-echo   Launching Full Mode...
-start "" "venv\Scripts\pythonw.exe" launcher.py --full
+:chat
+echo.
+echo   Type /help for commands, /exit to quit.
+echo.
+"venv\Scripts\python.exe" -m cli
 exit /b
 
-:desktop
-echo   Launching Desktop HUD...
-start "" "venv\Scripts\pythonw.exe" launcher.py --gui
+:dashboard
+echo.
+"venv\Scripts\python.exe" -m cli tui
 exit /b
 
-:voice
-echo   Launching Voice Mode...
-start "" "venv\Scripts\pythonw.exe" launcher.py --voice
+:oneshot
+echo.
+set /p goal="  goal> "
+if "%goal%"=="" goto chat
+echo.
+"venv\Scripts\python.exe" -m cli "%goal%"
+pause
 exit /b
 
-:text
-echo   Launching Text Mode...
-start "" "venv\Scripts\pythonw.exe" launcher.py --text
+:daemon
+echo   Starting daemon...
+"venv\Scripts\python.exe" -m cli daemon start
+echo.
+"venv\Scripts\python.exe" -m cli daemon status
+pause
 exit /b
 
-:health
-echo   Running diagnostics...
-start "" "venv\Scripts\python.exe" launcher.py --health
+:perf
+"venv\Scripts\python.exe" -m cli perf summary
+pause
+exit /b
+
+:tests
+"venv\Scripts\python.exe" -m pytest tests -q
 pause
 exit /b
 
 :install
 echo   Updating dependencies...
-start "" "venv\Scripts\python.exe" launcher.py --install
+"venv\Scripts\python.exe" -m pip install -r requirements.txt
 pause
 exit /b
 
