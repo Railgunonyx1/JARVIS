@@ -9,6 +9,7 @@ real ``~/.jarvis`` is never touched.
 """
 
 import asyncio
+import io
 import json
 import os
 import socket
@@ -477,4 +478,30 @@ def test_sweep_keeps_healthy_daemon(server, tmp_path):
     srv = server()
     assert sweep_stale_entries(base_dir=base) == []
     assert (base / f"daemon-{srv.project_id}.json").exists()
+
+
+# ── interactive REPL ────────────────────────────────────────────────────────
+
+
+def test_interactive_repl_runs_goal_and_prints_summary(server, capsys, monkeypatch):
+    """Regression: the daemon REPL must actually execute (await) the goal.
+
+    ``_interactive_daemon`` previously invoked the async ``_run_once_daemon``
+    without ``asyncio.run``, so the coroutine was discarded and never awaited:
+    the user saw only the banner and an echoed prompt (silent no-response,
+    exit 0). This drives the real REPL against a stub-kernel daemon and
+    asserts the collapsed run summary is printed.
+    """
+    import cli.main
+    from daemon.client import DaemonClient
+
+    srv = server(events=2, delay=0.005)
+    client = DaemonClient(host="127.0.0.1", port=srv.port,
+                          token=srv.token, project_id=srv.project_id)
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO("regression goal"))
+    cli.main._interactive_daemon(client)
+
+    out = capsys.readouterr().out
+    assert "Enter to expand" in out, f"run summary missing; got:\n{out}"
 

@@ -34,6 +34,20 @@ def test_sandbox_rejects_input_and_escape():
     assert not Sandbox().check_command("echo ^& dir")[0]
 
 
+def test_sandbox_rejects_semicolon_chaining():
+    from security.sandbox import Sandbox
+    allowed, reason = Sandbox().check_command("dir; whoami")
+    assert not allowed
+    assert "operator" in reason
+
+
+def test_sandbox_rejects_powershell_operators():
+    from security.sandbox import Sandbox
+    assert not Sandbox().check_command("echo `whoami")[0]
+    assert not Sandbox().check_command("echo $(whoami)")[0]
+    assert not Sandbox().check_command("echo ${env:PATH}")[0]
+
+
 def test_sandbox_allows_plain_command():
     from security.sandbox import Sandbox
     allowed, reason = Sandbox().check_command("dir /b")

@@ -319,4 +319,4 @@ class Cache:
     @staticmethod
     def make_key(*parts: str) -> str:
         raw = ":".join(parts)
-        return hashlib.md5(raw.encode()).hexdigest()
+        return hashlib.sha256(raw.encode()).hexdigest()[:32]

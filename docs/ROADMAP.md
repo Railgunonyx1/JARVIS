@@ -21,6 +21,83 @@ Terminal-first, lightweight, Claude Code–style engineering agent.
 - No unnecessary UI frameworks
 - No voice subsystem unless the architecture changes explicitly
 
+## Current Execution Plan (approved 2026-08-09, revised 2026-08-09)
+
+Governing rule: **do not add complexity to compensate for an unreliable core.**
+
+Target loop: `JARVIS> input → IPC → AgentLoop.run() → response → terminal`
+
+Priority stack (locked):
+
+| Pri | Work | Reason |
+|---|---|---|
+| **P0** | Interactive no-response bug | **DONE** — see below |
+| **P0** | Command-execution security (`shell=True`) | Verified security boundary failure |
+| **P1** | Named Pipe IPC + reliability (IDs, cancel, reconnect, limits) | Core Textual ↔ daemon architecture |
+| **P1** | Textual UX stabilization | User-facing interface |
+| **P2** | Harden existing memory stack | Existing architecture, major project priority |
+| **P2** | Memory benchmarks / evaluation | Objective baseline |
+| **P2** | Provider hardening | Reliability / fallback quality |
+| **P3** | Gemini `google-genai` migration | Scheduled refactor, not urgent |
+| **P3** | New capabilities (CRM research agent, Gotify) | Post-stability |
+| **P4** | Evaluate external memory repos | Only if baseline demonstrates a need |
+
+Immediate engineering sequence:
+
+```
+No-response blocker (DONE)
+        ↓
+Command execution security
+        ↓
+Named Pipe / daemon integration
+        ↓
+Textual stabilization
+        ↓
+Memory hardening
+        ↓
+Provider hardening
+        ↓
+Gemini migration
+        ↓
+New capabilities
+```
+
+- **P0 — Interactive reliability (DONE):** silent no-response in the daemon REPL was a
+  missing `asyncio.run` around the async `_run_once_daemon` (coroutine discarded, never
+  awaited). Fixed: `cli/main.py` now awaits the run, the `--daemon` one-shot no longer
+  double-wraps in `asyncio.run`, Windows daemon spawn is WMI-first (escapes kill-on-close
+  job objects so the daemon survives terminal close), `python -m cli.main` routes through
+  `entry()`, and the REPL reports dropped connections instead of a raw traceback.
+  Regression: `tests/test_daemon.py::test_interactive_repl_runs_goal_and_prints_summary`.
+  Launchers verified: `jarvis.cmd` and `scripts/start.bat`.
+- **P0 — Command execution security (approved):** verified `shell=True` boundary failure.
+  `Sandbox.check_command` previously missed `;`, backtick, `$(`, `${` (now blocked) and the
+  whole blocklist path (`SecurityEngine.execute_sandboxed`) has **zero runtime callers** —
+  the autonomous agent actually executes through `tools/shell.py:shell_execute` →
+  `subprocess.run(command, shell=True)` with only the policy gate upstream and **no
+  operator filtering at all**. Remediation target: command policy → structured
+  argv → `subprocess` with `shell=False`; shell-requiring commands route through a
+  restricted, explicitly-approved path. Authorization stays capability-based (policy
+  gate), operator filtering becomes defense-in-depth, not the boundary.
+- **P1 — IPC integration:** named pipe, request IDs, event streaming, cancellation,
+  reconnect, bounded queues/frame limits, Windows end-to-end test.
+- **P1 — Terminal UX:** stabilize the existing Textual/terminal UX; do NOT replace Textual yet.
+- **P2 — Memory hardening:** benchmark-first against the existing in-repo stack; caching,
+  pruning, tiers, context-aware recall; evaluate sqlite-vec. Research repos (Memvid,
+  LycheeMemory, Mnemosyne, Cortex, TencentDB, agentmemory) are evaluation candidates only —
+  **P4: adopt only if the baseline demonstrates a need.**
+- **P2 — Provider hardening:** dynamic routing, capability + health registries, fail-fast
+  on 429, retry budget ≈ 1, cost tracking.
+- **P3 — Gemini `google-genai` migration (scheduled):** `google-generativeai` is EOL
+  (2025-11-30) but pinned and functional; Gemini is fallback priority 2 behind Groq.
+  Sequence: build eval harness → port `providers/gemini_provider.py` → A/B (quality,
+  latency, tokens, tool calls, error/fallback) → port 9 direct SDK call sites across
+  `core/executor.py`, `core/planner.py`, `core/cog_error_handler.py`,
+  `workflows/goal_decomposer.py` → full test/eval → remove old SDK. Keep both SDKs
+  installed during transition.
+- **P3 — New capabilities:** CRM research agent, Gotify notifications.
+- **P4 — External memory repos:** evaluate only if the in-repo baseline demonstrates a need.
+
 ## 1. Core Runtime & Daemon
 
 - [ ] Make the daemon the single runtime authority
@@ -28,12 +105,12 @@ Terminal-first, lightweight, Claude Code–style engineering agent.
 - [ ] `asyncio.shield()` in-flight runs
 - [ ] Preserve running tasks after client disconnect
 - [ ] Top-level daemon crash logging
-- [ ] Automatic daemon resurrection
-- [ ] Watchdog / health monitoring
-- [ ] Stale daemon registry cleanup
-- [ ] Windows `CREATE_BREAKAWAY_FROM_JOB`
-- [ ] WMI fallback spawning
-- [ ] 50+ connect/disconnect survivability test
+- [x] Automatic daemon resurrection
+- [x] Watchdog / health monitoring
+- [x] Stale daemon registry cleanup
+- [x] Windows `CREATE_BREAKAWAY_FROM_JOB`
+- [x] WMI fallback spawning
+- [x] 50+ connect/disconnect survivability test
 - [ ] Interrupted-request survivability test
 - [ ] Real-terminal detached-daemon validation
 
@@ -259,7 +336,11 @@ Terminal-first, lightweight, Claude Code–style engineering agent.
 
 ## 14. Security
 
-- [ ] Resolve all Bandit HIGH findings
+- [x] Resolve all Bandit HIGH findings (verified 0 HIGH remaining, 2026-08-09)
+- [ ] Command execution: route agent shell through structured argv + `shell=False`
+- [ ] Shell-required commands: restricted, explicitly-approved path only
+- [ ] Wire operator filtering into the agent's live shell path (`tools/shell.py`), not only the unused sandbox
+- [ ] `core/jarvis.py`: replace silent `pass` with `logger.debug(..., exc_info=True)` (39 of 98 B110 findings)
 - [ ] Resolve medium security findings
 - [ ] Security CI
 - [ ] Dependency auditing
@@ -385,8 +466,11 @@ Terminal → ultra-fast client → permanent daemon → intelligent router → m
 - **Phase 1 — Controlled demolition (done):** `pipeline/`, `actions/`, `voice_engine/` moved to
   `_quarantine_removed/`; `tests/test_imports.py` guards resurrection; surviving closure verified
   free of the quarantined packages.
-- **Next milestone:** JARVIS can open a repository, understand its structure, ask for a task,
-  plan changes, and execute one safe filesystem operation through the terminal
-  (see Sections 7, 10, 16).
+- **Next milestone:** P0 interactive reliability is done (see Current Execution Plan) — the
+  `JARVIS>` REPL round-trips through the daemon and prints responses. Next (locked order):
+  P0 command-execution security (verified `shell=True` boundary failure; agent's live shell
+  path needs operator filtering + structured argv), then P1 named-pipe IPC integration and
+  terminal UX stabilization, P2 memory + provider hardening, then P3 Gemini `google-genai`
+  migration as a scheduled refactor.
 - **Blocked:** git recovery points (branch/tag/manifest) require a git-equipped machine; real
   detached-daemon and live-LLM TTFT numbers require the user's terminal + API access.

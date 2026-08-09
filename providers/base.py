@@ -1,6 +1,7 @@
 """Abstract base class for LLM providers in JARVIS MK-X."""
 
 import importlib
+import random
 import time
 import logging
 from abc import ABC, abstractmethod
@@ -131,7 +132,7 @@ class LLMProvider(ABC):
         self._requests_today += 1
         self._requests_this_minute += 1
         cooldown = min(120, 10 * (2 ** self.health.consecutive_failures))
-        self.health.cooldown_until = time.time() + cooldown
+        self.health.cooldown_until = time.time() + cooldown + random.uniform(0, 2)  # nosec B311
         self.health.last_error = "rate_limited"
 
     def record_failure(self, error: str):
@@ -140,13 +141,13 @@ class LLMProvider(ABC):
         self.health.last_error = error
         self.health.error_rate = min(1.0, self.health.error_rate * 0.9 + 0.1)
 
-        # Exponential backoff cooldown
+        # Exponential backoff cooldown (full jitter to avoid thundering herd)
         if self.health.consecutive_failures >= 3:
             cooldown = min(300, 30 * (2 ** (self.health.consecutive_failures - 3)))
-            self.health.cooldown_until = time.time() + cooldown
+            self.health.cooldown_until = time.time() + random.uniform(0, cooldown)  # nosec B311
             logger.warning(
                 "%s: %d consecutive failures, cooling down for %ds",
-                self.name, self.health.consecutive_failures, cooldown
+                self.name, self.health.consecutive_failures, int(cooldown)
             )
         if self.health.consecutive_failures >= 5:
             self.health.available = False

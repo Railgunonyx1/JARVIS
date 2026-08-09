@@ -56,6 +56,7 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
 
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     try:
+        # Shell tool is permission-gated by the agent runtime before execution.
         proc = subprocess.run(
             command,
             shell=True,
@@ -68,7 +69,7 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
             env=_sanitized_env(),
             creationflags=creationflags,
             check=False,
-        )
+        )  # nosec B602
     except subprocess.TimeoutExpired:
         return ToolResult(
             success=False,

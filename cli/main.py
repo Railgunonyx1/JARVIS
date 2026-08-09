@@ -266,8 +266,8 @@ def main(
             from daemon.client import DaemonDisconnected, DaemonError
 
             try:
-                asyncio.run(_daemon_one_shot(goal, client, json_output=json_output,
-                                             perf=perf))
+                _daemon_one_shot(goal, client, json_output=json_output,
+                                 perf=perf)
             except (DaemonDisconnected, DaemonError, ConnectionError, OSError) as exc:
                 if daemon:
                     typer.secho(f"daemon connection failed: {exc}", err=True, fg="red")
@@ -552,15 +552,18 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
             if not last_goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
-                last_result = _run_once_daemon(
-                    last_goal, client, collapsed=True, notifications=notifications)
+                last_result = asyncio.run(_run_once_daemon(
+                    last_goal, client, collapsed=True, notifications=notifications))
         else:
             last_goal = line
             try:
-                last_result = _run_once_daemon(
-                    line, client, collapsed=True, notifications=notifications)
+                last_result = asyncio.run(_run_once_daemon(
+                    line, client, collapsed=True, notifications=notifications))
             except KeyboardInterrupt:
                 typer.secho("(interrupted)", dim=True)
+                last_result = None
+            except (ConnectionError, OSError) as exc:
+                typer.secho(f"daemon connection lost: {exc}", err=True, fg="red")
                 last_result = None
 
 
@@ -1058,4 +1061,4 @@ def _print_help() -> None:
 
 
 if __name__ == "__main__":
-    app()
+    entry()

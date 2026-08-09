@@ -18,6 +18,12 @@ from daemon.project import project_id
 from daemon.state import PROTOCOL_VERSION, list_entries, load_entry, remove_entry
 from runtime.transport.protocol import decode_line, encode_line
 
+# Full path to powershell.exe to avoid PATH-order hijack of the WMI spawner.
+_WINDOWS_POWERSHELL = (
+    r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    if os.name == "nt" else "powershell"
+)
+
 __all__ = [
     "entry_healthy",
     "find_matching",
@@ -155,12 +161,18 @@ def start_daemon(project_dir: str, port: int | None = None,
 def _spawn(command: list, cwd: str) -> None:
     """Start the detached daemon, escaping any inherited Job object.
 
-    Windows terminal harnesses often place commands inside a kill-on-close Job
-    object. ``CREATE_BREAKAWAY_FROM_JOB`` escapes it when the job allows
-    breakaway; when denied (``OSError``), spawn via the WMI provider instead,
-    which creates the process outside the caller's job entirely.
+    Terminal harnesses place commands inside a kill-on-close Job object, so a
+    plain ``CreateProcess`` child dies when the spawning command's job closes
+    — even with ``CREATE_BREAKAWAY_FROM_JOB``, which can silently fail to
+    actually escape. On Windows we therefore spawn through the WMI provider
+    first: ``Win32_Process.Create`` creates the process as a child of
+    ``WmiPrvSE.exe``, outside the caller's job entirely. ``CreateProcess``
+    (with breakaway) remains the fallback for machines where WMI/PowerShell
+    is unavailable.
     """
     if os.name == "nt":
+        if _spawn_wmi(command, cwd):
+            return
         try:
             subprocess.Popen(
                 command,
@@ -172,9 +184,7 @@ def _spawn(command: list, cwd: str) -> None:
             )
             return
         except OSError:
-            pass  # job forbids breakaway — try the WMI provider
-        if _spawn_wmi(command, cwd):
-            return
+            pass  # job forbids breakaway — nothing more to try
     subprocess.Popen(
         command,
         cwd=cwd,
@@ -203,7 +213,7 @@ def _spawn_wmi(command: list, cwd: str) -> bool:
     )
     try:
         result = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            [_WINDOWS_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=30.0,

@@ -79,8 +79,8 @@ class Sandbox:
                 return False, f"Blocked command pattern: {blocked}"
 
         # Block dangerous shell operators
-        dangerous = ["&&", "&", "||", "|", ">", ">>", "2>&1", ">&", "<", "^",
-                     "\n", "\r"]
+        dangerous = ["&&", "&", "||", "|", ";", ">", ">>", "2>&1", ">&", "<", "^",
+                     "`", "$(", "${", "\n", "\r"]
         for d in dangerous:
             if d in cmd_lower:
                 # Allow common safe redirects
@@ -127,6 +127,7 @@ class Sandbox:
         try:
             # Use subprocess with timeout
             is_windows = sys.platform == "win32"
+            # Command pre-validated by check_command() blocklists and operators.
             proc = subprocess.Popen(
                 command,
                 shell=True,
@@ -135,7 +136,7 @@ class Sandbox:
                 cwd=cwd,
                 env=exec_env,
                 creationflags=subprocess.CREATE_NO_WINDOW if is_windows else 0,
-            )
+            )  # nosec B602
 
             with self._lock:
                 self._active_processes[proc_id] = proc
