@@ -2,12 +2,19 @@
 
 import time
 import logging
+import warnings
 from typing import AsyncIterator, Optional
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import json_args, parse_gemini_function_calls, to_gemini_tools
 
 logger = logging.getLogger("jarvis.providers.gemini")
+
+# The deprecated google.generativeai SDK raises a FutureWarning at import that
+# is attributed to importlib via stacklevel, so it evades module-scoped
+# filters. Match on the message text to keep it out of user-facing output.
+warnings.filterwarnings("ignore", category=FutureWarning,
+                        message=r"(?s).*google\.generativeai")
 
 
 class GeminiProvider(LLMProvider):

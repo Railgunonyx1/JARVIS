@@ -41,6 +41,10 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 warnings.filterwarnings("ignore")
+# The deprecated google.generativeai SDK warns via a stacklevel that points at
+# importlib, so module-scoped filters never match — filter on the message text.
+warnings.filterwarnings("ignore", category=FutureWarning,
+                        message=r"(?s).*google\.generativeai")
 
 # Heavy modules (config, providers, tools, memory, UI panels) are imported
 # lazily inside the functions that need them so the interactive prompt can
