@@ -325,17 +325,17 @@ def _resolve_transport(force_daemon: bool, force_standalone: bool,
 
 def _render_status_bar_dict(status: dict) -> Text:
     """Status-bar line rendered from a daemon status dict."""
-    bits = ["JARVIS"]
-    bits.append(f"mode={status.get('mode', 'agent')}")
+    bits = [Text("JARVIS", style="bold cyan")]
+    bits.append(Text(f"mode={status.get('mode', 'agent')}", style="green"))
     if status.get("provider"):
-        bits.append(f"{status.get('model')}/{status.get('provider')}")
-    bits.append(f"tools={status.get('tools', 0)}")
+        bits.append(Text(f"{status.get('model')}/{status.get('provider')}", style="magenta"))
+    bits.append(Text(f"tools={status.get('tools', 0)}", style="yellow"))
     mem = status.get("mem_stats") or {}
     if mem:
-        bits.append(f"mem={mem.get('decisions', 0)}d/{mem.get('knowledge', 0)}k")
+        bits.append(Text(f"mem={mem.get('decisions', 0)}d/{mem.get('knowledge', 0)}k", style="dim"))
     if status.get("busy"):
-        bits.append("busy")
-    return Text("  │  ".join(bits))
+        bits.append(Text("busy", style="bold red blink"))
+    return Text("  │  ").join(bits)
 
 
 def _print_result_dict(result: dict) -> None:
@@ -469,11 +469,19 @@ def _client_call(client, coro):
 
 def _interactive_daemon(client, profile_startup: bool = False) -> None:
     """Interactive command center against a persistent daemon kernel."""
+    from rich import box
+    from rich.panel import Panel
+
     from cli.cockpit import render_notifications
 
     console.clear()
-    console.print(Text("JARVIS MK-X — persistent daemon kernel", style="bold cyan"))
-    console.print(Text("/help for commands", style="dim"))
+    console.print(Panel(
+        Text("JARVIS MK-X — persistent daemon kernel", style="bold cyan"),
+        subtitle="terminal-first autonomous engineering agent",
+        box=box.ROUNDED,
+        border_style="cyan",
+    ))
+    console.print(Text("  /help for commands", style="dim"))
 
     notifications: list = []
     _configure_noise(verbose=False)
@@ -487,6 +495,7 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
         typer.secho("daemon connection failed", err=True, fg="red")
         return
     console.print(_render_status_bar_dict(status))
+    console.print()
     if profile_startup:
         _print_startup_report()
 
@@ -495,7 +504,12 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
 
     while True:
         try:
-            line = input("JARVIS> ").strip()
+            status = _client_call(client, client.status())
+            console.print(_render_status_bar_dict(status), highlight=False)
+        except Exception:
+            pass
+        try:
+            line = console.input(Text("JARVIS", style="bold cyan") + Text("> ", style="bold")).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -739,27 +753,36 @@ def perf_cli(argv) -> int:
 
 
 def tui_cli(argv) -> int:
-    """`jarvis tui` — launch the Textual dashboard, a client of the daemon.
+    """`jarvis tui` — launch the Textual conversation client, a client of the daemon.
 
-    Imported lazily so the default REPL keeps a tiny startup profile; the
-    TUI talks to the running daemon over TCP (or the named pipe) and falls
-    back to a mock provider when no daemon is up.
+    Imported lazily so the default REPL keeps a tiny startup profile; the TUI
+    talks to the running daemon (auto-starting it if needed) and streams agent
+    events into a conversation view. Pass ``--dashboard`` for the legacy
+    system-dashboard view.
     """
     import argparse
 
-    from ui.tui import JarvisApp
-
     parser = argparse.ArgumentParser(
         prog="jarvis tui",
-        description="Textual dashboard for a running JARVIS daemon.",
+        description="Textual conversation client for a running JARVIS daemon.",
     )
     parser.add_argument("--mock", action="store_true",
                         help="force mock providers even if a daemon is reachable")
     parser.add_argument("--url", default=None,
                         help="daemon TCP URL override (default: auto-discover)")
+    parser.add_argument("--dashboard", action="store_true",
+                        help="show the legacy system dashboard instead")
+    parser.add_argument("--project-dir", default=None,
+                        help="project root for daemon discovery (default: cwd)")
     args = parser.parse_args(argv)
 
-    JarvisApp(mock=args.mock, url=args.url).run()
+    if args.dashboard:
+        from ui.tui import JarvisApp as DashboardApp
+        DashboardApp(mock=args.mock, url=args.url).run()
+        return 0
+
+    from ui.conversation import JarvisApp
+    JarvisApp(mock=args.mock, url=args.url, project_dir=args.project_dir).run()
     return 0
 
 

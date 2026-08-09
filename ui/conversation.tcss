@@ -1,0 +1,75 @@
+/* conversation.tcss
+   JARVIS MK-X conversation client — dark engineering-console theme.
+   White/cyan for structure, green reserved for healthy/active state. */
+
+Screen {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+/* ---- Header ---- */
+#header {
+    height: 1;
+    background: #161b22;
+    border-bottom: solid #30363d;
+    padding: 0 2;
+}
+
+/* ---- Main: conversation + sidebar ---- */
+#main {
+    height: 1fr;
+    layout: horizontal;
+}
+#conversation {
+    width: 1fr;
+    height: 100%;
+    padding: 0 2;
+}
+#conversation RichLog {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+#conversation .richlog {
+    background: #0d1117;
+    border: none;
+}
+
+/* ---- Sidebar ---- */
+#sidebar {
+    width: 30;
+    height: 100%;
+    background: #161b22;
+    border-left: solid #30363d;
+    padding: 1 1;
+}
+#sidebar Static {
+    border: solid #30363d;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+#daemon-box { }
+#system-box { }
+#task-box   { }
+
+/* ---- Input bar ---- */
+#input-bar {
+    height: 3;
+    background: #161b22;
+    border-top: solid #30363d;
+    padding: 0 1;
+}
+#prompt {
+    content-align: left middle;
+    color: #58a6ff;
+    text-style: bold;
+    width: 10;
+    padding-left: 1;
+}
+#cmd-input {
+    background: #0d1117;
+    color: #e6edf3;
+    border: none;
+}
+#cmd-input:focus {
+    border: none;
+}

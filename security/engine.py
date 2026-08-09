@@ -19,6 +19,7 @@ from security.policies import (
     build_controlled_policy, build_smart_policy, build_agent_policy,
 )
 from security.sandbox import Sandbox, SandboxConfig, SandboxResult
+from security.executor import ExecRequest, get_secure_executor
 from security.audit import AuditLog, AuditEntry
 
 logger = logging.getLogger("jarvis.security.engine")
@@ -104,7 +105,13 @@ class SecurityEngine:
     def execute_sandboxed(self, command: str, session_id: str = "",
                           cwd: Optional[str] = None,
                           env: Optional[Dict[str, str]] = None) -> SandboxResult:
-        """Execute a command in the sandbox with full audit logging."""
+        """Execute a command through the authoritative Secure Executor.
+
+        The executor (security.executor) is the single execution boundary:
+        policy classification, structured shell=False runs, governed shell
+        scripts, resource limits, and env sanitization all happen there.
+        This method adds permission pre-check + audit logging on top.
+        """
         start_time = time.time()
 
         # Pre-check
@@ -113,7 +120,9 @@ class SecurityEngine:
             return SandboxResult(success=False, blocked=True, block_reason=reason)
 
         # Execute
-        result = self._sandbox.execute(command, cwd=cwd, env=env)
+        req = ExecRequest(command=command, cwd=cwd, env=env,
+                          timeout=self._policy.timeout_seconds)
+        result = get_secure_executor().execute(req)
         duration_ms = (time.time() - start_time) * 1000
 
         # Audit
@@ -122,14 +131,23 @@ class SecurityEngine:
             action="shell_execute",
             tool="action.shell.run",
             permission_level=PermissionLevel.ELEVATED,
-            allowed=True,
+            allowed=not result.blocked,
             duration_ms=duration_ms,
             success=result.success,
             error=result.stderr if not result.success else None,
         )
         self._audit.log(entry)
 
-        return result
+        return SandboxResult(
+            success=result.success,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+            duration_ms=duration_ms,
+            timed_out=result.timed_out,
+            blocked=result.blocked,
+            block_reason=result.reason,
+        )
 
     def validate_action(self, tool_name: str, session_id: str = "",
                         mode: str = "") -> tuple[bool, str, Dict[str, Any]]:

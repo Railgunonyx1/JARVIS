@@ -34,6 +34,7 @@ class TuiDataSource:
             Path(project_dir).resolve() if project_dir else Path.cwd().resolve())
         self._force_mock = mock
         self._url_override = url
+        self._auto_start = True
         self._client: Any = None
         self._connected = False
         self._last_error = ""
@@ -63,6 +64,8 @@ class TuiDataSource:
                 return
         else:
             entry = await asyncio.to_thread(self._resolve_entry)
+            if entry is None and self._auto_start:
+                entry = await asyncio.to_thread(self._start_entry)
             if entry is None:
                 self._mark_offline("no daemon for this project (run `jarvis daemon start`)")
                 return
@@ -81,6 +84,11 @@ class TuiDataSource:
         self._connected = True
         self._last_error = ""
         await self.refresh()
+
+    def _start_entry(self) -> dict | None:
+        from daemon.lifecycle import start_daemon
+
+        return start_daemon(self.project_dir)
 
     @staticmethod
     def _client_from_url(url: str) -> tuple[Any, str]:

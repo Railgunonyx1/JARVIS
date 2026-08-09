@@ -1,36 +1,28 @@
-"""Shell tool — executes host commands with safety constraints.
+"""Shell tool — executes host commands through the Secure Executor.
 
-Guards: timeout, output truncation, sanitized environment (no secrets),
-explicit cwd, and a mandatory permission check in the agent runtime.
+This module is the user/agent-facing interface only. Every command is routed
+through security.executor (the single authoritative boundary): structured
+``executable``+``args`` runs with shell=False, raw ``command`` strings run
+through a governed PowerShell/cmd path after policy validation.
 """
 
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from security.executor import (
+    ExecRequest,
+    ExecResult,
+    get_secure_executor,
+    sanitize_environment,
+)
 from tools.schema import ToolResult, truncate
 
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 300
 MAX_OUTPUT_CHARS = 8000
-
-_SECRET_PATTERNS = (
-    "api_key", "apikey", "token", "secret", "password", "credential",
-    "authorization", "groq", "gemini", "openrouter", "opencode", "openai",
-)
-
-
-def _sanitized_env() -> Dict[str, str]:
-    """Environment copy with credential-like variables removed."""
-    env = dict(os.environ)
-    for key in list(env):
-        lower = key.lower()
-        if any(pattern in lower for pattern in _SECRET_PATTERNS):
-            env.pop(key, None)
-    return env
 
 
 def _default_cwd() -> str:
@@ -40,12 +32,24 @@ def _default_cwd() -> str:
 
 def shell_execute(args: Dict[str, Any]) -> ToolResult:
     command = (args.get("command") or "").strip()
-    if not command:
+    executable = (args.get("executable") or "").strip()
+    raw_args = args.get("args") or []
+
+    if command and executable:
+        return ToolResult(
+            success=False,
+            error="Provide either 'command' or 'executable'+'args', not both",
+        )
+    if not command and not executable:
         return ToolResult(success=False, error="No command provided")
+
     try:
         timeout = min(int(args.get("timeout") or DEFAULT_TIMEOUT), MAX_TIMEOUT)
     except (TypeError, ValueError):
         timeout = DEFAULT_TIMEOUT
+
+    if not isinstance(raw_args, (list, tuple)):
+        return ToolResult(success=False, error="'args' must be a list of strings")
 
     cwd = _default_cwd()
     if args.get("cwd"):
@@ -54,45 +58,38 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
             return ToolResult(success=False, error=f"cwd does not exist: {args['cwd']}")
         cwd = str(resolved)
 
-    creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    try:
-        # Shell tool is permission-gated by the agent runtime before execution.
-        proc = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            cwd=cwd,
-            env=_sanitized_env(),
-            creationflags=creationflags,
-            check=False,
-        )  # nosec B602
-    except subprocess.TimeoutExpired:
+    req = ExecRequest(
+        command=command,
+        executable=executable,
+        args=[str(a) for a in raw_args],
+        shell=args.get("shell") or "",  # nosec B604 -- dataclass field, not a subprocess call
+        cwd=cwd,
+        timeout=timeout,
+    )
+    result: ExecResult = get_secure_executor().execute(req)
+
+    if result.blocked:
         return ToolResult(
             success=False,
-            error=f"Command timed out after {timeout}s",
-            metadata={"timeout_s": timeout, "cwd": cwd},
+            error=f"Command blocked: {result.reason}",
+            metadata={"blocked": True, "cwd": cwd, "mode": result.mode},
         )
-    except OSError as e:
-        return ToolResult(success=False, error=f"Failed to run command: {e}")
 
-    stdout = proc.stdout or ""
-    stderr = proc.stderr or ""
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
     output = truncate(stdout, MAX_OUTPUT_CHARS)
-    if proc.returncode != 0 and not output:
+    if result.exit_code != 0 and not output:
         output = truncate(stderr, MAX_OUTPUT_CHARS)
 
     return ToolResult(
-        success=proc.returncode == 0,
+        success=result.success,
         output=output,
-        error="" if proc.returncode == 0 else truncate(stderr, MAX_OUTPUT_CHARS),
+        error="" if result.success else truncate(stderr, MAX_OUTPUT_CHARS),
         metadata={
-            "exit_code": proc.returncode,
+            "exit_code": result.exit_code,
             "cwd": cwd,
-            "shell": "cmd" if os.name == "nt" else "sh",
+            "mode": result.mode,
+            "timed_out": result.timed_out,
             "truncated": len(stdout) > MAX_OUTPUT_CHARS,
         },
     )

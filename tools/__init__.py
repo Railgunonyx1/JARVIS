@@ -68,18 +68,24 @@ def build_default_registry() -> ToolRegistry:
         Tool(
             name="shell.execute",
             description=(
-                "Execute a shell command on the host system and return its stdout/stderr. "
+                "Execute a command on the host system and return its stdout/stderr. "
+                "Prefer structured form: 'executable' + 'args' (runs without a shell). "
+                "For shell scripts use 'command' with optional 'shell' (powershell|cmd); "
+                "chaining operators and dangerous commands are rejected. "
                 "Use for anything the filesystem tools cannot do. Output is truncated; "
                 "long-running commands may time out."
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "The command line to run."},
+                    "executable": {"type": "string", "description": "Executable path or name. Preferred over 'command'."},
+                    "args": {"type": "array", "items": {"type": "string"}, "description": "Argument list (structured, no shell)."},
+                    "command": {"type": "string", "description": "A shell command string. Chaining/operators are blocked."},
+                    "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell host for raw commands. Default powershell."},
                     "cwd": {"type": "string", "description": "Working directory. Defaults to project root."},
                     "timeout": {"type": "integer", "description": "Timeout in seconds. Default 60, max 300."},
                 },
-                "required": ["command"],
+                "required": [],
             },
             permission="shell.execute",
             handler=shell_execute,
