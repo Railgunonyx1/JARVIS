@@ -141,6 +141,7 @@ class DaemonServer:
         self._bootstrap_tokens: dict[str, float] = {}
         self._tasks: dict[int, set] = {}
         self._run_lock = asyncio.Lock()
+        self._run_claim = asyncio.Lock()
         self._shutdown = asyncio.Event()
         self.started_at = time.time()
         self._last_state = None
@@ -442,16 +443,19 @@ class DaemonServer:
                     if expiry <= now]:
             self._bootstrap_tokens.pop(key, None)
 
-    async def _broadcast_conn_state(self, event: str, peer: str) -> None:
+    async def _broadcast_conn_state(self, event: str, peer: str,
+                                    exclude=None) -> None:
         """Tell WS subscribers a peer connection opened or closed.
 
-        TCP/pipe clients are excluded: they correlate every frame to a request
-        id and an unsolicited broadcast would break their read loop.
+        The connecting peer is excluded (it already received its ``ok`` auth
+        frame); a frame addressed to it would just linger in its socket.
+        TCP/pipe clients are never addressed: they correlate every frame to a
+        request id and an unsolicited broadcast would break their read loop.
         """
         frame = {"event": event, "peer": peer,
                  "clients": len(self._ws_clients)}
         for client in list(self._ws_clients):
-            if client.is_closing:
+            if client is exclude or client.is_closing:
                 continue
             await _safe_send(client, MSG_CONN_STATE, frame, "__broadcast__")
 
@@ -544,19 +548,21 @@ class DaemonServer:
         if mode and mode in _MODES:
             self.kernel.permissions.set_mode(mode)
 
-        existing = self._run_ids.get(rid)
-        if existing is not None and not existing.done():
-            # Duplicate run request carrying the same id — a client that
-            # reconnected after the daemon bounced, or resent an in-flight
-            # run. Never start a second kernel run: attach this client to the
-            # running task so it resumes streaming and receives the terminal
-            # result. The kernel run lock stays held by the original task.
-            await self._stream_run(goal, rid, transport, existing=existing)
-            return
-        await self._stream_run(goal, rid, transport)
+        # Claim the request id atomically. A duplicate run request carrying the
+        # same id (client reconnect, or a resent in-flight run) must attach to
+        # the running task instead of executing the kernel a second time.
+        async with self._run_claim:
+            existing = self._run_ids.get(rid)
+            if existing is not None and not existing.done():
+                task = existing
+            else:
+                task = asyncio.ensure_future(self._run_locked(goal))
+                self._run_ids[rid] = task
+                self._detached_runs.add(task)
+                task.add_done_callback(self._on_run_done)
+        await self._stream_run(goal, rid, transport, task)
 
-    async def _stream_run(self, goal: str, rid: str, transport,
-                          existing: asyncio.Task | None = None) -> None:
+    async def _stream_run(self, goal: str, rid: str, transport, task) -> None:
         current = asyncio.current_task()
         if current is not None:
             self._active_runs.add(current)
@@ -571,7 +577,7 @@ class DaemonServer:
 
         previous = getattr(self.kernel.observer, "on_event", None)
         self.kernel.observer.on_event = _forward
-        if existing is None and self._run_lock.locked():
+        if self._run_lock.locked():
             # Another kernel run (possibly a detached one from a vanished
             # client) still holds the run lock. Without this frame the client
             # would block on _run_locked() in total silence — the "type a
@@ -582,10 +588,7 @@ class DaemonServer:
             }})
         result = None
         try:
-            if existing is not None:
-                result = await asyncio.shield(existing)
-            else:
-                result = await self._shielded_kernel_run(goal, rid)
+            result = await asyncio.shield(task)
         except asyncio.CancelledError:
             # Two ways a CancelledError can land here:
             #   * this dispatch task is being cancelled (client disconnect) —
@@ -649,29 +652,6 @@ class DaemonServer:
             "message": "cancel requested",
             "cancelled": cancelled,
         }, rid)
-
-    async def _shielded_kernel_run(self, goal: str, rid: str = ""):
-        """Run the kernel detached so cancellation cannot kill the work.
-
-        If the dispatch task is cancelled (client disconnect mid-run), the
-        kernel run keeps going in the background holding the run lock; a fresh
-        client simply waits for it instead of corrupting a half-finished LLM
-        call. The daemon never dies because a client vanished.
-
-        An explicit MSG_CANCEL cancels the returned task directly (the
-        ``_run_ids`` entry maps the run request id to it); the shielded caller
-        then sees a CancelledError with ``cancelling() == 0`` and sends a
-        terminal result frame.
-        """
-        task = asyncio.ensure_future(self._run_locked(goal))
-        if rid:
-            self._run_ids[rid] = task
-        self._detached_runs.add(task)
-        task.add_done_callback(self._on_run_done)
-        try:
-            return await asyncio.shield(task)
-        except asyncio.CancelledError:
-            raise
 
     async def _run_locked(self, goal: str):
         async with self._run_lock:

@@ -103,8 +103,10 @@ class StubKernel:
         self._events = events
         self._delay = delay
         self._duration = duration
+        self.run_count = 0
 
     async def run(self, goal):
+        self.run_count += 1
         for i in range(self._events):
             self.observer.on_event("task.progress", {"i": i})
             if self._delay:
@@ -303,6 +305,108 @@ def test_ws_malformed_frame_closes_connection(server):
         with pytest.raises(Exception):
             await _recv_frame(ws, timeout=3.0)
         await ws.close()
+
+    asyncio.run(scenario())
+
+
+# ── Block 2: connection state, run-id idempotency, bootstrap ────────────────
+
+
+def test_ws_broadcasts_connection_state(server):
+    """WS peers see stream.conn frames when another peer opens/closes."""
+    srv = server()
+
+    async def scenario():
+        a = await _connect_auth(srv)
+        try:
+            b = await _connect_auth(srv)
+            try:
+                opened = await _recv_until(a, "__broadcast__", {"stream.conn"}, timeout=3.0)
+                assert opened["payload"]["event"] == "opened"
+                assert opened["payload"]["clients"] == 2
+            finally:
+                await b.close()
+            closed = await _recv_until(a, "__broadcast__", {"stream.conn"}, timeout=3.0)
+            assert closed["payload"]["event"] == "closed"
+            assert closed["payload"]["clients"] == 1
+        finally:
+            await a.close()
+
+    asyncio.run(scenario())
+
+
+def test_ws_run_id_dedupe_no_double_execution(server):
+    """Two run requests with the same id execute the kernel exactly once."""
+    srv = server(events=3, delay=0.05, duration=0.2)
+
+    async def scenario():
+        ws = await _connect_auth(srv)
+        try:
+            rid = uuid.uuid4().hex
+            await ws.send(json.dumps(_env("run", {"goal": "dup"}, rid)))
+            await asyncio.sleep(0.1)
+            await ws.send(json.dumps(_env("run", {"goal": "dup"}, rid)))
+            r1 = await _recv_until(ws, rid, {"stream.result"}, timeout=8.0)
+            r2 = await _recv_until(ws, rid, {"stream.result"}, timeout=8.0)
+            assert r1["payload"]["result"]["success"] is True
+            assert r2["payload"]["result"]["success"] is True
+            assert srv.kernel.run_count == 1
+        finally:
+            await ws.close()
+
+    asyncio.run(scenario())
+
+
+def test_ws_bootstrap_auth_is_single_use(server):
+    """A bootstrap credential authenticates once, then is rejected."""
+    srv = server()
+
+    async def scenario():
+        client = DaemonClient("127.0.0.1", srv.port, token=srv.token)
+        await client.connect()
+        try:
+            cred = await client.issue_bootstrap()
+        finally:
+            await client.close()
+        assert cred.get("bootstrap")
+        assert cred.get("ws_port") == srv.ws_port
+
+        async def try_auth(payload):
+            ws = await connect(f"ws://127.0.0.1:{srv.ws_port}",
+                               max_size=4 * 1024 * 1024)
+            await ws.send(json.dumps(_env("auth", payload, "b")))
+            resp = await _recv_frame(ws, timeout=3.0)
+            await ws.close()
+            return resp
+
+        first = await try_auth({"bootstrap": cred["bootstrap"]})
+        assert first["type"] == "ok"
+        second = await try_auth({"bootstrap": cred["bootstrap"]})
+        assert second["type"] == "error"
+        assert "unauthorized" in second["payload"]["message"]
+
+    asyncio.run(scenario())
+
+
+def test_ws_bootstrap_rejects_expired_and_bad_token(server):
+    srv = server()
+    srv._bootstrap_tokens["stale-cred"] = time.time() - 10.0
+
+    async def scenario():
+        async def try_auth(payload):
+            ws = await connect(f"ws://127.0.0.1:{srv.ws_port}",
+                               max_size=4 * 1024 * 1024)
+            await ws.send(json.dumps(_env("auth", payload, "b")))
+            resp = await _recv_frame(ws, timeout=3.0)
+            await ws.close()
+            return resp
+
+        stale = await try_auth({"bootstrap": "stale-cred"})
+        assert stale["type"] == "error"
+        unknown = await try_auth({"bootstrap": "never-issued"})
+        assert unknown["type"] == "error"
+        bad_token = await try_auth({"token": "wrong"})
+        assert bad_token["type"] == "error"
 
     asyncio.run(scenario())
 
