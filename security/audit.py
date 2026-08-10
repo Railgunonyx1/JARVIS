@@ -152,7 +152,7 @@ class AuditLog:
         if since:
             sql += " AND timestamp > ?"
             params.append(since)
-        sql += " ORDER BY timestamp DESC LIMIT ?"
+        sql += " ORDER BY timestamp DESC, id DESC LIMIT ?"
         params.append(limit)
 
         conn = self._get_conn()

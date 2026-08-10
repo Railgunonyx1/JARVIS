@@ -111,3 +111,55 @@ def test_decode_line_accepts_frame_at_limit():
     at_limit = b" " * (MAX_FRAME_SIZE - 2) + b"{}"
     decoded = decode_line(at_limit)
     assert decoded.payload == {}
+
+
+# ── shell audit None-safety ───────────────────────────────────────────────────
+
+def test_shell_audit_tolerates_none_reason_and_stderr(monkeypatch):
+    from security.audit import AuditEntry
+    from security.executor import ExecResult
+    from tools.shell import _audit_shell_execution
+
+    recorded = []
+
+    class FakeLog:
+        def log(self, entry: AuditEntry) -> None:
+            recorded.append(entry)
+
+    monkeypatch.setattr("security.audit.get_audit_log", lambda: FakeLog())
+
+    _audit_shell_execution(
+        "whoami", [],
+        ExecResult(success=False, blocked=True, reason=None, stderr=None),
+    )
+
+    assert len(recorded) == 1
+    assert recorded[0].error is None
+
+    _audit_shell_execution(
+        "whoami", [],
+        ExecResult(success=False, blocked=False, stderr="boom"),
+    )
+    assert recorded[-1].error == "boom"
+
+
+def test_shell_audit_none_is_success_no_error(monkeypatch):
+    from security.audit import AuditEntry
+    from security.executor import ExecResult
+    from tools.shell import _audit_shell_execution
+
+    recorded = []
+
+    class FakeLog:
+        def log(self, entry: AuditEntry) -> None:
+            recorded.append(entry)
+
+    monkeypatch.setattr("security.audit.get_audit_log", lambda: FakeLog())
+
+    _audit_shell_execution(
+        "whoami", [],
+        ExecResult(success=True, reason=None),
+    )
+
+    assert len(recorded) == 1
+    assert recorded[0].error is None

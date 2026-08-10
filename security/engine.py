@@ -20,7 +20,7 @@ from security.policies import (
 )
 from security.sandbox import Sandbox, SandboxConfig, SandboxResult
 from security.executor import ExecRequest, get_secure_executor
-from security.audit import AuditLog, AuditEntry
+from security.audit import AuditEntry, get_audit_log
 
 logger = logging.getLogger("jarvis.security.engine")
 
@@ -34,7 +34,7 @@ class SecurityEngine:
         self._sandbox = Sandbox(SandboxConfig(
             timeout_seconds=self._policy.timeout_seconds,
         ))
-        self._audit = AuditLog()
+        self._audit = get_audit_log()
         self._lock = threading.Lock()
 
         # Rate limiting

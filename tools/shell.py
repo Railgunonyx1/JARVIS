@@ -57,7 +57,8 @@ def _audit_shell_execution(command: str, args: list[str],
             allowed=not result.blocked,
             duration_ms=result.duration_ms,
             success=result.success,
-            error=(result.reason or (result.stderr if not result.success else None))[:500],
+            error=(result.reason or (result.stderr if not result.success else None)
+                   or "")[:500] or None,
             params_hash=hashlib.sha256(payload).hexdigest()[:16],
             mode=result.mode,
         ))
