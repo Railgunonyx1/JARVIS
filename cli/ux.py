@@ -66,7 +66,10 @@ class LiveTaskDisplay:
         observer.on_event = self._on_event
 
     def start(self) -> None:
-        if not self._enable:
+        # Live requires a real terminal: escape sequences on a pipe/CI stream
+        # render as garbage. Transient runs under capsys (tests) or piped
+        # output degrade gracefully to no-op instead.
+        if not self._enable or not self.console.is_terminal:
             return
         self._started = time.time()
         self._live = Live(
@@ -90,6 +93,8 @@ class LiveTaskDisplay:
             return
         if name == events.TASK_STARTED:
             self._goal = payload.get("goal", "")
+        elif name == "run.queued":
+            self._goal = f"{payload.get('goal', self._goal)} (queued — previous task running)"
         self._refresh()
 
     def _refresh(self) -> None:

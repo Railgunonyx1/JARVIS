@@ -458,6 +458,15 @@ class DaemonServer:
 
         previous = getattr(self.kernel.observer, "on_event", None)
         self.kernel.observer.on_event = _forward
+        if self._run_lock.locked():
+            # Another kernel run (possibly a detached one from a vanished
+            # client) still holds the run lock. Without this frame the client
+            # would block on _run_locked() in total silence — the "type a
+            # goal, nothing happens" no-response bug. Surface the wait.
+            stream.put_nowait({"name": "run.queued", "payload": {
+                "reason": "a previous task is still running",
+                "goal": goal,
+            }})
         result = None
         try:
             result = await self._shielded_kernel_run(goal)

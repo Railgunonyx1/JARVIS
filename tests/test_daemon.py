@@ -505,3 +505,66 @@ def test_interactive_repl_runs_goal_and_prints_summary(server, capsys, monkeypat
     out = capsys.readouterr().out
     assert "Enter to expand" in out, f"run summary missing; got:\n{out}"
 
+
+def test_interactive_repl_survives_daemon_failures(server, capsys, monkeypatch):
+    """Regression: the daemon REPL must never crash on a mid-run failure.
+
+    ``_run_once_daemon`` raises ``DaemonDisconnected`` when the peer drops
+    mid-run, ``DaemonError`` on an error frame, or an arbitrary exception.
+    Each must be printed as a visible message and the REPL must keep
+    prompting — not die with a raw traceback (the "no-response" bug).
+    """
+    import cli.main
+    from daemon.client import DaemonClient, DaemonDisconnected, DaemonError
+
+    srv = server()
+    client = DaemonClient(host="127.0.0.1", port=srv.port, token=srv.token,
+                          project_id=srv.project_id)
+
+    async def _boom(goal, client, json_output=False, collapsed=False,
+                    notifications=None, perf=False):
+        raise exc_holder["exc"]
+
+    for exc, expected in [
+        (DaemonDisconnected("daemon connection lost"), "daemon connection lost"),
+        (DaemonError("run failed: boom"), "daemon error: run failed: boom"),
+        (RuntimeError("kaboom"), "unexpected error: kaboom"),
+    ]:
+        exc_holder = {"exc": exc}
+        monkeypatch.setattr(cli.main, "_run_once_daemon", _boom)
+        monkeypatch.setattr(sys, "stdin", io.StringIO("goal"))
+        cli.main._interactive_daemon(client)
+        captured = capsys.readouterr()
+        assert expected in captured.out + captured.err, (
+            f"{expected!r} not reported; got:\n{captured.out}{captured.err}")
+
+
+def test_run_queued_event_when_busy(server):
+    """A run issued while the kernel run-lock is held must get immediate
+    ``run.queued`` feedback instead of blocking in total silence.
+
+    This is the server half of the no-response bug: after a mid-run client
+    disconnect the kernel keeps running and holds the lock, so the next goal
+    used to wait forever with zero frames sent to the client.
+    """
+    srv = server(events=50, delay=0.02, duration=0.0)
+
+    def _first():
+        with _client(srv) as c1:
+            c1.connect()
+            c1.run("long", on_event=lambda *_: None)
+
+    t = threading.Thread(target=_first, daemon=True)
+    t.start()
+    time.sleep(0.15)
+
+    queued = []
+    with _client(srv) as c2:
+        c2.connect()
+        result = c2.run("second", on_event=lambda name, _: queued.append(name))
+        assert "run.queued" in queued, f"queued event missing; got {queued!r}"
+        assert result["success"] is True
+    t.join(timeout=10.0)
+    assert not t.is_alive()
+    assert time.monotonic() - t0 < 10.0, "second run blocked too long"
+

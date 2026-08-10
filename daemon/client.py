@@ -7,6 +7,7 @@ observer events back through a callback, then returns the final result dict.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import Callable, Dict, List, Optional
@@ -58,6 +59,13 @@ def _env(type_: str, payload: Optional[Dict] = None,
 class DaemonClient:
     """Persistent connection to a single daemon."""
 
+    #: Upper bound on a TCP connect + auth handshake.
+    CONNECT_TIMEOUT = 5.0
+    #: Max silence between frames while a request/run is in flight. Streams
+    #: (run events) refresh far more often, so this only fires when the daemon
+    #: is truly hung — turning a silent freeze into a visible error.
+    IDLE_TIMEOUT = 120.0
+
     def __init__(self, host: str = "127.0.0.1", port: int = 0,
                  token: str = "", project_id: str = "") -> None:
         self.host = host
@@ -81,10 +89,18 @@ class DaemonClient:
         if self._connected:
             return
         t0 = time.perf_counter()
-        transport = await open_connection(self.host, self.port)
+        transport = None
         try:
-            await transport.send(_env(MSG_AUTH, {"token": self.token}))
-            response = await transport.receive()
+            transport = await asyncio.wait_for(
+                open_connection(self.host, self.port), timeout=self.CONNECT_TIMEOUT)
+            try:
+                await transport.send(_env(MSG_AUTH, {"token": self.token}))
+                response = await asyncio.wait_for(
+                    transport.receive(), timeout=self.CONNECT_TIMEOUT)
+            except asyncio.TimeoutError:
+                raise DaemonDisconnected(
+                    f"daemon {self.host}:{self.port} did not authenticate within "
+                    f"{self.CONNECT_TIMEOUT:.0f}s") from None
             if response is None:
                 raise DaemonDisconnected("daemon closed during auth handshake")
             if response.get("type") == MSG_ERROR:
@@ -92,7 +108,8 @@ class DaemonClient:
             if response.get("type") != MSG_OK:
                 raise DaemonError(f"unexpected auth response: {response.get('type')}")
         except Exception:
-            await transport.close()
+            if transport is not None:
+                await transport.close()
             raise
         self._transport = transport
         self._connected = True
@@ -119,7 +136,14 @@ class DaemonClient:
     async def _recv(self) -> Dict:
         if self._transport is None:
             raise DaemonDisconnected("not connected")
-        message = await self._transport.receive()
+        try:
+            message = await asyncio.wait_for(
+                self._transport.receive(), timeout=self.IDLE_TIMEOUT)
+        except asyncio.TimeoutError:
+            self._connected = False
+            raise DaemonError(
+                f"daemon unresponsive — no frame for {self.IDLE_TIMEOUT:.0f}s"
+            ) from None
         if message is None:
             self._connected = False
             raise DaemonDisconnected("daemon connection lost")

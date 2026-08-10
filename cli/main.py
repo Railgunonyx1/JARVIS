@@ -182,7 +182,9 @@ def _print_collapsed(result) -> None:
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
     """Map observer events to the rolling notification log."""
-    if name == "task.finished":
+    if name == "run.queued":
+        notifications.append(("warn", "queued — a previous task is still running"))
+    elif name == "task.finished":
         status = payload.get("status", "")
         mark = "ok" if status in ("completed", "ok") else "err"
         notifications.append((mark, f"task {payload.get('task_id', '')[:8]} {status} "
@@ -471,6 +473,34 @@ def _client_call(client, coro):
     return asyncio.run(_wrapped())
 
 
+def _run_daemon_goal(goal: str, client, notifications: list) -> dict | None:
+    """Run one goal against the daemon, converting every failure into a visible
+    message instead of a crash or a silent freeze.
+
+    ``_run_once_daemon`` can raise ``DaemonDisconnected`` (peer drop mid-run),
+    ``DaemonError`` (an error frame, a busy timeout), or an unexpected
+    exception. None of them may escape the REPL: each is printed and turned
+    into a ``None`` result so the session keeps prompting.
+    """
+    from daemon.client import DaemonDisconnected, DaemonError
+
+    try:
+        return asyncio.run(_run_once_daemon(
+            goal, client, collapsed=True, notifications=notifications))
+    except KeyboardInterrupt:
+        typer.secho("(interrupted)", dim=True)
+        return None
+    except DaemonDisconnected as exc:
+        typer.secho(f"daemon connection lost: {exc}", err=True, fg="red")
+        return None
+    except (DaemonError, ConnectionError, OSError) as exc:
+        typer.secho(f"daemon error: {exc}", err=True, fg="red")
+        return None
+    except Exception as exc:
+        typer.secho(f"unexpected error: {exc}", err=True, fg="red")
+        return None
+
+
 def _interactive_daemon(client, profile_startup: bool = False) -> None:
     """Interactive command center against a persistent daemon kernel."""
     from rich import box
@@ -493,8 +523,21 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
     try:
         status = _client_call(client, client.status())
     except Exception as exc:
-        typer.secho(f"daemon connection failed: {exc}", err=True, fg="red")
-        return
+        # The registry entry we resolved may be stale (the daemon died without
+        # removing it). Try once to resurrect the daemon instead of dropping
+        # the user out of the REPL with no recourse.
+        typer.secho(f"daemon unreachable: {exc}", err=True, fg="yellow")
+        fresh = _resolve_transport(False, False, None)
+        if fresh is None:
+            typer.secho("daemon failed to restart — run `jarvis daemon status` "
+                        "or check ~/.jarvis/daemon.log", err=True, fg="red")
+            return
+        client = fresh
+        try:
+            status = _client_call(client, client.status())
+        except Exception as exc:
+            typer.secho(f"daemon still unreachable: {exc}", err=True, fg="red")
+            return
     if not status:
         typer.secho("daemon connection failed", err=True, fg="red")
         return
@@ -510,8 +553,8 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
         try:
             status = _client_call(client, client.status())
             console.print(_render_status_bar_dict(status), highlight=False)
-        except Exception:
-            pass
+        except Exception as exc:
+            typer.secho(f"daemon status unreachable: {exc}", err=True, fg="yellow")
         try:
             line = console.input(Text("JARVIS", style="bold cyan") + Text("> ", style="bold")).strip()
         except (EOFError, KeyboardInterrupt):
@@ -570,19 +613,10 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
             if not last_goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
-                last_result = asyncio.run(_run_once_daemon(
-                    last_goal, client, collapsed=True, notifications=notifications))
+                last_result = _run_daemon_goal(last_goal, client, notifications)
         else:
             last_goal = line
-            try:
-                last_result = asyncio.run(_run_once_daemon(
-                    line, client, collapsed=True, notifications=notifications))
-            except KeyboardInterrupt:
-                typer.secho("(interrupted)", dim=True)
-                last_result = None
-            except (ConnectionError, OSError) as exc:
-                typer.secho(f"daemon connection lost: {exc}", err=True, fg="red")
-                last_result = None
+            last_result = _run_daemon_goal(line, client, notifications)
 
 
 def _print_models_dict(data: dict) -> None:
