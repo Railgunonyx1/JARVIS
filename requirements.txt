@@ -18,6 +18,7 @@ mcp==1.28.1
 # === Transport / HTTP ===
 httpx==0.28.1
 orjson==3.11.9
+websockets==16.1.1  # WebSocket transport for browser/terminal clients
 
 # === System ===
 psutil==7.2.2

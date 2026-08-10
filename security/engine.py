@@ -100,6 +100,10 @@ class SecurityEngine:
             else:
                 logger.warning("Confirmation required for %s but no handler set", tool_name)
 
+        # Log allowed decisions too — the gate must leave an auditable trail
+        # for every call, not just denials and confirmations.
+        self._log_allowed(tool_name, session_id, level)
+
         return True, ""
 
     def execute_sandboxed(self, command: str, session_id: str = "",
@@ -217,6 +221,18 @@ class SecurityEngine:
             permission_level=level,
             allowed=True,
             confirmed=confirmed,
+            mode=self._mode,
+        )
+        self._audit.log(entry)
+
+    def _log_allowed(self, tool: str, session_id: str,
+                     level: PermissionLevel):
+        entry = AuditEntry(
+            session_id=session_id,
+            action="allowed",
+            tool=tool,
+            permission_level=level,
+            allowed=True,
             mode=self._mode,
         )
         self._audit.log(entry)

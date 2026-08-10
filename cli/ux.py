@@ -66,10 +66,9 @@ class LiveTaskDisplay:
         observer.on_event = self._on_event
 
     def start(self) -> None:
-        # Live requires a real terminal: escape sequences on a pipe/CI stream
-        # render as garbage. Transient runs under capsys (tests) or piped
-        # output degrade gracefully to no-op instead.
-        if not self._enable or not self.console.is_terminal:
+        # Rich's Live already degrades gracefully on non-terminals (a single
+        # plain print, no ANSI redraw), so no extra is_terminal gate here.
+        if not self._enable:
             return
         self._started = time.time()
         self._live = Live(

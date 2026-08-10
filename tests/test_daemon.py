@@ -556,6 +556,7 @@ def test_run_queued_event_when_busy(server):
 
     t = threading.Thread(target=_first, daemon=True)
     t.start()
+    t0 = time.monotonic()
     time.sleep(0.15)
 
     queued = []

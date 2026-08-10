@@ -43,6 +43,7 @@ __all__ = [
     "MSG_RUN_RESULT",
     "MSG_ERROR",
     "MSG_BUSY",
+    "MSG_CANCEL",
     "MAX_FRAME_SIZE",
     "Envelope",
     "make_envelope",
@@ -65,6 +66,7 @@ MSG_MEMORY_ADD = "memory_add"
 MSG_MODELS = "models"
 MSG_HISTORY = "history"
 MSG_SHUTDOWN = "shutdown"
+MSG_CANCEL = "cancel"
 
 # Response message types (daemon -> client)
 MSG_PONG = "pong"

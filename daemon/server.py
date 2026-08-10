@@ -43,6 +43,7 @@ from daemon.state import (
 )
 from runtime.transport.protocol import (
     MSG_AUTH,
+    MSG_CANCEL,
     MSG_ERROR,
     MSG_EVENT,
     MSG_HISTORY,
@@ -60,6 +61,7 @@ from runtime.transport.protocol import (
     MSG_STATUS,
 )
 from runtime.transport.tcp import start_server
+from runtime.transport.ws import start_ws_server
 
 logger = logging.getLogger("jarvis.daemon")
 
@@ -113,18 +115,21 @@ class DaemonServer:
         token: str | None = None,
         registry_dir: Path | None = None,
         state_dir: Path | None = None,
+        ws_port: int | None = None,
     ) -> None:
         self.kernel_factory = kernel_factory
         self.project_dir = str(Path(project_dir).resolve()) if project_dir else str(Path.cwd().resolve())
         self.project_id = project_id(Path(self.project_dir))
         self.host = host
         self.port = port or pick_port()
+        self.ws_port = ws_port or pick_port()
         self.token = token or generate_token()
         self.registry_dir = Path(registry_dir) if registry_dir else DAEMONS_DIR
         self.state_dir = Path(state_dir) if state_dir else STATE_DIR
 
         self.kernel: Any = None
         self._server = None
+        self._ws_server = None
         self._pipe_server = None
         self._connections = set()
         self._tasks: dict[int, set] = {}
@@ -136,6 +141,8 @@ class DaemonServer:
         self._active_runs: set = set()
         self._detached_runs: set = set()
         self._senders: set = set()
+        self._run_ids: dict[str, asyncio.Task] = {}
+        self._shutdown_task: asyncio.Task | None = None
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 
@@ -161,6 +168,20 @@ class DaemonServer:
             bound = self._server.sockets[0].getsockname()
             self.port = bound[1]
 
+            for attempt in range(3):
+                try:
+                    self._ws_server = await start_ws_server(
+                        self._on_client, self.host, self.ws_port)
+                    break
+                except OSError:
+                    if attempt == 2:
+                        raise
+                    self.ws_port = pick_port()
+            ws_bound = self._ws_server.sockets[0].getsockname()
+            self.ws_port = ws_bound[1]
+            logger.info("daemon %s listening on ws://%s:%s", self.project_id,
+                        self.host, self.ws_port)
+
             try:
                 from runtime.transport.pipe import start_pipe_server
                 pipe_name = rf"\\.\pipe\jarvis-{self.project_id}"
@@ -173,6 +194,7 @@ class DaemonServer:
                 "project_id": self.project_id,
                 "project": self.project_dir,
                 "port": self.port,
+                "ws_port": self.ws_port,
                 "pid": os.getpid(),
                 "token": self.token,
                 "version": PROTOCOL_VERSION,
@@ -229,6 +251,14 @@ class DaemonServer:
 
     async def serve(self) -> None:
         await self._shutdown.wait()
+        # Wait for the actual shutdown to finish. Without this, serve() (the
+        # loop's main task) returns the moment _shutdown is set and asyncio.run
+        # teardown cancels the still-running shutdown task — the registry entry
+        # and snapshots are then left stale. A fire-and-forget shutdown task
+        # wins the race only when it is fast enough, which the WebSocket
+        # server's wait_closed (an internal asyncio.sleep(0) yield) made flaky.
+        if self._shutdown_task is not None:
+            await asyncio.shield(self._shutdown_task)
 
     async def shutdown(self) -> None:
         if self._closing:
@@ -239,6 +269,9 @@ class DaemonServer:
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
+        if self._ws_server is not None:
+            self._ws_server.close()
+            await self._ws_server.wait_closed()
         if self._pipe_server is not None:
             self._pipe_server.close()
             await self._pipe_server.wait_closed()
@@ -326,6 +359,7 @@ class DaemonServer:
             MSG_MEMORY_ADD: self._handle_memory_add,
             MSG_HISTORY: self._handle_history,
             MSG_RUN: self._handle_run,
+            MSG_CANCEL: self._handle_cancel,
             MSG_SHUTDOWN: self._handle_shutdown,
         }.get(type_)
         if handler is None:
@@ -353,6 +387,8 @@ class DaemonServer:
             "project": self.project_dir,
             "project_id": self.project_id,
             "mode": self._mode(),
+            "port": self.port,
+            "ws_port": self.ws_port,
             "started_at": self.started_at,
             "uptime": time.time() - self.started_at,
         }, rid)
@@ -365,6 +401,8 @@ class DaemonServer:
             "started_at": self.started_at,
             "uptime": time.time() - self.started_at,
             "mode": self._mode(),
+            "port": self.port,
+            "ws_port": self.ws_port,
             "provider": getattr(self.kernel.router, "_last_provider", None),
             "model": getattr(self.kernel.router, "_last_model", None),
             "tools": len(self.kernel.registry.list()),
@@ -469,8 +507,26 @@ class DaemonServer:
             }})
         result = None
         try:
-            result = await self._shielded_kernel_run(goal)
+            result = await self._shielded_kernel_run(goal, rid)
+        except asyncio.CancelledError:
+            # Two ways a CancelledError can land here:
+            #   * this dispatch task is being cancelled (client disconnect) —
+            #     leave the shielded run to finish in the background and let
+            #     _on_client clean up; or
+            #   * the kernel run task was cancelled by an explicit MSG_CANCEL —
+            #     current_task().cancelling() stays 0, so send a terminal
+            #     frame so the client's run() loop returns instead of hanging.
+            if asyncio.current_task().cancelling() > 0:
+                raise
+            await _safe_send(transport, MSG_RUN_RESULT, {"result": {
+                "success": False,
+                "cancelled": True,
+                "goal": goal,
+                "error": "cancelled by user",
+            }}, rid)
+            return
         finally:
+            self._run_ids.pop(rid, None)
             if current is not None:
                 self._active_runs.discard(current)
             self.kernel.observer.on_event = previous
@@ -487,15 +543,50 @@ class DaemonServer:
         await _safe_send(transport, MSG_RUN_RESULT,
                          {"result": result.to_dict()}, rid)
 
-    async def _shielded_kernel_run(self, goal: str):
+    async def _handle_cancel(self, payload, rid, transport) -> None:
+        """Cancel a running kernel task (explicit user stop, not a disconnect)."""
+        task_id = str(payload.get("task_id", "")).strip()
+        candidates: dict[str, asyncio.Task] = {}
+        if task_id:
+            task = self._run_ids.get(task_id)
+            if task is None or task.done():
+                await _send(transport, MSG_ERROR,
+                            {"message": f"no running task '{task_id}'"}, rid)
+                return
+            candidates[task_id] = task
+        else:
+            for run_rid, task in list(self._run_ids.items()):
+                if not task.done():
+                    candidates[run_rid] = task
+        if not candidates:
+            await _send(transport, MSG_ERROR,
+                        {"message": "no running task to cancel"}, rid)
+            return
+        cancelled = []
+        for run_rid, task in candidates.items():
+            task.cancel()
+            cancelled.append(run_rid)
+        await _send(transport, MSG_OK, {
+            "message": "cancel requested",
+            "cancelled": cancelled,
+        }, rid)
+
+    async def _shielded_kernel_run(self, goal: str, rid: str = ""):
         """Run the kernel detached so cancellation cannot kill the work.
 
         If the dispatch task is cancelled (client disconnect mid-run), the
         kernel run keeps going in the background holding the run lock; a fresh
         client simply waits for it instead of corrupting a half-finished LLM
         call. The daemon never dies because a client vanished.
+
+        An explicit MSG_CANCEL cancels the returned task directly (the
+        ``_run_ids`` entry maps the run request id to it); the shielded caller
+        then sees a CancelledError with ``cancelling() == 0`` and sends a
+        terminal result frame.
         """
         task = asyncio.ensure_future(self._run_locked(goal))
+        if rid:
+            self._run_ids[rid] = task
         self._detached_runs.add(task)
         task.add_done_callback(self._on_run_done)
         try:
@@ -526,7 +617,8 @@ class DaemonServer:
 
     async def _handle_shutdown(self, payload, rid, transport) -> None:
         await _send(transport, MSG_OK, {"message": "shutting down"}, rid)
-        asyncio.create_task(self.shutdown())
+        if self._shutdown_task is None or self._shutdown_task.done():
+            self._shutdown_task = asyncio.create_task(self.shutdown())
 
     # ── state snapshot ─────────────────────────────────────────────────────
 
@@ -630,6 +722,7 @@ def _start_daemon(args) -> None:
     except Exception:
         pass
     server = DaemonServer(project_dir=project_dir, port=args.port,
+                          ws_port=args.ws_port,
                           registry_dir=args.registry_dir,
                           state_dir=args.state_dir)
 
@@ -689,6 +782,7 @@ def main(argv=None) -> None:
     start = sub.add_parser("start", help="start (and serve) the daemon")
     start.add_argument("--project-dir", default=None)
     start.add_argument("--port", type=int, default=None)
+    start.add_argument("--ws-port", type=int, default=None)
     start.add_argument("--log", default=None)
     start.add_argument("--registry-dir", default=None)
     start.add_argument("--state-dir", default=None)

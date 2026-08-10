@@ -249,3 +249,50 @@ def test_engine_execute_sandboxed_blocks_injection():
     engine = SecurityEngine(mode="agent")
     result = engine.execute_sandboxed("echo hi; whoami")
     assert result.blocked
+
+
+# ── 13. audit trail ──────────────────────────────────────────────────────────
+
+def test_shell_execute_is_audited():
+    """Every shell execution through the tool must leave an audit entry
+    (allowed path) — not just denials."""
+    from security.audit import get_audit_log
+    from tools.shell import shell_execute
+
+    shell_execute({"executable": PYEXE, "args": ["-c", "print('audit-ok')"]})
+    get_audit_log().flush()
+    rows = get_audit_log().query(tool="shell.execute", limit=5)
+    assert rows, "no audit entries for shell.execute"
+    newest = rows[0]
+    assert newest["allowed"] == 1
+    assert newest["mode"] == "structured"
+    assert newest["action"] == "shell_execute"
+
+
+def test_blocked_shell_is_audited():
+    """A policy-blocked command is audited as denied (allowed=0)."""
+    from security.audit import get_audit_log
+    from tools.shell import shell_execute
+
+    out = shell_execute({"command": "echo hi & calc"})
+    assert not out.success
+    assert out.metadata.get("blocked") is True
+    get_audit_log().flush()
+    rows = get_audit_log().query(tool="shell.execute", limit=5)
+    newest = rows[0]
+    assert newest["allowed"] == 0
+    assert newest["mode"] == "blocked"
+
+
+def test_permission_allowed_is_audited():
+    """The permission gate must audit allowed decisions too, not only denials."""
+    from security.audit import get_audit_log
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    allowed, reason = engine.check_permission("action.shell.run")
+    assert allowed and reason == ""
+    get_audit_log().flush()
+    rows = get_audit_log().query(tool="action.shell.run", limit=5)
+    allowed_rows = [r for r in rows if r["action"] == "allowed"]
+    assert allowed_rows and allowed_rows[0]["allowed"] == 1

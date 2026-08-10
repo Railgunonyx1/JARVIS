@@ -15,6 +15,7 @@ from typing import Callable, Dict, List, Optional
 from daemon.state import PROTOCOL_VERSION
 from runtime.transport.protocol import (
     MSG_AUTH,
+    MSG_CANCEL,
     MSG_ERROR,
     MSG_EVENT,
     MSG_HISTORY,
@@ -78,6 +79,7 @@ class DaemonClient:
         self.last_connect_ms = 0.0
         self.last_request_ms = 0.0
         self.last_run_ms = 0.0
+        self._last_run_id = ""
 
     @property
     def connected(self) -> bool:
@@ -208,6 +210,7 @@ class DaemonClient:
         t0 = time.perf_counter()
         try:
             rid = uuid.uuid4().hex
+            self._last_run_id = rid
             payload: Dict = {"goal": goal}
             if mode:
                 payload["mode"] = mode
@@ -227,3 +230,17 @@ class DaemonClient:
                     raise DaemonError(message.get("payload", {}).get("message", "run failed"))
         finally:
             self.last_run_ms = (time.perf_counter() - t0) * 1000.0
+
+    async def cancel(self, task_id: str = "") -> Dict:
+        """Cancel a running kernel task; defaults to the most recent ``run()``.
+
+        The daemon replies ``MSG_OK`` immediately; the running task's terminal
+        ``stream.result`` (``cancelled: True``) arrives on the in-flight
+        ``run()`` call.
+        """
+        payload: Dict = {}
+        if task_id:
+            payload["task_id"] = task_id
+        elif self._last_run_id:
+            payload["task_id"] = self._last_run_id
+        return await self.request(MSG_CANCEL, payload)

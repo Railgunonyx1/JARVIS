@@ -9,6 +9,8 @@ through a governed PowerShell/cmd path after policy validation.
 from __future__ import annotations
 
 import ast
+import hashlib
+import logging
 import os
 import shlex
 from pathlib import Path
@@ -22,6 +24,8 @@ from security.executor import (
 )
 from tools.schema import ToolResult, truncate
 
+logger = logging.getLogger("jarvis.tools.shell")
+
 DEFAULT_TIMEOUT = 60
 MAX_TIMEOUT = 300
 MAX_OUTPUT_CHARS = 8000
@@ -30,6 +34,35 @@ MAX_OUTPUT_CHARS = 8000
 def _default_cwd() -> str:
     from core.project import ProjectContext
     return str(ProjectContext.discover().root_path)
+
+
+def _audit_shell_execution(command: str, args: list[str],
+                           result: ExecResult) -> None:
+    """Record every shell execution (allowed, blocked, or timed out) in the
+    persistent audit log.
+
+    The raw command is deliberately NOT stored — only a hash, so secrets can
+    never leak into the audit DB. Audit failure must never break the command,
+    so the whole write is best-effort.
+    """
+    try:
+        from security.audit import AuditEntry, get_audit_log
+        from security.policies import PermissionLevel
+
+        payload = (command or " ".join([command, *args])).encode("utf-8", "replace")
+        get_audit_log().log(AuditEntry(
+            action="shell_execute",
+            tool="shell.execute",
+            permission_level=PermissionLevel.ELEVATED,
+            allowed=not result.blocked,
+            duration_ms=result.duration_ms,
+            success=result.success,
+            error=(result.reason or (result.stderr if not result.success else None))[:500],
+            params_hash=hashlib.sha256(payload).hexdigest()[:16],
+            mode=result.mode,
+        ))
+    except Exception:
+        logger.warning("audit write failed for shell_execute", exc_info=True)
 
 
 def _coerce_args(raw_args: Any) -> list[str] | None:
@@ -95,6 +128,7 @@ def shell_execute(args: Dict[str, Any]) -> ToolResult:
         timeout=timeout,
     )
     result: ExecResult = get_secure_executor().execute(req)
+    _audit_shell_execution(command or executable, args, result)
 
     if result.blocked:
         return ToolResult(
