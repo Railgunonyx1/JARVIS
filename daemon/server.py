@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import logging
 import os
+import secrets
 import sys
 import threading
 import time
@@ -43,7 +44,9 @@ from daemon.state import (
 )
 from runtime.transport.protocol import (
     MSG_AUTH,
+    MSG_BOOTSTRAP,
     MSG_CANCEL,
+    MSG_CONN_STATE,
     MSG_ERROR,
     MSG_EVENT,
     MSG_HISTORY,
@@ -67,6 +70,8 @@ logger = logging.getLogger("jarvis.daemon")
 
 _MODES = ("plan", "controlled", "smart", "agent")
 KernelFactory = Callable[[str | None], Any]
+
+BOOTSTRAP_TTL = 60.0
 
 
 class DaemonAlreadyRunning(RuntimeError):
@@ -132,6 +137,8 @@ class DaemonServer:
         self._ws_server = None
         self._pipe_server = None
         self._connections = set()
+        self._ws_clients: set = set()
+        self._bootstrap_tokens: dict[str, float] = {}
         self._tasks: dict[int, set] = {}
         self._run_lock = asyncio.Lock()
         self._shutdown = asyncio.Event()
@@ -308,16 +315,21 @@ class DaemonServer:
     async def _on_client(self, transport) -> None:
         self._connections.add(transport)
         self._tasks[id(transport)] = set()
+        is_ws = getattr(transport, "kind", "") == "ws"
         try:
             first = await transport.receive()
             if first is None:
                 return
             if (first.get("type") != MSG_AUTH
-                    or first.get("payload", {}).get("token") != self.token):
+                    or not self._authorize(first.get("payload", {}))):
                 await _safe_send(transport, MSG_ERROR,
                                  {"message": "unauthorized"}, first.get("id", ""))
                 return
             await _safe_send(transport, MSG_OK, {}, first.get("id", ""))
+            if is_ws:
+                self._ws_clients.add(transport)
+                await self._broadcast_conn_state("opened", "ws",
+                                                 exclude=transport)
             while not self._shutdown.is_set():
                 message = await transport.receive()
                 if message is None:
@@ -333,6 +345,9 @@ class DaemonServer:
             logger.warning("client connection dropped: %r", sys.exc_info()[1])
         finally:
             self._connections.discard(transport)
+            if is_ws:
+                self._ws_clients.discard(transport)
+                await self._broadcast_conn_state("closed", "ws")
             pending = self._tasks.pop(id(transport), set())
             for task in pending:
                 if task in self._active_runs:
@@ -360,6 +375,7 @@ class DaemonServer:
             MSG_HISTORY: self._handle_history,
             MSG_RUN: self._handle_run,
             MSG_CANCEL: self._handle_cancel,
+            MSG_BOOTSTRAP: self._handle_bootstrap,
             MSG_SHUTDOWN: self._handle_shutdown,
         }.get(type_)
         if handler is None:
@@ -392,6 +408,52 @@ class DaemonServer:
             "started_at": self.started_at,
             "uptime": time.time() - self.started_at,
         }, rid)
+
+    def _authorize(self, payload: dict[str, Any]) -> bool:
+        """Accept the permanent registry token or a short-lived bootstrap."""
+        if payload.get("token") == self.token:
+            return True
+        bootstrap = str(payload.get("bootstrap", "")).strip()
+        if bootstrap:
+            expiry = self._bootstrap_tokens.pop(bootstrap, None)
+            if expiry is not None and expiry > time.time():
+                return True
+        return False
+
+    async def _handle_bootstrap(self, payload, rid, transport) -> None:
+        """Issue a short-lived, single-use credential for a browser client.
+
+        The CLI requests this over an authenticated TCP connection and embeds
+        it in the dashboard URL. It is never the permanent registry token.
+        """
+        self._prune_bootstrap_tokens()
+        credential = secrets.token_urlsafe(24)
+        self._bootstrap_tokens[credential] = time.time() + BOOTSTRAP_TTL
+        await _send(transport, MSG_RESULT, {
+            "bootstrap": credential,
+            "expires_in": BOOTSTRAP_TTL,
+            "ws_port": self.ws_port,
+            "project_id": self.project_id,
+        }, rid)
+
+    def _prune_bootstrap_tokens(self) -> None:
+        now = time.time()
+        for key in [k for k, expiry in self._bootstrap_tokens.items()
+                    if expiry <= now]:
+            self._bootstrap_tokens.pop(key, None)
+
+    async def _broadcast_conn_state(self, event: str, peer: str) -> None:
+        """Tell WS subscribers a peer connection opened or closed.
+
+        TCP/pipe clients are excluded: they correlate every frame to a request
+        id and an unsolicited broadcast would break their read loop.
+        """
+        frame = {"event": event, "peer": peer,
+                 "clients": len(self._ws_clients)}
+        for client in list(self._ws_clients):
+            if client.is_closing:
+                continue
+            await _safe_send(client, MSG_CONN_STATE, frame, "__broadcast__")
 
     async def _handle_status(self, payload, rid, transport) -> None:
         await _send(transport, MSG_RESULT, {
@@ -482,6 +544,19 @@ class DaemonServer:
         if mode and mode in _MODES:
             self.kernel.permissions.set_mode(mode)
 
+        existing = self._run_ids.get(rid)
+        if existing is not None and not existing.done():
+            # Duplicate run request carrying the same id — a client that
+            # reconnected after the daemon bounced, or resent an in-flight
+            # run. Never start a second kernel run: attach this client to the
+            # running task so it resumes streaming and receives the terminal
+            # result. The kernel run lock stays held by the original task.
+            await self._stream_run(goal, rid, transport, existing=existing)
+            return
+        await self._stream_run(goal, rid, transport)
+
+    async def _stream_run(self, goal: str, rid: str, transport,
+                          existing: asyncio.Task | None = None) -> None:
         current = asyncio.current_task()
         if current is not None:
             self._active_runs.add(current)
@@ -496,7 +571,7 @@ class DaemonServer:
 
         previous = getattr(self.kernel.observer, "on_event", None)
         self.kernel.observer.on_event = _forward
-        if self._run_lock.locked():
+        if existing is None and self._run_lock.locked():
             # Another kernel run (possibly a detached one from a vanished
             # client) still holds the run lock. Without this frame the client
             # would block on _run_locked() in total silence — the "type a
@@ -507,7 +582,10 @@ class DaemonServer:
             }})
         result = None
         try:
-            result = await self._shielded_kernel_run(goal, rid)
+            if existing is not None:
+                result = await asyncio.shield(existing)
+            else:
+                result = await self._shielded_kernel_run(goal, rid)
         except asyncio.CancelledError:
             # Two ways a CancelledError can land here:
             #   * this dispatch task is being cancelled (client disconnect) —
@@ -529,7 +607,8 @@ class DaemonServer:
             self._run_ids.pop(rid, None)
             if current is not None:
                 self._active_runs.discard(current)
-            self.kernel.observer.on_event = previous
+            if getattr(self.kernel.observer, "on_event", None) is _forward:
+                self.kernel.observer.on_event = previous
             stream.put_nowait(None)
             try:
                 await asyncio.wait_for(asyncio.shield(sender), timeout=2.0)
@@ -764,10 +843,40 @@ def _stop_daemon(args) -> None:
     sys.exit(0 if ok else 1)
 
 
+def _print_dashboard_url(project_dir: str) -> None:
+    """Issue a bootstrap credential and print the dashboard launch URL."""
+    import asyncio as _asyncio
+
+    from daemon.client import DaemonClient
+
+    async def _issue():
+        entry = load_entry(project_id(Path(project_dir)))
+        if entry is None:
+            return None
+        client = DaemonClient("127.0.0.1", int(entry["port"]),
+                              token=entry["token"])
+        try:
+            await client.connect()
+            return await client.issue_bootstrap()
+        except Exception:
+            return None
+        finally:
+            await client.close()
+
+    credential = _asyncio.run(_issue())
+    if credential is None:
+        print("no daemon running for this project")
+        sys.exit(1)
+    print(f"http://localhost:5173/?bootstrap={credential.get('bootstrap', '')}")
+
+
 def _status_daemon(args) -> None:
     from daemon.lifecycle import daemon_status
 
     project_dir = args.project_dir or str(Path.cwd().resolve())
+    if getattr(args, "web", False):
+        _print_dashboard_url(project_dir)
+        return
     info = daemon_status(project_dir)
     if info is None:
         print("no daemon running for this project")
@@ -790,6 +899,8 @@ def main(argv=None) -> None:
     stop.add_argument("--project-dir", default=None)
     status = sub.add_parser("status", help="show daemon status for this project")
     status.add_argument("--project-dir", default=None)
+    status.add_argument("--web", action="store_true",
+                        help="print the dashboard launch URL (issues a bootstrap credential)")
 
     args = parser.parse_args(argv)
     if args.command == "start":

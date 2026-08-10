@@ -43,6 +43,11 @@ ServerHandler = Callable[[Transport], Awaitable[None]]
 class WebSocketTransport(Transport):
     """One envelope-framed JSON WebSocket connection."""
 
+    #: The daemon broadcasts peer connection-state frames only to transports
+    #: that can tolerate unsolicited frames (browsers). TCP/pipe clients match
+    #: every frame to a request id and would misread a broadcast.
+    kind = "ws"
+
     def __init__(self, ws) -> None:
         self._ws = ws
         self._closed = False

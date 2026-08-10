@@ -36,11 +36,13 @@ __all__ = [
     "MSG_MODELS",
     "MSG_HISTORY",
     "MSG_SHUTDOWN",
+    "MSG_BOOTSTRAP",
     "MSG_PONG",
     "MSG_OK",
     "MSG_RESULT",
     "MSG_EVENT",
     "MSG_RUN_RESULT",
+    "MSG_CONN_STATE",
     "MSG_ERROR",
     "MSG_BUSY",
     "MSG_CANCEL",
@@ -67,6 +69,7 @@ MSG_MODELS = "models"
 MSG_HISTORY = "history"
 MSG_SHUTDOWN = "shutdown"
 MSG_CANCEL = "cancel"
+MSG_BOOTSTRAP = "issue_bootstrap"  # request a short-lived dashboard credential
 
 # Response message types (daemon -> client)
 MSG_PONG = "pong"
@@ -74,6 +77,7 @@ MSG_OK = "ok"
 MSG_RESULT = "result"
 MSG_EVENT = "stream.event"      # one task observer event
 MSG_RUN_RESULT = "stream.result"  # terminal frame for a run
+MSG_CONN_STATE = "stream.conn"  # broadcast: a WS peer opened or closed
 MSG_ERROR = "error"
 MSG_BUSY = "busy"
 

@@ -8,6 +8,7 @@ observer events back through a callback, then returns the final result dict.
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 import uuid
 from typing import Callable, Dict, List, Optional
@@ -15,6 +16,7 @@ from typing import Callable, Dict, List, Optional
 from daemon.state import PROTOCOL_VERSION
 from runtime.transport.protocol import (
     MSG_AUTH,
+    MSG_BOOTSTRAP,
     MSG_CANCEL,
     MSG_ERROR,
     MSG_EVENT,
@@ -66,6 +68,14 @@ class DaemonClient:
     #: (run events) refresh far more often, so this only fires when the daemon
     #: is truly hung — turning a silent freeze into a visible error.
     IDLE_TIMEOUT = 120.0
+    #: Bounded exponential-backoff window for re-establishing a connection.
+    RECONNECT_MAX_ATTEMPTS = 5
+    RECONNECT_BASE_DELAY = 0.25
+    RECONNECT_MAX_DELAY = 5.0
+    #: How many times an in-flight run may be resumed across reconnects. Each
+    #: resume resends the same request id; the daemon dedupes by id so a
+    #: running kernel task is never duplicated.
+    RUN_MAX_RETRIES = 3
 
     def __init__(self, host: str = "127.0.0.1", port: int = 0,
                  token: str = "", project_id: str = "") -> None:
@@ -127,6 +137,34 @@ class DaemonClient:
         await self.close()
         await self.connect()
 
+    async def connect_bounded(self, max_attempts: Optional[int] = None,
+                              base_delay: Optional[float] = None,
+                              max_delay: Optional[float] = None) -> None:
+        """Connect, retrying with jittered exponential backoff.
+
+        Useful on top of a daemon restart: a few quick attempts cover the
+        window where the old process has died but the new one has not bound
+        its socket yet. Raises the last connection error when attempts run
+        out.
+        """
+        attempts = max_attempts or self.RECONNECT_MAX_ATTEMPTS
+        base = base_delay if base_delay is not None else self.RECONNECT_BASE_DELAY
+        ceiling = max_delay or self.RECONNECT_MAX_DELAY
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, attempts + 1):
+            try:
+                await self.connect()
+                return
+            except Exception as exc:  # noqa: BLE001 - any failure is retryable
+                last_exc = exc
+                if attempt >= attempts:
+                    break
+                delay = min(ceiling, base * (2 ** (attempt - 1)))
+                delay *= random.uniform(0.5, 1.5)
+                await asyncio.sleep(delay)
+        assert last_exc is not None
+        raise last_exc
+
     # ── low level ────────────────────────────────────────────────────────
 
     async def _send(self, type_: str, payload: Optional[Dict] = None,
@@ -142,12 +180,12 @@ class DaemonClient:
             message = await asyncio.wait_for(
                 self._transport.receive(), timeout=self.IDLE_TIMEOUT)
         except asyncio.TimeoutError:
-            self._connected = False
+            await self.close()
             raise DaemonError(
                 f"daemon unresponsive — no frame for {self.IDLE_TIMEOUT:.0f}s"
             ) from None
         if message is None:
-            self._connected = False
+            await self.close()
             raise DaemonDisconnected("daemon connection lost")
         return message
 
@@ -204,32 +242,58 @@ class DaemonClient:
             payload["task_id"] = task_id
         return await self.request(MSG_HISTORY, payload)
 
+    async def issue_bootstrap(self) -> Dict:
+        """Ask the daemon for a short-lived dashboard credential.
+
+        Returns the bootstrap credential payload (``bootstrap``, ``ws_port``,
+        ``project_id``). Only ever used to build the dashboard launch URL —
+        the permanent registry token is never embedded there.
+        """
+        return await self.request(MSG_BOOTSTRAP)
+
     async def run(self, goal: str, mode: Optional[str] = None,
                   on_event: Optional[EventCallback] = None) -> Dict:
-        """Run a goal; stream observer events via ``on_event``, return result dict."""
+        """Run a goal; stream observer events via ``on_event``, return result dict.
+
+        If the connection drops mid-run, reconnects with bounded backoff and
+        resends the same request id. The daemon dedupes by id, so the running
+        kernel task resumes streaming instead of executing twice.
+        """
         t0 = time.perf_counter()
         try:
             rid = uuid.uuid4().hex
             self._last_run_id = rid
-            payload: Dict = {"goal": goal}
-            if mode:
-                payload["mode"] = mode
-            await self._send(MSG_RUN, payload, rid)
+            attempts = 0
             while True:
-                message = await self._recv()
-                if message.get("id") != rid:
-                    continue
-                msg_type = message.get("type")
-                if msg_type == MSG_EVENT:
-                    if on_event is not None:
-                        data = message.get("payload", {})
-                        on_event(data.get("name", ""), data.get("payload", {}))
-                elif msg_type == MSG_RUN_RESULT:
-                    return message.get("payload", {}).get("result", {})
-                elif msg_type == MSG_ERROR:
-                    raise DaemonError(message.get("payload", {}).get("message", "run failed"))
+                try:
+                    return await self._run_once(rid, goal, mode, on_event)
+                except DaemonDisconnected:
+                    attempts += 1
+                    if attempts > self.RUN_MAX_RETRIES:
+                        raise
+                    await self.connect_bounded()
         finally:
             self.last_run_ms = (time.perf_counter() - t0) * 1000.0
+
+    async def _run_once(self, rid: str, goal: str, mode: Optional[str],
+                        on_event: Optional[EventCallback]) -> Dict:
+        payload: Dict = {"goal": goal}
+        if mode:
+            payload["mode"] = mode
+        await self._send(MSG_RUN, payload, rid)
+        while True:
+            message = await self._recv()
+            if message.get("id") != rid:
+                continue
+            msg_type = message.get("type")
+            if msg_type == MSG_EVENT:
+                if on_event is not None:
+                    data = message.get("payload", {})
+                    on_event(data.get("name", ""), data.get("payload", {}))
+            elif msg_type == MSG_RUN_RESULT:
+                return message.get("payload", {}).get("result", {})
+            elif msg_type == MSG_ERROR:
+                raise DaemonError(message.get("payload", {}).get("message", "run failed"))
 
     async def cancel(self, task_id: str = "") -> Dict:
         """Cancel a running kernel task; defaults to the most recent ``run()``.
