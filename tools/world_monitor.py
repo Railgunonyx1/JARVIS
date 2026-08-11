@@ -30,7 +30,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 from core.api_keys import get_api_key
 from core.config import Config
@@ -87,7 +87,7 @@ def _cache_ttl() -> float:
         return 300.0
 
 
-def _api_key() -> Optional[str]:
+def _api_key() -> str | None:
     key = get_api_key("worldmonitor_api_key") or str(_settings().get("api_key", "") or "")
     return key.strip() or None
 
