@@ -95,7 +95,7 @@ def build_default_registry() -> ToolRegistry:
                         "description": "Argument list (structured, no shell). May be a list or a stringified list.",
                     },
                     "command": {"type": "string", "description": "A shell command string. Chaining blocked."},
-                    "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell for raw commands."},
+                    "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell host."},
                     "cwd": {"type": "string", "description": "Working directory. Defaults to project root."},
                     "timeout": {"type": "integer", "description": "Timeout in seconds. Default 60, max 300."},
                 },
