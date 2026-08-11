@@ -12,7 +12,7 @@ from tools.schema import Tool, ToolResult, tool_result
 
 def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
-    from tools.filesystem import filesystem_read, filesystem_write, filesystem_list
+    from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
     from tools.shell import shell_execute
     from tools.world_monitor import (
         world_monitor_get_alerts,
@@ -116,7 +116,7 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Free-text search query."},
-                    "category": {"type": "string", "description": "Optional category to narrow to (e.g. geopolitics, finance, climate)."},
+                    "category": {"type": "string", "description": "Category to narrow to (geopolitics, finance, climate...)."},
                     "limit": {"type": "integer", "description": "Max results to return. Default 10."},
                 },
                 "required": ["query"],
@@ -174,7 +174,7 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "event_id": {"type": "string", "description": "The event id to look up."},
-                    "event_type": {"type": "string", "description": "Optional event type (conflict, disaster, cyber, market...)."},
+                    "event_type": {"type": "string", "description": "Event type (conflict, disaster, cyber, market...)."},
                 },
                 "required": ["event_id"],
             },

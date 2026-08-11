@@ -95,7 +95,7 @@ def _api_key() -> str | None:
 # ── transport (seam for tests) ──────────────────────────────────────────────
 
 
-def _http_get(url: str, timeout: float, api_key: Optional[str]) -> Optional[dict]:
+def _http_get(url: str, timeout: float, api_key: str | None) -> dict | None:
     """GET a JSON payload. Returns None on any failure (never raises)."""
     headers = {"User-Agent": "JARVIS/1.0", "Accept": "application/json"}
     if api_key:
@@ -111,17 +111,6 @@ def _http_get(url: str, timeout: float, api_key: Optional[str]) -> Optional[dict
         return None
     if not isinstance(data, dict):
         return {"data": data}
-    return data
-
-
-def _request(tool: str, params: dict[str, Any]) -> Optional[dict]:
-    rpc = _endpoint_for(tool)
-    url = f"{_base_url()}/api/{_variant()}/v1/{rpc}"
-    data = _http_get(url, _timeout(), _api_key())
-    if data is None:
-        return None
-    data["_url"] = url
-    data["_rpc"] = rpc
     return data
 
 
