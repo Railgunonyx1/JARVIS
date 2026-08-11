@@ -36,7 +36,7 @@ def build_default_registry() -> ToolRegistry:
                 "properties": {
                     "path": {"type": "string", "description": "Relative or absolute file path."},
                     "content": {"type": "string", "description": "Full file content to write."},
-                    "overwrite": {"type": "boolean", "description": "Allow overwriting an existing file. Default true."},
+                    "overwrite": {"type": "boolean", "description": "Allow overwriting existing file. Default true."},
                 },
                 "required": ["path", "content"],
             },
@@ -86,7 +86,7 @@ def build_default_registry() -> ToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "executable": {"type": "string", "description": "Executable path or name. Preferred over 'command'."},
+                    "executable": {"type": "string", "description": "Executable path or name. Preferred over command."},
                     "args": {
                         "oneOf": [
                             {"type": "array", "items": {"type": "string"}},
@@ -94,8 +94,8 @@ def build_default_registry() -> ToolRegistry:
                         ],
                         "description": "Argument list (structured, no shell). May be a list or a stringified list.",
                     },
-                    "command": {"type": "string", "description": "A shell command string. Chaining/operators are blocked."},
-                    "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell host for raw commands. Default powershell."},
+                    "command": {"type": "string", "description": "A shell command string. Chaining blocked."},
+                    "shell": {"type": "string", "enum": ["powershell", "cmd"], "description": "Shell for raw commands."},
                     "cwd": {"type": "string", "description": "Working directory. Defaults to project root."},
                     "timeout": {"type": "integer", "description": "Timeout in seconds. Default 60, max 300."},
                 },
@@ -116,7 +116,7 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Free-text search query."},
-                    "category": {"type": "string", "description": "Category to narrow to (geopolitics, finance, climate...)."},
+                    "category": {"type": "string", "description": "Category filter (geopolitics, finance...)."},
                     "limit": {"type": "integer", "description": "Max results to return. Default 10."},
                 },
                 "required": ["query"],
@@ -174,7 +174,7 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "event_id": {"type": "string", "description": "The event id to look up."},
-                    "event_type": {"type": "string", "description": "Event type (conflict, disaster, cyber, market...)."},
+                    "event_type": {"type": "string", "description": "Event type (conflict, disaster, cyber...)."},
                 },
                 "required": ["event_id"],
             },
