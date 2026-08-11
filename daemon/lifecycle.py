@@ -38,8 +38,12 @@ __all__ = [
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP — no console, survives parent exit.
-_WIN_DETACH_FLAGS = 0x00000008 | 0x00000200
+logger = logging.getLogger("jarvis.lifecycle")
+
+# DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW — no console,
+# survives parent exit, and never flashes a window even if DETACHED_PROCESS is
+# ignored for a GUI-subsystem child.
+_WIN_DETACH_FLAGS = 0x00000008 | 0x00000200 | 0x08000000
 # CREATE_BREAKAWAY_FROM_JOB — escape an inherited Job object so the daemon is
 # not killed when the spawning shell's job closes (common under terminals that
 # put commands in a kill-on-close job). Fails with ERROR_ACCESS_DENIED when the
@@ -173,7 +177,9 @@ def _spawn(command: list, cwd: str) -> None:
     """
     if os.name == "nt":
         if _spawn_wmi(command, cwd):
+            logger.info("spawn: ok strategy=wmi cmd=%s cwd=%s", command, cwd)
             return
+        logger.warning("spawn: wmi failed, trying breakaway cmd=%s", command)
         try:
             subprocess.Popen(
                 command,
@@ -183,9 +189,13 @@ def _spawn(command: list, cwd: str) -> None:
                 stderr=subprocess.DEVNULL,
                 stdin=subprocess.DEVNULL,
             )
+            logger.info("spawn: ok strategy=breakaway cmd=%s", command)
             return
-        except OSError:
-            pass  # job forbids breakaway — nothing more to try
+        except OSError as exc:
+            # Job forbids breakaway — fall through to the plain detach below.
+            logger.warning("spawn: breakaway failed (%s), falling back to "
+                           "plain detach cmd=%s", exc, command)
+    logger.info("spawn: ok strategy=detached cmd=%s", command)
     subprocess.Popen(
         command,
         cwd=cwd,
@@ -212,6 +222,7 @@ def _spawn_wmi(command: list, cwd: str) -> bool:
         "CurrentDirectory = '" + cwd_escaped + "' }; "
         "if ($r.ReturnValue -ne 0) { exit 1 }"
     )
+    logger.info("spawn: wmi attempting create cmd=%s", cmdline)
     try:
         result = subprocess.run(
             [_WINDOWS_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
@@ -220,8 +231,12 @@ def _spawn_wmi(command: list, cwd: str) -> bool:
             timeout=30.0,
             check=False,
         )
+        if result.returncode != 0:
+            logger.warning("spawn: wmi failed returncode=%s cmd=%s",
+                           result.returncode, cmdline)
         return result.returncode == 0
-    except Exception:
+    except Exception as exc:
+        logger.warning("spawn: wmi raised %r cmd=%s", exc, cmdline)
         return False
 
 
