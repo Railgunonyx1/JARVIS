@@ -18,20 +18,14 @@ tool.* / task.finished) and update the conversation and sidebar incrementally
 from __future__ import annotations
 
 import asyncio
-import datetime
 import time
 
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import (
-    Input,
-    Label,
-    ProgressBar,
-    RichLog,
-    Static,
-)
+from textual.widgets import Input, RichLog, Static
 
 from ui.backend import TuiDataSource
 
@@ -62,7 +56,10 @@ _HELP = """\
 /memory add <k>=<v>   remember a fact
 /reconnect   force daemon reconnect
 /clear       clear conversation
-/exit        quit JARVIS"""
+/exit        quit JARVIS
+
+↑/↓          recall previous commands
+ctrl+c       cancel the running task"""
 
 
 # ------------------------------------------------------------------ widgets
@@ -128,6 +125,7 @@ class DaemonBox(Static):
 
     connected = reactive(False)
     status = reactive({})
+    last_error = reactive("")
 
     def render(self) -> Text:
         lines = [Text("DAEMON", style="bold")]
@@ -137,6 +135,8 @@ class DaemonBox(Static):
             lines.append(Text(f"uptime   {_fmt_uptime(float(self.status.get('uptime', 0)))}"))
         else:
             lines.append(Text("○ OFFLINE", style="red bold"))
+            if self.last_error:
+                lines.append(Text(self.last_error[:24], style="dim"))
         lines.append(Text(f"mode     {self.status.get('mode', '-')}"))
         lines.append(Text(f"tools    {self.status.get('tools', '-')}"))
         mem = self.status.get("mem_stats") or {}
@@ -195,10 +195,51 @@ class Sidebar(Vertical):
         yield TaskBox(id="task-box")
 
 
+class CmdInput(Input):
+    """Input with recallable command history (Up/Down arrows)."""
+
+    BINDINGS = [
+        Binding("up", "history_previous", "Previous command", priority=True),
+        Binding("down", "history_next", "Next command", priority=True),
+    ]
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._history: list[str] = []
+        self._index = 0
+        self._draft = ""
+
+    def add_to_history(self, text: str) -> None:
+        text = text.strip()
+        if text and (not self._history or self._history[-1] != text):
+            self._history.append(text)
+        self._index = len(self._history)
+        self._draft = ""
+
+    def action_history_previous(self) -> None:
+        if not self._history:
+            return
+        if self._index == len(self._history):
+            self._draft = self.value
+        if self._index > 0:
+            self._index -= 1
+            self.value = self._history[self._index]
+
+    def action_history_next(self) -> None:
+        if not self._history:
+            return
+        if self._index < len(self._history) - 1:
+            self._index += 1
+            self.value = self._history[self._index]
+        else:
+            self._index = len(self._history)
+            self.value = self._draft
+
+
 class InputBar(Horizontal):
     def compose(self) -> ComposeResult:
         yield Static("jarvis>", id="prompt")
-        yield Input(placeholder="ask JARVIS…", id="cmd-input")
+        yield CmdInput(placeholder="ask JARVIS…", id="cmd-input")
 
 
 # ---------------------------------------------------------------------- app
@@ -244,6 +285,8 @@ class JarvisApp(App):
         self.set_interval(5.0, self._refresh_status)
         asyncio.create_task(self._connect())
         self.query_one("#cmd-input", Input).focus()
+        log = self.query_one(ConversationLog)
+        log.system("type /help for commands — ↑/↓ recalls previous commands")
 
     # ── connection lifecycle ─────────────────────────────────────────────
 
@@ -270,6 +313,7 @@ class JarvisApp(App):
         box = self.query_one(DaemonBox)
         box.connected = self._data.connected
         box.status = self._data.status
+        box.last_error = self._data.last_error
 
     # ── periodic refreshes ───────────────────────────────────────────────
 
@@ -297,6 +341,8 @@ class JarvisApp(App):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         command = event.value.strip()
+        input_widget = self.query_one(CmdInput)
+        input_widget.add_to_history(command)
         event.input.value = ""
         if not command:
             return
@@ -304,6 +350,9 @@ class JarvisApp(App):
             self._slash_command(command)
             return
         log = self.query_one(ConversationLog)
+        if self._run_task and not self._run_task.done():
+            log.error("a goal is already running — press ctrl+c to cancel it first")
+            return
         log.user(command)
         task = self.query_one(TaskBox)
         task.goal = command

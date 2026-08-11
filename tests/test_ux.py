@@ -5,10 +5,7 @@ import asyncio
 import io
 import json
 import sys
-import tempfile
 from pathlib import Path
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -102,8 +99,9 @@ def test_record_tool_stores_output_and_diff():
 # ── LiveTaskDisplay ─────────────────────────────────────────────────────────
 
 def test_live_display_renders_events_without_polling():
-    from cli.ux import LiveTaskDisplay
     from rich.console import Console
+
+    from cli.ux import LiveTaskDisplay
 
     out = io.StringIO()
     console = Console(file=out, width=100, force_terminal=False, color_system=None)
@@ -121,8 +119,9 @@ def test_live_display_renders_events_without_polling():
 
 
 def test_live_display_disabled_does_not_render():
-    from cli.ux import LiveTaskDisplay
     from rich.console import Console
+
+    from cli.ux import LiveTaskDisplay
 
     out = io.StringIO()
     console = Console(file=out, width=100, force_terminal=False, color_system=None)
@@ -221,8 +220,9 @@ def test_render_summary_collapsed():
 
 
 def test_render_expanded_sections():
-    from cli.details import render_expanded
     from rich.console import Console
+
+    from cli.details import render_expanded
 
     usage = {
         "system_tokens": 100, "memory_tokens": 50, "files_tokens": 30,
@@ -242,8 +242,9 @@ def test_render_expanded_sections():
 
 
 def test_render_expanded_empty_state_no_crash():
-    from cli.details import render_expanded
     from rich.console import Console
+
+    from cli.details import render_expanded
 
     out = io.StringIO()
     Console(file=out, width=100, force_terminal=False,
@@ -255,7 +256,9 @@ def test_render_expanded_empty_state_no_crash():
 
 def test_render_status_bar_and_notifications():
     import types
+
     from rich.console import Console
+
     from cli.cockpit import render_notifications, render_status_bar
 
     loop = types.SimpleNamespace(
@@ -276,3 +279,42 @@ def test_render_status_bar_and_notifications():
                 [("ok", "task done"), ("warn", "denied")]))
     text = out.getvalue()
     assert "task done" in text and "denied" in text
+
+
+# ── Textual conversation client (headless, mock daemon) ─────────────────────
+
+def test_conversation_cmd_history_recall():
+    """Up-arrow recalls the last submitted command in the input."""
+    from ui.backend import TuiDataSource
+    from ui.conversation import CmdInput, JarvisApp
+
+    async def scenario():
+        app = JarvisApp(data_source=TuiDataSource(mock=True))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            inp = app.query_one(CmdInput)
+            await pilot.press("h", "i")
+            await pilot.press("enter")
+            await pilot.pause()
+            assert inp.value == ""
+            await pilot.press("up")
+            assert inp.value == "hi"
+
+    asyncio.run(scenario())
+
+
+def test_conversation_cmd_history_empty_does_not_crash():
+    """Up/Down with no history is a no-op, not an error."""
+    from ui.backend import TuiDataSource
+    from ui.conversation import CmdInput, JarvisApp
+
+    async def scenario():
+        app = JarvisApp(data_source=TuiDataSource(mock=True))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            inp = app.query_one(CmdInput)
+            await pilot.press("up")
+            await pilot.press("down")
+            assert inp.value == ""
+
+    asyncio.run(scenario())
