@@ -847,7 +847,11 @@ def _print_dashboard_url(project_dir: str) -> None:
     if credential is None:
         print("no daemon running for this project")
         sys.exit(1)
-    print(f"http://localhost:5173/?bootstrap={credential.get('bootstrap', '')}")
+    ws_port = credential.get("ws_port", "")
+    query = f"?bootstrap={credential.get('bootstrap', '')}"
+    if ws_port:
+        query += f"&ws_port={ws_port}"
+    print(f"http://localhost:5173/{query}")
 
 
 def _status_daemon(args) -> None:

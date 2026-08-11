@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/chatpanel.tsx","./src/components/connectionbar.tsx","./src/components/timelinepanel.tsx","./src/daemon/client.ts","./src/daemon/events.ts","./src/daemon/protocol.ts","./src/daemon/reconnect.ts","./src/daemon/types.ts","./src/store/connection.ts","./src/store/task.ts"],"version":"5.7.3"}

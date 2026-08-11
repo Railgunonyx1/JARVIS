@@ -58,7 +58,6 @@ export class DaemonClient {
   private url = ''
   private auth: AuthCredentials = { token: '' }
   private status: ConnectionStatus = 'idle'
-  private statusDetail = ''
   private pending = new Map<string, PendingRequest>()
   private runs = new Map<string, RunHandle>()
   private runId: string | null = null
@@ -173,7 +172,6 @@ export class DaemonClient {
 
   private setStatus(status: ConnectionStatus, detail = ''): void {
     this.status = status
-    this.statusDetail = detail
     for (const fn of this.statusListeners) {
       fn(status, detail)
     }
@@ -211,7 +209,7 @@ export class DaemonClient {
       const run = this.runs.get(frame.id)
       if (run && !run.settled) {
         run.settled = true
-        const result = (frame.payload as { result?: RunResult }).result ?? {}
+        const result = (frame.payload as { result?: RunResult }).result ?? ({} as RunResult)
         run.handlers.onResult(result)
       }
       if (frame.id === this.runId) {

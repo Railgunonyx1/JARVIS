@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { DaemonClient } from '../daemon/client'
+import type { AuthCredentials } from '../daemon/client'
 import type { ConnStateEvent, ConnectionStatus } from '../daemon/types'
-
-export type AuthInput = { token?: string; bootstrap?: string }
 
 interface ConnectionStore {
   status: ConnectionStatus
@@ -11,7 +10,7 @@ interface ConnectionStore {
   bootstrapUrl: string
   url: string
   client: DaemonClient
-  connect: (url: string, auth: AuthInput) => void
+  connect: (url: string, auth: AuthCredentials) => void
   disconnect: () => void
   setBootstrapUrl: (url: string) => void
 }

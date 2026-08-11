@@ -39,28 +39,30 @@ export const useTaskStore = create<TaskStore>((set) => ({
   handleEvent: (name, payload) => {
     if (name === RUN_QUEUED || name === TASK_STARTED) {
       const goal = payload.goal ? String(payload.goal) : undefined
-      set((s) => ({
+      set({
         phase: 'running',
         ...(goal ? { goal } : {}),
         ...(name === TASK_STARTED && payload.run_id
           ? { runId: String(payload.run_id) }
           : {}),
-      }))
+      })
       return
     }
     if (name === STEP_STARTED) {
-      const index = Number(payload.step ?? s.steps.length)
-      set((s) => ({
-        steps: [
-          ...s.steps,
-          {
-            index,
-            tool: String(payload.tool ?? 'tool'),
-            status: 'running',
-            duration_ms: undefined,
-          },
-        ],
-      }))
+      set((s) => {
+        const index = Number(payload.step ?? s.steps.length)
+        return {
+          steps: [
+            ...s.steps,
+            {
+              index,
+              tool: String(payload.tool ?? 'tool'),
+              status: 'running' as const,
+              duration_ms: undefined,
+            },
+          ],
+        }
+      })
       return
     }
     if (name === STEP_COMPLETED) {
