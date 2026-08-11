@@ -85,7 +85,7 @@ class HistoryStore:
             return
         for raw in text.splitlines():
             line = raw.strip()
-            if line and line not in self._entries:
+            if line and line.isprintable() and line not in self._entries:
                 self._entries.append(line)
         if len(self._entries) > MAX_ENTRIES:
             self._entries = self._entries[-MAX_ENTRIES:]
