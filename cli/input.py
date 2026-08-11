@@ -19,10 +19,11 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 
+from cli.theme import PROMPT_TEXT
+
 KeySource = Callable[[], str]
 
 # Keys returned by msvcrt for the function keys we care about.
-_ESC = "\x1b"
 _ENTER = "\r"
 _CTRL_C = "\x03"
 _CTRL_Z = "\x1a"
@@ -105,13 +106,14 @@ class InputReader:
         self._history: list[str] = []
         self._index = 0
         self._draft = ""
+        self._fallback_seeded = False
 
     def set_history(self, entries: list[str]) -> None:
         """Seed history for ↑/↓ recall (caller owns persistence)."""
         self._history = list(entries)
         self._index = len(self._history)
 
-    def read_line(self, prompt: str = "JARVIS> ") -> str:
+    def read_line(self, prompt: str = PROMPT_TEXT) -> str:
         """Read one command line with editing + history. Raises
         ``KeyboardInterrupt`` on Ctrl+C and ``EOFError`` on Ctrl+Z/EOF."""
         if sys.platform != "win32":
@@ -150,35 +152,30 @@ class InputReader:
         self._index = len(self._history)
         self._draft = ""
         _redraw(self._write, prompt, buf)
-        try:
-            while True:
-                ch = keys()
-                if ch == _ENTER:
-                    self._write("\n")
-                    return buf.text
-                if ch == _CTRL_C:
-                    self._write("\n")
-                    raise KeyboardInterrupt
-                if ch == _CTRL_Z:
-                    self._write("\n")
-                    raise EOFError
-                if len(ch) == 2:  # extended key (arrow / Home / End / Delete)
-                    self._extended_key(ch[1], buf)
-                elif ch == _BACKSPACE:
-                    buf.delete_left()
-                elif ch == _DELETE:
-                    buf.delete_right()
-                elif ch == _TAB:
-                    buf.insert("\t")
-                elif ch.isprintable():
-                    buf.insert(ch)
-                else:
-                    continue
-                _redraw(self._write, prompt, buf)
-        except KeyboardInterrupt:
-            raise
-        except EOFError:
-            raise
+        while True:
+            ch = keys()
+            if ch == _ENTER:
+                self._write("\n")
+                return buf.text
+            if ch == _CTRL_C:
+                self._write("\n")
+                raise KeyboardInterrupt
+            if ch == _CTRL_Z:
+                self._write("\n")
+                raise EOFError
+            if len(ch) == 2:  # extended key (arrow / Home / End / Delete)
+                self._extended_key(ch[1], buf)
+            elif ch == _BACKSPACE:
+                buf.delete_left()
+            elif ch == _DELETE:
+                buf.delete_right()
+            elif ch == _TAB:
+                buf.insert("\t")
+            elif ch.isprintable():
+                buf.insert(ch)
+            else:
+                continue
+            _redraw(self._write, prompt, buf)
 
     def _extended_key(self, code: str, buf: Buffer) -> None:
         if code == _EXT_UP:
@@ -200,15 +197,18 @@ class InputReader:
 
     def _read_fallback(self, prompt: str) -> str:
         try:
-            import readline  # noqa: F401  (stdlib, POSIX)
+            import readline
         except ImportError:
             return input(prompt)
-        # readline gives us Up/Down history for free on POSIX.
+        # readline gives us Up/Down history for free on POSIX — seed once so a
+        # multi-prompt session doesn't duplicate entries.
+        if not self._fallback_seeded:
+            for entry in self._history:
+                readline.add_history(entry)
+            self._fallback_seeded = True
         try:
             import builtins
 
-            for entry in self._history:
-                readline.add_history(entry)
             return builtins.input(prompt)
         except (EOFError, KeyboardInterrupt):
             raise

@@ -10,7 +10,10 @@ from __future__ import annotations
 # Brand / identity
 BRAND = "bold cyan"
 TITLE = "bold cyan"
-PROMPT = "bold"
+
+# REPL input
+PROMPT_TEXT = "JARVIS> "
+PROMPT_STYLE = "bold"
 PROMPT_HINT = "dim"
 
 # Status
