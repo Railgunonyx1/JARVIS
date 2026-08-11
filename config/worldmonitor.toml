@@ -1,0 +1,24 @@
+[worldmonitor]
+# Self-hosted World Monitor instance (github.com/koala73/worldmonitor).
+# Default matches the Docker compose stack: nginx serves the app and proxies
+# /api/* to the Node API on 127.0.0.1:3000. See the project SELF_HOSTING.md.
+base_url = "http://127.0.0.1:3000"
+
+# Site variant ("full" | "tech" | "finance"). Routes are /api/<variant>/v1/<rpc>.
+variant = "full"
+
+# HTTP request timeout (seconds).
+timeout = 10.0
+
+# Result cache TTL (seconds). Live data moves fast; keep it short.
+cache_ttl = 300
+
+# Optional inline fallback API key. Normally set WORLDMONITOR_API_KEY in
+# config/.env or config/api_keys.json instead (loaded by core/api_keys).
+# api_key = "wm_..."
+
+# Optional per-tool RPC route overrides (advanced). Only needed if your
+# instance names a route differently than the defaults in tools/world_monitor.py.
+# [worldmonitor.endpoints]
+# world_monitor.search = "getNewsIntelligence"
+# world_monitor.get_alerts = "getConflictEvents"
