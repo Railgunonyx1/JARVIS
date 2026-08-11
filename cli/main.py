@@ -129,6 +129,16 @@ def _status_getter(loop) -> dict:
     }
 
 
+def _emit_response(text: str) -> None:
+    """Print an assistant response: Markdown on an interactive terminal, plain
+    otherwise (pipes, tests) so machine-readable output stays byte-exact."""
+    if sys.stdout.isatty():
+        from cli.renderer import render_markdown
+        console.print(render_markdown(text))
+    else:
+        print(text)
+
+
 def _print_result(result) -> None:
     state = result.state
     obs = result.observation or {}
@@ -149,7 +159,7 @@ def _print_result(result) -> None:
             print(f"[diff] {call.get('output', '')}")
             print(diff)
     if result.success:
-        print(result.response)
+        _emit_response(result.response)
     else:
         print(f"ERROR: {result.error}", file=sys.stderr)
     print(f"[trace {result.trace_id}] provider={state.provider} model={state.model} "
@@ -169,7 +179,7 @@ def _print_collapsed(result) -> None:
 
     state = result.state
     if result.success:
-        console.print(Text(result.response))
+        _emit_response(result.response)
     else:
         typer.secho(f"ERROR: {result.error}", err=True, fg="red")
     for call in state.tool_calls:
@@ -341,6 +351,7 @@ def _render_status_bar_dict(status: dict) -> Text:
         bits.append(Text(f"mem={mem.get('decisions', 0)}d/{mem.get('knowledge', 0)}k", style="dim"))
     if status.get("busy"):
         bits.append(Text("busy", style="bold red blink"))
+    bits.append(Text(f"time={datetime.datetime.now().strftime('%H:%M:%S')}", style="dim"))
     return Text("  │  ").join(bits)
 
 
@@ -366,7 +377,7 @@ def _print_result_dict(result: dict) -> None:
             print(f"[diff] {call.get('output', '')}")
             print(diff)
     if result.get("success"):
-        print(result.get("response", ""))
+        _emit_response(result.get("response", ""))
     else:
         print(f"ERROR: {result.get('error', '')}", file=sys.stderr)
     usage = obs.get("context_usage") or state.get("context_usage") or {}
@@ -385,7 +396,7 @@ def _print_collapsed_dict(result: dict) -> None:
     """Collapsed (conversation-dominant) rendering of a daemon result dict."""
     state = result.get("state", {}) or {}
     if result.get("success"):
-        console.print(Text(result.get("response", "")))
+        _emit_response(result.get("response", ""))
     else:
         typer.secho(f"ERROR: {result.get('error', '')}", err=True, fg="red")
     for call in state.get("tool_calls", []):
@@ -507,6 +518,8 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
     from rich.panel import Panel
 
     from cli.cockpit import render_notifications
+    from cli.history import HistoryStore
+    from cli.input import InputReader
 
     console.clear()
     console.print(Panel(
@@ -519,6 +532,10 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
 
     notifications: list = []
     _configure_noise(verbose=False)
+
+    history = HistoryStore()
+    reader = InputReader()
+    reader.set_history(history.to_list())
 
     try:
         status = _client_call(client, client.status())
@@ -556,10 +573,12 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
         except Exception as exc:
             typer.secho(f"daemon status unreachable: {exc}", err=True, fg="yellow")
         try:
-            line = console.input(Text("JARVIS", style="bold cyan") + Text("> ", style="bold")).strip()
+            line = reader.read_line("JARVIS> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
+        history.add(line)
+        history.save()
         if not line:
             if last_result is not None:
                 _print_result_dict(last_result)
@@ -609,6 +628,8 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
             _cmd_memory_daemon(client, line)
         elif line.startswith("/history"):
             _cmd_history_daemon(client, line)
+        elif line == "/audit" or line.startswith("/audit "):
+            _cmd_audit(line)
         elif line == "/resume":
             if not last_goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
@@ -617,6 +638,8 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
         else:
             last_goal = line
             last_result = _run_daemon_goal(line, client, notifications)
+
+    history.save()
 
 
 def _print_models_dict(data: dict) -> None:
@@ -851,6 +874,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
     from cli.cockpit import render_cockpit, render_notifications, render_status_bar
     from cli.details import render_expanded
+    from cli.history import HistoryStore
+    from cli.input import InputReader
     from cli.startup_profile import get_profiler
 
     profiler = get_profiler()
@@ -887,15 +912,20 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     _configure_noise(verbose=False)
     loop = None
 
+    history = HistoryStore()
+    reader = InputReader()
+    reader.set_history(history.to_list())
+
     while True:
         if loop is None:
-            console.print("JARVIS> ", style="dim", end="")
-            sys.stdout.flush()
             try:
-                line = input()
+                line = reader.read_line("JARVIS> ")
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
+            line = line.strip()
+            history.add(line)
+            history.save()
             if not ready.is_set():
                 typer.secho("(waiting for kernel startup…)", dim=True)
                 try:
@@ -913,14 +943,15 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             if profile_startup:
                 _print_startup_report()
             console.print(render_status_bar(loop))
-            line = line.strip()
         else:
             console.print(render_status_bar(loop))
             try:
-                line = input("JARVIS> ").strip()
+                line = reader.read_line("JARVIS> ").strip()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
+            history.add(line)
+            history.save()
         if not line:
             last = getattr(loop, "_last_result", None)
             if last is not None:
@@ -981,6 +1012,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_memory(loop, line)
         elif line.startswith("/history"):
             _cmd_history(line)
+        elif line == "/audit" or line.startswith("/audit "):
+            _cmd_audit(line)
         elif line == "/resume":
             goal = getattr(loop, "_last_goal", None)
             if not goal:
@@ -996,6 +1029,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
     if loop is not None:
         loop.logger.flush()
+    history.save()
 
 
 def _print_models(loop) -> None:
@@ -1071,6 +1105,52 @@ def _cmd_memory(loop, line: str) -> None:
         typer.secho("usage: /memory [search <query> | add <key>=<value>]", err=True, fg="red")
 
 
+def _cmd_audit(line: str, limit_default: int = 12) -> None:
+    """`/audit [trace <id> | <n> | <tool>]` — read the security audit log
+    (stats + recent actions + per-trace replay). Reads the shared
+    ``~/.jarvis/data/audit.db``, so it works identically for the standalone
+    kernel and the daemon REPL."""
+    from security.audit import get_audit_log
+
+    parts = line.split(maxsplit=1)
+    args = parts[1].strip() if len(parts) == 2 else ""
+    log = get_audit_log()
+    stats = log.get_stats()
+    print(f"audit: {stats['total_actions']} actions · "
+          f"{stats['denied']} denied · {stats['failed']} failed")
+    if stats["top_tools"]:
+        top = ", ".join(f"{k}={v}" for k, v in list(stats["top_tools"].items())[:5])
+        print(f"top tools: {top}")
+    if args.startswith("trace "):
+        trace_id = args[6:].strip()
+        entries = log.query_trace(trace_id)
+        if not entries:
+            typer.secho(f"no audit entries for trace {trace_id}", err=True, fg="red")
+            return
+        for e in entries:
+            ts = datetime.datetime.fromtimestamp(e["timestamp"]).strftime("%H:%M:%S")
+            ok = "ok" if e["success"] else "fail"
+            flag = "" if e["allowed"] else " DENIED"
+            print(f"{ts} {e['tool'] or e['action']:<28} {ok}{flag} "
+                  f"{e['duration_ms']:.0f}ms {e.get('session_id', '')[:8]}")
+        return
+    limit = limit_default
+    tool = args or None
+    if args.isdigit():
+        limit = int(args)
+        tool = None
+    entries = log.query(tool=tool, limit=limit)
+    if not entries:
+        print("no audit entries yet")
+        return
+    for e in entries:
+        ts = datetime.datetime.fromtimestamp(e["timestamp"]).strftime("%H:%M:%S")
+        ok = "ok" if e["success"] else "fail"
+        flag = "" if e["allowed"] else " DENIED"
+        print(f"{ts} {e['tool'] or e['action']:<28} {ok}{flag} "
+              f"{e['duration_ms']:.0f}ms {e.get('session_id', '')[:8]}")
+
+
 def _cmd_history(line: str) -> None:
     from core.event_store import get_event_store
     store = get_event_store()
@@ -1110,6 +1190,8 @@ def _print_help() -> None:
     print("/memory add <k>=<v>  remember a fact")
     print("/history        list recent tasks")
     print("/history <id>   replay a task timeline")
+    print("/audit          security audit log (stats + recent actions)")
+    print("/audit trace <id>   replay an audit trace")
     print("/tree           show project tree")
     print("/resume         re-run the last goal")
     print("/cockpit        heavy diagnostic dashboard (on demand)")
