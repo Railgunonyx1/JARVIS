@@ -71,7 +71,6 @@ CAPABILITY_TO_TOOL = {
     "calculator": "system_settings",
     "notifications.send": "system_settings",
     "system.info": "system_settings",
-    "memory.query": "memory",
     "screen.capture": "screen_analyzer",
     "screen.analyze": "screen_analyzer",
     "screen.find_element": "screen_analyzer",

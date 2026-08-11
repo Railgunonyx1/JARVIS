@@ -191,12 +191,12 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             raise RuntimeError(f"Code error: {error[:400]}")
         return "Completed."
 
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Generated code timed out after 120 seconds.")
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("Generated code timed out after 120 seconds.") from e
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"Generated code failed: {e}")
+        raise RuntimeError(f"Generated code failed: {e}") from e
 
 def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "") -> dict:
     if not step_results:

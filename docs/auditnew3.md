@@ -129,15 +129,32 @@ Notes: `_quarantine_removed/` (32 tracked files) is legacy reference code but is
 
 ## 7. Recommendations (prioritized)
 
-| Priority | Action |
-|---------:|--------|
-| P0 | Fix `InputReader` non-tty stdin fallback (unblocks full suite + pipe input) |
-| P1 | Spawn daemon via `pythonw.exe` on Windows (single console window) |
-| P1 | Add ANSI reset + themed prompt to `InputReader._redraw` (readable typed input) |
-| P2 | Remove duplicate MCP route key; `raise ... from err` in `core/executor.py`; fix 15 unused vars |
-| P2 | `git rm -r --cached web/node_modules` + gitignore; exclude `_quarantine*` from scans |
-| P3 | Pin litellm (>=1.84.0), upgrade aiohttp/cryptography/pip; add CI lint+bandit gate |
-| P3 | Mechanical UP* ruff modernization pass (safe autofixes only) |
+| Priority | Action | Status |
+|---------:|--------|--------|
+| P0 | Fix `InputReader` non-tty stdin fallback (unblocks full suite + pipe input) | **DONE** |
+| P1 | Spawn daemon via `pythonw.exe` on Windows (single console window) | **DONE** |
+| P1 | Add ANSI reset + themed prompt to `InputReader._redraw` (readable typed input) | **DONE** |
+| P2 | Remove duplicate MCP route key; `raise ... from err` in `core/executor.py`; fix 15 unused vars | open |
+| P2 | `git rm -r --cached web/node_modules` + gitignore; exclude `_quarantine*` from scans | open |
+| P3 | Pin litellm (>=1.84.0), upgrade aiohttp/cryptography/pip; add CI lint+bandit gate | open |
+| P3 | Mechanical UP* ruff modernization pass (safe autofixes only) | open |
+
+### Resolution notes (2026-08-11)
+- **P0** `cli/input.py`: `read_line()` now checks `sys.stdin.isatty()`; when false (piped/file
+  input, monkeypatched stdin) it reads `sys.stdin.readline()` directly and raises `EOFError` on
+  EOF. The `msvcrt` raw editor is preserved for a real console and for injected key sources.
+- **P1 console** `daemon/lifecycle.py`: `start_daemon()` now uses `pythonw.exe` (GUI subsystem,
+  never allocates a console) on Windows via `_daemon_python()`. Applies to the WMI spawn path
+  where `CREATE_NO_WINDOW` cannot be passed; Popen fallbacks already carry the flag.
+- **P1 rendering** `cli/input.py`: `_redraw()` previously wrote `\r{cursor_spaces}`, which erased
+  the text it had just painted — the root cause of the "black/blank input" report. It now paints
+  the line once and repositions the cursor with absolute-column CSI (`\x1b[{n}G`), clears stale
+  glyphs with `\x1b[K`, and renders a bold-cyan prompt with a leading reset so typed text uses
+  the default (readable) attribute.
+- **Regression guard** `tests/test_daemon.py::test_cli_fast_imports_only_stdlib` was
+  order-dependent (failed when run after modules that import typer/rich in-process). Rewritten to
+  assert `cli.fast` does not *introduce* heavy modules; `cli.fast` remains stdlib-clean.
+- **Verification:** full suite `tests/` — **207 passed, 0 failed** (was blocked by the P0 hang).
 
 ### Parked (research only, not in this pass)
 Provider/gateway research (FreeLLMAPI, OmniRoute, Free LLM Gateway, LLM-Rosetta, LLMGateway, LM-Proxy, OpenProxy, RelayFreeLLM, LiteLLM, Ollama + ContinuityBench stateful-failover) - provider layer untouched by design; a later M0 provider pass should own model selection/retries/cooldowns/circuit-breaking itself and treat gateways as replaceable inference infrastructure.
