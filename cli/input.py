@@ -103,6 +103,7 @@ class InputReader:
     def __init__(self, write: Callable[[str], None] | None = None, key_source: KeySource | None = None) -> None:
         self._write = write or sys.stdout.write
         self._key_source = key_source or (_msvcrt_key_source if sys.platform == "win32" else _fallback_key_source)
+        self._raw_key_source = key_source is not None
         self._history: list[str] = []
         self._index = 0
         self._draft = ""
@@ -118,7 +119,9 @@ class InputReader:
         ``KeyboardInterrupt`` on Ctrl+C and ``EOFError`` on Ctrl+Z/EOF."""
         if sys.platform != "win32":
             return self._read_fallback(prompt)
-        return self._read_raw(prompt)
+        if self._raw_key_source or _stdin_is_tty():
+            return self._read_raw(prompt)
+        return self._read_plain(prompt)
 
     # ── history navigation ─────────────────────────────────────────────────
 
@@ -195,6 +198,19 @@ class InputReader:
 
     # ── non-Windows fallback ───────────────────────────────────────────────
 
+    def _read_plain(self, prompt: str) -> str:
+        """Line-at-a-time read from a non-interactive stdin (pipe/file).
+
+        The ``msvcrt`` path reads the real console device, which ignores a
+        redirected ``sys.stdin``; when stdin is not a TTY we read it directly
+        instead. Raises ``EOFError`` at end-of-input, matching ``input()``.
+        """
+        self._write(prompt)
+        line = sys.stdin.readline()
+        if not line:
+            raise EOFError
+        return line.rstrip("\n")
+
     def _read_fallback(self, prompt: str) -> str:
         try:
             import readline
@@ -219,3 +235,10 @@ def _fallback_key_source() -> KeySource:
         return input("")
 
     return _next
+
+
+def _stdin_is_tty() -> bool:
+    try:
+        return bool(sys.stdin.isatty())
+    except (AttributeError, ValueError):
+        return False
