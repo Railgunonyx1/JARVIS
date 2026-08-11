@@ -12,6 +12,8 @@ No polling: it is recomputed on demand (startup, after each task, /cockpit).
 
 from __future__ import annotations
 
+import datetime
+
 from rich import box
 from rich.console import Group
 from rich.layout import Layout
