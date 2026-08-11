@@ -106,8 +106,7 @@ class HistoryStore:
         """Atomically persist history. Never raises into the REPL."""
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(prefix=".jarvis-history-",
-                                       dir=str(self._path.parent))
+            fd, tmp = tempfile.mkstemp(prefix=".jarvis-history-", dir=str(self._path.parent))
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
                     handle.write("\n".join(self._entries))

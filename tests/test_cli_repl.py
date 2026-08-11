@@ -8,7 +8,6 @@ tmp_path; no LLM, no daemon.
 
 from __future__ import annotations
 
-import io
 import sys
 import types
 from pathlib import Path
@@ -17,12 +16,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
 
-from cli.history import HistoryStore, MAX_ENTRIES
+from cli.history import MAX_ENTRIES, HistoryStore
 from cli.input import Buffer, InputReader
 from cli.renderer import render_markdown
 
-
 # ── HistoryStore ────────────────────────────────────────────────────────────
+
 
 def test_history_add_skips_empty_and_dedups(tmp_path):
     store = HistoryStore(path=tmp_path / "history")
@@ -71,6 +70,7 @@ def test_history_corrupt_file_degrades_cleanly(tmp_path):
 
 # ── InputReader / Buffer ────────────────────────────────────────────────────
 
+
 def test_buffer_editing():
     b = Buffer("hello")
     b.cursor_home()
@@ -101,15 +101,15 @@ def test_read_line_typing():
 
 
 def test_read_line_backspace_and_delete():
-    reader = _reader_with(list("abc") + ["\x08", "\x00S", "\x08", "\r"])
-    # type abc → backspace (ab) → Delete (ab) → backspace (a)
-    assert reader.read_line() == "a"
+    reader = _reader_with(list("abcd") + ["\xe0K", "\xe0K", "\x00S", "\x08", "\r"])
+    # type abcd → left,left → Delete removes 'c' → left, Backspace removes 'b' → "ad"
+    assert reader.read_line() == "ad"
 
 
 def test_read_line_cursor_movement():
     keys = list("abcd")
-    keys += ["\xe0K", "\xe0K", "\x00G"]   # left, left, Home
-    keys += ["\x00O"]                     # End
+    keys += ["\xe0K", "\xe0K", "\x00G"]  # left, left, Home
+    keys += ["\x00O"]  # End
     keys += ["\r"]
     reader = _reader_with(keys)
     assert reader.read_line() == "abcd"
@@ -145,14 +145,17 @@ def test_read_line_ctrl_z_raises_eof():
 
 # ── renderer ────────────────────────────────────────────────────────────────
 
+
 def test_render_markdown_returns_markdown_renderable():
     from rich.markdown import Markdown
+
     item = render_markdown("```python\nx = 1\n```")
     assert isinstance(item, Markdown)
 
 
 def test_render_markdown_plain_stays_plain():
     from rich.text import Text
+
     item = render_markdown("just a plain sentence")
     assert isinstance(item, Text)
 
@@ -160,11 +163,13 @@ def test_render_markdown_plain_stays_plain():
 def test_render_markdown_garbage_does_not_crash():
     from rich.markdown import Markdown
     from rich.text import Text
+
     assert isinstance(render_markdown(""), Text)
-    assert isinstance(render_markdown("# "*50 + "x"*200), (Markdown, Text))
+    assert isinstance(render_markdown("# " * 50 + "x" * 200), (Markdown, Text))
 
 
 # ── status clock ────────────────────────────────────────────────────────────
+
 
 def test_status_bar_has_clock():
     from cli.cockpit import render_status_bar
@@ -192,18 +197,29 @@ def test_status_bar_dict_has_clock(capsys):
 
 # ── /audit read-out ─────────────────────────────────────────────────────────
 
+
 def test_cmd_audit_stats_and_recent(monkeypatch, tmp_path, capsys):
     import security.audit as audit_mod
 
     log = audit_mod.AuditLog(db_path=tmp_path / "audit.db")
-    log.log_immediate(audit_mod.AuditEntry(
-        action="tool_call", tool="filesystem.write",
-        trace_id="trace_abc", allowed=True, success=True,
-    ))
-    log.log_immediate(audit_mod.AuditEntry(
-        action="tool_call", tool="bash.exec",
-        trace_id="trace_abc", allowed=False, success=False,
-    ))
+    log.log_immediate(
+        audit_mod.AuditEntry(
+            action="tool_call",
+            tool="filesystem.write",
+            trace_id="trace_abc",
+            allowed=True,
+            success=True,
+        )
+    )
+    log.log_immediate(
+        audit_mod.AuditEntry(
+            action="tool_call",
+            tool="bash.exec",
+            trace_id="trace_abc",
+            allowed=False,
+            success=False,
+        )
+    )
     monkeypatch.setattr(audit_mod, "_audit_log", log)
 
     from cli.main import _cmd_audit

@@ -146,7 +146,6 @@ def render_status_bar(loop) -> Text:
         width = 6
         filled = max(0, min(width, int(round(ratio * width))))
         bar = "█" * filled + "░" * (width - filled)
-        bar_style = "green" if ratio < 0.8 else ("yellow" if ratio < 1.0 else "red")
         bits.append(f"ctx {ratio:.0%} {bar}")
         bits.append(f"{data.get('total_tokens', 0):,} tok")
     bits.append(f"time={datetime.datetime.now().strftime('%H:%M:%S')}")

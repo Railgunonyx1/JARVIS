@@ -17,8 +17,7 @@ can be driven headlessly in tests.
 from __future__ import annotations
 
 import sys
-import time
-from typing import Callable
+from collections.abc import Callable
 
 KeySource = Callable[[], str]
 
@@ -64,17 +63,17 @@ class Buffer:
         self.cursor = len(text) if cursor is None else cursor
 
     def insert(self, char: str) -> None:
-        self.text = self.text[: self.cursor] + char + self.text[self.cursor:]
+        self.text = self.text[: self.cursor] + char + self.text[self.cursor :]
         self.cursor += len(char)
 
     def delete_left(self) -> None:
         if self.cursor > 0:
-            self.text = self.text[: self.cursor - 1] + self.text[self.cursor:]
+            self.text = self.text[: self.cursor - 1] + self.text[self.cursor :]
             self.cursor -= 1
 
     def delete_right(self) -> None:
         if self.cursor < len(self.text):
-            self.text = self.text[: self.cursor] + self.text[self.cursor + 1:]
+            self.text = self.text[: self.cursor] + self.text[self.cursor + 1 :]
 
     def cursor_left(self) -> None:
         self.cursor = max(0, self.cursor - 1)
@@ -100,9 +99,8 @@ def _redraw(write: Callable[[str], None], prompt: str, buf: Buffer) -> None:
 class InputReader:
     """Raw-key REPL input with editing and history recall."""
 
-    def __init__(self, write: Callable[[str], None] | None = None,
-                 key_source: KeySource | None = None) -> None:
-        self._write = write or (lambda s: sys.stdout.write(s))
+    def __init__(self, write: Callable[[str], None] | None = None, key_source: KeySource | None = None) -> None:
+        self._write = write or sys.stdout.write
         self._key_source = key_source or (_msvcrt_key_source if sys.platform == "win32" else _fallback_key_source)
         self._history: list[str] = []
         self._index = 0
@@ -219,4 +217,5 @@ class InputReader:
 def _fallback_key_source() -> KeySource:
     def _next() -> str:
         return input("")
+
     return _next
