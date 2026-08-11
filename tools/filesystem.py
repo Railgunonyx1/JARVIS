@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import difflib
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from tools.schema import ToolResult, truncate
 
@@ -25,7 +25,7 @@ def _brief_diff(before: str, after: str, max_lines: int = 12) -> str:
     return "\n".join(diff)
 
 
-def _diff_stats(diff: str) -> Dict[str, int]:
+def _diff_stats(diff: str) -> dict[str, int]:
     added = sum(1 for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++"))
     removed = sum(1 for line in diff.splitlines() if line.startswith("-") and not line.startswith("---"))
     return {"added": added, "removed": removed}
@@ -36,7 +36,7 @@ def _root() -> Path:
     return ProjectContext.discover().root_path
 
 
-def _resolve(path_str: Optional[str]) -> Path:
+def _resolve(path_str: str | None) -> Path:
     root = _root()
     if not path_str:
         return root
@@ -46,7 +46,7 @@ def _resolve(path_str: Optional[str]) -> Path:
     return path.resolve()
 
 
-def filesystem_write(args: Dict[str, Any]) -> ToolResult:
+def filesystem_write(args: dict[str, Any]) -> ToolResult:
     path = _resolve(args.get("path"))
     content = str(args.get("content", "") or "")
     overwrite = bool(args.get("overwrite", True))
@@ -72,7 +72,7 @@ def filesystem_write(args: Dict[str, Any]) -> ToolResult:
     )
 
 
-def filesystem_read(args: Dict[str, Any]) -> ToolResult:
+def filesystem_read(args: dict[str, Any]) -> ToolResult:
     path = _resolve(args.get("path"))
     if not path.exists():
         return ToolResult(success=False, error=f"File not found: {path}")
@@ -92,7 +92,7 @@ def filesystem_read(args: Dict[str, Any]) -> ToolResult:
     )
 
 
-def filesystem_list(args: Dict[str, Any]) -> ToolResult:
+def filesystem_list(args: dict[str, Any]) -> ToolResult:
     path = _resolve(args.get("path"))
     if not path.exists():
         return ToolResult(success=False, error=f"Directory not found: {path}")

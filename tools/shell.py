@@ -14,13 +14,12 @@ import logging
 import os
 import shlex
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from security.executor import (
     ExecRequest,
     ExecResult,
     get_secure_executor,
-    sanitize_environment,
 )
 from tools.schema import ToolResult, truncate
 
@@ -89,7 +88,7 @@ def _coerce_args(raw_args: Any) -> list[str] | None:
     return None
 
 
-def shell_execute(args: Dict[str, Any]) -> ToolResult:
+def shell_execute(args: dict[str, Any]) -> ToolResult:
     command = (args.get("command") or "").strip()
     executable = (args.get("executable") or "").strip()
     raw_args = args.get("args") or []

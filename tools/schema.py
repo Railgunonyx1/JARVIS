@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
-ToolHandler = Callable[[Dict[str, Any]], Awaitable["ToolResult"]]
+ToolHandler = Callable[[dict[str, Any]], Awaitable["ToolResult"]]
 
 
 @dataclass
@@ -15,7 +16,7 @@ class ToolResult:
     success: bool
     output: str = ""
     error: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -24,12 +25,12 @@ class Tool:
 
     name: str
     description: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     permission: str
     handler: ToolHandler
     category: str = ""
 
-    def to_openai(self) -> Dict[str, Any]:
+    def to_openai(self) -> dict[str, Any]:
         """Serialize to an OpenAI-style function tool definition."""
         return {
             "type": "function",
@@ -40,7 +41,7 @@ class Tool:
             },
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
