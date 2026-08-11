@@ -63,7 +63,7 @@ def test_history_persists_roundtrip(tmp_path):
 
 def test_history_corrupt_file_degrades_cleanly(tmp_path):
     path = tmp_path / "history"
-    path.write_bytes(b"\xff\xfe corrupted \x00\x01")
+    path.write_bytes(b"\xff\xfe\x00\x01\x00\x02")
     store = HistoryStore(path=path)
     assert store.to_list() == []
 
@@ -73,24 +73,28 @@ def test_history_corrupt_file_degrades_cleanly(tmp_path):
 
 def test_buffer_editing():
     b = Buffer("hello")
-    b.cursor_home()
-    b.insert("x")
-    assert b.text == "xhello" and b.cursor == 1
-    b.delete_right()
-    assert b.text == "hello" and b.cursor == 1
-    b.cursor_end()
-    b.insert("!")
-    assert b.text == "hello!" and b.cursor == 6
-    b.cursor_left()
-    b.delete_left()
     assert b.text == "hello" and b.cursor == 5
+    b.cursor_left()
+    assert b.cursor == 4
+    b.delete_left()  # removes 'l' at index 3
+    assert b.text == "helo" and b.cursor == 3
+    b.cursor_end()
+    b.insert("!")  # → "helo!"
+    assert b.text == "helo!" and b.cursor == 5
+    b.cursor_home()
+    b.insert("x")  # → "xhelo!"
+    assert b.text == "xhelo!" and b.cursor == 1
+    b.delete_right()  # removes 'h' at index 1
+    assert b.text == "xelo!" and b.cursor == 1
+    b.cursor_right()
+    assert b.cursor == 2
 
 
 def _reader_with(keys, write=None):
     it = iter(keys)
     reader = InputReader(
         write=write or (lambda s: None),
-        key_source=lambda: next(it),
+        key_source=lambda: (lambda: next(it)),
     )
     return reader
 
