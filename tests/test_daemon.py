@@ -407,12 +407,12 @@ def test_second_daemon_starts_after_first_stops(server, tmp_path):
 
 def test_cli_fast_imports_only_stdlib():
     """The fast path must not drag typer/rich into the process."""
+    heavy = ("typer", "rich")
+    before = {m for m in heavy if m in sys.modules}
     import cli.fast  # noqa: F401
 
-    for heavy in ("typer", "rich"):
-        assert heavy not in sys.modules, (
-            f"cli.fast pulled in heavy dependency {heavy!r}"
-        )
+    pulled = {m for m in heavy if m in sys.modules} - before
+    assert not pulled, f"cli.fast pulled in heavy dependency {pulled!r}"
 
 
 def test_cli_fast_run_against_daemon(server, capsys):

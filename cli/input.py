@@ -23,6 +23,10 @@ from cli.theme import PROMPT_TEXT
 
 KeySource = Callable[[], str]
 
+# ANSI control codes (stdlib-only: the fast CLI path must not import rich).
+_ANSI_RESET = "\x1b[0m"
+_ANSI_BOLD_CYAN = "\x1b[1;36m"
+
 # Keys returned by msvcrt for the function keys we care about.
 _ENTER = "\r"
 _CTRL_C = "\x03"
@@ -89,12 +93,26 @@ class Buffer:
         self.cursor = len(self.text)
 
 
-def _redraw(write: Callable[[str], None], prompt: str, buf: Buffer) -> None:
-    """Repaint prompt + buffer + cursor using the ANSI carriage-return trick."""
-    text = prompt + buf.text
-    pad = " " * max(0, len(text) - (len(prompt) + len(buf.text)))
-    cursor_line = " " * (len(prompt) + buf.cursor)
-    write(f"\r{text}{pad}\r{cursor_line}")
+def _styled_prompt(prompt: str) -> str:
+    """Prompt with a leading reset and bold-cyan branding, matching the old
+    ``console.input(Text("JARVIS", style="bold cyan"))`` look. The trailing
+    reset restores the default attribute so typed text renders normally."""
+    return f"{_ANSI_RESET}{_ANSI_BOLD_CYAN}{prompt}{_ANSI_RESET}"
+
+
+def _redraw(write: Callable[[str], None], prompt: str, buf: Buffer,
+            styled_prompt: str | None = None) -> None:
+    """Repaint prompt + buffer + cursor using ANSI.
+
+    ``styled_prompt`` is the display form of the prompt (with ANSI codes);
+    ``prompt`` stays plain so the cursor column counts real glyphs. The line
+    is painted once and the cursor repositioned with absolute-column CSI —
+    never by writing spaces, which would erase the text it just drew (the
+    original "input renders black/blank" bug).
+    """
+    shown = styled_prompt if styled_prompt is not None else prompt
+    cursor_col = len(prompt) + buf.cursor
+    write(f"\r{shown}{buf.text}\x1b[K\x1b[{cursor_col}G")
 
 
 class InputReader:
@@ -154,7 +172,8 @@ class InputReader:
         buf = Buffer()
         self._index = len(self._history)
         self._draft = ""
-        _redraw(self._write, prompt, buf)
+        styled = _styled_prompt(prompt)
+        _redraw(self._write, prompt, buf, styled_prompt=styled)
         while True:
             ch = keys()
             if ch == _ENTER:
@@ -178,7 +197,7 @@ class InputReader:
                 buf.insert(ch)
             else:
                 continue
-            _redraw(self._write, prompt, buf)
+            _redraw(self._write, prompt, buf, styled_prompt=styled)
 
     def _extended_key(self, code: str, buf: Buffer) -> None:
         if code == _EXT_UP:

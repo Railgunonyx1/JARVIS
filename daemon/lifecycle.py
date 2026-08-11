@@ -131,6 +131,20 @@ def find_matching(project_dir: str) -> dict | None:
     return None
 
 
+def _daemon_python() -> str:
+    """Interpreter for the detached daemon process.
+
+    On Windows prefer ``pythonw.exe`` (GUI subsystem): it never allocates a
+    console, so spawning the daemon does not pop a second terminal window.
+    This matters for the WMI path, which cannot pass ``CREATE_NO_WINDOW``.
+    """
+    if os.name == "nt":
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        if pythonw.is_file():
+            return str(pythonw)
+    return sys.executable
+
+
 def start_daemon(project_dir: str, port: int | None = None,
                  log_path: str | None = None, timeout: float = 30.0) -> dict | None:
     """Start (or reuse) a detached daemon for the project and wait until ready."""
@@ -142,7 +156,7 @@ def start_daemon(project_dir: str, port: int | None = None,
     if existing:
         remove_entry(pid)
 
-    command = [sys.executable, "-m", "daemon.server", "start",
+    command = [_daemon_python(), "-m", "daemon.server", "start",
                "--project-dir", project_dir]
     if port:
         command += ["--port", str(port)]
