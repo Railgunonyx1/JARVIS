@@ -3,12 +3,11 @@ Central API Key Loader — reads from .env and api_keys.json.
 Priority: environment variable > .env file > api_keys.json
 """
 
-import os
 import json
 import logging
+import os
 import threading
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("jarvis.api_keys")
 
@@ -43,8 +42,8 @@ def _load_dotenv() -> dict:
         return {}
     env = {}
     try:
-        for line in DOT_ENV.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
+        for raw_line in DOT_ENV.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, _, val = line.partition("=")
@@ -76,7 +75,7 @@ def _load_all() -> dict:
     return merged
 
 
-def get_api_key(key_name: str) -> Optional[str]:
+def get_api_key(key_name: str) -> str | None:
     global _merged_keys
     if _merged_keys is None:
         with _keys_lock:
