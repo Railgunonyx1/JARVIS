@@ -27,6 +27,7 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Grid, Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import (
     DataTable,
     Input,
@@ -505,6 +506,13 @@ class JarvisApp(App):
     def action_focus_chat(self) -> None:
         self.query_one("#chat-input", Input).focus()
 
+    def _panel(self, cls):
+        """Look up a widget type, returning None while the screen is still mounting."""
+        try:
+            return self.query_one(cls)
+        except NoMatches:
+            return None
+
     def on_mount(self) -> None:
         logs = self.query_one(LogsPanel)
         logs.write("console started")
@@ -526,39 +534,54 @@ class JarvisApp(App):
         self.query_one("#chat-input", Input).focus()
 
     async def _connect(self) -> None:
-        logs = self.query_one(LogsPanel)
+        logs = self._panel(LogsPanel)
         await self._data.connect()
         if self._data.connected:
-            logs.write("daemon connected")
+            if logs:
+                logs.write("daemon connected")
             await self._refresh_live()
         else:
-            logs.write(f"daemon offline: {self._data.last_error} — showing mock data")
-            logs.write("start it in another terminal with `jarvis daemon start`")
-        self.query_one(TopBar).set_daemon_state(self._data.connected)
-        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
+            if logs:
+                logs.write(f"daemon offline: {self._data.last_error} — showing mock data")
+                logs.write("start it in another terminal with `jarvis daemon start`")
+        top = self._panel(TopBar)
+        if top:
+            top.set_daemon_state(self._data.connected)
+            top.sync_mode(self._data.status.get("mode", ""))
         hits = await self._data.memory_search("")
         if hits:
-            self.query_one(MemoryPanel).update_data(
-                [{"kind": "fact", "key": h.get("key", str(h)), "value": str(h),
-                  "score": h.get("score", 0.5)} for h in hits])
+            mem = self._panel(MemoryPanel)
+            if mem:
+                mem.update_data(
+                    [{"kind": "fact", "key": h.get("key", str(h)), "value": str(h),
+                      "score": h.get("score", 0.5)} for h in hits])
 
     async def _reconnect(self) -> None:
         if self._data.connected:
             return
-        logs = self.query_one(LogsPanel)
+        logs = self._panel(LogsPanel)
         await self._data.try_reconnect()
         if self._data.connected:
-            logs.write("daemon connected")
+            if logs:
+                logs.write("daemon connected")
             await self._refresh_live()
-        self.query_one(TopBar).set_daemon_state(self._data.connected)
-        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
+        top = self._panel(TopBar)
+        if top:
+            top.set_daemon_state(self._data.connected)
+            top.sync_mode(self._data.status.get("mode", ""))
 
     async def _refresh_live(self) -> None:
         await self._data.refresh()
-        self.query_one(ProvidersPanel).update_data(self._data.provider_rows)
-        self.query_one(SkillsPanel).update_data(self._data.skill_rows)
-        self.query_one(TopBar).set_model(self._data.status.get("model", ""))
-        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
+        providers = self._panel(ProvidersPanel)
+        if providers:
+            providers.update_data(self._data.provider_rows)
+        skills = self._panel(SkillsPanel)
+        if skills:
+            skills.update_data(self._data.skill_rows)
+        top = self._panel(TopBar)
+        if top:
+            top.set_model(self._data.status.get("model", ""))
+            top.sync_mode(self._data.status.get("mode", ""))
 
     def _refresh(self) -> None:
         snap = self._data.snapshot()
