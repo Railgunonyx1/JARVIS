@@ -1,0 +1,14 @@
+{
+  "name": "Case Law",
+  "version": "1.0.0",
+  "description": "Case law lookup",
+  "capabilities": [
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.case_law:case_law"
+}

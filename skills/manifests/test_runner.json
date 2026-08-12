@@ -1,0 +1,14 @@
+{
+  "name": "Test Runner",
+  "version": "1.0.0",
+  "description": "Run test suites",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.test_runner:test_runner"
+}

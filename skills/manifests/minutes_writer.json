@@ -1,0 +1,15 @@
+{
+  "name": "Minutes Writer",
+  "version": "1.0.0",
+  "description": "Write meeting minutes",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.minutes_writer:minutes_writer"
+}

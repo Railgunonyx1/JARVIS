@@ -1,0 +1,16 @@
+{
+  "name": "Report Compiler",
+  "version": "1.0.0",
+  "description": "Compile reports from data",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.report_compiler:report_compiler"
+}

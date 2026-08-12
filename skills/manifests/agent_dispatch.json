@@ -1,0 +1,14 @@
+{
+  "name": "Agent Dispatch",
+  "version": "1.0.0",
+  "description": "Routes requests to the appropriate sub-agent via a shared scratchpad",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.agent_dispatch:agent_dispatch"
+}

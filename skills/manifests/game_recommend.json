@@ -1,0 +1,15 @@
+{
+  "name": "Game Recommend",
+  "version": "1.0.0",
+  "description": "Recommend games",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.game_recommend:game_recommend"
+}

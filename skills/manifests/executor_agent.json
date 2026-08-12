@@ -1,0 +1,14 @@
+{
+  "name": "Executor Agent",
+  "version": "1.0.0",
+  "description": "Executes planned actions with proper context",
+  "capabilities": [
+    "ai.llm.query",
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.executor_agent:executor_agent"
+}

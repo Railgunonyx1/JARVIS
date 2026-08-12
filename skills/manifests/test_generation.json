@@ -1,0 +1,15 @@
+{
+  "name": "Test Generation",
+  "version": "1.0.0",
+  "description": "Generate test cases",
+  "capabilities": [
+    "filesystem.write",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.test_generation:test_generation"
+}

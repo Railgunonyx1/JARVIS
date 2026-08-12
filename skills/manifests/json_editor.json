@@ -1,0 +1,15 @@
+{
+  "name": "JSON Editor",
+  "version": "1.0.0",
+  "description": "Edit and validate JSON",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.json_editor:json_editor"
+}

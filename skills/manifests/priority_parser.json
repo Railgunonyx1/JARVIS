@@ -1,0 +1,14 @@
+{
+  "name": "Priority Parser",
+  "version": "1.0.0",
+  "description": "Parse and prioritize tasks",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.priority_parser:priority_parser"
+}

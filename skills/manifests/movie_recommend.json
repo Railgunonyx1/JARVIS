@@ -1,0 +1,15 @@
+{
+  "name": "Movie Recommend",
+  "version": "1.0.0",
+  "description": "Recommend movies",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.movie_recommend:movie_recommend"
+}

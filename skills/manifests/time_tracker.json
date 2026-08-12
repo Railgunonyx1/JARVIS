@@ -1,0 +1,15 @@
+{
+  "name": "Time Tracker",
+  "version": "1.0.0",
+  "description": "Track time spent on tasks",
+  "capabilities": [
+    "task.manage",
+    "schedule.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.time_tracker:time_tracker"
+}

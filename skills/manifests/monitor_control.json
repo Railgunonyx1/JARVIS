@@ -1,0 +1,14 @@
+{
+  "name": "Monitor Control",
+  "version": "1.0.0",
+  "description": "Control monitor settings",
+  "capabilities": [
+    "display.manage"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.monitor_control:monitor_control"
+}

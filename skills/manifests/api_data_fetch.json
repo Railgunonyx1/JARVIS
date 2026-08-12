@@ -1,0 +1,15 @@
+{
+  "name": "API Data Fetch",
+  "version": "1.0.0",
+  "description": "Fetch data from APIs",
+  "capabilities": [
+    "web.scrape",
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.api_data_fetch:api_data_fetch"
+}

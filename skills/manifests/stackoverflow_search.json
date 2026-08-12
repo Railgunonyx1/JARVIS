@@ -1,0 +1,15 @@
+{
+  "name": "Stack Overflow Search",
+  "version": "1.0.0",
+  "description": "Search programming questions and answers",
+  "capabilities": [
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.stackoverflow_search:stackoverflow_search"
+}

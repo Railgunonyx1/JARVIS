@@ -1,0 +1,15 @@
+{
+  "name": "Weekly Review",
+  "version": "1.0.0",
+  "description": "Weekly review generation",
+  "capabilities": [
+    "ai.llm.query",
+    "memory.recall"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.weekly_review:weekly_review"
+}

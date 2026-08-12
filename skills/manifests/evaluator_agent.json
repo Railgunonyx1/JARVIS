@@ -1,0 +1,14 @@
+{
+  "name": "Evaluator Agent",
+  "version": "1.0.0",
+  "description": "Validates agent outcomes and learns from errors",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.evaluator_agent:evaluator_agent"
+}

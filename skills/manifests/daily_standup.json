@@ -1,0 +1,14 @@
+{
+  "name": "Daily Standup",
+  "version": "1.0.0",
+  "description": "Generate daily standup notes",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.daily_standup:daily_standup"
+}

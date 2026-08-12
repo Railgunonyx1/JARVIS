@@ -1,0 +1,14 @@
+{
+  "name": "Code Execution",
+  "version": "1.0.0",
+  "description": "Execute code in a controlled environment",
+  "capabilities": [
+    "shell.execute",
+    "shell.run"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.code_execution:code_execution"
+}

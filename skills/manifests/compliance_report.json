@@ -1,0 +1,15 @@
+{
+  "name": "Compliance Report",
+  "version": "1.0.0",
+  "description": "Generate compliance reports",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.compliance_report:compliance_report"
+}

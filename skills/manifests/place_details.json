@@ -1,0 +1,15 @@
+{
+  "name": "Place Details",
+  "version": "1.0.0",
+  "description": "Get details about a location",
+  "capabilities": [
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.place_details:place_details"
+}

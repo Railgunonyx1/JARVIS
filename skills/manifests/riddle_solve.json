@@ -1,0 +1,15 @@
+{
+  "name": "Riddle Solver",
+  "version": "1.0.0",
+  "description": "Solve riddles",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.riddle_solve:riddle_solve"
+}

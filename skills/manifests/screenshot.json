@@ -1,0 +1,14 @@
+{
+  "name": "Screenshot",
+  "version": "1.0.0",
+  "description": "Take screenshots",
+  "capabilities": [
+    "screen.capture"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.screenshot:screenshot"
+}

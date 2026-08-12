@@ -1,0 +1,15 @@
+{
+  "name": "Meeting Scheduler",
+  "version": "1.0.0",
+  "description": "Schedule meetings",
+  "capabilities": [
+    "schedule.create",
+    "schedule.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.meeting_scheduler:meeting_scheduler"
+}

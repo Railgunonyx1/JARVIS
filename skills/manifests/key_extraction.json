@@ -1,0 +1,14 @@
+{
+  "name": "Key Extraction",
+  "version": "1.0.0",
+  "description": "Extract key phrases from text",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.key_extraction:key_extraction"
+}

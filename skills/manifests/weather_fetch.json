@@ -1,0 +1,16 @@
+{
+  "name": "Weather Fetch",
+  "version": "1.0.0",
+  "description": "Get current weather information",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.weather_fetch:weather_fetch"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Statistical Analysis",
+  "version": "1.0.0",
+  "description": "Perform statistical analysis",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.statistical_analysis:statistical_analysis"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Forecast Get",
+  "version": "1.0.0",
+  "description": "Get weather forecast",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.forecast_get:forecast_get"
+}

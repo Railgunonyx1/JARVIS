@@ -1,0 +1,16 @@
+{
+  "name": "Wiki Search",
+  "version": "1.0.0",
+  "description": "Search Wikipedia articles",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.wiki_search:wiki_search"
+}

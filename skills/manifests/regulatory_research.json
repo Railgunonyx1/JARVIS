@@ -1,0 +1,14 @@
+{
+  "name": "Regulatory Research",
+  "version": "1.0.0",
+  "description": "Research regulations",
+  "capabilities": [
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.regulatory_research:regulatory_research"
+}

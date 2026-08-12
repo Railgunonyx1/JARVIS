@@ -1,0 +1,14 @@
+{
+  "name": "Feature Build",
+  "version": "1.0.0",
+  "description": "Generates and validates feature specifications",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.feature_build:feature_build"
+}

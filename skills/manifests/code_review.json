@@ -1,0 +1,15 @@
+{
+  "name": "Code Review",
+  "version": "1.0.0",
+  "description": "Code review assistance",
+  "capabilities": [
+    "filesystem.read",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.code_review:code_review"
+}

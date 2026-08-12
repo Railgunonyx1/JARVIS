@@ -1,0 +1,15 @@
+{
+  "name": "Code Documentation",
+  "version": "1.0.0",
+  "description": "Read and understand code documentation",
+  "capabilities": [
+    "web.search",
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.code_documentation:code_documentation"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Risk Assessment",
+  "version": "1.0.0",
+  "description": "Risk assessment",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.risk_assessment:risk_assessment"
+}

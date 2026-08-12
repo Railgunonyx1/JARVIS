@@ -1,0 +1,14 @@
+{
+  "name": "Brightness Control",
+  "version": "1.0.0",
+  "description": "Control screen brightness",
+  "capabilities": [
+    "display.manage"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.brightness_control:brightness_control"
+}

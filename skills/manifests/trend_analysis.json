@@ -1,0 +1,14 @@
+{
+  "name": "Trend Analysis",
+  "version": "1.0.0",
+  "description": "Identify trends in data",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.trend_analysis:trend_analysis"
+}

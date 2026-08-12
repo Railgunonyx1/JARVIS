@@ -1,0 +1,14 @@
+{
+  "name": "Python Script",
+  "version": "1.0.0",
+  "description": "Run Python scripts",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.python_script:python_script"
+}

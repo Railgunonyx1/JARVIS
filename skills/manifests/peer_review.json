@@ -1,0 +1,15 @@
+{
+  "name": "Peer Review",
+  "version": "1.0.0",
+  "description": "Peer code review",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.peer_review:peer_review"
+}

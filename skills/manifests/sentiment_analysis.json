@@ -1,0 +1,14 @@
+{
+  "name": "Sentiment Analysis",
+  "version": "1.0.0",
+  "description": "Analyze sentiment in text",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.sentiment_analysis:sentiment_analysis"
+}

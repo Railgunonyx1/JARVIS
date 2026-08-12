@@ -1,0 +1,13 @@
+{
+  "name": "Kubernetes Exec",
+  "version": "1.0.0",
+  "description": "Execute commands in Kubernetes",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.kubernetes_exec:kubernetes_exec"
+}

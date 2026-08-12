@@ -1,0 +1,16 @@
+{
+  "name": "Schedule Optimizer",
+  "version": "1.0.0",
+  "description": "Optimize scheduling",
+  "capabilities": [
+    "schedule.list",
+    "schedule.delete",
+    "schedule.create"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.schedule_optimizer:schedule_optimizer"
+}

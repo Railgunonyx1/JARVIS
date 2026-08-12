@@ -1,0 +1,14 @@
+{
+  "name": "Framework Bridge",
+  "version": "1.0.0",
+  "description": "Bridge between different agent frameworks",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.framework_bridge:framework_bridge"
+}

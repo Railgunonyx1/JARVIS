@@ -1,0 +1,15 @@
+{
+  "name": "Technical Writing",
+  "version": "1.0.0",
+  "description": "Technical writing assistance",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.technical_writing:technical_writing"
+}

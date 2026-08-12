@@ -1,0 +1,14 @@
+{
+  "name": "Goal Generator",
+  "version": "1.0.0",
+  "description": "Generates autonomous goals for the agent to pursue",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.goal_generator:goal_generator"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Bash Command",
+  "version": "1.0.0",
+  "description": "Run bash commands safely",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.bash_command:bash_command"
+}

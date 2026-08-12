@@ -1,0 +1,14 @@
+{
+  "name": "CSV Parser",
+  "version": "1.0.0",
+  "description": "Process CSV data files",
+  "capabilities": [
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.csv_parser:csv_parser"
+}

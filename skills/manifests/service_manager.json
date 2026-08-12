@@ -1,0 +1,17 @@
+{
+  "name": "Service Manager",
+  "version": "1.0.0",
+  "description": "Manage system services",
+  "capabilities": [
+    "service.list",
+    "service.start",
+    "service.stop",
+    "service.restart"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.service_manager:service_manager"
+}

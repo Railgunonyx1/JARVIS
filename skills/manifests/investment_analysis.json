@@ -1,0 +1,14 @@
+{
+  "name": "Investment Analysis",
+  "version": "1.0.0",
+  "description": "Investment analysis",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.investment_analysis:investment_analysis"
+}

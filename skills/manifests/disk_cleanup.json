@@ -1,0 +1,14 @@
+{
+  "name": "Disk Cleanup",
+  "version": "1.0.0",
+  "description": "Clean up disk space",
+  "capabilities": [
+    "filesystem.list",
+    "filesystem.delete"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.disk_cleanup:disk_cleanup"
+}

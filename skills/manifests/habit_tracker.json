@@ -1,0 +1,15 @@
+{
+  "name": "Habit Tracker",
+  "version": "1.0.0",
+  "description": "Track habits and routines",
+  "capabilities": [
+    "ai.llm.query",
+    "memory.store"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.habit_tracker:habit_tracker"
+}

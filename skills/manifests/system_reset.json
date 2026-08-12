@@ -1,0 +1,14 @@
+{
+  "name": "System Reset",
+  "version": "1.0.0",
+  "description": "Reset system settings",
+  "capabilities": [
+    "system.restart",
+    "system.shutdown"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.system_reset:system_reset"
+}

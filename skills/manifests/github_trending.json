@@ -1,0 +1,15 @@
+{
+  "name": "GitHub Trending",
+  "version": "1.0.0",
+  "description": "Get trending GitHub repositories",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.github_trending:github_trending"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "arXiv Search",
+  "version": "1.0.0",
+  "description": "Search arXiv for research papers",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.arxiv_search:arxiv_search"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Email Draft",
+  "version": "1.0.0",
+  "description": "Draft email messages",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.email_draft:email_draft"
+}

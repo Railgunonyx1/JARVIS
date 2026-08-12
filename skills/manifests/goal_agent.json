@@ -1,0 +1,14 @@
+{
+  "name": "Goal Agent",
+  "version": "1.0.0",
+  "description": "Generates and tracks autonomous goals",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.goal_agent:goal_agent"
+}

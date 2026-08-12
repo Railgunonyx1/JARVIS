@@ -1,0 +1,16 @@
+{
+  "name": "System Health",
+  "version": "1.0.0",
+  "description": "Check overall system health",
+  "capabilities": [
+    "system.query",
+    "process.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.system_health:system_health"
+}

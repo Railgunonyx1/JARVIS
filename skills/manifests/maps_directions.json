@@ -1,0 +1,16 @@
+{
+  "name": "Maps Directions",
+  "version": "1.0.0",
+  "description": "Get directions between locations",
+  "capabilities": [
+    "web.search",
+    "web.navigate"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.maps_directions:maps_directions"
+}

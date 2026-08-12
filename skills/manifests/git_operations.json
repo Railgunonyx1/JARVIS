@@ -1,0 +1,15 @@
+{
+  "name": "Git Operations",
+  "version": "1.0.0",
+  "description": "Git operations: commit, push, pull, merge",
+  "capabilities": [
+    "shell.execute",
+    "filesystem.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.git_operations:git_operations"
+}

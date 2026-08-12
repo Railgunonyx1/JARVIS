@@ -1,0 +1,14 @@
+{
+  "name": "Summarization",
+  "version": "1.0.0",
+  "description": "Summarize long texts",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.summarization:summarization"
+}

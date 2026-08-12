@@ -1,0 +1,14 @@
+{
+  "name": "Comparison Analysis",
+  "version": "1.0.0",
+  "description": "Compare two or more datasets",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.comparison_analysis:comparison_analysis"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Repo Analysis",
+  "version": "1.0.0",
+  "description": "Analyze repository structure",
+  "capabilities": [
+    "filesystem.list",
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.repo_analysis:repo_analysis"
+}

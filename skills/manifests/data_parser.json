@@ -1,0 +1,14 @@
+{
+  "name": "Data Parser",
+  "version": "1.0.0",
+  "description": "Parse various data formats",
+  "capabilities": [
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.data_parser:data_parser"
+}

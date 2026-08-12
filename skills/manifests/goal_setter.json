@@ -1,0 +1,15 @@
+{
+  "name": "Goal Setter",
+  "version": "1.0.0",
+  "description": "Set and track goals",
+  "capabilities": [
+    "ai.llm.query",
+    "memory.store"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.goal_setter:goal_setter"
+}

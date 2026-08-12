@@ -1,0 +1,15 @@
+{
+  "name": "Research Paper",
+  "version": "1.0.0",
+  "description": "Find and analyze academic papers",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.research_paper:research_paper"
+}

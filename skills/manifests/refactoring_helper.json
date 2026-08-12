@@ -1,0 +1,15 @@
+{
+  "name": "Refactoring Helper",
+  "version": "1.0.0",
+  "description": "Suggest code refactoring",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.refactoring_helper:refactoring_helper"
+}

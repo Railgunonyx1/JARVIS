@@ -1,0 +1,14 @@
+{
+  "name": "Agent Evolution",
+  "version": "1.0.0",
+  "description": "Self-evolving skills that generate and test new capabilities",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.agent_evolution:agent_evolution"
+}

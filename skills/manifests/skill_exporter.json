@@ -1,0 +1,14 @@
+{
+  "name": "Skill Exporter",
+  "version": "1.0.0",
+  "description": "Export skills to other frameworks",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.skill_exporter:skill_exporter"
+}

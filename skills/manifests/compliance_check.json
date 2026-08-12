@@ -1,0 +1,15 @@
+{
+  "name": "Compliance Check",
+  "version": "1.0.0",
+  "description": "Check compliance",
+  "capabilities": [
+    "ai.llm.query",
+    "web.search"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.compliance_check:compliance_check"
+}

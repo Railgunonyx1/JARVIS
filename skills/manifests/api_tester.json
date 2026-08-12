@@ -1,0 +1,14 @@
+{
+  "name": "API Tester",
+  "version": "1.0.0",
+  "description": "Test API endpoints",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.api_tester:api_tester"
+}

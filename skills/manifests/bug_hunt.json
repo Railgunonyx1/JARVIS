@@ -1,0 +1,15 @@
+{
+  "name": "Bug Hunt",
+  "version": "1.0.0",
+  "description": "Autonomously detects and fixes bugs in the codebase",
+  "capabilities": [
+    "ai.llm.query",
+    "filesystem.read"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.bug_hunt:bug_hunt"
+}

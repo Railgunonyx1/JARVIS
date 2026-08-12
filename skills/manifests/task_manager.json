@@ -1,0 +1,16 @@
+{
+  "name": "Task Manager",
+  "version": "1.0.0",
+  "description": "Manage the task list",
+  "capabilities": [
+    "task.list",
+    "task.manage",
+    "schedule.list"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.task_manager:task_manager"
+}

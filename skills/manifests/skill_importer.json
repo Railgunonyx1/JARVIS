@@ -1,0 +1,14 @@
+{
+  "name": "Skill Importer",
+  "version": "1.0.0",
+  "description": "Import skills from other frameworks",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.skill_importer:skill_importer"
+}

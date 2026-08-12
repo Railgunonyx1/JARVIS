@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.capability_registry import CAPABILITY_REGISTRY
+from core.capability_registry import get_all_capabilities
 from core.mode_manager import ExecutionMode, get_mode_manager
 
 logger = logging.getLogger("jarvis.skills")
@@ -55,8 +55,9 @@ class SkillLoader:
                 )
 
                 # Validate capabilities exist in registry
+                registered = get_all_capabilities()
                 for cap in manifest.capabilities:
-                    if cap not in CAPABILITY_REGISTRY:
+                    if cap not in registered:
                         logger.warning("Skill '%s' references unknown capability: %s", manifest.name, cap)
 
                 self._skills[manifest.name] = manifest

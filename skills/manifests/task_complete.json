@@ -1,0 +1,14 @@
+{
+  "name": "Task Complete",
+  "version": "1.0.0",
+  "description": "Marks a task complete and evaluates the outcome",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.task_complete:task_complete"
+}

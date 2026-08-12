@@ -1,0 +1,14 @@
+{
+  "name": "Topic Modeling",
+  "version": "1.0.0",
+  "description": "Topic modeling on a text corpus",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.topic_modeling:topic_modeling"
+}

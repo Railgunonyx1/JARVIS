@@ -1,0 +1,15 @@
+{
+  "name": "Patent Search",
+  "version": "1.0.0",
+  "description": "Search patents",
+  "capabilities": [
+    "web.search",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.patent_search:patent_search"
+}

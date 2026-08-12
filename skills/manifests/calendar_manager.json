@@ -1,0 +1,16 @@
+{
+  "name": "Calendar Manager",
+  "version": "1.0.0",
+  "description": "Manage calendar events",
+  "capabilities": [
+    "schedule.create",
+    "schedule.list",
+    "schedule.delete"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.calendar_manager:calendar_manager"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Memory Cleanup",
+  "version": "1.0.0",
+  "description": "Clean up memory usage",
+  "capabilities": [
+    "process.list",
+    "process.kill"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.memory_cleanup:memory_cleanup"
+}

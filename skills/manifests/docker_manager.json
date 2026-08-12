@@ -1,0 +1,13 @@
+{
+  "name": "Docker Manager",
+  "version": "1.0.0",
+  "description": "Manage Docker containers",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.docker_manager:docker_manager"
+}

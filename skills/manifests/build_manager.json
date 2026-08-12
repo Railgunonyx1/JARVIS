@@ -1,0 +1,13 @@
+{
+  "name": "Build Manager",
+  "version": "1.0.0",
+  "description": "Build projects from source",
+  "capabilities": [
+    "shell.execute"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.build_manager:build_manager"
+}

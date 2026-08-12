@@ -1,0 +1,15 @@
+{
+  "name": "Report Generator",
+  "version": "1.0.0",
+  "description": "Generate reports from data",
+  "capabilities": [
+    "filesystem.write",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.report_generator:report_generator"
+}

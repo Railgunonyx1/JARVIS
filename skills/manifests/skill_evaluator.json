@@ -1,0 +1,14 @@
+{
+  "name": "Skill Evaluator",
+  "version": "1.0.0",
+  "description": "Evaluates skill performance and suggests improvements",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.skill_evaluator:skill_evaluator"
+}

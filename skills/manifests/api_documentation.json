@@ -1,0 +1,15 @@
+{
+  "name": "API Documentation",
+  "version": "1.0.0",
+  "description": "Fetch and summarize API documentation",
+  "capabilities": [
+    "web.search",
+    "web.scrape"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.api_documentation:api_documentation"
+}

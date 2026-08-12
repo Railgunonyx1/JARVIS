@@ -1,0 +1,16 @@
+{
+  "name": "Fact Check",
+  "version": "1.0.0",
+  "description": "Check facts and validity",
+  "capabilities": [
+    "web.search",
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "controlled",
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.fact_check:fact_check"
+}

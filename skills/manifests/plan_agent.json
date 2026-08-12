@@ -1,0 +1,14 @@
+{
+  "name": "Plan Agent",
+  "version": "1.0.0",
+  "description": "Breaks high-level goals into executable steps",
+  "capabilities": [
+    "ai.llm.query"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "smart",
+    "agent"
+  ],
+  "entry_point": "actions.plan_agent:plan_agent"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Skill Port",
+  "version": "1.0.0",
+  "description": "Ports skills between different agent frameworks",
+  "capabilities": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "permissions": [],
+  "supported_modes": [
+    "agent"
+  ],
+  "entry_point": "actions.skill_port:skill_port"
+}
