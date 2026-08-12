@@ -74,11 +74,11 @@ async def test_dashboard_boots_in_mock_mode():
 # ── new feature panels (mock mode) ───────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_plan_and_mcp_panels_render():
+async def test_plan_and_skills_panels_render():
     pytest.importorskip("textual")
 
     from ui.backend import TuiDataSource
-    from ui.tui import AgentPlanPanel, JarvisApp, McpPanel
+    from ui.tui import AgentPlanPanel, JarvisApp, SkillsPanel
 
     source = TuiDataSource(mock=True)
     app = JarvisApp(data_source=source)
@@ -92,10 +92,10 @@ async def test_plan_and_mcp_panels_render():
         title = str(plan.query_one(".panel-title").render())
         assert "4/6" in title
 
-        app.query_one(McpPanel)
-        mcp_table = app.query_one("#mcp-table")
-        assert mcp_table.row_count == len(source.mcp_rows)
-        assert all(row[2] == "ONLINE" for row in source.mcp_rows)
+        app.query_one(SkillsPanel)
+        skills_table = app.query_one("#skills-table")
+        assert skills_table.row_count == len(source.skill_rows)
+        assert source.using_mock_skills  # daemon offline -> mock fallback
 
 
 @pytest.mark.asyncio
@@ -112,6 +112,23 @@ async def test_mode_select_present_and_disabled_offline():
         select = app.query_one("#mode-select")
         assert select.value == "smart"
         assert select.disabled  # daemon offline at boot
+
+
+def test_skill_rows_ready_status_tracks_mode():
+    """READY/LOCKED in the skill panel follows the daemon's active mode."""
+    from ui.backend import TuiDataSource
+
+    source = TuiDataSource(mock=True)
+    assert source.using_mock_skills
+
+    rows = {name: st for name, _, st in source.skill_rows}
+    assert rows["Agent Dispatch"] == "READY"
+    assert rows["Memory Manager"] == "LOCKED"
+
+    source._status["mode"] = "expert"
+    source.recompute_skill_rows()
+    rows = {name: st for name, _, st in source.skill_rows}
+    assert rows["Memory Manager"] == "READY"
 
 
 @pytest.mark.asyncio

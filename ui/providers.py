@@ -43,13 +43,15 @@ MOCK_MCP: list[tuple[str, str, str]] = [
 ]  # MOCK — real status comes from the daemon MCP registry
 
 # Offline fallback for the skill-registry panel; mirrors real manifests.
-MOCK_SKILLS: list[tuple[str, str, str]] = [
-    ("Agent Dispatch", "1.0.0", "READY"),
-    ("Bash Command", "1.0.0", "READY"),
-    ("File System", "1.0.0", "READY"),
-    ("Web Search", "1.0.0", "READY"),
-    ("Memory Manager", "1.0.0", "LOCKED"),
-    ("Window Manager", "1.0.0", "LOCKED"),
+# (name, version, supported_modes) — READY/LOCKED is derived from the active
+# daemon mode so mock rows behave like live registry records.
+MOCK_SKILLS: list[tuple[str, str, list[str]]] = [
+    ("Agent Dispatch", "1.0.0", ["auto", "smart", "expert"]),
+    ("Bash Command", "1.0.0", ["smart", "expert"]),
+    ("File System", "1.0.0", ["smart", "expert"]),
+    ("Web Search", "1.0.0", ["auto", "smart", "expert"]),
+    ("Memory Manager", "1.0.0", ["expert"]),
+    ("Window Manager", "1.0.0", ["expert"]),
 ]  # MOCK — real rows come from the daemon skill registry
 
 

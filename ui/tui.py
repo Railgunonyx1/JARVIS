@@ -420,7 +420,7 @@ class JarvisApp(App):
                 yield ContextPanel()
                 yield SparklinePanel("MEMORY USAGE", "panel-mem", "mem-spark")
                 yield AgentPlanPanel()
-                yield McpPanel()
+                yield SkillsPanel()
         yield CommandBar(id="command-bar")
 
     def toggle_todo(self) -> None:
@@ -456,9 +456,9 @@ class JarvisApp(App):
         self.query_one(AgentPlanPanel).update_data(self._data.plan_rows)
         if self._data.using_mock_plan:
             logs.write("agent plan: mock data (no plan endpoint on the daemon yet)")
-        self.query_one(McpPanel).update_data(self._data.mcp_rows)
-        if self._data.using_mock_mcp:
-            logs.write("mcp servers: mock data (no MCP registry endpoint on the daemon yet)")
+        self.query_one(SkillsPanel).update_data(self._data.skill_rows)
+        if self._data.using_mock_skills:
+            logs.write("skills: mock data (daemon offline — start with `jarvis daemon start`)")
         self.query_one(TopBar).set_daemon_state(self._data.connected)
         self.set_interval(20.0, self._refresh)
         self.set_interval(5.0, self._reconnect)
@@ -495,6 +495,10 @@ class JarvisApp(App):
         if self._data.using_mock_providers:
             logs = self.query_one(LogsPanel)
             logs.write("providers: mock data (no keys configured on the daemon)")
+        self.query_one(SkillsPanel).update_data(self._data.skill_rows)
+        if self._data.using_mock_skills:
+            logs = self.query_one(LogsPanel)
+            logs.write("skills: mock data (daemon offline — start with `jarvis daemon start`)")
         self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
 
     def _refresh(self) -> None:
@@ -549,6 +553,7 @@ class JarvisApp(App):
                 "  /status          show daemon status",
                 "  /models          show provider model status",
                 "  /memory <query>  search daemon memory",
+                "  /skills [q]      discover skills in the registry",
                 "  /reconnect       reconnect to the daemon",
                 "  /clear           clear the log",
                 "  /exit            quit the dashboard",
@@ -616,6 +621,7 @@ class JarvisApp(App):
             else:
                 logs.write(f"mode change failed: {result.get('error')}")
             self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
+            self.query_one(SkillsPanel).update_data(self._data.skill_rows)
             return
 
         if cmd == "/memory":
@@ -628,6 +634,23 @@ class JarvisApp(App):
                 return
             for hit in hits:
                 logs.write(f"  {hit}")
+            return
+
+        if cmd == "/skills":
+            result = await self._data.search_skills(arg)
+            if not result.get("skills"):
+                if arg:
+                    logs.write(f"no skill hits for {arg!r}")
+                else:
+                    logs.write("skills: daemon offline (start with `jarvis daemon start`)")
+                return
+            logs.write(f"skills: {result.get('total')} of {result.get('catalog')} "
+                       f"matched ({arg!r})")
+            for skill in result.get("skills", []):
+                logs.write(
+                    f"  {skill.get('name')} v{skill.get('version')} "
+                    f"[risk {skill.get('max_risk')}]"
+                )
             return
 
         logs.write(f"unknown command: {cmd} (try /help)")

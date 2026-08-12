@@ -150,6 +150,18 @@ class FastClient:
     def status(self) -> dict:
         return self.request("status")
 
+    def skills(self, query: str = "", mode: str | None = None,
+               max_risk: str | None = None) -> dict:
+        """Query the skill registry; returns ``{total, catalog, skills, ...}``."""
+        payload: dict = {}
+        if query:
+            payload["query"] = query
+        if mode:
+            payload["mode"] = mode
+        if max_risk:
+            payload["max_risk"] = max_risk
+        return self.request("skills", payload)
+
     def run(self, goal: str, mode: str | None = None,
             on_event: EventCallback | None = None) -> dict:
         """Run a goal; stream observer events via ``on_event``; return result dict."""

@@ -264,6 +264,33 @@ def test_fastclient_round_trip(server):
         assert status["mode"] == "agent"
 
 
+def test_skills_registry_endpoint(server):
+    """The skill registry answers over the wire, applies filters, and keeps
+    the FastClient working after a skill request (state not clobbered)."""
+    srv = server()
+    with _client(srv) as c:
+        c.connect()
+        c.ping()
+
+        result = c.skills()
+        assert result["catalog"] > 0
+        assert result["total"] == result["catalog"]
+        assert any("bash" in s["name"].lower() for s in result["skills"])
+
+        limited = c.skills(mode="agent", max_risk="high")
+        assert limited["total"] <= result["total"]
+        assert all(s["max_risk"] in ("safe", "low", "medium", "high")
+                   for s in limited["skills"])
+
+        queried = c.skills(query="memory")
+        assert queried["total"] > 0
+        assert any("memory" in s["name"].lower()
+                   or "memory" in s["description"].lower()
+                   for s in queried["skills"])
+
+        assert c.ping()["pid"] > 0  # connection still healthy after skills calls
+
+
 def test_fastclient_streams_many_events(server):
     """A burst of events in one TCP segment must not lose frames (regression
     for the old _readline that discarded surplus buffered lines)."""

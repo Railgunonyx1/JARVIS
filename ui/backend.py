@@ -45,13 +45,13 @@ class TuiDataSource:
         self._client: Any = None
         self._connected = False
         self._last_error = ""
-        self._status: dict = {}
+        self._status: dict = {"mode": "smart"}
         self._models: dict = {}
         self._provider_rows: list[tuple[str, str, str, str, str]] = list(MOCK_PROVIDERS)
         self._mock_providers = True
         self._mock_tasks = True
         self._skills: list[dict] = []
-        self._skill_rows: list[tuple[str, str, str]] = list(MOCK_SKILLS)
+        self._skill_rows: list[tuple[str, str, str]] = self._build_skill_rows([])
         self._mock_skills = True
         self._cpu_history = [0.0] * 60
         self._ram_history = [0.0] * 60
@@ -155,15 +155,21 @@ class TuiDataSource:
 
         A skill is READY when the daemon's current mode is among its
         ``supported_modes``; otherwise it is shown LOCKED (dim) so the panel
-        surfaces what this mode can actually call.
+        surfaces what this mode can actually call. With no registry records
+        (offline/mock) the same heuristic runs over :data:`MOCK_SKILLS`, whose
+        entries carry ``supported_modes`` so mock rows stay mode-aware.
         """
         mode = self._status.get("mode", "")
         rows = []
-        for record in sorted(records, key=lambda r: r.get("name", "").lower()):
-            modes = record.get("supported_modes") or []
+        if records:
+            entries = [(r.get("name", "?"), r.get("version", "-"),
+                        r.get("supported_modes") or [])
+                       for r in records]
+        else:
+            entries = [(name, version, modes) for name, version, modes in MOCK_SKILLS]
+        for name, version, modes in sorted(entries, key=lambda e: e[0].lower()):
             ready = (not mode) or mode in modes
-            rows.append((record.get("name", "?"), record.get("version", "-"),
-                         "READY" if ready else "LOCKED"))
+            rows.append((name, version, "READY" if ready else "LOCKED"))
         return rows
 
     async def try_reconnect(self) -> None:
@@ -194,9 +200,17 @@ class TuiDataSource:
         try:
             result = await self._client.set_mode(mode)
             self._status["mode"] = result.get("mode", mode)
+            self.recompute_skill_rows()
             return {"success": True, "mode": result.get("mode", mode)}
         except Exception as exc:
             return {"success": False, "error": str(exc)}
+
+    def recompute_skill_rows(self) -> None:
+        """Rebuild ``skill_rows`` from the cached registry + current mode.
+
+        Called after a mode switch so READY/LOCKED reflects the new mode.
+        """
+        self._skill_rows = self._build_skill_rows(self._skills)
 
     async def memory_search(self, query: str) -> list[dict]:
         """Search daemon memory; returns a list of hits (possibly empty)."""

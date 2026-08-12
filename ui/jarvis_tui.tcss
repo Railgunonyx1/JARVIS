@@ -103,7 +103,7 @@ Screen {
 #panel-context   { column-span: 1; row-span: 2; }
 #panel-mem       { column-span: 1; row-span: 1; }
 #panel-plan      { column-span: 1; row-span: 1; }
-#panel-mcp       { column-span: 1; row-span: 1; }
+#panel-skills    { column-span: 1; row-span: 1; }
 
 /* ---- Mode selector ---- */
 #mode-select {
