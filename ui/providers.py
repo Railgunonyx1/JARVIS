@@ -24,6 +24,24 @@ MOCK_TASKS: list[tuple[str, str, str, int, str]] = [
     ("-", "Document index", "IDLE", 0, "-"),
 ]  # MOCK — no task endpoint on the daemon yet (roadmap follow-up)
 
+# Placeholder agent plan; the daemon has no plan endpoint yet.
+MOCK_PLAN: list[tuple[str, str, str]] = [
+    ("1", "Analyze current memory architecture", "DONE"),
+    ("2", "Review vector store implementation", "DONE"),
+    ("3", "Implement hybrid search layer", "DONE"),
+    ("4", "Add keyword fallback", "DONE"),
+    ("5", "Update tests", "PENDING"),
+    ("6", "Validate performance", "PENDING"),
+]  # MOCK — real plans come from the daemon planner
+
+# Placeholder MCP servers; the daemon has no MCP registry endpoint yet.
+MOCK_MCP: list[tuple[str, str, str]] = [
+    ("filesystem", "v1.2.0", "ONLINE"),
+    ("github", "v1.4.1", "ONLINE"),
+    ("browser", "v1.1.3", "ONLINE"),
+    ("database", "v1.0.8", "ONLINE"),
+]  # MOCK — real status comes from the daemon MCP registry
+
 
 def provider_rows(router_status: dict) -> list[tuple[str, str, str, str, str]]:
     """Map the daemon's router status dict to provider-table rows.
