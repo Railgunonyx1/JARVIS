@@ -61,6 +61,7 @@ from runtime.transport.protocol import (
     MSG_RUN_RESULT,
     MSG_SET_MODE,
     MSG_SHUTDOWN,
+    MSG_SKILLS,
     MSG_STATUS,
 )
 from runtime.transport.tcp import start_server
@@ -374,6 +375,7 @@ class DaemonServer:
             MSG_MEMORY_SEARCH: self._handle_memory_search,
             MSG_MEMORY_ADD: self._handle_memory_add,
             MSG_HISTORY: self._handle_history,
+            MSG_SKILLS: self._handle_skills,
             MSG_RUN: self._handle_run,
             MSG_CANCEL: self._handle_cancel,
             MSG_BOOTSTRAP: self._handle_bootstrap,
@@ -517,6 +519,29 @@ class DaemonServer:
             return
         message = mem.remember(key, value, category=str(payload.get("category", "notes")))
         await _send(transport, MSG_OK, {"message": message}, rid)
+
+    async def _handle_skills(self, payload, rid, transport) -> None:
+        """Serve the skill registry (optional query / mode / max_risk filters).
+
+        Discovery payload: ``{"query": "...", "mode": "agent",
+        "max_risk": "high"}``. Returns the ranked records plus a summary so a
+        client can show both the hits and the overall catalog shape.
+        """
+        from core.skill_registry import get_skill_registry
+
+        registry = get_skill_registry()
+        query = str(payload.get("query", "")).strip()
+        mode = str(payload.get("mode", "")).strip() or None
+        max_risk = str(payload.get("max_risk", "")).strip() or None
+        records = registry.search(query=query, mode=mode, max_risk=max_risk)
+        await _send(transport, MSG_RESULT, {
+            "total": len(records),
+            "catalog": registry.count(),
+            "query": query,
+            "mode": mode or self._mode(),
+            "max_risk": max_risk,
+            "skills": [record.to_dict() for record in records],
+        }, rid)
 
     async def _handle_history(self, payload, rid, transport) -> None:
         from core.event_store import get_event_store

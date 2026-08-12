@@ -46,6 +46,7 @@ __all__ = [
     "MSG_ERROR",
     "MSG_BUSY",
     "MSG_CANCEL",
+    "MSG_SKILLS",
     "MAX_FRAME_SIZE",
     "Envelope",
     "make_envelope",

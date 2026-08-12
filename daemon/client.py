@@ -31,6 +31,7 @@ from runtime.transport.protocol import (
     MSG_RUN,
     MSG_RUN_RESULT,
     MSG_SET_MODE,
+    MSG_SKILLS,
     MSG_STATUS,
 )
 from runtime.transport.tcp import open_connection
@@ -235,6 +236,18 @@ class DaemonClient:
     async def models(self) -> dict:
         payload = await self.request(MSG_MODELS)
         return payload.get("data", {})
+
+    async def skills(self, query: str = "", mode: str | None = None,
+                     max_risk: str | None = None) -> dict:
+        """Query the skill registry; returns ``{total, catalog, skills, ...}``."""
+        payload: dict = {}
+        if query:
+            payload["query"] = query
+        if mode:
+            payload["mode"] = mode
+        if max_risk:
+            payload["max_risk"] = max_risk
+        return await self.request(MSG_SKILLS, payload)
 
     async def history(self, task_id: str = "", limit: int = 10) -> dict:
         payload = {"limit": limit}
