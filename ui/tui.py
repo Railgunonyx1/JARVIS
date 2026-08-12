@@ -87,11 +87,11 @@ class Sidebar(Vertical):
         data = self.app.data_source
         if data.connected:
             status = data.status
-            line = "[b]\u25cf[/b] [green]DAEMON CONNECTED[/green]"
+            line = "[b]\u25cf[/b] [#1DB954]DAEMON CONNECTED[/#1DB954]"
             pid = status.get("pid", "-")
             uptime = _fmt_uptime(float(status.get("uptime", 0.0)))
         else:
-            line = "[b]\u25cf[/b] [red]DAEMON OFFLINE[/red] (mock data)"
+            line = "[b]\u25cf[/b] [#B00020]DAEMON OFFLINE[/#B00020] (mock data)"
             pid = "-"
             uptime = "-"
         self.query_one("#daemon-box", Static).update(
@@ -182,8 +182,8 @@ class ProvidersPanel(Panel):
         table = self.query_one("#providers-table", DataTable)
         table.clear()
         for name, status, latency, rate, model in rows:
-            status_markup = f"[green]{status}[/green]" \
-                if status == "ONLINE" else f"[red]{status}[/red]"
+            status_markup = f"[#1DB954]{status}[/#1DB954]" \
+                if status == "ONLINE" else f"[#B00020]{status}[/#B00020]"
             table.add_row(name, status_markup, latency, rate, model)
 
 
@@ -204,10 +204,10 @@ class TasksPanel(Panel):
         table = self.query_one("#tasks-table", DataTable)
         table.clear()
         for task_id, name, status, progress, time_left in rows:
-            status_markup = f"[green]{status}[/green]" \
+            status_markup = f"[#1DB954]{status}[/#1DB954]" \
                 if status == "RUNNING" else f"[dim]{status}[/dim]"
             bar = "\u2588" * (progress // 10) + "\u2591" * (10 - progress // 10)
-            progress_cell = f"[green]{bar}[/green] {progress}%" if progress else "-"
+            progress_cell = f"[#1DB954]{bar}[/#1DB954] {progress}%" if progress else "-"
             table.add_row(task_id, name, status_markup, progress_cell, time_left)
 
 
@@ -223,12 +223,15 @@ class LogsPanel(Panel):
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         self.query_one("#logs-view", Log).write_line(f"[{ts}] | {message}")
 
+    def clear(self):
+        self.query_one("#logs-view", Log).clear()
+
 
 class TodoPanel(Panel):
     """Panel showing a todo list with toggleable border."""
 
     def __init__(self):
-        super().__init__("TODO LIST", "panel-todo")
+        super().__init__("TODO LIST (Ctrl+T)", "panel-todo")
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
@@ -251,7 +254,7 @@ class ContextPanel(Panel):
     """Panel showing LLM conversation context with toggleable border."""
 
     def __init__(self):
-        super().__init__("CONTEXT", "panel-context")
+        super().__init__("CONTEXT (Ctrl+C)", "panel-context")
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
@@ -300,13 +303,13 @@ class JarvisApp(App):
             with Grid(id="dashboard-grid"):
                 yield SystemOverviewPanel()
                 yield SparklinePanel("CPU USAGE", "panel-cpu", "cpu-spark")
-                yield SparklinePanel("MEMORY USAGE", "panel-mem", "mem-spark")
                 yield ProvidersPanel()
+                yield SparklinePanel("TOKEN USAGE", "panel-tokens", "token-spark", show_token_usage=True)
                 yield TasksPanel()
                 yield LogsPanel()
-                yield SparklinePanel("TOKEN USAGE", "panel-tokens", "token-spark", show_token_usage=True)
                 yield TodoPanel()
                 yield ContextPanel()
+                yield SparklinePanel("MEMORY USAGE", "panel-mem", "mem-spark")
         yield CommandBar(id="command-bar")
 
     def toggle_todo(self) -> None:
