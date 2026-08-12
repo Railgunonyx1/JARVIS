@@ -118,8 +118,12 @@ def _redraw(write: Callable[[str], None], prompt: str, buf: Buffer,
 class InputReader:
     """Raw-key REPL input with editing and history recall."""
 
-    def __init__(self, write: Callable[[str], None] | None = None, key_source: KeySource | None = None) -> None:
+    def __init__(self, write: Callable[[str], None] | None = None,
+                 flush: Callable[[], None] | None = None,
+                 key_source: KeySource | None = None) -> None:
         self._write = write or sys.stdout.write
+        self._flush = flush or (sys.stdout.flush if hasattr(sys.stdout, "flush")
+                                else lambda: None)
         self._key_source = key_source or (_msvcrt_key_source if sys.platform == "win32" else _fallback_key_source)
         self._raw_key_source = key_source is not None
         self._history: list[str] = []

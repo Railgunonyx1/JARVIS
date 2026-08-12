@@ -344,7 +344,10 @@ def _render_status_bar_dict(status: dict) -> Text:
     bits = [Text("JARVIS", style="bold cyan")]
     bits.append(Text(f"mode={status.get('mode', 'agent')}", style="green"))
     if status.get("provider"):
-        bits.append(Text(f"{status.get('model')}/{status.get('provider')}", style="magenta"))
+        label = f"{status.get('model')}/{status.get('provider')}"
+        if len(label) > 30:
+            label = label[:28] + "…"
+        bits.append(Text(label, style="magenta"))
     bits.append(Text(f"tools={status.get('tools', 0)}", style="yellow"))
     mem = status.get("mem_stats") or {}
     if mem:
@@ -558,8 +561,6 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
     if not status:
         typer.secho("daemon connection failed", err=True, fg="red")
         return
-    console.print(_render_status_bar_dict(status))
-    console.print()
     if profile_startup:
         _print_startup_report()
 
@@ -569,9 +570,11 @@ def _interactive_daemon(client, profile_startup: bool = False) -> None:
     while True:
         try:
             status = _client_call(client, client.status())
-            console.print(_render_status_bar_dict(status), highlight=False)
+            console.print()
+            console.print(_render_status_bar_dict(status))
         except Exception as exc:
             typer.secho(f"daemon status unreachable: {exc}", err=True, fg="yellow")
+        console.print()
         try:
             line = reader.read_line("JARVIS> ").strip()
         except (EOFError, KeyboardInterrupt):
