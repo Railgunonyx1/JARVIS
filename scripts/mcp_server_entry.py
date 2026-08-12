@@ -9,8 +9,8 @@ import logging
 import sys
 from pathlib import Path
 
-# Add JARVIS root to path
-JARVIS_ROOT = Path(__file__).resolve().parent.parent.parent
+# Add JARVIS root to path (this file lives in scripts/)
+JARVIS_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(JARVIS_ROOT))
 
 from mcp.server import main

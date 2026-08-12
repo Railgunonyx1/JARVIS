@@ -15,7 +15,7 @@ print(f"BANDIT BEFORE: HIGH={t2['SEVERITY.HIGH']} MEDIUM={t2['SEVERITY.MEDIUM']}
 
 # Read current bandit
 try:
-    with open(r'C:\Users\aayan\Desktop\JARVIS\bandit_current.json') as f:
+    with open(r'C:\Users\aayan\Desktop\JARVIS\audits\bandit_current.json') as f:
         d3 = json.load(f)
     t3 = d3['metrics']['_totals']
     print(f"BANDIT CURRENT: HIGH={t3['SEVERITY.HIGH']} MEDIUM={t3['SEVERITY.MEDIUM']} LOW={t3['SEVERITY.LOW']} loc={t3['loc']}")

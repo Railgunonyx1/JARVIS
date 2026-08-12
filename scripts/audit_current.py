@@ -1,6 +1,6 @@
 import json
 
-with open(r'C:\Users\aayan\Desktop\JARVIS\bandit_current.json') as f:
+with open(r'C:\Users\aayan\Desktop\JARVIS\audits\bandit_current.json') as f:
     d = json.load(f)
 
 totals = d.get('metrics', {}).get('_totals', {})

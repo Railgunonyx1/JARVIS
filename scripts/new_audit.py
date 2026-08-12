@@ -38,15 +38,15 @@ if results_file and 'pytest' in results_file:
         print(f"Status: {r.get('status', 'unknown')}")
 else:
     # Check pytest output
-    if os.path.exists('pytest_output.txt'):
-        print("pytest_output.txt found (see file for details)")
+    if os.path.exists('audits/pytest_output.txt'):
+        print("audits/pytest_output.txt found (see file for details)")
     else:
         print("No pytest results available")
 
 # 3. Ruff lint
 print("\n--- Ruff Lint ---")
-if os.path.exists('ruff_output.txt'):
-    print("ruff_output.txt found (see file for details)")
+if os.path.exists('audits/ruff_output.txt'):
+    print("audits/ruff_output.txt found (see file for details)")
 else:
     print("No ruff results available")
 
@@ -64,8 +64,8 @@ else:
 
 # 5. Mypy
 print("\n--- Type Checking ---")
-if os.path.exists('mypy_report.txt'):
-    print("mypy_report.txt found")
+if os.path.exists('audits/mypy_report.txt'):
+    print("audits/mypy_report.txt found")
 else:
     print("No mypy report available")
 
