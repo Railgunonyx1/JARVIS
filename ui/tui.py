@@ -527,7 +527,7 @@ class JarvisApp(App):
             return
 
         def _on_event(name: str, payload: dict) -> None:
-            logs.write(f"  \u21b3 {name}")
+            logs.write_event(name)
 
         result = await self._data.run_goal(command, on_event=_on_event)
         if result.get("success"):
