@@ -69,6 +69,7 @@ MSG_MODELS = "models"
 MSG_HISTORY = "history"
 MSG_SHUTDOWN = "shutdown"
 MSG_CANCEL = "cancel"
+MSG_SKILLS = "skills"
 MSG_BOOTSTRAP = "issue_bootstrap"  # request a short-lived dashboard credential
 
 # Response message types (daemon -> client)

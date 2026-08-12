@@ -89,9 +89,10 @@ async def test_plan_and_mcp_panels_render():
         plan = app.query_one(AgentPlanPanel)
         plan_table = app.query_one("#plan-table")
         assert plan_table.row_count == len(source.plan_rows)
-        assert "4/6" in plan.title
+        title = str(plan.query_one(".panel-title").render())
+        assert "4/6" in title
 
-        mcp = app.query_one(McpPanel)
+        app.query_one(McpPanel)
         mcp_table = app.query_one("#mcp-table")
         assert mcp_table.row_count == len(source.mcp_rows)
         assert all(row[2] == "ONLINE" for row in source.mcp_rows)
@@ -117,6 +118,7 @@ async def test_mode_select_present_and_disabled_offline():
 async def test_write_event_tags():
     pytest.importorskip("textual")
 
+    from ui.backend import TuiDataSource
     from ui.tui import JarvisApp, LogsPanel
 
     app = JarvisApp(data_source=TuiDataSource(mock=True))
@@ -125,7 +127,7 @@ async def test_write_event_tags():
         logs = app.query_one(LogsPanel)
         logs.clear()
         logs.write_event("tool_execution.started")
-        logs.write_event("task.completed")
-        text = logs.query_one("#logs-view").text_content
+        logs.write_event("goal.completed")
+        text = " ".join(logs.query_one("#logs-view").lines)
         assert "[TOOL]" in text
         assert "[OK]" in text
