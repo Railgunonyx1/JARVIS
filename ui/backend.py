@@ -22,6 +22,7 @@ from ui.providers import (
     MOCK_MCP,
     MOCK_PLAN,
     MOCK_PROVIDERS,
+    MOCK_SKILLS,
     MOCK_TASKS,
     provider_rows,
 )
@@ -49,6 +50,9 @@ class TuiDataSource:
         self._provider_rows: list[tuple[str, str, str, str, str]] = list(MOCK_PROVIDERS)
         self._mock_providers = True
         self._mock_tasks = True
+        self._skills: list[dict] = []
+        self._skill_rows: list[tuple[str, str, str]] = list(MOCK_SKILLS)
+        self._mock_skills = True
         self._cpu_history = [0.0] * 60
         self._ram_history = [0.0] * 60
         self._token_history = [5.0] * 48
@@ -126,9 +130,12 @@ class TuiDataSource:
         self._models = {}
         self._provider_rows = list(MOCK_PROVIDERS)
         self._mock_providers = True
+        self._skills = []
+        self._skill_rows = list(MOCK_SKILLS)
+        self._mock_skills = True
 
     async def refresh(self) -> None:
-        """Pull status + provider health from the daemon."""
+        """Pull status + provider health + skill registry from the daemon."""
         if not self._connected or self._client is None:
             return
         try:
@@ -137,8 +144,27 @@ class TuiDataSource:
             rows = provider_rows(self._models)
             self._provider_rows = rows if rows else list(MOCK_PROVIDERS)
             self._mock_providers = not bool(rows)
+            self._skills = (await self._client.skills()).get("skills", [])
+            self._skill_rows = self._build_skill_rows(self._skills)
+            self._mock_skills = not bool(self._skills)
         except Exception as exc:
             self._mark_offline(str(exc))
+
+    def _build_skill_rows(self, records: list[dict]) -> list[tuple[str, str, str]]:
+        """Map registry records to ``(name, version, STATUS)`` rows.
+
+        A skill is READY when the daemon's current mode is among its
+        ``supported_modes``; otherwise it is shown LOCKED (dim) so the panel
+        surfaces what this mode can actually call.
+        """
+        mode = self._status.get("mode", "")
+        rows = []
+        for record in sorted(records, key=lambda r: r.get("name", "").lower()):
+            modes = record.get("supported_modes") or []
+            ready = (not mode) or mode in modes
+            rows.append((record.get("name", "?"), record.get("version", "-"),
+                         "READY" if ready else "LOCKED"))
+        return rows
 
     async def try_reconnect(self) -> None:
         """Best-effort background reconnect when currently offline."""
@@ -180,6 +206,21 @@ class TuiDataSource:
             return await self._client.memory_search(query)
         except Exception:
             return []
+
+    async def search_skills(self, query: str) -> dict:
+        """Discovery query against the daemon's skill registry.
+
+        Returns the raw response ``{total, catalog, skills, ...}`` or a
+        ``{"skills": []}``-shaped fallback when the daemon is offline.
+        """
+        if not self._connected or self._client is None:
+            return {"total": 0, "catalog": len(MOCK_SKILLS),
+                    "query": query, "skills": []}
+        try:
+            return await self._client.skills(query=query,
+                                              mode=self._status.get("mode", ""))
+        except Exception:
+            return {"total": 0, "catalog": 0, "query": query, "skills": []}
 
     # ── live samples (local psutil, no daemon needed) ───────────────────
 
@@ -258,6 +299,19 @@ class TuiDataSource:
     @property
     def using_mock_mcp(self) -> bool:
         return True
+
+    @property
+    def skill_rows(self) -> list[tuple[str, str, str]]:
+        """Registry rows: ``(name, version, STATUS)`` — real when connected."""
+        return self._skill_rows
+
+    @property
+    def using_mock_skills(self) -> bool:
+        return self._mock_skills
+
+    @property
+    def skills(self) -> list[dict]:
+        return self._skills
 
     @property
     def cpu_history(self) -> list[float]:

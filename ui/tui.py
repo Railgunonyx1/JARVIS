@@ -270,28 +270,28 @@ class AgentPlanPanel(Panel):
         self.query_one(".panel-title", Static).update(f"AGENT PLAN ({done}/{len(rows)})")
 
 
-class McpPanel(Panel):
-    """MCP server registry status (mock until the daemon exposes it)."""
+class SkillsPanel(Panel):
+    """Live skill registry from the daemon (mock when offline)."""
 
     def __init__(self):
-        super().__init__("MCP SERVERS", "panel-mcp")
+        super().__init__("SKILL REGISTRY", "panel-skills")
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
-        yield DataTable(id="mcp-table")
+        yield DataTable(id="skills-table")
 
     def on_mount(self):
-        table = self.query_one("#mcp-table", DataTable)
-        table.add_columns("SERVER", "VERSION", "STATUS")
+        table = self.query_one("#skills-table", DataTable)
+        table.add_columns("SKILL", "VERSION", "STATUS")
         table.cursor_type = "row"
 
     def update_data(self, rows):
-        table = self.query_one("#mcp-table", DataTable)
+        table = self.query_one("#skills-table", DataTable)
         table.clear()
-        for server, version, status in rows:
-            status_markup = f"[#1DB954]{status}[/#1DB954]" \
-                if status == "ONLINE" else f"[#B00020]{status}[/#B00020]"
-            table.add_row(server, version, status_markup)
+        for name, version, status in rows:
+            status_markup = "[#1DB954]READY[/#1DB954]" \
+                if status == "READY" else "[dim]LOCKED[/dim]"
+            table.add_row(name, version, status_markup)
 
 
 class LogsPanel(Panel):

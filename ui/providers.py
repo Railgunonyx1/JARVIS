@@ -42,6 +42,16 @@ MOCK_MCP: list[tuple[str, str, str]] = [
     ("database", "v1.0.8", "ONLINE"),
 ]  # MOCK — real status comes from the daemon MCP registry
 
+# Offline fallback for the skill-registry panel; mirrors real manifests.
+MOCK_SKILLS: list[tuple[str, str, str]] = [
+    ("Agent Dispatch", "1.0.0", "READY"),
+    ("Bash Command", "1.0.0", "READY"),
+    ("File System", "1.0.0", "READY"),
+    ("Web Search", "1.0.0", "READY"),
+    ("Memory Manager", "1.0.0", "LOCKED"),
+    ("Window Manager", "1.0.0", "LOCKED"),
+]  # MOCK — real rows come from the daemon skill registry
+
 
 def provider_rows(router_status: dict) -> list[tuple[str, str, str, str, str]]:
     """Map the daemon's router status dict to provider-table rows.
