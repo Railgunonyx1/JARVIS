@@ -4,9 +4,9 @@ FP32 → FP16 → INT8 → INT4 based on task requirements and hardware.
 """
 import logging
 import threading
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.dynamic_precision")
 
@@ -53,7 +53,7 @@ class DynamicPrecisionSelector:
         self._vram_gb = available_vram_gb
         self._current_precision = PrecisionLevel.FP16
         self._lock = threading.Lock()
-        self._selections: Dict[str, int] = {}
+        self._selections: dict[str, int] = {}
 
     def select(self, task_type: str = "default") -> PrecisionLevel:
         """Select the optimal precision for a task type."""
@@ -88,7 +88,7 @@ class DynamicPrecisionSelector:
         config = PRECISION_CONFIGS[level]
         return model_params_b * config.memory_multiplier * 2  # 2 bytes per param baseline
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "current_precision": self._current_precision.value,
@@ -97,7 +97,7 @@ class DynamicPrecisionSelector:
             }
 
 
-_precision_instance: Optional[DynamicPrecisionSelector] = None
+_precision_instance: DynamicPrecisionSelector | None = None
 
 
 def get_dynamic_precision(vram_gb: float = 2.0) -> DynamicPrecisionSelector:

@@ -1,10 +1,9 @@
 """Knowledge Distiller — Extracts, consolidates, and manages facts from conversations."""
 
-import re
-import time
 import logging
+import re
 import threading
-from typing import Optional, List, Dict, Any
+import time
 from collections import Counter
 
 logger = logging.getLogger("jarvis.knowledge_engine.knowledge_distiller")
@@ -26,7 +25,7 @@ def _extract_keywords(text: str, top_n: int = 10) -> list[str]:
         'these', 'those', 'it', 'its', 'i', 'me', 'my', 'we', 'our', 'you',
         'your', 'he', 'him', 'his', 'she', 'her', 'they', 'them', 'their',
         'what', 'which', 'who', 'whom', 'about', 'also', 'like', 'know',
-        'think', 'want', 'need', 'make', 'get', 'go', 'come', 'see', 'look',
+        'think', 'want', 'make', 'get', 'go', 'come', 'see', 'look',
         'use', 'say', 'tell', 'give', 'take', 'let', 'keep', 'put', 'try',
         'ask', 'set', 'run', 'move', 'show', 'help', 'start', 'turn', 'play',
     }
@@ -92,7 +91,7 @@ class KnowledgeDistiller:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._facts: List[dict] = []
+        self._facts: list[dict] = []
         self._fact_counter = 0
 
     def distill(self, conversation: str) -> dict:
@@ -180,7 +179,7 @@ class KnowledgeDistiller:
         return min(1.0, 0.3 + (count * 0.15))
 
 
-_instance: Optional[KnowledgeDistiller] = None
+_instance: KnowledgeDistiller | None = None
 
 
 def get_knowledge_distiller() -> KnowledgeDistiller:

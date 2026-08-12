@@ -4,8 +4,8 @@ Coding: 0.1 | Brainstorming: 0.8 | Math: 0 | Architecture: 0.3
 """
 import logging
 import threading
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.dynamic_temperature")
 
@@ -52,9 +52,9 @@ class DynamicTemperatureSelector:
     """Automatically select optimal temperature based on task type."""
 
     def __init__(self):
-        self._custom_profiles: Dict[str, TemperatureProfile] = {}
+        self._custom_profiles: dict[str, TemperatureProfile] = {}
         self._selection_count = 0
-        self._task_counts: Dict[str, int] = {}
+        self._task_counts: dict[str, int] = {}
         self._lock = threading.Lock()
 
     def detect_task_type(self, prompt: str) -> str:
@@ -87,7 +87,7 @@ class DynamicTemperatureSelector:
         with self._lock:
             self._custom_profiles[task_type] = profile
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "selections": self._selection_count,
@@ -96,7 +96,7 @@ class DynamicTemperatureSelector:
             }
 
 
-_temp_selector_instance: Optional[DynamicTemperatureSelector] = None
+_temp_selector_instance: DynamicTemperatureSelector | None = None
 
 
 def get_dynamic_temperature() -> DynamicTemperatureSelector:

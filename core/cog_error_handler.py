@@ -1,21 +1,18 @@
 import json
 import re
-import sys
-from pathlib import Path
 from enum import Enum
 
 from core.utils import get_project_root as get_base_dir
-
 
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
 
 class ErrorDecision(Enum):
-    RETRY       = "retry"      
-    SKIP        = "skip"       
-    REPLAN      = "replan"     
-    ABORT       = "abort"    
+    RETRY       = "retry"
+    SKIP        = "skip"
+    REPLAN      = "replan"
+    ABORT       = "abort"
 
 
 ERROR_ANALYST_PROMPT = """You are the error recovery module of MARK XXV AI assistant.
@@ -47,7 +44,7 @@ Return ONLY valid JSON:
 
 def _get_api_key() -> str:
     try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(API_CONFIG_PATH, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("gemini_api_key", "")
     except (FileNotFoundError, json.JSONDecodeError, KeyError):

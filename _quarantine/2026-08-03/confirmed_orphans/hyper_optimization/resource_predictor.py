@@ -1,11 +1,9 @@
 """HyperResourcePredictor — Predicts resource exhaustion before it happens."""
 
-from collections import deque
-from typing import Optional
 import logging
-import math
 import threading
 import time
+from collections import deque
 
 try:
     import psutil
@@ -27,7 +25,7 @@ class HyperResourcePredictor:
         self._lock: threading.RLock = threading.RLock()
         self._collection_interval: float = 2.0
         self._running: bool = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._snapshots_collected: int = 0
         self._predictions_made: int = 0
         self._alerts_triggered: int = 0
@@ -154,7 +152,7 @@ class HyperResourcePredictor:
         resources = ["cpu_percent", "ram_percent", "disk_percent", "ram_used_mb"]
         return {r: self.predict(r, horizon_seconds) for r in resources}
 
-    def get_time_to_limit(self, resource_name: str) -> Optional[float]:
+    def get_time_to_limit(self, resource_name: str) -> float | None:
         prediction = self.predict(resource_name, horizon_seconds=300)
         ttl = prediction.get("time_to_limit")
         return ttl
@@ -395,7 +393,7 @@ class HyperResourcePredictor:
         return max(0, min(100, overall))
 
 
-_predictor_instance: Optional[HyperResourcePredictor] = None
+_predictor_instance: HyperResourcePredictor | None = None
 _predictor_lock = threading.Lock()
 
 

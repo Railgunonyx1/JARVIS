@@ -13,14 +13,12 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
-from core.context.budget import estimate_tokens
 from core.context.selector import score as _lexical_score
 
 logger = logging.getLogger("jarvis.memory.knowledge")
 
-_instance: Optional["ProjectKnowledge"] = None
+_instance: ProjectKnowledge | None = None
 _instance_lock = threading.Lock()
 
 _DOC_CANDIDATES = [
@@ -37,7 +35,7 @@ _MAX_DOC_CHARS = 8000
 class ProjectKnowledge:
     """SQLite-backed per-project knowledge store."""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         self._data_dir = data_dir or (Path.home() / ".jarvis" / "data")
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "project_knowledge.db"
@@ -74,7 +72,7 @@ class ProjectKnowledge:
             )
             self._conn.commit()
 
-    def get(self, project: str, key: str) -> Optional[str]:
+    def get(self, project: str, key: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT content FROM project_knowledge WHERE project = ? AND key = ?",
@@ -91,7 +89,7 @@ class ProjectKnowledge:
             self._conn.commit()
         return cur.rowcount > 0
 
-    def all(self, project: str) -> List[Dict]:
+    def all(self, project: str) -> list[dict]:
         with self._lock:
             rows = [dict(r) for r in self._conn.execute(
                 "SELECT key, content, category, updated_at FROM project_knowledge "
@@ -99,7 +97,7 @@ class ProjectKnowledge:
             ).fetchall()]
         return rows
 
-    def search(self, project: str, query: str = "", limit: int = 5) -> List[Dict]:
+    def search(self, project: str, query: str = "", limit: int = 5) -> list[dict]:
         rows = self.all(project)
         if not rows:
             return []
@@ -148,7 +146,7 @@ class ProjectKnowledge:
             text = text[: budget_chars] + "\n"
         return text
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         with self._lock:
             total = self._conn.execute("SELECT COUNT(*) AS c FROM project_knowledge").fetchone()["c"]
         return {"knowledge": total}

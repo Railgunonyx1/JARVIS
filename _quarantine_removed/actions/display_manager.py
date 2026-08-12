@@ -1,7 +1,7 @@
 """Display Manager — resolution, monitors, wallpaper for JARVIS MK-X."""
 
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger("jarvis.actions.display_manager")
@@ -69,8 +69,8 @@ def _set_wallpaper(params: dict) -> str:
     p = Path(path).expanduser().resolve()
     if not p.exists():
         return f"Image not found: {p}"
-    import winreg
     import ctypes
+    import winreg
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Desktop", 0, winreg.KEY_SET_VALUE)
     winreg.SetValueEx(key, "WallPaper", 0, winreg.REG_SZ, str(p))
     winreg.CloseKey(key)
@@ -91,12 +91,12 @@ def _dual_screen(params: dict) -> str:
 
 
 def _extend_screens(params: dict) -> str:
-    _ps("Set-DisplayConfiguration -Path '\\.\DISPLAY2' -Position @{X=1920;Y=0}")
+    _ps("Set-DisplayConfiguration -Path '\\.\\DISPLAY2' -Position @{X=1920;Y=0}")
     return "Extended display layout"
 
 
 def _mirror_screens(params: dict) -> str:
-    _ps("Set-DisplayConfiguration -Path '\\.\DISPLAY2' -Position @{X=0;Y=0}")
+    _ps("Set-DisplayConfiguration -Path '\\.\\DISPLAY2' -Position @{X=0;Y=0}")
     return "Mirrored display layout"
 
 

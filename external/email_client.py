@@ -2,15 +2,14 @@
 
 Provides basic email operations for JARVIS.
 """
-import logging
-import time
-import smtplib
-import imaplib
 import email
-from email.mime.text import MIMEText
+import imaplib
+import logging
+import smtplib
+from dataclasses import dataclass
 from email.mime.multipart import MIMEMultipart
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+from email.mime.text import MIMEText
+from typing import Any
 
 logger = logging.getLogger("external.email_client")
 
@@ -26,7 +25,7 @@ class EmailMessage:
     uid: str = ""
     is_read: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "to": self.to, "subject": self.subject,
             "body": self.body[:500], "from": self.from_addr,
@@ -48,7 +47,7 @@ class EmailClient:
         self._password = password
         self._sent_count = 0
 
-    def send_email(self, to: str, subject: str, body: str) -> Dict[str, Any]:
+    def send_email(self, to: str, subject: str, body: str) -> dict[str, Any]:
         """Send an email."""
         if not self._smtp_host or not self._email:
             return {"success": False, "error": "SMTP not configured"}
@@ -71,7 +70,7 @@ class EmailClient:
             logger.error("Email send failed: %s", e)
             return {"success": False, "error": str(e)}
 
-    def read_emails(self, folder: str = "INBOX", count: int = 10) -> List[EmailMessage]:
+    def read_emails(self, folder: str = "INBOX", count: int = 10) -> list[EmailMessage]:
         """Read recent emails from the inbox."""
         if not self._imap_host or not self._email:
             return []
@@ -109,7 +108,7 @@ class EmailClient:
                     return part.get_payload(decode=True).decode(errors="replace")[:500]
         return msg.get_payload(decode=True).decode(errors="replace")[:500] if msg.get_payload() else ""
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "configured": bool(self._smtp_host and self._email),
             "sent_count": self._sent_count,
@@ -117,7 +116,7 @@ class EmailClient:
         }
 
 
-_email_instance: Optional[EmailClient] = None
+_email_instance: EmailClient | None = None
 
 
 def get_email_client() -> EmailClient:

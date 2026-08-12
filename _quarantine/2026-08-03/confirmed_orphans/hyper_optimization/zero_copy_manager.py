@@ -3,7 +3,6 @@
 import logging
 import threading
 import time
-from typing import Dict, Optional
 
 logger = logging.getLogger("jarvis.hyper_opt.zero_copy_manager")
 
@@ -30,7 +29,7 @@ class SharedBuffer:
             self._valid_size = data_len
             self._last_access = time.time()
 
-    def read(self, offset: int = 0, length: Optional[int] = None) -> memoryview:
+    def read(self, offset: int = 0, length: int | None = None) -> memoryview:
         with self._lock:
             self._last_access = time.time()
             if length is None:
@@ -89,7 +88,7 @@ class ZeroCopyManager:
     """Manages shared memory buffers for zero-copy data sharing between components."""
 
     def __init__(self):
-        self._buffers: Dict[str, SharedBuffer] = {}
+        self._buffers: dict[str, SharedBuffer] = {}
         self._lock = threading.RLock()
         self._stats = {
             "creates": 0,
@@ -111,7 +110,7 @@ class ZeroCopyManager:
             logger.debug("Created buffer '%s' (%d bytes)", name, size_bytes)
             return buf
 
-    def get_buffer(self, name: str) -> Optional[SharedBuffer]:
+    def get_buffer(self, name: str) -> SharedBuffer | None:
         with self._lock:
             buf = self._buffers.get(name)
             if buf is not None:
@@ -124,7 +123,7 @@ class ZeroCopyManager:
             if buf is not None:
                 remaining = buf.decrement_ref()
 
-    def read_from_buffer(self, name: str, offset: int = 0, length: Optional[int] = None) -> Optional[memoryview]:
+    def read_from_buffer(self, name: str, offset: int = 0, length: int | None = None) -> memoryview | None:
         with self._lock:
             buf = self._buffers.get(name)
         if buf is None:
@@ -180,7 +179,7 @@ class ZeroCopyManager:
             ]
 
 
-_instance: Optional[ZeroCopyManager] = None
+_instance: ZeroCopyManager | None = None
 _instance_lock = threading.RLock()
 
 

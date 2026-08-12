@@ -3,11 +3,11 @@
 Locate every bottleneck at microsecond granularity.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import time
 from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("inference_optimization.micro_profiler")
 
@@ -18,7 +18,7 @@ class TimingEntry:
     name: str
     start_ns: int = 0
     end_ns: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def elapsed_us(self) -> float:
@@ -42,8 +42,8 @@ class MicrosecondProfiler:
     """
 
     def __init__(self, max_entries: int = 10000):
-        self._entries: Dict[str, List[TimingEntry]] = defaultdict(list)
-        self._active: Dict[str, int] = {}  # name → start_ns
+        self._entries: dict[str, list[TimingEntry]] = defaultdict(list)
+        self._active: dict[str, int] = {}  # name → start_ns
         self._max_entries = max_entries
         self._lock = threading.Lock()
 
@@ -51,7 +51,7 @@ class MicrosecondProfiler:
         """Start timing a named section."""
         self._active[name] = time.perf_counter_ns()
 
-    def stop(self, name: str, **metadata) -> Optional[TimingEntry]:
+    def stop(self, name: str, **metadata) -> TimingEntry | None:
         """Stop timing and record the entry."""
         start_ns = self._active.pop(name, None)
         if start_ns is None:
@@ -71,7 +71,7 @@ class MicrosecondProfiler:
 
         return entry
 
-    def get_stats(self, name: str) -> Dict[str, Any]:
+    def get_stats(self, name: str) -> dict[str, Any]:
         """Get statistics for a named timing section."""
         with self._lock:
             entries = self._entries.get(name, [])
@@ -95,7 +95,7 @@ class MicrosecondProfiler:
             "avg_ms": round(sum(times_ms) / n, 3),
         }
 
-    def get_all_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_stats(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             names = list(self._entries.keys())
         return {name: self.get_stats(name) for name in names}
@@ -121,7 +121,7 @@ class MicrosecondProfiler:
         return "\n".join(lines)
 
 
-_profiler_instance: Optional[MicrosecondProfiler] = None
+_profiler_instance: MicrosecondProfiler | None = None
 
 
 def get_micro_profiler() -> MicrosecondProfiler:

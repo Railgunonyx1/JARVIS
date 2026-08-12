@@ -1,16 +1,15 @@
 """Compression Engine — auto-selecting data compression (zlib/gzip/lz4)."""
 
-import zlib
 import gzip
-import threading
 import logging
-from typing import Optional
+import threading
+import zlib
 
 logger = logging.getLogger("jarvis.performance_engine.compression")
 
 try:
-    import lz4.frame as _lz4_frame
     import lz4.block as _lz4_block
+    import lz4.frame as _lz4_frame
 
     _HAS_LZ4 = True
 except ImportError:
@@ -45,7 +44,7 @@ class CompressionEngine:
         if not data:
             return _TAG_NONE
 
-        best: Optional[bytes] = None
+        best: bytes | None = None
         best_len = len(data) + 1
 
         # Always available
@@ -140,7 +139,7 @@ class CompressionEngine:
 # Singleton
 # ----------------------------------------------------------------------
 
-_compression_engine: Optional[CompressionEngine] = None
+_compression_engine: CompressionEngine | None = None
 _compression_lock = threading.Lock()
 
 

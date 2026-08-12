@@ -3,16 +3,15 @@
 Supports full desktop, multi-monitor, and active focused window cropping.
 """
 
-import io
 import ctypes
+import io
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
 
 logger = logging.getLogger("jarvis.actions.screen_capture")
 
 
-def _get_active_window_bbox() -> Optional[Tuple[int, int, int, int]]:
+def _get_active_window_bbox() -> tuple[int, int, int, int] | None:
     """Get (left, top, right, bottom) bbox of the currently focused active window on Windows."""
     try:
         user32 = ctypes.windll.user32
@@ -31,10 +30,10 @@ def _get_active_window_bbox() -> Optional[Tuple[int, int, int, int]]:
 
 
 def capture_screen(
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
     active_window_only: bool = False,
     all_screens: bool = True
-) -> Optional[bytes]:
+) -> bytes | None:
     """Capture screen (full screen, all monitors, or active focused window) and return PNG bytes."""
     try:
         from PIL import ImageGrab

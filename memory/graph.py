@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from memory.models import KnowledgeTriple
 
@@ -20,10 +18,10 @@ MAX_TRIPLES = 5000
 class KnowledgeGraph:
     """Entity-relation-entity triple store with simple graph queries."""
 
-    def __init__(self, path: Optional[Path] = None) -> None:
+    def __init__(self, path: Path | None = None) -> None:
         self._path = path or Path.home() / ".jarvis" / "knowledge_graph.json"
         self._lock = threading.Lock()
-        self._triples: List[KnowledgeTriple] = []
+        self._triples: list[KnowledgeTriple] = []
         self._load()
 
     def _load(self) -> None:
@@ -54,7 +52,7 @@ class KnowledgeGraph:
                 self._triples = self._triples[-MAX_TRIPLES:]
             self._save()
 
-    def query(self, entity: str, relation: Optional[str] = None) -> List[KnowledgeTriple]:
+    def query(self, entity: str, relation: str | None = None) -> list[KnowledgeTriple]:
         with self._lock:
             return [
                 t for t in self._triples
@@ -62,9 +60,9 @@ class KnowledgeGraph:
                 if relation is None or t.relation.lower() == relation.lower()
             ]
 
-    def get_related(self, entity: str, max_depth: int = 2) -> Dict[str, list]:
+    def get_related(self, entity: str, max_depth: int = 2) -> dict[str, list]:
         visited: set = set()
-        graph: Dict[str, list] = {}
+        graph: dict[str, list] = {}
         queue = [(entity, 0)]
         while queue:
             current, depth = queue.pop(0)
@@ -83,7 +81,7 @@ class KnowledgeGraph:
                 graph[current] = edges
         return graph
 
-    def search(self, query: str, limit: int = 10) -> List[KnowledgeTriple]:
+    def search(self, query: str, limit: int = 10) -> list[KnowledgeTriple]:
         query = query.lower()
         with self._lock:
             results = [

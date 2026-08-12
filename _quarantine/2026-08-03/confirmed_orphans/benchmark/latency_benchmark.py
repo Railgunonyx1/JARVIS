@@ -1,30 +1,29 @@
 """Latency Benchmark — Measures TTFT, total response, provider fallback, intent classification."""
-import os
 import sys
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import time
 import asyncio
 import statistics
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 @dataclass
 class LatencyResult:
-    ttft_values_ms: List[float] = field(default_factory=list)
-    total_response_ms: List[float] = field(default_factory=list)
-    intent_classify_ms: List[float] = field(default_factory=list)
-    tokens_per_sec: List[float] = field(default_factory=list)
-    provider_used: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    test_commands: List[str] = field(default_factory=list)
+    ttft_values_ms: list[float] = field(default_factory=list)
+    total_response_ms: list[float] = field(default_factory=list)
+    intent_classify_ms: list[float] = field(default_factory=list)
+    tokens_per_sec: list[float] = field(default_factory=list)
+    provider_used: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    test_commands: list[str] = field(default_factory=list)
 
     @property
     def avg_ttft(self) -> float:
@@ -49,7 +48,7 @@ class LatencyResult:
     def avg_tokens_per_sec(self) -> float:
         return statistics.mean(self.tokens_per_sec) if self.tokens_per_sec else 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "avg_ttft_ms": round(self.avg_ttft, 1),
             "p50_ttft_ms": round(self.p50_ttft, 1),
@@ -79,7 +78,7 @@ DEFAULT_TEST_COMMANDS = [
 ]
 
 
-def run_latency_benchmark(rounds: int = 1, commands: List[str] = None) -> LatencyResult:
+def run_latency_benchmark(rounds: int = 1, commands: list[str] = None) -> LatencyResult:
     if commands is None:
         commands = DEFAULT_TEST_COMMANDS
 
@@ -91,7 +90,7 @@ def run_latency_benchmark(rounds: int = 1, commands: List[str] = None) -> Latenc
     return result
 
 
-def _run_single_latency_benchmark(result: LatencyResult, commands: List[str]):
+def _run_single_latency_benchmark(result: LatencyResult, commands: list[str]):
     from core.jarvis import JarvisMKX
 
     jarvis = JarvisMKX()
@@ -180,7 +179,7 @@ def print_latency_result(result: LatencyResult):
     print(f"{'=' * 60}")
 
     if result.ttft_values_ms:
-        print(f"  TTFT (First Token Latency):")
+        print("  TTFT (First Token Latency):")
         print(f"    Average:  {result.avg_ttft:.0f}ms")
         print(f"    P50:      {result.p50_ttft:.0f}ms")
         print(f"    P95:      {result.p95_ttft:.0f}ms")
@@ -192,24 +191,24 @@ def print_latency_result(result: LatencyResult):
 
     if result.total_response_ms:
         avg_total = statistics.mean(result.total_response_ms)
-        print(f"\n  Total Response Time:")
+        print("\n  Total Response Time:")
         print(f"    Average:  {avg_total:.0f}ms")
 
     if result.intent_classify_ms:
         avg_intent = statistics.mean(result.intent_classify_ms)
-        print(f"\n  Intent Classification:")
+        print("\n  Intent Classification:")
         print(f"    Average:  {avg_intent:.0f}ms")
 
     if result.tokens_per_sec:
         avg_tps = statistics.mean(result.tokens_per_sec)
-        print(f"\n  Token Throughput:")
+        print("\n  Token Throughput:")
         print(f"    Average:  {avg_tps:.1f} tokens/sec")
 
     if result.provider_used:
         providers = {}
         for p in result.provider_used:
             providers[p] = providers.get(p, 0) + 1
-        print(f"\n  Provider Distribution:")
+        print("\n  Provider Distribution:")
         for p, count in sorted(providers.items(), key=lambda x: -x[1]):
             print(f"    {p:20s} {count} requests")
 

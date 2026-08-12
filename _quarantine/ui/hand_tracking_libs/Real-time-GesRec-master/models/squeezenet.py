@@ -4,12 +4,10 @@ See the paper "SqueezeNet: AlexNet-level accuracy with 50x fewer parameters and 
 '''
 
 import math
+
 import torch
 import torch.nn as nn
-import torch.nn.init as init
-import torch.nn.functional as F
 from torch.autograd import Variable
-from functools import partial
 
 __all__ = ['SqueezeNet', 'squeezenet1_0', 'squeezenet1_1']
 
@@ -19,7 +17,7 @@ class Fire(nn.Module):
     def __init__(self, inplanes, squeeze_planes,
                  expand1x1_planes, expand3x3_planes,
                  use_bypass=False):
-        super(Fire, self).__init__()
+        super().__init__()
         self.use_bypass = use_bypass
         self.inplanes = inplanes
         self.relu = nn.ReLU(inplace=True)
@@ -39,7 +37,7 @@ class Fire(nn.Module):
 
         out1 = self.expand1x1(out)
         out1 = self.expand1x1_bn(out1)
-        
+
         out2 = self.expand3x3(out)
         out2 = self.expand3x3_bn(out2)
 
@@ -55,13 +53,13 @@ class SqueezeNet(nn.Module):
 
     def __init__(self,
                  sample_size,
-                 sample_duration,			
+                 sample_duration,
     	         version=1.1,
     	         num_classes=600):
-        super(SqueezeNet, self).__init__()
+        super().__init__()
         if version not in [1.0, 1.1]:
-            raise ValueError("Unsupported SqueezeNet version {version}:"
-                             "1.0 or 1.1 expected".format(version=version))
+            raise ValueError(f"Unsupported SqueezeNet version {version}:"
+                             "1.0 or 1.1 expected")
         self.num_classes = num_classes
         last_duration = int(math.ceil(sample_duration / 16))
         last_size = int(math.ceil(sample_size / 32))
@@ -145,7 +143,7 @@ def get_fine_tuning_parameters(model, ft_portion):
     else:
         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
 
-    
+
 def get_model(**kwargs):
     """
     Returns the model.

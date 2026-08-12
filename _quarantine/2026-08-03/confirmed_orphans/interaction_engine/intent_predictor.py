@@ -1,10 +1,8 @@
 """Intent Predictor — N-gram frequency-based next-intent prediction with pattern mining."""
 
-import time
-import math
 import logging
 import threading
-from typing import Optional
+import time
 from collections import Counter, defaultdict
 
 logger = logging.getLogger("jarvis.interaction_engine.intent_predictor")
@@ -247,7 +245,7 @@ class IntentPredictor:
         }
 
 
-_instance: Optional[IntentPredictor] = None
+_instance: IntentPredictor | None = None
 _instance_lock = threading.Lock()
 
 

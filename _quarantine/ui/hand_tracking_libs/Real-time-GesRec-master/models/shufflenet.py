@@ -21,7 +21,7 @@ def channel_shuffle(x, groups):
     batchsize, num_channels, depth, height, width = x.data.size()
     channels_per_group = num_channels // groups
     # reshape
-    x = x.view(batchsize, groups, 
+    x = x.view(batchsize, groups,
         channels_per_group, depth, height, width)
     #permute
     x = x.permute(0,2,1,3,4,5).contiguous()
@@ -33,7 +33,7 @@ def channel_shuffle(x, groups):
 
 class Bottleneck(nn.Module):
     def __init__(self, in_planes, out_planes, stride, groups):
-        super(Bottleneck, self).__init__()
+        super().__init__()
         self.stride = stride
         self.groups = groups
         mid_planes = out_planes//4
@@ -71,7 +71,7 @@ class ShuffleNet(nn.Module):
                  groups,
                  width_mult=1,
                  num_classes=400):
-        super(ShuffleNet, self).__init__()
+        super().__init__()
         self.num_classes = num_classes
         self.groups = groups
         num_blocks = [4,8,4]
@@ -90,8 +90,8 @@ class ShuffleNet(nn.Module):
             out_planes = [24, 384, 768, 1536]
         else:
             raise ValueError(
-                """{} groups is not supported for
-                   1x1 Grouped Convolutions""".format(num_groups))
+                f"""{num_groups} groups is not supported for
+                   1x1 Grouped Convolutions""")
         out_planes = [int(i * width_mult) for i in out_planes]
         self.in_planes = out_planes[0]
         self.conv1   = conv_bn(3, self.in_planes, stride=(1,2,2))

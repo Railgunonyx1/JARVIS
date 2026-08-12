@@ -4,10 +4,10 @@ Avoid: Load Model → Infer → Unload → Load Again
 Instead: Load once, keep resident, infer on demand.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("gpu_optimization.residency")
 
@@ -35,7 +35,7 @@ class GPUResidencyManager:
 
     def __init__(self, total_vram_mb: float = 2048):
         self._total_vram_mb = total_vram_mb
-        self._allocated: Dict[str, GPUBuffers] = {}
+        self._allocated: dict[str, GPUBuffers] = {}
         self._lock = threading.Lock()
         self._total_allocations = 0
         self._total_evictions = 0
@@ -88,7 +88,7 @@ class GPUResidencyManager:
             if name in self._allocated:
                 self._allocated[name].resident = False
 
-    def get_usage(self) -> Dict[str, Any]:
+    def get_usage(self) -> dict[str, Any]:
         with self._lock:
             resident = [b for b in self._allocated.values() if b.resident]
             total_used = sum(b.size_mb for b in resident)
@@ -104,7 +104,7 @@ class GPUResidencyManager:
             }
 
 
-_residency_instance: Optional[GPUResidencyManager] = None
+_residency_instance: GPUResidencyManager | None = None
 
 
 def get_gpu_residency_manager(vram_mb: float = 2048) -> GPUResidencyManager:

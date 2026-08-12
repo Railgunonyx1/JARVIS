@@ -1,11 +1,10 @@
 """Performance Analyzer Engine — metric recording, trend analysis, and health scoring."""
 
-import time
-import math
-import threading
 import logging
+import threading
+import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.evolution_engine.performance_analyzer")
 
@@ -16,7 +15,7 @@ class PerformanceAnalyzerEngine:
     """Records metrics, computes trends, and derives a holistic health score."""
 
     def __init__(self) -> None:
-        self._metrics_history: Dict[str, deque] = {}
+        self._metrics_history: dict[str, deque] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -34,7 +33,7 @@ class PerformanceAnalyzerEngine:
     # Analysis
     # ------------------------------------------------------------------
 
-    def analyze(self) -> Dict[str, Any]:
+    def analyze(self) -> dict[str, Any]:
         """Return a comprehensive analysis across all recorded metrics."""
         with self._lock:
             snapshot = {k: list(v) for k, v in self._metrics_history.items()}
@@ -60,7 +59,7 @@ class PerformanceAnalyzerEngine:
             "generated_at": time.time(),
         }
 
-    def get_trend(self, metric: str, window: int = 100) -> Dict[str, Any]:
+    def get_trend(self, metric: str, window: int = 100) -> dict[str, Any]:
         """Return trend data for *metric* over the last *window* data points.
 
         ``direction`` is ``"improving"``, ``"stable"``, or ``"degrading"``.
@@ -98,7 +97,7 @@ class PerformanceAnalyzerEngine:
 
         return {"direction": direction, "slope": round(slope, 6), "data": values}
 
-    def compare_periods(self, period1_ms: float, period2_ms: float) -> Dict[str, Any]:
+    def compare_periods(self, period1_ms: float, period2_ms: float) -> dict[str, Any]:
         """Compare two time periods and return relative change info."""
         if period1_ms == 0:
             return {
@@ -129,7 +128,7 @@ class PerformanceAnalyzerEngine:
 
     def get_health_score(self) -> int:
         """Return a 0-100 health score based on latency trend, error rate, throughput, memory."""
-        scores: List[float] = []
+        scores: list[float] = []
 
         with self._lock:
             snapshot = {k: list(v) for k, v in self._metrics_history.items()}
@@ -209,12 +208,12 @@ class PerformanceAnalyzerEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _summarise_category(self, metrics: Dict[str, list]) -> Dict[str, Any]:
+    def _summarise_category(self, metrics: dict[str, list]) -> dict[str, Any]:
         if not metrics:
             return {"count": 0, "avg": None, "min": None, "max": None}
 
-        all_values: List[float] = []
-        per_metric: Dict[str, dict] = {}
+        all_values: list[float] = []
+        per_metric: dict[str, dict] = {}
         for name, series in metrics.items():
             values = [v for _, v in series]
             all_values.extend(values)
@@ -237,11 +236,11 @@ class PerformanceAnalyzerEngine:
 
     def _build_recommendations(
         self,
-        latency: Dict[str, Any],
-        throughput: Dict[str, Any],
-        errors: Dict[str, Any],
-    ) -> List[str]:
-        recommendations: List[str] = []
+        latency: dict[str, Any],
+        throughput: dict[str, Any],
+        errors: dict[str, Any],
+    ) -> list[str]:
+        recommendations: list[str] = []
 
         if latency.get("avg") is not None and latency["avg"] > 500:
             recommendations.append(
@@ -281,7 +280,7 @@ class PerformanceAnalyzerEngine:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[PerformanceAnalyzerEngine] = None
+_instance: PerformanceAnalyzerEngine | None = None
 _lock = threading.Lock()
 
 

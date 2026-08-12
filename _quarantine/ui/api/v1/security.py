@@ -4,9 +4,9 @@ Plugins request permission through this API before executing sensitive actions.
 """
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from api.v1.models import PermissionRequest, PermissionDecision
+from api.v1.models import PermissionDecision, PermissionRequest
 
 logger = logging.getLogger("jarvis.api.v1.security")
 
@@ -17,7 +17,7 @@ class SecurityAPI:
     def __init__(self, security_engine=None, approval_chain=None):
         self._engine = security_engine
         self._approval = approval_chain
-        self._audit_log: List[Dict[str, Any]] = []
+        self._audit_log: list[dict[str, Any]] = []
         self._max_audit = 200
 
     def request_permission(self, req: PermissionRequest) -> PermissionDecision:
@@ -63,10 +63,10 @@ class SecurityAPI:
 
         return decision
 
-    def get_audit_log(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_audit_log(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._audit_log[-limit:]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         approved = sum(1 for e in self._audit_log if e["approved"])
         denied = len(self._audit_log) - approved
         return {

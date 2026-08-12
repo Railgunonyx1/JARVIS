@@ -1,9 +1,10 @@
 """Prefetch Engine — background data preloading with dependency-aware scheduling."""
 
-import time
-import threading
 import logging
-from typing import Any, Callable, Dict, List, Optional
+import threading
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.orchestration_engine.prefetch_engine")
 
@@ -12,11 +13,11 @@ class PrefetchEngine:
     """Registers data sources, prefetches them in background threads, and caches results."""
 
     def __init__(self) -> None:
-        self._prefetchers: Dict[str, dict] = {}
-        self._cache: Dict[str, Any] = {}
-        self._timestamps: Dict[str, float] = {}
+        self._prefetchers: dict[str, dict] = {}
+        self._cache: dict[str, Any] = {}
+        self._timestamps: dict[str, float] = {}
         self._lock = threading.Lock()
-        self._inflight: Dict[str, threading.Event] = {}
+        self._inflight: dict[str, threading.Event] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -26,7 +27,7 @@ class PrefetchEngine:
         self,
         name: str,
         prefetch_fn: Callable,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
     ) -> None:
         """Register a prefetchable data source.
 
@@ -42,7 +43,7 @@ class PrefetchEngine:
             }
         logger.debug("Registered prefetch source '%s'", name)
 
-    def trigger_prefetch(self, context: Optional[dict] = None) -> None:
+    def trigger_prefetch(self, context: dict | None = None) -> None:
         """Trigger all registered prefetches in background threads.
 
         Respects dependency ordering — sources whose dependencies are not yet
@@ -75,7 +76,7 @@ class PrefetchEngine:
         for name in list(self._inflight):
             self._inflight[name].wait(timeout=10.0)
 
-    def get_prefetched(self, name: str) -> Optional[Any]:
+    def get_prefetched(self, name: str) -> Any | None:
         """Return prefetched data for *name* if available, else ``None``."""
         with self._lock:
             return self._cache.get(name)
@@ -87,10 +88,10 @@ class PrefetchEngine:
             self._timestamps.pop(name, None)
         logger.debug("Invalidated prefetch cache for '%s'", name)
 
-    def get_stats(self) -> Dict[str, dict]:
+    def get_stats(self) -> dict[str, dict]:
         """Return per-source ``hit_rate``, ``avg_prefetch_ms``, ``last_prefetch_time``."""
         with self._lock:
-            stats: Dict[str, dict] = {}
+            stats: dict[str, dict] = {}
             for name in self._prefetchers:
                 data = self._prefetchers[name]
                 timings = data.get("_timings", [])
@@ -125,7 +126,7 @@ class PrefetchEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _dispatch(self, name: str, context: Optional[dict] = None) -> None:
+    def _dispatch(self, name: str, context: dict | None = None) -> None:
         event = threading.Event()
         with self._lock:
             self._inflight[name] = event
@@ -165,7 +166,7 @@ class PrefetchEngine:
         thread.start()
 
     @staticmethod
-    def _load_memory_context(context: Optional[dict] = None) -> Any:
+    def _load_memory_context(context: dict | None = None) -> Any:
         try:
             from memory_engine import get_memory_engine
             engine = get_memory_engine()
@@ -176,7 +177,7 @@ class PrefetchEngine:
             return {}
 
     @staticmethod
-    def _load_kg_context(context: Optional[dict] = None) -> Any:
+    def _load_kg_context(context: dict | None = None) -> Any:
         try:
             from knowledge_graph.graph import KnowledgeGraph
             graph = KnowledgeGraph()
@@ -187,7 +188,7 @@ class PrefetchEngine:
             return {}
 
     @staticmethod
-    def _load_user_profile(context: Optional[dict] = None) -> Any:
+    def _load_user_profile(context: dict | None = None) -> Any:
         try:
             from personal_intelligence.user_model import UserModel
             model = UserModel()
@@ -202,7 +203,7 @@ class PrefetchEngine:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[PrefetchEngine] = None
+_instance: PrefetchEngine | None = None
 _lock = threading.Lock()
 
 

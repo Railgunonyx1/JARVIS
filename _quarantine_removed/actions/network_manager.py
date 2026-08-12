@@ -1,8 +1,8 @@
 """Network Manager — WiFi, IP, ping, connectivity for JARVIS MK-X."""
 
-import subprocess
 import logging
 import socket
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.network_manager")
 

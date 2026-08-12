@@ -4,7 +4,6 @@ Uses pyautogui and win32gui for window management.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.window_manager")
 
@@ -51,7 +50,7 @@ def _get_all_windows():
     return windows
 
 
-def _find_window(name: str) -> Optional[int]:
+def _find_window(name: str) -> int | None:
     """Find a window by partial title match."""
     import win32gui
 
@@ -86,8 +85,8 @@ def _focus_window(params: dict) -> str:
     if not name:
         return "Provide a window name to focus"
 
-    import win32gui
     import win32con
+    import win32gui
 
     hwnd = _find_window(name)
     if not hwnd:
@@ -108,8 +107,8 @@ def _close_window(params: dict) -> str:
     if not name:
         return "Provide a window name to close"
 
-    import win32gui
     import win32con
+    import win32gui
 
     hwnd = _find_window(name)
     if not hwnd:
@@ -125,8 +124,8 @@ def _close_window(params: dict) -> str:
 
 def _minimize_window(params: dict) -> str:
     name = params.get("name", "")
-    import win32gui
     import win32con
+    import win32gui
 
     hwnd = _find_window(name) if name else win32gui.GetForegroundWindow()
     if hwnd:
@@ -137,8 +136,8 @@ def _minimize_window(params: dict) -> str:
 
 def _maximize_window(params: dict) -> str:
     name = params.get("name", "")
-    import win32gui
     import win32con
+    import win32gui
 
     hwnd = _find_window(name) if name else win32gui.GetForegroundWindow()
     if hwnd:
@@ -149,8 +148,8 @@ def _maximize_window(params: dict) -> str:
 
 def _restore_window(params: dict) -> str:
     name = params.get("name", "")
-    import win32gui
     import win32con
+    import win32gui
 
     hwnd = _find_window(name) if name else win32gui.GetForegroundWindow()
     if hwnd:

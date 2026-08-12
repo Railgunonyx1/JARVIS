@@ -8,31 +8,42 @@ from __future__ import annotations
 
 import ctypes
 import math
-import os
 import platform
-import random
 import sys
 import threading
 import time
-from pathlib import Path
 
 import psutil
-
 from PyQt6.QtCore import (
-    QPointF, QRectF, Qt, QTimer, pyqtSignal,
+    QPointF,
+    QRectF,
+    Qt,
+    QTimer,
+    pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QBrush, QColor, QFont, QFontDatabase, QLinearGradient,
-    QPainter, QPainterPath, QPen, QPolygonF, QRadialGradient,
+    QBrush,
+    QColor,
+    QFont,
+    QPainter,
+    QPen,
+    QRadialGradient,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
-    QPushButton, QSizePolicy, QSlider, QTextEdit, QVBoxLayout,
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
     QWidget,
 )
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-
 from core.utils import get_project_root as _base_dir
 
 BASE_DIR = _base_dir()
@@ -1120,8 +1131,8 @@ class JarvisUI(QMainWindow):
     def _handle_camera_frame(self, frame_data):
         """Update camera feed label with a frame (numpy array or QPixmap)."""
         try:
-            from PyQt6.QtGui import QImage, QPixmap
             import numpy as np
+            from PyQt6.QtGui import QImage, QPixmap
             if isinstance(frame_data, np.ndarray):
                 h, w, ch = frame_data.shape
                 bytes_per_line = ch * w
@@ -1191,7 +1202,6 @@ def main():
     ui.show()
 
     def _demo():
-        import random
         states = ["IDLE", "LISTENING", "THINKING", "SPEAKING"]
         i = [0]
 

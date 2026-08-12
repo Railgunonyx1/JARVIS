@@ -3,7 +3,6 @@ semantic retrieval facade, and AgentLoop integration (temp dirs only)."""
 
 import asyncio
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -18,7 +17,7 @@ from memory.mem import Mem
 from memory.project_knowledge import ProjectKnowledge
 from memory.store import MemoryStore
 from memory.vector_store import VectorMemoryStore
-from providers.types import LLMResponse, ToolCall
+from providers.types import LLMResponse
 from tools import build_default_registry
 
 ROOT = Path(__file__).resolve().parents[1]

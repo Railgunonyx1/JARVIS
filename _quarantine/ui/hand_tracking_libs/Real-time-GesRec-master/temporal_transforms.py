@@ -1,8 +1,7 @@
 import random
-import math
 
 
-class LoopPadding(object):
+class LoopPadding:
 
     def __init__(self, size, downsample):
         self.size = size
@@ -23,7 +22,7 @@ class LoopPadding(object):
         return out
 
 
-class TemporalBeginCrop(object):
+class TemporalBeginCrop:
     """Temporally crop the given frame indices at a beginning.
 
     If the number of frames is less than the size,
@@ -53,7 +52,7 @@ class TemporalBeginCrop(object):
         return selected_frames
 
 
-class TemporalCenterCrop(object):
+class TemporalCenterCrop:
     """Temporally crop the given frame indices at a center.
 
     If the number of frames is less than the size,
@@ -93,7 +92,7 @@ class TemporalCenterCrop(object):
         return selected_frames
 
 
-class TemporalRandomCrop(object):
+class TemporalRandomCrop:
     """Temporally crop the given frame indices at a random location.
 
     If the number of frames is less than the size,

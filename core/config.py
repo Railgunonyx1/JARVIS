@@ -4,11 +4,11 @@ Loads from config/*.toml files. Supports hot-reload via file watching.
 Provides a single Config instance used across the entire system.
 """
 
-import os
-import toml
 import logging
 from pathlib import Path
 from typing import Any, Optional
+
+import toml
 
 logger = logging.getLogger("jarvis.config")
 
@@ -23,7 +23,7 @@ _instance: Optional["Config"] = None
 class Config:
     """Central configuration store. Reads all .toml files from config/ directory."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         self._config_dir = config_dir or _CONFIG_DIR
         self._data: dict[str, dict[str, Any]] = {}
         self._listeners: list[callable] = []

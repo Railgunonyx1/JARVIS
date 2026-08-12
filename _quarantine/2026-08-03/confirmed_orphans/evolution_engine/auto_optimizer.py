@@ -1,10 +1,11 @@
 """Auto Optimizer — analyses current state and applies safe optimisations with rollback."""
 
-import time
 import copy
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.evolution_engine.auto_optimizer")
 
@@ -13,19 +14,19 @@ class AutoOptimizer:
     """Discovers optimisation opportunities, applies them, and tracks history."""
 
     def __init__(self) -> None:
-        self._applied: List[dict] = []
-        self._configs_snapshot: Dict[str, Any] = {}
+        self._applied: list[dict] = []
+        self._configs_snapshot: dict[str, Any] = {}
         self._lock = threading.Lock()
-        self._optimization_registry: Dict[str, dict] = {}
+        self._optimization_registry: dict[str, dict] = {}
         self._register_builtins()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def analyze_and_suggest(self) -> List[dict]:
+    def analyze_and_suggest(self) -> list[dict]:
         """Analyse the current system state and return a list of suggestions."""
-        suggestions: List[dict] = []
+        suggestions: list[dict] = []
 
         with self._lock:
             applied_names = {o["name"] for o in self._applied if o.get("status") == "applied"}
@@ -56,7 +57,7 @@ class AutoOptimizer:
 
         return suggestions
 
-    def apply_optimization(self, name: str) -> Dict[str, Any]:
+    def apply_optimization(self, name: str) -> dict[str, Any]:
         """Apply a named optimisation. Returns ``{"success": bool, "details": str}``."""
         with self._lock:
             if name not in self._optimization_registry:
@@ -95,7 +96,7 @@ class AutoOptimizer:
             logger.error("Failed to apply optimisation '%s': %s", name, exc)
             return {"success": False, "details": str(exc)}
 
-    def get_applied_optimizations(self) -> List[dict]:
+    def get_applied_optimizations(self) -> list[dict]:
         """Return the full history of applied optimisations."""
         with self._lock:
             return [copy.deepcopy(o) for o in self._applied]
@@ -134,8 +135,8 @@ class AutoOptimizer:
         name: str,
         description: str,
         apply_fn: Callable,
-        check: Optional[Callable] = None,
-        rollback_fn: Optional[Callable] = None,
+        check: Callable | None = None,
+        rollback_fn: Callable | None = None,
         impact: str = "medium",
         effort: str = "low",
         auto_apply: bool = False,
@@ -309,8 +310,8 @@ class AutoOptimizer:
     # Snapshot helpers
     # ------------------------------------------------------------------
 
-    def _take_snapshot(self, name: str) -> Dict[str, Any]:
-        snapshot: Dict[str, Any] = {"name": name, "timestamp": time.time()}
+    def _take_snapshot(self, name: str) -> dict[str, Any]:
+        snapshot: dict[str, Any] = {"name": name, "timestamp": time.time()}
         try:
             from core.config import Config
             cfg = Config.instance()
@@ -319,7 +320,7 @@ class AutoOptimizer:
             snapshot["config"] = {}
         return snapshot
 
-    def _restore_snapshot(self, snapshot: Dict[str, Any]) -> None:
+    def _restore_snapshot(self, snapshot: dict[str, Any]) -> None:
         if not snapshot:
             return
         try:
@@ -338,7 +339,7 @@ class AutoOptimizer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[AutoOptimizer] = None
+_instance: AutoOptimizer | None = None
 _lock = threading.Lock()
 
 

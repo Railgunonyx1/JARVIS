@@ -6,16 +6,16 @@ L3: Provider/LLM (slowest, auto-populated on miss)
 
 Every roundtrip to the provider goes through this cache.
 """
-import json
-import time
-import sqlite3
 import hashlib
+import json
 import logging
+import sqlite3
 import threading
+import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("jarvis.cache")
 
@@ -44,7 +44,7 @@ class SemanticCache:
         self._max_items = max_items
         self._threshold = threshold
         self._ttl = ttl
-        self._entries: "OrderedDict[str, tuple]" = OrderedDict()  # query -> (embedding, value, created)
+        self._entries: OrderedDict[str, tuple] = OrderedDict()  # query -> (embedding, value, created)
         self._lock = threading.Lock()
         self._hits = 0
         self._misses = 0
@@ -53,7 +53,7 @@ class SemanticCache:
         from memory.vector_store import _text_to_vector
         return _text_to_vector(text)
 
-    def get(self, query: str) -> Optional[Any]:
+    def get(self, query: str) -> Any | None:
         """Return cached value if query is semantically near a stored query."""
         if not self.enabled or not query.strip():
             return None
@@ -141,7 +141,7 @@ class Cache:
     def __init__(self, name: str = "default",
                  max_memory_items: int = _DEFAULT_MAX_MEMORY_ITEMS,
                  default_ttl: int = _DEFAULT_TTL_S,
-                 db_path: Optional[str] = None):
+                 db_path: str | None = None):
         self.name = name
         self._max_memory = max_memory_items
         self._default_ttl = default_ttl
@@ -174,7 +174,7 @@ class Cache:
 
     # ── Public API ───────────────────────────────────────────────
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         with self._lock:
             entry = self._memory.get(key)
             if entry is not None:
@@ -204,7 +204,7 @@ class Cache:
         return None
 
     def set(self, key: str, value: Any,
-            ttl: Optional[int] = None):
+            ttl: int | None = None):
         ttl_sec = ttl if ttl is not None else self._default_ttl
         entry = CacheEntry(
             key=key, value=value,
@@ -220,7 +220,7 @@ class Cache:
             self._set_sqlite(key, value, entry.ttl)
 
     def get_or_compute(self, key: str, compute_fn: Callable,
-                       ttl: Optional[int] = None) -> Any:
+                       ttl: int | None = None) -> Any:
         cached = self.get(key)
         if cached is not None:
             return cached
@@ -274,7 +274,7 @@ class Cache:
 
     # ── SQLite helpers ───────────────────────────────────────────
 
-    def _get_sqlite(self, key: str) -> Optional[Any]:
+    def _get_sqlite(self, key: str) -> Any | None:
         try:
             conn = sqlite3.connect(self._db_path, timeout=2.0)
             row = conn.execute(

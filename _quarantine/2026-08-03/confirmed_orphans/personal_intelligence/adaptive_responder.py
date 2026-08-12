@@ -1,9 +1,8 @@
 """Adaptive Responder — Response style selection and proactive suggestions."""
 
-import time
 import logging
 import threading
-from typing import Optional
+import time
 from dataclasses import dataclass
 from datetime import datetime
 

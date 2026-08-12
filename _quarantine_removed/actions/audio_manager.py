@@ -1,7 +1,7 @@
 """Audio Manager — switch devices, volume control for JARVIS MK-X."""
 
-import subprocess
 import logging
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.audio_manager")
 
@@ -75,7 +75,6 @@ def _set_input_device(params: dict) -> str:
 
 def _set_volume(params: dict) -> str:
     level = params.get("level", 50)
-    import pyautogui
     # Use nircmd or PowerShell to set volume
     _ps(f"$wsh = New-Object -ComObject WScript.Shell; 1..50 | ForEach-Object {{$wsh.SendKeys([char]174)}}; 1..{int(level)//2} | ForEach-Object {{$wsh.SendKeys([char]175)}}")
     return f"Volume set to ~{level}%"

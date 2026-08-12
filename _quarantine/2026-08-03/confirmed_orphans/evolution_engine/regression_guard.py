@@ -1,9 +1,10 @@
 """Regression Guard — baseline tracking with automatic rollback on performance regression."""
 
-import time
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.evolution_engine.regression_guard")
 
@@ -12,9 +13,9 @@ class RegressionGuard:
     """Monitors metrics against baselines and triggers rollback callbacks on regression."""
 
     def __init__(self) -> None:
-        self._baselines: Dict[str, dict] = {}
-        self._history: List[dict] = []
-        self._rollback_callbacks: Dict[str, Callable] = {}
+        self._baselines: dict[str, dict] = {}
+        self._history: list[dict] = []
+        self._rollback_callbacks: dict[str, Callable] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -37,7 +38,7 @@ class RegressionGuard:
             }
         logger.debug("Baseline set for '%s': %.4f (threshold %.1f%%)", name, value, threshold_pct)
 
-    def get_all_baselines(self) -> Dict[str, dict]:
+    def get_all_baselines(self) -> dict[str, dict]:
         """Return all registered baselines."""
         with self._lock:
             return dict(self._baselines)
@@ -46,7 +47,7 @@ class RegressionGuard:
     # Regression checking
     # ------------------------------------------------------------------
 
-    def check_regression(self, name: str, current_value: float) -> Dict[str, Any]:
+    def check_regression(self, name: str, current_value: float) -> dict[str, Any]:
         """Check if *current_value* represents a regression against the baseline.
 
         Returns a dict with ``regressed``, ``baseline``, ``current``, and ``change_pct``.
@@ -98,7 +99,7 @@ class RegressionGuard:
 
         return result
 
-    def get_regression_history(self) -> List[dict]:
+    def get_regression_history(self) -> list[dict]:
         """Return all detected regressions."""
         with self._lock:
             return list(self._history)
@@ -172,7 +173,7 @@ class RegressionGuard:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[RegressionGuard] = None
+_instance: RegressionGuard | None = None
 _lock = threading.Lock()
 
 

@@ -3,11 +3,11 @@
 Fetches web pages and extracts readable content.
 """
 import logging
-import time
 import re
-from urllib.error import HTTPError
-from typing import Optional, Dict, Any
+import time
 from dataclasses import dataclass
+from typing import Any
+from urllib.error import HTTPError
 
 logger = logging.getLogger("external.web_scraper")
 
@@ -33,7 +33,7 @@ class WebScraper:
 
     def __init__(self, timeout: int = 15):
         self._timeout = timeout
-        self._cache: Dict[str, ScrapedPage] = {}
+        self._cache: dict[str, ScrapedPage] = {}
         self._cache_ttl = 300
 
     def scrape(self, url: str) -> ScrapedPage:
@@ -97,11 +97,11 @@ class WebScraper:
     def _clean(self, text: str) -> str:
         return re.sub(r'<[^>]+>', '', text).strip()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {"cached_pages": len(self._cache)}
 
 
-_scraper_instance: Optional[WebScraper] = None
+_scraper_instance: WebScraper | None = None
 
 
 def get_web_scraper() -> WebScraper:

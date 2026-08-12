@@ -4,9 +4,8 @@ Detects common code smells and suggests improvements.
 """
 import logging
 import re
-import time
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("se_factory.refactor_engine")
 
@@ -43,9 +42,9 @@ class RefactorEngine:
     ]
 
     def __init__(self):
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
-    def analyze(self, code: str, file_path: str = "") -> List[RefactorSuggestion]:
+    def analyze(self, code: str, file_path: str = "") -> list[RefactorSuggestion]:
         """Analyze code and return refactoring suggestions."""
         suggestions = []
         lines = code.split("\n")
@@ -80,7 +79,7 @@ class RefactorEngine:
         code = re.sub(r'\n{3,}', '\n\n', code)
         return code
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = len(self._history)
         total_suggestions = sum(h["suggestions"] for h in self._history)
         return {
@@ -90,7 +89,7 @@ class RefactorEngine:
         }
 
 
-_refactor_instance: Optional[RefactorEngine] = None
+_refactor_instance: RefactorEngine | None = None
 
 
 def get_refactor_engine() -> RefactorEngine:

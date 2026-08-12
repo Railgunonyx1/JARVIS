@@ -35,11 +35,10 @@ included — you decide which servers you trust enough to connect.
 
 from __future__ import annotations
 
-import json
 import asyncio
+import json
 import logging
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from core.plugin_loader import jarvis_plugin
 from core.utils import get_project_root
@@ -50,7 +49,7 @@ _CONFIG_PATH = get_project_root() / "config" / "mcp_servers.json"
 
 # One persistent event loop + set of live sessions, so we don't pay
 # stdio-process-spawn cost on every single tool call.
-_loop: Optional[asyncio.AbstractEventLoop] = None
+_loop: asyncio.AbstractEventLoop | None = None
 _sessions: dict[str, Any] = {}
 _sessions_lock = asyncio.Lock() if False else None  # created lazily inside the loop
 
@@ -165,7 +164,7 @@ def mcp_list_tools(server_name: str) -> str:
     description="Call a specific tool on a connected MCP server with arguments.",
     patterns=["use {server} to {action}"],
 )
-def mcp_call_tool(server_name: str, tool_name: str, arguments: Optional[dict] = None) -> str:
+def mcp_call_tool(server_name: str, tool_name: str, arguments: dict | None = None) -> str:
     arguments = arguments or {}
     try:
         return _run(_call_tool_async(server_name, tool_name, arguments))

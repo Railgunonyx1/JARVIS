@@ -4,13 +4,13 @@ User opens VS Code → Project loads automatically.
 User starts coding → Relevant files pre-loaded.
 """
 import logging
-import time
-import threading
 import os
-from typing import Optional, Dict, Any, List, Set
-from pathlib import Path
+import threading
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("optimization_system.predictive_context")
 
@@ -22,8 +22,8 @@ class ProjectContext:
     loaded_at: float = 0.0
     files_loaded: int = 0
     size_bytes: int = 0
-    file_types: Dict[str, int] = field(default_factory=dict)
-    key_files: List[str] = field(default_factory=list)
+    file_types: dict[str, int] = field(default_factory=dict)
+    key_files: list[str] = field(default_factory=list)
     is_ready: bool = False
 
 
@@ -46,13 +46,13 @@ class PredictiveContextLoader:
 
     def __init__(self, base_path: str = None):
         self._base_path = base_path or os.getcwd()
-        self._loaded_projects: Dict[str, ProjectContext] = {}
-        self._recent_dirs: List[str] = []
-        self._access_patterns: Dict[str, int] = defaultdict(int)
+        self._loaded_projects: dict[str, ProjectContext] = {}
+        self._recent_dirs: list[str] = []
+        self._access_patterns: dict[str, int] = defaultdict(int)
         self._lock = threading.Lock()
         self._preload_count = 0
 
-    def detect_active_project(self) -> Optional[str]:
+    def detect_active_project(self) -> str | None:
         """Detect the most likely active project directory."""
         with self._lock:
             if self._recent_dirs:
@@ -76,7 +76,7 @@ class PredictiveContextLoader:
 
             files_loaded = 0
             total_size = 0
-            file_types: Dict[str, int] = defaultdict(int)
+            file_types: dict[str, int] = defaultdict(int)
             key_files = []
 
             for item in project_dir.rglob("*"):
@@ -133,7 +133,7 @@ class PredictiveContextLoader:
             if parent not in self._recent_dirs:
                 self._recent_dirs.append(parent)
 
-    def get_predictions(self) -> List[str]:
+    def get_predictions(self) -> list[str]:
         """Predict which files/projects will be needed next."""
         with self._lock:
             # Return most frequently accessed files
@@ -143,10 +143,10 @@ class PredictiveContextLoader:
             )
             return [f for f, _ in sorted_files[:20]]
 
-    def get_project_context(self, project_path: str) -> Optional[ProjectContext]:
+    def get_project_context(self, project_path: str) -> ProjectContext | None:
         return self._loaded_projects.get(str(Path(project_path).resolve()))
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             total_files = sum(c.files_loaded for c in self._loaded_projects.values())
             return {
@@ -158,7 +158,7 @@ class PredictiveContextLoader:
             }
 
 
-_predictive_instance: Optional[PredictiveContextLoader] = None
+_predictive_instance: PredictiveContextLoader | None = None
 
 
 def get_predictive_context_loader() -> PredictiveContextLoader:

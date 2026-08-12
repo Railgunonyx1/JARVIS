@@ -4,10 +4,9 @@ Fuse LayerNorm + MatMul + Activation into single kernel.
 Reduces memory transfers and improves throughput.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("gpu_optimization.kernel_fusion")
 
@@ -24,7 +23,7 @@ class KernelOperation:
 @dataclass
 class FusionGroup:
     """A group of operations that can be fused."""
-    operations: List[KernelOperation] = field(default_factory=list)
+    operations: list[KernelOperation] = field(default_factory=list)
     fused_name: str = ""
     original_ms: float = 0.0
     fused_ms: float = 0.0
@@ -52,8 +51,8 @@ class KernelFusionOptimizer:
     ]
 
     def __init__(self):
-        self._operations: List[KernelOperation] = []
-        self._fusion_groups: List[FusionGroup] = []
+        self._operations: list[KernelOperation] = []
+        self._fusion_groups: list[FusionGroup] = []
         self._lock = threading.Lock()
         self._total_fusions = 0
         self._total_speedup_ms = 0.0
@@ -64,7 +63,7 @@ class KernelFusionOptimizer:
                 name=name.lower(), input_size=input_size, estimated_ms=estimated_ms
             ))
 
-    def find_fusion_opportunities(self) -> List[FusionGroup]:
+    def find_fusion_opportunities(self) -> list[FusionGroup]:
         """Analyze current operations and find fusion opportunities."""
         groups = []
         ops = [op.name for op in self._operations]
@@ -86,7 +85,7 @@ class KernelFusionOptimizer:
         self._fusion_groups = groups
         return groups
 
-    def get_total_speedup(self) -> Dict[str, Any]:
+    def get_total_speedup(self) -> dict[str, Any]:
         """Calculate total speedup from all fusion opportunities."""
         self.find_fusion_opportunities()
         total_original = sum(g.original_ms for g in self._fusion_groups)
@@ -100,7 +99,7 @@ class KernelFusionOptimizer:
             "estimated_savings_ms": round(total_original - total_fused, 2),
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "total_operations": len(self._operations),
@@ -109,7 +108,7 @@ class KernelFusionOptimizer:
             }
 
 
-_kernel_fusion_instance: Optional[KernelFusionOptimizer] = None
+_kernel_fusion_instance: KernelFusionOptimizer | None = None
 
 
 def get_kernel_fusion_optimizer() -> KernelFusionOptimizer:

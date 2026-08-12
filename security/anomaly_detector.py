@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
+import time
 from collections import deque
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("jarvis.security.anomaly_detector")
 
@@ -26,7 +25,7 @@ class SecurityAnomalyDetector:
 
     def __init__(self) -> None:
         self._events: deque = deque(maxlen=_MAX_EVENTS)
-        self._baseline: Dict[str, dict] = {}
+        self._baseline: dict[str, dict] = {}
         self._anomaly_count: int = 0
         self._lock = threading.Lock()
 
@@ -34,13 +33,13 @@ class SecurityAnomalyDetector:
     # Analysis
     # ------------------------------------------------------------------
 
-    def analyze_event(self, event_type: str, details: Optional[dict] = None) -> dict:
+    def analyze_event(self, event_type: str, details: dict | None = None) -> dict:
         """Analyse *event_type* for anomalies and return an assessment.
 
         Returns dict with ``anomaly``, ``severity``, and ``description``.
         """
         details = details or {}
-        anomalies: List[str] = []
+        anomalies: list[str] = []
 
         # 1. Rapid succession detection
         rapid = self._check_rapid_succession(event_type)
@@ -90,7 +89,7 @@ class SecurityAnomalyDetector:
     # Event recording
     # ------------------------------------------------------------------
 
-    def record_event(self, event_type: str, details: Optional[dict] = None) -> None:
+    def record_event(self, event_type: str, details: dict | None = None) -> None:
         """Record an event for pattern learning."""
         details = details or {}
         entry = {
@@ -116,7 +115,7 @@ class SecurityAnomalyDetector:
     # Detection helpers
     # ------------------------------------------------------------------
 
-    def _check_rapid_succession(self, event_type: str) -> Optional[str]:
+    def _check_rapid_succession(self, event_type: str) -> str | None:
         """Detect too many events of the same type in a short window."""
         now = time.perf_counter()
         cutoff = now - _RAPID_WINDOW
@@ -132,7 +131,7 @@ class SecurityAnomalyDetector:
 
     def _check_unusual_hours(
         self, event_type: str, details: dict,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Detect actions at unusual hours."""
         hour = details.get("hour", time.localtime().tm_hour)
         if _UNUSUAL_START <= hour <= _UNUSUAL_END:
@@ -141,7 +140,7 @@ class SecurityAnomalyDetector:
 
     def _check_privilege_escalation(
         self, event_type: str, details: dict,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Detect higher-risk actions."""
         risk = details.get("risk_level", "")
         if event_type in _PRIVILEGE_ACTIONS or risk == "high":
@@ -150,7 +149,7 @@ class SecurityAnomalyDetector:
 
     def _check_resource_abuse(
         self, event_type: str, details: dict,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Detect excessive resource consumption."""
         cpu = details.get("cpu_percent", 0.0)
         ram = details.get("ram_percent", 0.0)
@@ -192,7 +191,7 @@ def _severity_from_count(anomaly_hits: int) -> str:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[SecurityAnomalyDetector] = None
+_instance: SecurityAnomalyDetector | None = None
 _instance_lock = threading.Lock()
 
 

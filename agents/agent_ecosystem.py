@@ -10,11 +10,9 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
-from pathlib import Path
+from typing import Any
 
-from core.capability_registry import get_capability, CAPABILITY_REGISTRY
-from core.mode_manager import get_mode_manager, ExecutionMode
+from core.mode_manager import ExecutionMode, get_mode_manager
 
 logger = logging.getLogger("jarvis.agents")
 
@@ -41,13 +39,13 @@ class AgentProfile:
     name: str
     role: str
     description: str
-    capabilities: List[str] = field(default_factory=list)
-    required_permissions: List[str] = field(default_factory=list)
-    supported_modes: List[ExecutionMode] = field(default_factory=lambda: [ExecutionMode.SMART, ExecutionMode.AGENT])
+    capabilities: list[str] = field(default_factory=list)
+    required_permissions: list[str] = field(default_factory=list)
+    supported_modes: list[ExecutionMode] = field(default_factory=lambda: [ExecutionMode.SMART, ExecutionMode.AGENT])
     max_concurrent_tasks: int = 1
     timeout_seconds: int = 300
     priority: AgentPriority = AgentPriority.NORMAL
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,16 +54,16 @@ class AgentTask:
     task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     agent_name: str = ""
     capability: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     priority: AgentPriority = AgentPriority.NORMAL
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     status: str = "pending"
     result: Any = None
-    error: Optional[str] = None
-    context: Dict[str, Any] = field(default_factory=dict)
-    depends_on: List[str] = field(default_factory=list)
+    error: str | None = None
+    context: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -73,13 +71,13 @@ class AgentState:
     """Runtime state of an agent."""
     name: str
     status: AgentStatus = AgentStatus.IDLE
-    current_task: Optional[AgentTask] = None
+    current_task: AgentTask | None = None
     completed_tasks: int = 0
     failed_tasks: int = 0
     total_execution_time: float = 0.0
     last_activity: datetime = field(default_factory=datetime.now)
     error_count: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 class BaseAgent:
@@ -90,7 +88,7 @@ class BaseAgent:
         self.state = AgentState(name=profile.name)
         self._task_queue: asyncio.Queue = asyncio.Queue()
         self._running = False
-        self._worker_task: Optional[asyncio.Task] = None
+        self._worker_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
     async def start(self):
@@ -120,7 +118,7 @@ class BaseAgent:
             try:
                 task = await asyncio.wait_for(self._task_queue.get(), timeout=1.0)
                 await self._execute_task(task)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break
@@ -172,7 +170,7 @@ class BaseAgent:
         task.agent_name = self.profile.name
         await self._task_queue.put(task)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get agent status summary."""
         return {
             "name": self.profile.name,
@@ -191,8 +189,8 @@ class AgentRegistry:
     """Registry of all available agents."""
 
     def __init__(self):
-        self._agents: Dict[str, BaseAgent] = {}
-        self._profiles: Dict[str, AgentProfile] = {}
+        self._agents: dict[str, BaseAgent] = {}
+        self._profiles: dict[str, AgentProfile] = {}
 
     def register(self, agent: BaseAgent) -> bool:
         """Register an agent."""
@@ -213,13 +211,13 @@ class AgentRegistry:
             return True
         return False
 
-    def get(self, name: str) -> Optional[BaseAgent]:
+    def get(self, name: str) -> BaseAgent | None:
         return self._agents.get(name)
 
-    def get_profile(self, name: str) -> Optional[AgentProfile]:
+    def get_profile(self, name: str) -> AgentProfile | None:
         return self._profiles.get(name)
 
-    def list_agents(self) -> List[Dict[str, Any]]:
+    def list_agents(self) -> list[dict[str, Any]]:
         return [
             {
                 "name": name,
@@ -230,14 +228,14 @@ class AgentRegistry:
             for name, profile in self._profiles.items()
         ]
 
-    def get_by_capability(self, capability: str) -> List[BaseAgent]:
+    def get_by_capability(self, capability: str) -> list[BaseAgent]:
         """Find agents that have a specific capability."""
         return [
             agent for name, agent in self._agents.items()
             if capability in agent.profile.capabilities
         ]
 
-    def get_available_agents(self, mode: Optional[ExecutionMode] = None) -> List[BaseAgent]:
+    def get_available_agents(self, mode: ExecutionMode | None = None) -> list[BaseAgent]:
         mode = mode or get_mode_manager().get_mode()
         return [
             agent for agent in self._agents.values()
@@ -251,7 +249,7 @@ class AgentRouter:
     def __init__(self, registry: AgentRegistry):
         self.registry = registry
 
-    def route(self, capability: str, mode: Optional[ExecutionMode] = None) -> Optional[BaseAgent]:
+    def route(self, capability: str, mode: ExecutionMode | None = None) -> BaseAgent | None:
         """Find the best agent for a capability."""
         mode = mode or get_mode_manager().get_mode()
         candidates = [
@@ -264,7 +262,7 @@ class AgentRouter:
         candidates.sort(key=lambda a: (a.state.status != AgentStatus.IDLE, -a.profile.priority.value))
         return candidates[0] if candidates else None
 
-    def route_task(self, task: AgentTask, mode: Optional[ExecutionMode] = None) -> bool:
+    def route_task(self, task: AgentTask, mode: ExecutionMode | None = None) -> bool:
         """Route a task to an appropriate agent."""
         agent = self.route(task.capability, mode)
         if not agent:
@@ -280,9 +278,9 @@ class TaskAllocator:
         self.registry = registry
         self.router = router
 
-    async def allocate(self, tasks: List[AgentTask], mode: Optional[ExecutionMode] = None) -> Dict[str, List[AgentTask]]:
+    async def allocate(self, tasks: list[AgentTask], mode: ExecutionMode | None = None) -> dict[str, list[AgentTask]]:
         """Allocate tasks to agents."""
-        allocation: Dict[str, List[AgentTask]] = {}
+        allocation: dict[str, list[AgentTask]] = {}
         mode = mode or get_mode_manager().get_mode()
 
         for task in tasks:
@@ -295,7 +293,7 @@ class TaskAllocator:
 
         return allocation
 
-    async def allocate_parallel(self, tasks: List[AgentTask], mode: Optional[ExecutionMode] = None):
+    async def allocate_parallel(self, tasks: list[AgentTask], mode: ExecutionMode | None = None):
         """Allocate independent tasks in parallel."""
         return await self.allocate(tasks, mode)
 
@@ -305,9 +303,9 @@ class CollaborationEngine:
 
     def __init__(self, registry: AgentRegistry):
         self.registry = registry
-        self._message_queues: Dict[str, asyncio.Queue] = {}
+        self._message_queues: dict[str, asyncio.Queue] = {}
 
-    async def send_message(self, sender: str, receiver: str, message: Dict[str, Any]) -> bool:
+    async def send_message(self, sender: str, receiver: str, message: dict[str, Any]) -> bool:
         """Send a message from one agent to another."""
         if receiver not in self._message_queues:
             self._message_queues[receiver] = asyncio.Queue()
@@ -318,7 +316,7 @@ class CollaborationEngine:
         })
         return True
 
-    async def receive_message(self, agent_name: str, timeout: float = 5.0) -> Optional[Dict]:
+    async def receive_message(self, agent_name: str, timeout: float = 5.0) -> dict | None:
         """Receive a message for an agent."""
         if agent_name not in self._message_queues:
             return None
@@ -327,10 +325,10 @@ class CollaborationEngine:
                 self._message_queues[agent_name].get(),
                 timeout=timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
-    async def broadcast(self, sender: str, message: Dict[str, Any], exclude: Set[str] = None):
+    async def broadcast(self, sender: str, message: dict[str, Any], exclude: set[str] = None):
         """Broadcast a message to all agents except excluded."""
         exclude = exclude or set()
         for agent_name in self.registry._agents:
@@ -343,9 +341,9 @@ class AgentMonitor:
 
     def __init__(self, registry: AgentRegistry):
         self.registry = registry
-        self._metrics_history: Dict[str, List[Dict]] = {}
+        self._metrics_history: dict[str, list[dict]] = {}
 
-    def collect_metrics(self) -> Dict[str, Dict]:
+    def collect_metrics(self) -> dict[str, dict]:
         """Collect metrics from all agents."""
         metrics = {}
         for name, agent in self.registry._agents.items():
@@ -374,7 +372,7 @@ class AgentMonitor:
                 self._metrics_history[name] = self._metrics_history[name][-100:]
         return metrics
 
-    def get_agent_health(self, name: str) -> Dict[str, Any]:
+    def get_agent_health(self, name: str) -> dict[str, Any]:
         """Get health status for a specific agent."""
         agent = self.registry.get(name)
         if not agent:
@@ -401,7 +399,7 @@ class AgentScheduler:
 
     def __init__(self, registry: AgentRegistry):
         self.registry = registry
-        self._scheduled_tasks: Dict[str, asyncio.Task] = {}
+        self._scheduled_tasks: dict[str, asyncio.Task] = {}
         self._running = False
 
     async def start(self):
@@ -418,7 +416,7 @@ class AgentScheduler:
         agent_name: str,
         capability: str,
         interval_seconds: float,
-        parameters: Dict = None,
+        parameters: dict = None,
         priority: AgentPriority = AgentPriority.NORMAL
     ):
         """Schedule a periodic task for an agent."""
@@ -447,12 +445,12 @@ class AgentScheduler:
 
 
 # Global instances
-_agent_registry: Optional[AgentRegistry] = None
-_agent_router: Optional[AgentRouter] = None
-_task_allocator: Optional[TaskAllocator] = None
-_collaboration_engine: Optional[CollaborationEngine] = None
-_agent_monitor: Optional[AgentMonitor] = None
-_agent_scheduler: Optional[AgentScheduler] = None
+_agent_registry: AgentRegistry | None = None
+_agent_router: AgentRouter | None = None
+_task_allocator: TaskAllocator | None = None
+_collaboration_engine: CollaborationEngine | None = None
+_agent_monitor: AgentMonitor | None = None
+_agent_scheduler: AgentScheduler | None = None
 
 
 def get_agent_registry() -> AgentRegistry:
@@ -517,7 +515,7 @@ async def shutdown_agent_system():
 
 
 # Pre-built agent profiles
-def create_core_agent_profiles() -> Dict[str, AgentProfile]:
+def create_core_agent_profiles() -> dict[str, AgentProfile]:
     """Create standard agent profiles for JARVIS."""
     return {
         "coding_agent": AgentProfile(
@@ -620,6 +618,19 @@ def create_core_agent_profiles() -> Dict[str, AgentProfile]:
                 "context_retrieval", "memory_optimization"
             ],
             required_permissions=["memory.*"],
+            supported_modes=[ExecutionMode.SMART, ExecutionMode.AGENT],
+            max_concurrent_tasks=1,
+            priority=AgentPriority.NORMAL,
+        ),
+        "optimizer_agent": AgentProfile(
+            name="optimizer_agent",
+            role="Prompt Optimizer",
+            description="Iteratively optimizes LLM prompts using LangSmith evals and error analysis",
+            capabilities=[
+                "prompt_optimization", "eval_management", "error_analysis",
+                "experiment_tracking", "dataset_management"
+            ],
+            required_permissions=["langsmith.*", "memory.*", "web.search"],
             supported_modes=[ExecutionMode.SMART, ExecutionMode.AGENT],
             max_concurrent_tasks=1,
             priority=AgentPriority.NORMAL,

@@ -1,7 +1,7 @@
-from __future__ import print_function, division
 import os
-import sys
 import subprocess
+import sys
+
 
 def class_process(dir_path, dst_dir_path, class_name):
   class_path = os.path.join(dir_path, class_name)
@@ -22,8 +22,8 @@ def class_process(dir_path, dst_dir_path, class_name):
     try:
       if os.path.exists(dst_directory_path):
         if not os.path.exists(os.path.join(dst_directory_path, 'image_00001.jpg')):
-          subprocess.call('rm -r \"{}\"'.format(dst_directory_path), shell=True)
-          print('remove {}'.format(dst_directory_path))
+          subprocess.call(f'rm -r \"{dst_directory_path}\"', shell=True)
+          print(f'remove {dst_directory_path}')
           os.mkdir(dst_directory_path)
         else:
           continue
@@ -32,7 +32,7 @@ def class_process(dir_path, dst_dir_path, class_name):
     except:
       print(dst_directory_path)
       continue
-    cmd = 'ffmpeg -i \"{}\" -vf scale=-1:240 \"{}/image_%05d.jpg\"'.format(video_file_path, dst_directory_path)
+    cmd = f'ffmpeg -i \"{video_file_path}\" -vf scale=-1:240 \"{dst_directory_path}/image_%05d.jpg\"'
     print(cmd)
     subprocess.call(cmd, shell=True)
     print('\n')

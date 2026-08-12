@@ -7,7 +7,8 @@ event so the trace is auditable end-to-end.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from core import events
 from core.decision_logger import DecisionLogger
@@ -26,7 +27,7 @@ class PermissionEngine:
         self,
         decision_logger: DecisionLogger,
         mode: str = ExecutionMode.AGENT,
-        confirmation_handler: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
+        confirmation_handler: Callable[[str, dict[str, Any]], bool] | None = None,
     ) -> None:
         self.logger = decision_logger
         self.mode_manager = get_mode_manager()
@@ -56,10 +57,10 @@ class PermissionEngine:
     async def check(
         self,
         tool: Tool,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         trace_id: str,
         session_id: str = "",
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Check whether a tool call is permitted.
 
         Returns (allowed, reason). Never skips the checks — even in agent mode

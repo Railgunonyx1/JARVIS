@@ -5,6 +5,8 @@ connection every request) with a single reusable connection pool.
 
 Synchronous (thread-safe) for use from Flask request threads and async
 services. Fallback to urllib if httpx is unavailable.
+
+Scheme allow-list: only http/https URLs are permitted (B310).
 """
 
 import asyncio
@@ -13,7 +15,6 @@ import logging
 import random
 import threading
 import time
-from typing import Optional
 
 logger = logging.getLogger("jarvis.core.http_pool")
 
@@ -88,13 +89,21 @@ def get_async_client():
     return _async_client
 
 
-def fetch(url: str, timeout: Optional[float] = None, as_json: bool = False):
+def fetch(url: str, timeout: float | None = None, as_json: bool = False):
     """GET a URL through the pooled client with bounded retry.
 
     Retries transient failures (connect errors, 408/429/5xx) with exponential
     backoff + jitter. Returns raw text, parsed JSON (if as_json=True), or None
     on failure.
+
+    Scheme allow-list: only http/https URLs are permitted (B310).
     """
+    import urllib.parse
+
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        logger.debug("URL scheme %s not allowed (only http/https)", parsed.scheme)
+        return None
     timeout = timeout or 10.0
     last_exc: Exception | None = None
     for attempt in range(_RETRY_ATTEMPTS + 1):
@@ -124,7 +133,7 @@ def _fetch_once(url: str, timeout: float) -> str:
         return resp.read().decode()
 
 
-async def fetch_async(url: str, timeout: Optional[float] = None, as_json: bool = False):
+async def fetch_async(url: str, timeout: float | None = None, as_json: bool = False):
     """Async GET through the pooled async client (same event loop only).
 
     Retries transient failures (connect errors, 408/429/5xx) with exponential
@@ -156,7 +165,7 @@ async def _fetch_once_async(url: str, timeout: float) -> str:
     return await _urllib_fallback_async(url, timeout)
 
 
-async def _urllib_fallback_async(url: str, timeout: Optional[float]):
+async def _urllib_fallback_async(url: str, timeout: float | None):
     import asyncio
     import urllib.request
     def _get():

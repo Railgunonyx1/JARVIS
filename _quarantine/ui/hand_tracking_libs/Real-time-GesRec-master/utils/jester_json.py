@@ -1,8 +1,9 @@
-from __future__ import print_function, division
+import json
 import os
 import sys
-import json
+
 import pandas as pd
+
 
 def convert_csv_to_dict(csv_path, subset, labels):
     data = pd.read_csv(csv_path, delimiter=' ', header=None)
@@ -12,10 +13,10 @@ def convert_csv_to_dict(csv_path, subset, labels):
         row = data.iloc[i, :]
         class_name = labels[row[1]-1]
         basename = str(row[0])
-        
+
         keys.append(basename)
         key_labels.append(class_name)
-        
+
     database = {}
     for i in range(len(keys)):
         key = keys[i]
@@ -23,7 +24,7 @@ def convert_csv_to_dict(csv_path, subset, labels):
         database[key]['subset'] = subset
         label = key_labels[i]
         database[key]['annotations'] = {'label': label}
-    
+
     return database
 
 def load_labels(label_csv_path):
@@ -33,12 +34,12 @@ def load_labels(label_csv_path):
         labels.append(data.iloc[i, 1])
     return labels
 
-def convert_jester_csv_to_activitynet_json(label_csv_path, train_csv_path, 
+def convert_jester_csv_to_activitynet_json(label_csv_path, train_csv_path,
                                            val_csv_path, dst_json_path):
     labels = load_labels(label_csv_path)
     train_database = convert_csv_to_dict(train_csv_path, 'training', labels)
     val_database = convert_csv_to_dict(val_csv_path, 'validation', labels)
-    
+
     dst_data = {}
     dst_data['labels'] = labels
     dst_data['database'] = {}
@@ -55,7 +56,7 @@ if __name__ == '__main__':
     train_csv_path = os.path.join(csv_dir_path, 'trainlist.txt')
     val_csv_path = os.path.join(csv_dir_path, 'vallist.txt')
     dst_json_path = os.path.join(csv_dir_path, 'jester.json')
-    
+
     convert_jester_csv_to_activitynet_json(label_csv_path, train_csv_path,
                                                val_csv_path, dst_json_path)
 

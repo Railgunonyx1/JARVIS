@@ -9,10 +9,10 @@ reserved for active/healthy status only, and a single data seam
 (``ui.backend.TuiDataSource``) so the UI never touches sockets directly.
 
 Data sources:
-    live (psutil)          CPU / RAM / disk / uptime
+    live (psuit)          CPU / RAM / disk / uptime
     live (daemon)          provider health + status  (when daemon is up)
     mock (marked)          task list, token sparkline  (daemon has no
-                           task/token endpoints yet — roadmap follow-up)
+                            task/token endpoints yet — roadmap follow-up)
 
 Run ``pip install textual`` once, then ``python -m ui.tui`` or
 ``jarvis tui``.
@@ -144,16 +144,25 @@ class SystemOverviewPanel(Panel):
 
 
 class SparklinePanel(Panel):
-    def __init__(self, title: str, panel_id: str, spark_id: str):
+    def __init__(self, title: str, panel_id: str, spark_id: str, show_token_usage: bool = False):
         super().__init__(title, panel_id)
         self._spark_id = spark_id
+        self._show_token_usage = show_token_usage
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
         yield Sparkline([0] * 60, id=self._spark_id)
+        if self._show_token_usage:
+            yield Static("0 tokens", id=f"token-count-{self._spark_id}", classes="token-count")
 
-    def update_data(self, data: list[float]):
+    def update_data(self, data: list[float], token_count: int = 0, token_total: int = 0):
         self.query_one(f"#{self._spark_id}", Sparkline).data = data
+        if self._show_token_usage:
+            count_widget = self.query_one(f"token-count-{self._spark_id}", Static)
+            if token_total > 0:
+                count_widget.update(f"{token_count} / {token_total} tokens ({token_count/token_total*100:.0f}%)")
+            else:
+                count_widget.update(f"{token_count} tokens")
 
 
 class ProvidersPanel(Panel):
@@ -215,6 +224,45 @@ class LogsPanel(Panel):
         self.query_one("#logs-view", Log).write_line(f"[{ts}] | {message}")
 
 
+class TodoPanel(Panel):
+    """Panel showing a todo list with toggleable border."""
+
+    def __init__(self):
+        super().__init__("TODO LIST", "panel-todo")
+
+    def compose(self) -> ComposeResult:
+        yield from super().compose()
+        yield Static(
+            "[ ] Buy groceries\n"
+            "[ ] Fix bug #123\n"
+            "[ ] Update documentation\n"
+            "[ ] Deploy to production\n"
+            "[ ] Test new feature\n"
+            "[ ] Review PR #42\n"
+            "[ ] Write tests\n"
+            "[ ] Optimize performance\n"
+            "[ ] Refactor module X\n"
+            "[ ] Archive old data",
+            id="todo-list",
+        )
+
+
+class ContextPanel(Panel):
+    """Panel showing LLM conversation context with toggleable border."""
+
+    def __init__(self):
+        super().__init__("CONTEXT", "panel-context")
+
+    def compose(self) -> ComposeResult:
+        yield from super().compose()
+        yield Static(
+            "No active context\n"
+            "Start a conversation or load a session to see context here.",
+            id="context-display",
+            classes="context-display",
+        )
+
+
 class CommandBar(Horizontal):
     def compose(self) -> ComposeResult:
         yield Static("jarvis>", id="command-prompt")
@@ -226,12 +274,14 @@ class CommandBar(Horizontal):
 class JarvisApp(App):
     CSS_PATH = "jarvis_tui.tcss"
     TITLE = "JARVIS Terminal"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [("q", "quit", "Quit"), ("t", "toggle_todo", "Toggle todo"), ("c", "toggle_context", "Toggle context")]
 
     def __init__(self, data_source: TuiDataSource | None = None,
                  mock: bool = False, url: str | None = None):
         super().__init__()
         self._data = data_source or TuiDataSource(mock=mock, url=url)
+        self._todo_collapsed = False
+        self._context_collapsed = False
 
     @property
     def data_source(self) -> TuiDataSource:
@@ -248,8 +298,34 @@ class JarvisApp(App):
                 yield ProvidersPanel()
                 yield TasksPanel()
                 yield LogsPanel()
-                yield SparklinePanel("TOKEN USAGE", "panel-tokens", "token-spark")
+                yield SparklinePanel("TOKEN USAGE", "panel-tokens", "token-spark", show_token_usage=True)
+                yield TodoPanel()
+                yield ContextPanel()
         yield CommandBar(id="command-bar")
+
+    def toggle_todo(self) -> None:
+        self._todo_collapsed = not self._todo_collapsed
+        todo_panel = self.query_one("#panel-todo", Panel)
+        if self._todo_collapsed:
+            todo_panel.add_class("panel-collapsed")
+            todo_panel.remove_class("panel-expanded")
+            todo_panel.query_one("#todo-list").display = False
+        else:
+            todo_panel.add_class("panel-expanded")
+            todo_panel.remove_class("panel-collapsed")
+            todo_panel.query_one("#todo-list").display = True
+
+    def toggle_context(self) -> None:
+        self._context_collapsed = not self._context_collapsed
+        context_panel = self.query_one("#panel-context", Panel)
+        if self._context_collapsed:
+            context_panel.add_class("panel-collapsed")
+            context_panel.remove_class("panel-expanded")
+            context_panel.query_one("#context-display").display = False
+        else:
+            context_panel.add_class("panel-expanded")
+            context_panel.remove_class("panel-collapsed")
+            context_panel.query_one("#context-display").display = True
 
     def on_mount(self) -> None:
         logs = self.query_one(LogsPanel)
@@ -257,7 +333,7 @@ class JarvisApp(App):
         self.query_one(TasksPanel).update_data(self._data.task_rows)
         if self._data.using_mock_tasks:
             logs.write("tasks: mock data (no task endpoint on the daemon yet)")
-        self.set_interval(1.0, self._refresh)
+        self.set_interval(20.0, self._refresh)
         self.set_interval(5.0, self._reconnect)
         self.set_interval(30.0, self._refresh_live)
         asyncio.create_task(self._connect())
@@ -295,6 +371,13 @@ class JarvisApp(App):
         self.query_one("#cpu-spark", Sparkline).data = self._data.cpu_history
         self.query_one("#mem-spark", Sparkline).data = self._data.ram_history
         self.query_one("#token-spark", Sparkline).data = self._data.token_history()
+        # Update token usage display
+        token_data = self._data.token_usage() if hasattr(self._data, 'token_usage') else (0, 0)
+        self.query_one(SparklinePanel, "#panel-tokens").update_data(
+            self._data.token_history(),
+            token_count=token_data[0] if len(token_data) > 0 else 0,
+            token_total=token_data[1] if len(token_data) > 1 else 0
+        )
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         command = event.value.strip()

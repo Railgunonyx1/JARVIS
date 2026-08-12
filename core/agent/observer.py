@@ -11,13 +11,14 @@ this module is the in-memory, observable timeline.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from core import events
 
-EventCallback = Callable[[str, Dict[str, Any]], None]
+EventCallback = Callable[[str, dict[str, Any]], None]
 
 
 class TaskStatus(Enum):
@@ -34,7 +35,7 @@ class StepRecord:
 
     index: int
     tool: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
     started_at: float = 0.0
     duration_ms: float = 0.0
     status: str = "running"  # running | ok | error | denied
@@ -50,10 +51,10 @@ class TaskObservation:
     goal: str
     status: TaskStatus = TaskStatus.PENDING
     started_at: float = field(default_factory=time.time)
-    finished_at: Optional[float] = None
-    steps: List[StepRecord] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    files_changed: List[str] = field(default_factory=list)
+    finished_at: float | None = None
+    steps: list[StepRecord] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    files_changed: list[str] = field(default_factory=list)
     tokens_used: int = 0
     iterations: int = 0
     provider: str = ""
@@ -72,7 +73,7 @@ class TaskObservation:
         done = [s for s in self.steps if s.status != "running"]
         return round(len(done) / len(self.steps), 2)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "goal": self.goal,
@@ -99,9 +100,9 @@ class TaskObserver:
     next goal.
     """
 
-    def __init__(self, on_event: Optional[EventCallback] = None) -> None:
+    def __init__(self, on_event: EventCallback | None = None) -> None:
         self._on_event = on_event
-        self.observation: Optional[TaskObservation] = None
+        self.observation: TaskObservation | None = None
 
     @property
     def is_finished(self) -> bool:
@@ -118,7 +119,7 @@ class TaskObserver:
         self._emit(events.TASK_STARTED, {"task_id": task_id, "goal": goal})
         return self.observation
 
-    def step_started(self, tool: str, arguments: Dict[str, Any],
+    def step_started(self, tool: str, arguments: dict[str, Any],
                      tool_call_id: str = "") -> StepRecord:
         obs = self._obs()
         step = StepRecord(
@@ -160,7 +161,7 @@ class TaskObserver:
 
     def finish(self, status: TaskStatus, response: str = "", provider: str = "",
                model: str = "", tokens: int = 0, iterations: int = 0,
-               files_changed: Optional[List[str]] = None) -> None:
+               files_changed: list[str] | None = None) -> None:
         obs = self._obs()
         obs.status = status
         obs.response = response
@@ -186,7 +187,7 @@ class TaskObserver:
         obs.finished_at = time.time()
         self._emit(events.TASK_CANCELLED, {"task_id": obs.task_id})
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return self._obs().to_dict()
 
     def _obs(self) -> TaskObservation:
@@ -194,7 +195,7 @@ class TaskObserver:
             raise RuntimeError("TaskObserver.start() must be called first")
         return self.observation
 
-    def _emit(self, event: str, payload: Dict[str, Any]) -> None:
+    def _emit(self, event: str, payload: dict[str, Any]) -> None:
         # The public `on_event` attribute is authoritative when set (CLI,
         # daemon, LiveTaskDisplay all assign it); the constructor param
         # `_on_event` is the fallback.

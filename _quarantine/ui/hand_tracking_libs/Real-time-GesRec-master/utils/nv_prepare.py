@@ -1,9 +1,9 @@
-import os
-import cv2
-import numpy as np
 import glob
+import os
 import sys
 from subprocess import call
+
+import numpy as np
 
 dataset_path = "/data2/nvGesture"
 def load_split_nvgesture(file_with_split = './nvgesture_train_correct.lst',list_split = list()):
@@ -25,29 +25,29 @@ def load_split_nvgesture(file_with_split = './nvgesture_train_correct.lst',list_
                     key = parsed[0]
                     if key == 'label':
                         # make label start from 0
-                        label = int(parsed[1]) - 1 
+                        label = int(parsed[1]) - 1
                         params_dictionary['label'] = label
                     elif key in ('depth','color','duo_left'):
                         #othrwise only sensors format: <sensor name>:<folder>:<start frame>:<end frame>
                         sensor_name = key
                         #first store path
-                        params_dictionary[key] = path + '/' + parsed[1] 
+                        params_dictionary[key] = path + '/' + parsed[1]
                         #store start frame
                         params_dictionary[key+'_start'] = int(parsed[2])
 
                         params_dictionary[key+'_end'] = int(parsed[3])
-                        
-        
+
+
             params_dictionary['duo_right'] = params_dictionary['duo_left'].replace('duo_left', 'duo_right')
             params_dictionary['duo_right_start'] = params_dictionary['duo_left_start']
-            params_dictionary['duo_right_end'] = params_dictionary['duo_left_end']          
+            params_dictionary['duo_right_end'] = params_dictionary['duo_left_end']
 
             params_dictionary['duo_disparity'] = params_dictionary['duo_left'].replace('duo_left', 'duo_disparity')
             params_dictionary['duo_disparity_start'] = params_dictionary['duo_left_start']
-            params_dictionary['duo_disparity_end'] = params_dictionary['duo_left_end']                  
+            params_dictionary['duo_disparity_end'] = params_dictionary['duo_left_end']
 
             list_split.append(params_dictionary)
- 
+
     return list_split
 
 def create_list(example_config, sensor,  class_types = 'all'):
@@ -59,7 +59,7 @@ def create_list(example_config, sensor,  class_types = 'all'):
     start_frame = example_config[sensor+'_start']
     end_frame = example_config[sensor+'_end']
 
-    
+
     frame_indices = np.array([[start_frame,end_frame]])
     len_lines = frame_indices.shape[0]
     start = 1
@@ -91,18 +91,18 @@ def extract_frames(sensors=["color", "depth"]):
     modalities: list of str, ["color", "depth", "duo_left", "duo_right", "duo_disparity"]
     """
     for vt in sensors:
-        files = glob.glob(os.path.join(dataset_path, 
+        files = glob.glob(os.path.join(dataset_path,
                                        "Video_data",
-                                       "*", "*", 
-                                       "sk_" + vt + ".avi")) # this line should be updated according to the full path 
+                                       "*", "*",
+                                       "sk_" + vt + ".avi")) # this line should be updated according to the full path
         for file in files:
             print("Extracting frames for ", file)
             directory = file.split(".")[0] + "_all"
             if not os.path.exists(directory):
                 os.makedirs(directory)
-            call(["ffmpeg", "-i",  file, os.path.join(directory, "%05d.jpg"), "-hide_banner"]) 
-       
-    
+            call(["ffmpeg", "-i",  file, os.path.join(directory, "%05d.jpg"), "-hide_banner"])
+
+
 if __name__ == "__main__":
     sensors = ["color", "depth"]
     subset = sys.argv[1]
@@ -115,13 +115,13 @@ if __name__ == "__main__":
         file_list = "./nvgesture_train_correct_cvpr2016_v2.lst"
     elif subset == 'validation':
         file_list = "./nvgesture_test_correct_cvpr2016_v2.lst"
-    
+
 
     subset_list = list()
 
     load_split_nvgesture(file_with_split = file_list,list_split = subset_list)
 
-    new_lines = [] 
+    new_lines = []
     print("Processing Traing List")
     for sample_name in subset_list:
         create_list(example_config = sample_name, sensor = sensors[0], class_types = class_types)
@@ -134,5 +134,5 @@ if __name__ == "__main__":
             myfile.write(new_line)
             myfile.write('\n')
     print("Scuccesfully wrote file to:",file_path)
-    
+
     extract_frames(sensors=sensors)

@@ -3,13 +3,14 @@
 For complex questions, generate multiple reasoning paths concurrently
 and select the best result. Only used for complex tasks to save compute.
 """
-import logging
-import time
 import asyncio
+import logging
 import threading
-from typing import Optional, Dict, Any, List, Callable, Tuple
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 logger = logging.getLogger("reasoning_system.parallel_reasoning")
 
@@ -24,15 +25,15 @@ class Hypothesis:
     confidence: float = 0.0
     latency_ms: float = 0.0
     tokens: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
 class ReasoningResult:
     """Result of parallel reasoning."""
     question: str
-    best_hypothesis: Optional[Hypothesis] = None
-    all_hypotheses: List[Hypothesis] = field(default_factory=list)
+    best_hypothesis: Hypothesis | None = None
+    all_hypotheses: list[Hypothesis] = field(default_factory=list)
     total_latency_ms: float = 0.0
     strategy: str = "parallel"
     consensus_score: float = 0.0
@@ -55,7 +56,7 @@ class ParallelReasoningEngine:
         self._llm_fn = llm_fn
         self._max_parallel = max_parallel
         self._executor = ThreadPoolExecutor(max_workers=max_parallel, thread_name_prefix="reason")
-        self._history: List[ReasoningResult] = []
+        self._history: list[ReasoningResult] = []
         self._lock = threading.Lock()
 
     async def reason(self, question: str, complexity: float = 0.5,
@@ -155,7 +156,7 @@ class ParallelReasoningEngine:
 
         hypothesis.latency_ms = (time.time() - start) * 1000
 
-    def _generate_hypotheses(self, question: str) -> List[str]:
+    def _generate_hypotheses(self, question: str) -> list[str]:
         """Generate different prompts for the same question."""
         return [
             question,
@@ -182,7 +183,7 @@ class ParallelReasoningEngine:
         """Decide if parallel reasoning is worth the compute cost."""
         return complexity >= self.COMPLEXITY_THRESHOLD
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             total = len(self._history)
             avg_latency = sum(r.total_latency_ms for r in self._history) / max(total, 1)
@@ -198,7 +199,7 @@ class ParallelReasoningEngine:
             }
 
 
-_reasoning_instance: Optional[ParallelReasoningEngine] = None
+_reasoning_instance: ParallelReasoningEngine | None = None
 
 
 def get_parallel_reasoning_engine(llm_fn=None) -> ParallelReasoningEngine:

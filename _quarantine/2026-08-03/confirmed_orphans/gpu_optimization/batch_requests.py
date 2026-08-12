@@ -2,12 +2,13 @@
 
 OCR + OCR + OCR → Single GPU Batch → Parallel Results
 """
-import logging
-import time
-import threading
 import asyncio
-from typing import Optional, Dict, Any, Callable, List
-from dataclasses import dataclass, field
+import logging
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("gpu_optimization.batch_requests")
 
@@ -18,7 +19,7 @@ class BatchItem:
     item_id: str
     data: Any
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class BatchRequestProcessor:
@@ -35,7 +36,7 @@ class BatchRequestProcessor:
     MAX_BATCH_SIZE = 32
 
     def __init__(self):
-        self._pending_batches: Dict[str, List[BatchItem]] = {}
+        self._pending_batches: dict[str, list[BatchItem]] = {}
         self._lock = threading.Lock()
         self._stats = {
             "total_batches": 0,
@@ -81,7 +82,7 @@ class BatchRequestProcessor:
 
         return item.result
 
-    async def _process_batch(self, items: List[BatchItem], processor: Callable) -> Any:
+    async def _process_batch(self, items: list[BatchItem], processor: Callable) -> Any:
         """Process a batch of items."""
         self._stats["total_batches"] += 1
         self._stats["total_items"] += len(items)
@@ -114,11 +115,11 @@ class BatchRequestProcessor:
         # Return the result for the first item
         return items[0].result if items else None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return dict(self._stats)
 
 
-_batch_instance: Optional[BatchRequestProcessor] = None
+_batch_instance: BatchRequestProcessor | None = None
 
 
 def get_batch_processor() -> BatchRequestProcessor:

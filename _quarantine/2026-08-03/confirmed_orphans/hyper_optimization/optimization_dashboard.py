@@ -1,11 +1,10 @@
 """OptimizationDashboard — Aggregates all hyper-optimization metrics into a comprehensive dashboard."""
 
-from collections import deque
-from typing import Optional
 import json
 import logging
 import threading
 import time
+from collections import deque
 
 logger = logging.getLogger("jarvis.hyper_opt.optimization_dashboard")
 
@@ -345,7 +344,7 @@ class OptimizationDashboard:
         return json.dumps(data, indent=2, default=str)
 
 
-_dashboard_instance: Optional[OptimizationDashboard] = None
+_dashboard_instance: OptimizationDashboard | None = None
 _dashboard_lock = threading.Lock()
 
 

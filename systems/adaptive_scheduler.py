@@ -4,13 +4,14 @@ Replaces FIFO with priority-aware scheduling:
   Voice > Planning > Vision > Background indexing
 """
 import logging
-import time
-import threading
 import queue
-from typing import Optional, Dict, Any, Callable, List
+import threading
+import time
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import IntEnum
-from concurrent.futures import ThreadPoolExecutor, Future
+from typing import Any
 
 logger = logging.getLogger("systems.adaptive_scheduler")
 
@@ -35,8 +36,8 @@ class ScheduledTask:
     started_at: float = 0.0
     completed_at: float = 0.0
     result: Any = None
-    error: Optional[Exception] = None
-    future: Optional[Future] = None
+    error: Exception | None = None
+    future: Future | None = None
 
     def __post_init__(self):
         if self.created_at == 0.0:
@@ -62,9 +63,9 @@ class AdaptiveScheduler:
         self._min_workers = min_workers
         self._max_workers = max_workers
         self._task_queue: queue.PriorityQueue = queue.PriorityQueue()
-        self._executor: Optional[ThreadPoolExecutor] = None
-        self._active_tasks: Dict[str, ScheduledTask] = {}
-        self._completed_tasks: List[ScheduledTask] = []
+        self._executor: ThreadPoolExecutor | None = None
+        self._active_tasks: dict[str, ScheduledTask] = {}
+        self._completed_tasks: list[ScheduledTask] = []
         self._lock = threading.Lock()
         self._task_counter = 0
         self._running = False
@@ -158,7 +159,7 @@ class AdaptiveScheduler:
                 if len(self._completed_tasks) > 500:
                     self._completed_tasks = self._completed_tasks[-300:]
 
-    def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         with self._lock:
             task = self._active_tasks.get(task_id)
             if task:
@@ -179,7 +180,7 @@ class AdaptiveScheduler:
                 }
         return None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             stats = dict(self._stats)
             stats["active_tasks"] = len(self._active_tasks)
@@ -194,7 +195,7 @@ class AdaptiveScheduler:
             return count
 
 
-_scheduler_instance: Optional[AdaptiveScheduler] = None
+_scheduler_instance: AdaptiveScheduler | None = None
 
 
 def get_adaptive_scheduler() -> AdaptiveScheduler:

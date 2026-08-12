@@ -26,15 +26,14 @@ Install: pip install sqlite-vec
 
 from __future__ import annotations
 
-import json
-import struct
-import time
-import sqlite3
 import logging
+import sqlite3
+import struct
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 import numpy as np
 import sqlite_vec
@@ -69,7 +68,7 @@ class _LRUCache:
     """Unchanged from the original — search result cache."""
 
     def __init__(self, max_size: int = 64):
-        self._cache: "OrderedDict[str, Any]" = OrderedDict()
+        self._cache: OrderedDict[str, Any] = OrderedDict()
         self._max_size = max_size
         self._lock = threading.Lock()
 
@@ -93,10 +92,10 @@ class VectorMemoryStore:
     """Same public interface as the original VectorMemoryStore, backed
     by sqlite-vec's vec0 virtual table instead of an in-memory numpy list."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or (Path.home() / ".jarvis" / "data" / "vector_memory.db")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._conn_lock = threading.Lock()
         self._cache = _LRUCache(max_size=64)
         self._init_db()
@@ -176,7 +175,7 @@ class VectorMemoryStore:
             logger.error("Failed to store vector memory: %s", e)
             return False
 
-    def search_similar(self, query: str, top_k: int = 3, min_score: float = 0.15) -> List[Dict[str, Any]]:
+    def search_similar(self, query: str, top_k: int = 3, min_score: float = 0.15) -> list[dict[str, Any]]:
         cache_key = f"{query}|{top_k}|{min_score}"
         cached = self._cache.get(cache_key)
         if cached is not None:

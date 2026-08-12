@@ -1,11 +1,8 @@
 import json
 import re
-import sys
-from pathlib import Path
 
+from core.mode_manager import ExecutionMode, get_mode_manager
 from core.utils import get_project_root as get_base_dir
-from core.mode_manager import get_mode_manager, ExecutionMode
-
 
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -154,7 +151,7 @@ def _get_api_key() -> str:
         return os.environ["GEMINI_API_KEY"]
     if API_CONFIG_PATH.exists():
         try:
-            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            with open(API_CONFIG_PATH, encoding="utf-8") as f:
                 return json.load(f).get("gemini_api_key", "")
         except Exception:
             pass

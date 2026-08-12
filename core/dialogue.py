@@ -1,9 +1,8 @@
 """Dialogue State Machine — tracks conversation flow and turn management."""
 
-import time
 import logging
+import time
 from enum import Enum, auto
-from typing import Optional
 
 logger = logging.getLogger("jarvis.dialogue")
 
@@ -36,7 +35,7 @@ class DialogueStateMachine:
         self._entered_at = time.time()
         self._last_input = ""
 
-    def transition(self, event: str, data: Optional[dict] = None) -> DialogueState:
+    def transition(self, event: str, data: dict | None = None) -> DialogueState:
         valid = _TRANSITIONS.get(self.state, {})
         if event not in valid:
             logger.warning("Invalid transition: %s in %s", event, self.state.name)

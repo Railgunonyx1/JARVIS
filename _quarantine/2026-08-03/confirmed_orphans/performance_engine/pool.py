@@ -1,8 +1,9 @@
 """Object Pool — reusable object pool for expensive-to-create resources."""
 
-import threading
 import logging
-from typing import Any, Callable, Optional
+import threading
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.performance_engine.pool")
 

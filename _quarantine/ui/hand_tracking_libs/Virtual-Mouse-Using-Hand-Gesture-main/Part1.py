@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
-from pynput.mouse import Button,Controller #Contains Mouse Operations
-import wx #WX Lib is used To get the Screen Size Of Monitor
+import wx  #WX Lib is used To get the Screen Size Of Monitor
+from pynput.mouse import Button, Controller  #Contains Mouse Operations
+
 
 def leftClick():
     mouse = Controller()
@@ -67,11 +68,11 @@ def leftClick():
                 pinchFlag = 0
                 #Release Operation of Mouse
                 mouse.release(Button.left)
-        
+
             #detecting the two Objects And making a Rectangle Around It
             x1,y1,w1,h1 = cv2.boundingRect(conts[0])
             x2,y2,w2,h2 = cv2.boundingRect(conts[1])
-        
+
             cv2.rectangle(img,(x1,y1),(x1+w1,y1+h1),(255,0,0),2)
             cv2.rectangle(img,(x2,y2),(x2+w2,y2+h2),(255,0,0),2)
 
@@ -92,7 +93,7 @@ def leftClick():
             #Inorder to move mouse
             mouse.position = (sx-(mouseLoc[0]*sx/camx),mouseLoc[1]*sy/camy)
             mLocOld = mouseLoc
-        
+
 
 
 
@@ -114,7 +115,7 @@ def leftClick():
             mLocOld = mouseLoc
 
 
-        
+
 
         #Display Camera
         cv2.imshow('Cam', img)
@@ -129,5 +130,5 @@ def leftClick():
 
 if __name__ == "__main__":
     leftClick()
-    
-    
+
+

@@ -4,11 +4,10 @@ Pre-allocates buffer, runs capture in a background thread,
 provides latest frame on demand with FPS counter.
 """
 
-import time
-import queue
 import logging
+import queue
 import threading
-from typing import Optional, Tuple
+import time
 
 import cv2
 import numpy as np
@@ -33,9 +32,9 @@ class Camera:
         self._target_fps = max_fps
         self._frame_interval = 1.0 / max_fps
 
-        self._cap: Optional[cv2.VideoCapture] = None
+        self._cap: cv2.VideoCapture | None = None
         self._frame_queue: queue.Queue = queue.Queue(maxsize=buffer_size)
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._running = False
 
         # FPS tracking
@@ -44,7 +43,7 @@ class Camera:
         self._fps_timer = time.time()
 
         # Latest frame + lock
-        self._latest_frame: Optional[np.ndarray] = None
+        self._latest_frame: np.ndarray | None = None
         self._lock = threading.Lock()
 
     def start(self) -> bool:
@@ -83,7 +82,7 @@ class Camera:
             self._cap = None
         logger.info("Camera stopped")
 
-    def read(self) -> Optional[np.ndarray]:
+    def read(self) -> np.ndarray | None:
         """Get the latest frame (horizontal flip applied for mirror view)."""
         with self._lock:
             frame = self._latest_frame
@@ -91,7 +90,7 @@ class Camera:
             return cv2.flip(frame, 1)  # Mirror
         return None
 
-    def read_raw(self) -> Optional[np.ndarray]:
+    def read_raw(self) -> np.ndarray | None:
         """Get the latest frame without flipping."""
         with self._lock:
             return self._latest_frame
@@ -105,7 +104,7 @@ class Camera:
         return self._running and self._cap is not None and self._cap.isOpened()
 
     @property
-    def resolution(self) -> Tuple[int, int]:
+    def resolution(self) -> tuple[int, int]:
         return (self.width, self.height)
 
     def _capture_loop(self):

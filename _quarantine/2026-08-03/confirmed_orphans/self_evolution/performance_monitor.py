@@ -1,13 +1,13 @@
 """Performance Monitor — SQLite-backed metric tracking with regression detection."""
 
-import time
+import logging
 import math
 import sqlite3
-import logging
 import threading
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.self_evolution.performance_monitor")
 
@@ -59,7 +59,7 @@ class MetricPoint:
 class PerformanceMonitor:
     """Records metrics, computes stats, detects regressions, and identifies bottlenecks."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or _DB_PATH
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -74,7 +74,7 @@ class PerformanceMonitor:
     # Recording
     # ------------------------------------------------------------------
 
-    def record_metric(self, name: str, value: float, tags: Optional[dict[str, str]] = None, timestamp: Optional[float] = None) -> None:
+    def record_metric(self, name: str, value: float, tags: dict[str, str] | None = None, timestamp: float | None = None) -> None:
         """Record a single metric point."""
         import json as _json
         point = MetricPoint(name=name, value=value, timestamp=timestamp or time.time(), tags=tags or {})

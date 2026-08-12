@@ -13,7 +13,7 @@ Powers GET /api/audit/failure/<trace_id>.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.replay_engine import ReplayEngine
 
@@ -30,7 +30,7 @@ class FailureAnalyzer:
     def __init__(self) -> None:
         self._replay = ReplayEngine()
 
-    def analyze(self, trace_id: str) -> Dict[str, Any]:
+    def analyze(self, trace_id: str) -> dict[str, Any]:
         timeline = self._replay.replay(trace_id)
         if not timeline:
             return {
@@ -72,8 +72,8 @@ class FailureAnalyzer:
             "suggested_recovery": "replan",
         }
 
-    def _attribute_failure(self, timeline: List[Dict[str, Any]],
-                           failed_idx: int, trace_id: str) -> Dict[str, Any]:
+    def _attribute_failure(self, timeline: list[dict[str, Any]],
+                           failed_idx: int, trace_id: str) -> dict[str, Any]:
         prefix = timeline[:failed_idx]
         for e in reversed(prefix):
             data = e["data"] or {}
@@ -103,7 +103,7 @@ class FailureAnalyzer:
             "recovery": "replan",
         }
 
-    def _audit_failure(self, trace_id: str) -> Optional[Dict[str, Any]]:
+    def _audit_failure(self, trace_id: str) -> dict[str, Any] | None:
         """Fall back to the audit log for the failed tool entry (record_tool path)."""
         if not trace_id:
             return None

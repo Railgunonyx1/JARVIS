@@ -3,17 +3,16 @@
 Records metrics with trace_id, service, duration, memory, cpu, provider, cache_status.
 Never blocks the hot path: appends to ring buffer, flushes in background.
 """
-import os
-import json
-import time
 import asyncio
+import json
 import logging
 import sqlite3
 import threading
+import time
 from collections import deque
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.metrics")
 
@@ -25,7 +24,7 @@ _FLUSH_INTERVAL_S = 5.0
 class MetricPoint:
     name: str
     value: float
-    tags: Dict[str, str] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
     trace_id: str = ""
     service: str = ""
     timestamp: float = 0.0
@@ -38,7 +37,7 @@ class MetricPoint:
 class MetricsCollector:
     """Thread-safe metrics collector with ring buffer and periodic SQLite flush."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             data_dir = Path.home() / ".jarvis" / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -46,7 +45,7 @@ class MetricsCollector:
         self._db_path = db_path
         self._buffer: deque = deque(maxlen=_RING_BUFFER_MAX)
         self._lock = threading.Lock()
-        self._flush_task: Optional[asyncio.Task] = None
+        self._flush_task: asyncio.Task | None = None
         self._running = False
         self._init_db()
 
@@ -74,7 +73,7 @@ class MetricsCollector:
             logger.warning("Metrics DB init failed: %s", e)
 
     def record(self, name: str, value: float,
-               tags: Optional[Dict[str, str]] = None,
+               tags: dict[str, str] | None = None,
                trace_id: str = "", service: str = ""):
         point = MetricPoint(
             name=name,
@@ -86,7 +85,7 @@ class MetricsCollector:
         with self._lock:
             self._buffer.append(point)
 
-    def start_background_flush(self, loop: Optional[asyncio.AbstractEventLoop] = None):
+    def start_background_flush(self, loop: asyncio.AbstractEventLoop | None = None):
         if self._running:
             return
         self._running = True
@@ -120,7 +119,7 @@ class MetricsCollector:
         except Exception as e:
             logger.debug("Metrics SQLite flush failed: %s", e)
 
-    def query(self, name: str, limit: int = 100) -> List[MetricPoint]:
+    def query(self, name: str, limit: int = 100) -> list[MetricPoint]:
         try:
             conn = sqlite3.connect(self._db_path, timeout=2.0)
             rows = conn.execute(
@@ -141,7 +140,7 @@ class MetricsCollector:
         except Exception:
             return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             buffer_size = len(self._buffer)
         try:
@@ -168,7 +167,7 @@ class MetricsCollector:
 
 
 # Global singleton accessor (temporary during migration)
-_collector: Optional[MetricsCollector] = None
+_collector: MetricsCollector | None = None
 
 
 def get_metrics_collector() -> MetricsCollector:

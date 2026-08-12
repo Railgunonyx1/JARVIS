@@ -6,16 +6,15 @@ analysis, and optimization suggestions.
 """
 
 import json
-import time
+import logging
 import math
 import sqlite3
-import logging
 import threading
+import time
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from datetime import datetime, timezone
-from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("jarvis.digital_twin")
 
@@ -51,14 +50,14 @@ class SystemComponent:
     name: str
     component_type: ComponentType = ComponentType.OTHER
     status: ComponentStatus = ComponentStatus.UNKNOWN
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     last_updated: float = field(default_factory=time.time)
 
 
 @dataclass
 class SystemSnapshot:
     timestamp: float = field(default_factory=time.time)
-    components: Dict[str, SystemComponent] = field(default_factory=dict)
+    components: dict[str, SystemComponent] = field(default_factory=dict)
     cpu_usage: float = 0.0
     ram_usage: float = 0.0
     ram_total_gb: float = 0.0
@@ -68,9 +67,9 @@ class SystemSnapshot:
     net_io_sent_bytes: int = 0
     net_io_recv_bytes: int = 0
     process_count: int = 0
-    top_processes: List[Dict[str, Any]] = field(default_factory=list)
+    top_processes: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         components = {}
         for k, v in self.components.items():
             components[k] = {
@@ -97,13 +96,13 @@ class SystemSnapshot:
 
 
 class SystemModel:
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or (Path.home() / ".jarvis" / "data" / "digital_twin.db")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
-        self._last_snapshot: Optional[SystemSnapshot] = None
-        self._collector_thread: Optional[threading.Thread] = None
+        self._last_snapshot: SystemSnapshot | None = None
+        self._collector_thread: threading.Thread | None = None
         self._running = False
         self._collect_interval: float = 10.0
         self._init_db()
@@ -305,7 +304,7 @@ class SystemModel:
             conn.commit()
         self._prune_old()
 
-    def get_snapshot_history(self, limit: int = 100, hours: Optional[float] = None) -> List[SystemSnapshot]:
+    def get_snapshot_history(self, limit: int = 100, hours: float | None = None) -> list[SystemSnapshot]:
         cutoff = time.time() - (hours * 3600) if hours else 0
         with self._lock:
             conn = self._get_conn()
@@ -350,7 +349,7 @@ class SystemModel:
             top_processes=d.get("top_processes", []),
         )
 
-    def predict_resource_usage(self, minutes_ahead: int = 30) -> Dict[str, Any]:
+    def predict_resource_usage(self, minutes_ahead: int = 30) -> dict[str, Any]:
         history = self.get_snapshot_history(limit=200, hours=6)
         if len(history) < 3:
             return {
@@ -390,7 +389,7 @@ class SystemModel:
         }
 
     def _linear_extrapolate(
-        self, xs: List[float], ys: List[float], target: float
+        self, xs: list[float], ys: list[float], target: float
     ) -> float:
         n = len(xs)
         if n < 2:
@@ -405,7 +404,7 @@ class SystemModel:
         intercept = y_mean - slope * x_mean
         return slope * target + intercept
 
-    def _compute_residuals(self, xs: List[float], ys: List[float]) -> float:
+    def _compute_residuals(self, xs: list[float], ys: list[float]) -> float:
         n = len(xs)
         if n < 2:
             return 0.0
@@ -420,12 +419,12 @@ class SystemModel:
         sse = sum((ys[i] - (slope * xs[i] + intercept)) ** 2 for i in range(n))
         return math.sqrt(sse / n)
 
-    def detect_anomalies(self, snapshot: Optional[SystemSnapshot] = None) -> List[str]:
+    def detect_anomalies(self, snapshot: SystemSnapshot | None = None) -> list[str]:
         snap = snapshot or self._last_snapshot
         if not snap:
             return ["No snapshot available"]
 
-        alerts: List[str] = []
+        alerts: list[str] = []
         history = self.get_snapshot_history(limit=100, hours=2)
         if len(history) < 5:
             return alerts
@@ -468,7 +467,7 @@ class SystemModel:
 
         return alerts
 
-    def _z_score(self, value: float, values: List[float]) -> float:
+    def _z_score(self, value: float, values: list[float]) -> float:
         if len(values) < 2:
             return 0.0
         mean = sum(values) / len(values)
@@ -478,7 +477,7 @@ class SystemModel:
             return 0.0
         return (value - mean) / std
 
-    def get_component_health(self, name: str) -> Dict[str, Any]:
+    def get_component_health(self, name: str) -> dict[str, Any]:
         snap = self._last_snapshot
         if not snap:
             snap = self.take_snapshot()
@@ -500,7 +499,7 @@ class SystemModel:
             "age_seconds": round(time.time() - comp.last_updated, 1),
         }
 
-    def get_trend(self, metric: str, window_hours: float = 1.0) -> Dict[str, Any]:
+    def get_trend(self, metric: str, window_hours: float = 1.0) -> dict[str, Any]:
         history = self.get_snapshot_history(limit=500, hours=window_hours)
         if len(history) < 3:
             return {
@@ -556,7 +555,7 @@ class SystemModel:
             "window_hours": window_hours,
         }
 
-    def _extract_metric(self, history: List[SystemSnapshot], metric: str) -> List[float]:
+    def _extract_metric(self, history: list[SystemSnapshot], metric: str) -> list[float]:
         accessors = {
             "cpu_usage": lambda s: s.cpu_usage,
             "ram_usage": lambda s: s.ram_usage,
@@ -571,9 +570,9 @@ class SystemModel:
             return []
         return [accessor(s) for s in history]
 
-    def suggest_optimization(self) -> List[str]:
+    def suggest_optimization(self) -> list[str]:
         snap = self._last_snapshot or self.take_snapshot()
-        suggestions: List[str] = []
+        suggestions: list[str] = []
 
         cpu_trend = self.get_trend("cpu_usage", window_hours=2.0)
         if cpu_trend.get("trend") == "increasing":
@@ -661,7 +660,7 @@ class SystemModel:
                 logger.error("Snapshot collection failed: %s", exc)
             time.sleep(self._collect_interval)
 
-    def get_latest_snapshot(self) -> Optional[SystemSnapshot]:
+    def get_latest_snapshot(self) -> SystemSnapshot | None:
         if self._last_snapshot:
             return self._last_snapshot
         with self._lock:
@@ -673,7 +672,7 @@ class SystemModel:
             return self._row_to_snapshot(row["data"])
         return None
 
-    def get_model_stats(self) -> Dict[str, Any]:
+    def get_model_stats(self) -> dict[str, Any]:
         with self._lock:
             conn = self._get_conn()
             count = conn.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]

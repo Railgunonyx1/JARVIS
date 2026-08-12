@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Set
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.startup_optimizer")
 
@@ -16,8 +17,8 @@ class StartupPhaseOptimizer:
     """Manages module initialization in phases for fastest interactive startup."""
 
     def __init__(self) -> None:
-        self._modules: Dict[str, Dict[str, Any]] = {}
-        self._phases: Dict[str, List[str]] = {
+        self._modules: dict[str, dict[str, Any]] = {}
+        self._phases: dict[str, list[str]] = {
             "critical": [],
             "essential": [],
             "background": [],
@@ -26,13 +27,13 @@ class StartupPhaseOptimizer:
         self._lock = threading.RLock()
         self._startup_start: float = 0.0
         self._total_startup_ms: float = 0.0
-        self._phase_times: Dict[str, float] = {
+        self._phase_times: dict[str, float] = {
             "critical": 0.0,
             "essential": 0.0,
             "background": 0.0,
             "on_demand": 0.0,
         }
-        self._background_thread: Optional[threading.Thread] = None
+        self._background_thread: threading.Thread | None = None
 
     def register(
         self,
@@ -40,7 +41,7 @@ class StartupPhaseOptimizer:
         init_fn: Callable[[], Any],
         phase: str = "essential",
         priority: int = 50,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
     ) -> None:
         """Register a module for phased startup."""
         if phase not in self._phases:
@@ -84,11 +85,11 @@ class StartupPhaseOptimizer:
                 dependencies or [],
             )
 
-    def _resolve_dependencies(self, names: List[str]) -> List[str]:
+    def _resolve_dependencies(self, names: list[str]) -> list[str]:
         """Return names sorted so dependencies come first."""
-        resolved: List[str] = []
-        visited: Set[str] = set()
-        visiting: Set[str] = set()
+        resolved: list[str] = []
+        visited: set[str] = set()
+        visiting: set[str] = set()
 
         def _visit(n: str) -> None:
             if n in visited:
@@ -113,7 +114,7 @@ class StartupPhaseOptimizer:
             _visit(n)
         return resolved
 
-    def _load_modules(self, names: List[str]) -> float:
+    def _load_modules(self, names: list[str]) -> float:
         """Load a list of modules in dependency order. Returns total time_ms."""
         ordered = self._resolve_dependencies(names)
         total_ms = 0.0
@@ -245,10 +246,10 @@ class StartupPhaseOptimizer:
                 self._phase_times["on_demand"] += mod["init_time_ms"]
         return elapsed_ms
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Returns per-module loaded/init_time/phase and overall startup_ms."""
         with self._lock:
-            modules: Dict[str, Dict[str, Any]] = {}
+            modules: dict[str, dict[str, Any]] = {}
             for name, mod in self._modules.items():
                 modules[name] = {
                     "loaded": mod["loaded"],
@@ -274,10 +275,10 @@ class StartupPhaseOptimizer:
                 ),
             }
 
-    def get_module_count(self) -> Dict[str, Any]:
+    def get_module_count(self) -> dict[str, Any]:
         """Returns count by phase and total loaded."""
         with self._lock:
-            counts: Dict[str, int] = {}
+            counts: dict[str, int] = {}
             for phase in PHASE_ORDER:
                 counts[phase] = len(self._phases[phase])
             counts["total_registered"] = len(self._modules)
@@ -286,14 +287,14 @@ class StartupPhaseOptimizer:
             )
             return counts
 
-    def suggest_phases(self) -> List[Dict[str, Any]]:
+    def suggest_phases(self) -> list[dict[str, Any]]:
         """Analyze modules and suggest optimal phase assignments."""
         with self._lock:
-            suggestions: List[Dict[str, Any]] = []
+            suggestions: list[dict[str, Any]] = []
             for name, mod in self._modules.items():
                 current = mod["phase"]
                 suggested = current
-                reasons: List[str] = []
+                reasons: list[str] = []
                 if mod["loaded"] and mod["init_time_ms"] > 500:
                     if current == "critical":
                         suggested = "essential"
@@ -325,7 +326,7 @@ class StartupPhaseOptimizer:
             suggestions.sort(key=lambda s: s["priority"])
             return suggestions
 
-    def get_startup_time(self) -> Dict[str, Any]:
+    def get_startup_time(self) -> dict[str, Any]:
         """Returns per-phase timing and total startup_ms."""
         with self._lock:
             total = sum(self._phase_times.values())
@@ -349,7 +350,7 @@ class StartupPhaseOptimizer:
         return not t.is_alive()
 
 
-_instance: Optional[StartupPhaseOptimizer] = None
+_instance: StartupPhaseOptimizer | None = None
 _instance_lock = threading.RLock()
 
 

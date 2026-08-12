@@ -5,13 +5,12 @@ All background work should use this pool instead of creating raw threads.
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
-_pool: Optional[ThreadPoolExecutor] = None
+_pool: ThreadPoolExecutor | None = None
 _lock = threading.Lock()
 
 
-def get_pool(max_workers: Optional[int] = None) -> ThreadPoolExecutor:
+def get_pool(max_workers: int | None = None) -> ThreadPoolExecutor:
     """Get or create the shared thread pool.
 
     Worker count is auto-scaled to CPU cores (capped at 8) unless overridden.

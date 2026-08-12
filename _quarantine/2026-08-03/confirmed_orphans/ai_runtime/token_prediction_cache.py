@@ -6,12 +6,10 @@ Many responses begin similarly:
 Cache these common prefixes for instant display.
 """
 import logging
-import time
 import threading
-import hashlib
-from typing import Optional, Dict, Any, List, Tuple
-from collections import defaultdict, Counter
+import time
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.token_prediction")
 
@@ -23,7 +21,7 @@ class PrefixEntry:
     count: int = 0
     avg_continuation_ms: float = 0.0
     last_used: float = 0.0
-    continuations: Dict[str, int] = None
+    continuations: dict[str, int] = None
 
     def __post_init__(self):
         if self.continuations is None:
@@ -39,7 +37,7 @@ class TokenPredictionCache:
     """
 
     def __init__(self, max_prefixes: int = 1000, min_occurrences: int = 2):
-        self._prefixes: Dict[str, PrefixEntry] = {}
+        self._prefixes: dict[str, PrefixEntry] = {}
         self._max_prefixes = max_prefixes
         self._min_occurrences = min_occurrences
         self._lock = threading.Lock()
@@ -67,7 +65,7 @@ class TokenPredictionCache:
             if continuation:
                 entry.continuations[continuation] = entry.continuations.get(continuation, 0) + 1
 
-    def predict_prefix(self, partial_tokens: str) -> Optional[Tuple[str, float]]:
+    def predict_prefix(self, partial_tokens: str) -> tuple[str, float] | None:
         """Given the first few tokens, predict the likely full prefix.
 
         Returns (predicted_prefix, confidence) or None.
@@ -101,7 +99,7 @@ class TokenPredictionCache:
         for entry in sorted_entries[:len(sorted_entries) // 4]:
             self._prefixes.pop(entry.prefix, None)
 
-    def get_common_prefixes(self, top_n: int = 20) -> List[Dict[str, Any]]:
+    def get_common_prefixes(self, top_n: int = 20) -> list[dict[str, Any]]:
         with self._lock:
             sorted_entries = sorted(self._prefixes.values(), key=lambda e: e.count, reverse=True)
             return [
@@ -109,7 +107,7 @@ class TokenPredictionCache:
                 for e in sorted_entries[:top_n]
             ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "cached_prefixes": len(self._prefixes),
@@ -119,7 +117,7 @@ class TokenPredictionCache:
         }
 
 
-_prediction_cache_instance: Optional[TokenPredictionCache] = None
+_prediction_cache_instance: TokenPredictionCache | None = None
 
 
 def get_token_prediction_cache() -> TokenPredictionCache:

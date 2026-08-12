@@ -6,8 +6,7 @@ import logging
 import os
 import threading
 import time
-from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.io_optimizer")
 
@@ -25,16 +24,16 @@ class IOBatchOptimizer:
         cache_ttl_s: float = _DEFAULT_CACHE_TTL_S,
         dir_cache_ttl_s: float = _DEFAULT_DIR_CACHE_TTL_S,
     ) -> None:
-        self._pending_writes: List[Dict[str, Any]] = []
-        self._read_cache: Dict[str, Dict[str, Any]] = {}
-        self._dir_cache: Dict[str, Dict[str, Any]] = {}
+        self._pending_writes: list[dict[str, Any]] = []
+        self._read_cache: dict[str, dict[str, Any]] = {}
+        self._dir_cache: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._batch_size = batch_size
         self._flush_interval_ms = flush_interval_ms
         self._cache_ttl_s = cache_ttl_s
         self._dir_cache_ttl_s = dir_cache_ttl_s
         self._last_flush_time = time.perf_counter()
-        self._stats: Dict[str, Any] = {
+        self._stats: dict[str, Any] = {
             "reads": 0,
             "writes": 0,
             "batched_writes": 0,
@@ -166,7 +165,7 @@ class IOBatchOptimizer:
         logger.debug("Flushed %d writes (%.2f ms)", count, elapsed_ms)
         return count
 
-    def list_dir(self, path: str, use_cache: bool = True) -> List[str]:
+    def list_dir(self, path: str, use_cache: bool = True) -> list[str]:
         """List directory entries with caching."""
         abs_path = os.path.abspath(path)
         with self._lock:
@@ -190,10 +189,10 @@ class IOBatchOptimizer:
             logger.debug("Listed %s (%d entries)", abs_path, len(entries))
             return entries
 
-    def batch_read(self, paths: List[str]) -> Dict[str, bytes]:
+    def batch_read(self, paths: list[str]) -> dict[str, bytes]:
         """Read multiple files, leveraging cache where possible."""
-        results: Dict[str, bytes] = {}
-        uncached: List[str] = []
+        results: dict[str, bytes] = {}
+        uncached: list[str] = []
         with self._lock:
             for p in paths:
                 abs_p = os.path.abspath(p)
@@ -240,7 +239,7 @@ class IOBatchOptimizer:
         )
         return results
 
-    def invalidate_cache(self, path: Optional[str] = None) -> int:
+    def invalidate_cache(self, path: str | None = None) -> int:
         """Invalidate read cache for a specific path or all. Returns entries removed."""
         with self._lock:
             if path is None:
@@ -265,7 +264,7 @@ class IOBatchOptimizer:
         with self._lock:
             return len(self._pending_writes)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Returns aggregate I/O statistics."""
         with self._lock:
             reads = self._stats["reads"]
@@ -304,7 +303,7 @@ class IOBatchOptimizer:
                 "dir_cache_size": len(self._dir_cache),
             }
 
-    def get_io_profile(self) -> Dict[str, Any]:
+    def get_io_profile(self) -> dict[str, Any]:
         """Returns IO usage profile with recommendations."""
         with self._lock:
             stats = self.get_stats()
@@ -319,7 +318,7 @@ class IOBatchOptimizer:
                 profile = "batched_writes"
             else:
                 profile = "balanced"
-            recommendations: List[str] = []
+            recommendations: list[str] = []
             if stats["cache_hit_rate"] < 0.3 and stats["reads"] > 50:
                 recommendations.append("Cache hit rate is low — consider increasing TTL")
             if stats["pending_writes"] > 20:
@@ -336,7 +335,7 @@ class IOBatchOptimizer:
             }
 
 
-_instance: Optional[IOBatchOptimizer] = None
+_instance: IOBatchOptimizer | None = None
 _instance_lock = threading.RLock()
 
 

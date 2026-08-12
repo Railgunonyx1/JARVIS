@@ -1,9 +1,9 @@
 """Predictive Perception Cache — caches screen analyses and learns transitions."""
 
-import time
-import threading
 import logging
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from typing import Any
 
 logger = logging.getLogger("jarvis.perception_engine.predictive_cache")
 
@@ -12,8 +12,8 @@ class PredictivePerceptionCache:
     """Caches screen analyses with TTL and learns screen-state transitions."""
 
     def __init__(self) -> None:
-        self._cache: Dict[str, tuple] = {}
-        self._transitions: Dict[str, Dict[str, int]] = {}
+        self._cache: dict[str, tuple] = {}
+        self._transitions: dict[str, dict[str, int]] = {}
         self._lock = threading.Lock()
         self._hits: int = 0
         self._misses: int = 0
@@ -24,7 +24,7 @@ class PredictivePerceptionCache:
         with self._lock:
             self._cache[screen_hash] = (analysis, expiry)
 
-    def get_cached(self, screen_hash: str) -> Optional[dict]:
+    def get_cached(self, screen_hash: str) -> dict | None:
         """Retrieve a cached analysis if it has not expired."""
         with self._lock:
             entry = self._cache.get(screen_hash)
@@ -49,7 +49,7 @@ class PredictivePerceptionCache:
         if not current_elements:
             return []
 
-        screen_hash: Optional[str] = None
+        screen_hash: str | None = None
         for elem in current_elements:
             if isinstance(elem, dict) and "hash" in elem:
                 screen_hash = elem["hash"]
@@ -109,7 +109,7 @@ class PredictivePerceptionCache:
         with self._lock:
             self._transitions.clear()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return cache and transition statistics."""
         with self._lock:
             total = self._hits + self._misses
@@ -129,7 +129,7 @@ class PredictivePerceptionCache:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[PredictivePerceptionCache] = None
+_instance: PredictivePerceptionCache | None = None
 _instance_lock = threading.Lock()
 
 

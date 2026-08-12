@@ -1,7 +1,7 @@
 """Task Scheduler — Windows scheduled tasks for JARVIS MK-X."""
 
-import subprocess
 import logging
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.task_scheduler")
 

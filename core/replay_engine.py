@@ -5,7 +5,7 @@ recent-tasks list on the HUD.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from core.event_store import get_event_store
 
@@ -18,7 +18,7 @@ class ReplayEngine:
     def __init__(self) -> None:
         self._store = get_event_store()
 
-    def replay(self, trace_id: str) -> List[Dict[str, Any]]:
+    def replay(self, trace_id: str) -> list[dict[str, Any]]:
         """Ordered timeline of events for a trace (oldest first)."""
         events = self._store.query(trace_id=trace_id, limit=200)
         events.sort(key=lambda e: (e.timestamp, e.name))
@@ -32,7 +32,7 @@ class ReplayEngine:
             for e in events
         ]
 
-    def recent_tasks(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def recent_tasks(self, limit: int = 20) -> list[dict[str, Any]]:
         """Most recent traces with their first/last event summary."""
         traces = self._store.recent_traces(limit=limit)
         tasks = []
@@ -58,14 +58,14 @@ class ReplayEngine:
         return tasks
 
 
-def _find_event(timeline: List[Dict[str, Any]], name: str) -> Dict[str, Any]:
+def _find_event(timeline: list[dict[str, Any]], name: str) -> dict[str, Any]:
     for e in timeline:
         if e["name"] == name:
             return e["data"] or {}
     return {}
 
 
-def _find_completion(timeline: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _find_completion(timeline: list[dict[str, Any]]) -> dict[str, Any]:
     for e in reversed(timeline):
         if e["name"] in _COMPLETION_NAMES:
             return e["data"] or {}

@@ -1,5 +1,5 @@
-from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
 import cv2
+from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates
 
 
 def get_idx_to_coordinates(image, results, VISIBILITY_THRESHOLD=0.5, PRESENCE_THRESHOLD=0.5):

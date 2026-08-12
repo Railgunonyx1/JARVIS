@@ -8,7 +8,7 @@ without touching the protocol or the kernel.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 __all__ = ["Transport"]
 
@@ -21,11 +21,11 @@ class Transport(ABC):
     """
 
     @abstractmethod
-    async def send(self, message: Dict[str, Any]) -> None:
+    async def send(self, message: dict[str, Any]) -> None:
         """Write one envelope-dict to the peer."""
 
     @abstractmethod
-    async def receive(self) -> Optional[Dict[str, Any]]:
+    async def receive(self) -> dict[str, Any] | None:
         """Read one envelope-dict, or ``None`` when the peer closed the stream."""
 
     @abstractmethod

@@ -16,7 +16,8 @@ Render contents (compact, keyboard-first):
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -45,15 +46,15 @@ def _bar(ratio: float, width: int = 12) -> Text:
 class LiveTaskDisplay:
     """Event-driven Live region bound to a TaskObserver."""
 
-    def __init__(self, console: Optional[Console] = None,
-                 status_getter: Optional[Callable[[], Dict[str, Any]]] = None,
+    def __init__(self, console: Console | None = None,
+                 status_getter: Callable[[], dict[str, Any]] | None = None,
                  enable: bool = True, transient: bool = True) -> None:
         self.console = console or Console()
         self._status_getter = status_getter
         self._enable = enable
         self._transient = transient
-        self._observer: Optional[TaskObserver] = None
-        self._live: Optional[Live] = None
+        self._observer: TaskObserver | None = None
+        self._live: Live | None = None
         self._started = 0.0
         self._goal = ""
         self.renders = 0
@@ -87,7 +88,7 @@ class LiveTaskDisplay:
             finally:
                 self._live = None
 
-    def _on_event(self, name: str, payload: Dict[str, Any]) -> None:
+    def _on_event(self, name: str, payload: dict[str, Any]) -> None:
         if not self._enable or self._live is None:
             return
         if name == events.TASK_STARTED:
@@ -128,7 +129,7 @@ class LiveTaskDisplay:
         else:
             lines.append(Text("steps  (awaiting model…)", style="dim"))
 
-        status: Dict[str, Any] = {}
+        status: dict[str, Any] = {}
         if self._status_getter is not None:
             try:
                 status = self._status_getter() or {}

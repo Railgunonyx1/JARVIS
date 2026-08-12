@@ -1,24 +1,22 @@
-import os
+import csv
+import datetime
 import glob
 import json
+import os
+
+import numpy as np
 import pandas as pd
-import csv
 import torch
+from dataset import get_online_data
+from mean import get_mean, get_std
+from model import generate_model
+from opts import parse_opts_online
+from spatial_transforms import *
+from target_transforms import ClassLabel
+from temporal_transforms import *
 from torch.autograd import Variable
 from torch.nn import functional as F
-
-from opts import parse_opts_online
-from model import generate_model
-from mean import get_mean, get_std
-from spatial_transforms import *
-from temporal_transforms import *
-from target_transforms import ClassLabel
-from dataset import get_online_data
-from utils import  AverageMeter, LevenshteinDistance, Queue
-
-import pdb
-import numpy as np
-import datetime
+from utils import AverageMeter, LevenshteinDistance, Queue
 
 
 def weighting_func(x):
@@ -52,7 +50,7 @@ def load_models(opt):
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
-    opt.arch = '{}'.format(opt.model)
+    opt.arch = f'{opt.model}'
     opt.mean = get_mean(opt.norm_value)
     opt.std = get_std(opt.norm_value)
 
@@ -66,7 +64,7 @@ def load_models(opt):
 
     if opt.resume_path:
         opt.resume_path = os.path.join(opt.root_path, opt.resume_path)
-        print('loading checkpoint {}'.format(opt.resume_path))
+        print(f'loading checkpoint {opt.resume_path}')
         checkpoint = torch.load(opt.resume_path)
         #assert opt.arch == checkpoint['arch']
 
@@ -99,7 +97,7 @@ def load_models(opt):
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
-    opt.arch = '{}'.format(opt.model)
+    opt.arch = f'{opt.model}'
     opt.mean = get_mean(opt.norm_value)
     opt.std = get_std(opt.norm_value)
 
@@ -111,7 +109,7 @@ def load_models(opt):
     classifier, parameters = generate_model(opt)
 
     if opt.resume_path:
-        print('loading checkpoint {}'.format(opt.resume_path))
+        print(f'loading checkpoint {opt.resume_path}')
         checkpoint = torch.load(opt.resume_path)
 #        assert opt.arch == checkpoint['arch']
 
@@ -144,7 +142,7 @@ target_transform = ClassLabel()
 
 ## Get list of videos to test
 if opt.dataset == 'egogesture':
-    subject_list = ['Subject{:02d}'.format(i) for i in [2, 9, 11, 14, 18, 19, 28, 31, 41, 47]]
+    subject_list = [f'Subject{i:02d}' for i in [2, 9, 11, 14, 18, 19, 28, 31, 41, 47]]
     test_paths = []
     for subject in subject_list:
         for x in glob.glob(os.path.join(opt.video_path, subject, '*/*/rgb*')):
@@ -181,7 +179,7 @@ for path in test_paths[:]:
     myqueue_det = Queue(opt.det_queue_size, n_classes=opt.n_classes_det)
     myqueue_clf = Queue(opt.clf_queue_size, n_classes=opt.n_classes_clf)
 
-    print('[{}/{}]============'.format(videoidx, len(test_paths)))
+    print(f'[{videoidx}/{len(test_paths)}]============')
     print(path)
     opt.sample_duration = max(opt.sample_duration_clf, opt.sample_duration_det)
     temporal_transform = TemporalRandomCrop(opt.sample_duration, opt.downsample)
@@ -356,15 +354,10 @@ for path in test_paths[:]:
 
     print('predicted classes: \t', predicted)
     print('True classes :\t\t', true_classes)
-    print('Levenshtein Accuracy = {} ({})'.format(levenshtein_accuracies.val, levenshtein_accuracies.avg))
+    print(f'Levenshtein Accuracy = {levenshtein_accuracies.val} ({levenshtein_accuracies.avg})')
 
-print('Average Levenshtein Accuracy= {}'.format(levenshtein_accuracies.avg))
+print(f'Average Levenshtein Accuracy= {levenshtein_accuracies.avg}')
 
 print('-----Evaluation is finished------')
 with open("./results/online-results.log", "a") as myfile:
-    myfile.write("{}, {}, {}, {}, {}, {}".format(datetime.datetime.now(),
-                                    opt.resume_path_clf, 
-                                    opt.model_clf,
-                                    opt.width_mult_clf,
-                                    opt.modality_clf,
-                                    levenshtein_accuracies.avg))
+    myfile.write(f"{datetime.datetime.now()}, {opt.resume_path_clf}, {opt.model_clf}, {opt.width_mult_clf}, {opt.modality_clf}, {levenshtein_accuracies.avg}")

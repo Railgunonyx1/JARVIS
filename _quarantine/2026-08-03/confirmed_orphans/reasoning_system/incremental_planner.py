@@ -6,11 +6,12 @@ Instead of generating a complete plan upfront:
 Reduces waiting before execution begins.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List, Callable
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger("reasoning_system.incremental_planner")
 
@@ -31,9 +32,9 @@ class PlanStep:
     description: str
     state: StepState = StepState.PENDING
     tool_name: str = ""
-    tool_args: Dict[str, Any] = field(default_factory=dict)
+    tool_args: dict[str, Any] = field(default_factory=dict)
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     started_at: float = 0.0
     completed_at: float = 0.0
 
@@ -49,7 +50,7 @@ class IncrementalPlan:
     """An incrementally-generated plan."""
     plan_id: str
     goal: str
-    steps: List[PlanStep] = field(default_factory=list)
+    steps: list[PlanStep] = field(default_factory=list)
     current_index: int = 0
     is_complete: bool = False
     created_at: float = 0.0
@@ -67,7 +68,7 @@ class IncrementalPlanner:
     def __init__(self, llm_fn: Callable = None, planner_fn: Callable = None):
         self._llm_fn = llm_fn
         self._planner_fn = planner_fn
-        self._active_plan: Optional[IncrementalPlan] = None
+        self._active_plan: IncrementalPlan | None = None
         self._lock = threading.Lock()
         self._plans_created = 0
         self._steps_executed = 0
@@ -85,7 +86,7 @@ class IncrementalPlanner:
         return plan
 
     def add_step(self, description: str, tool_name: str = "",
-                 tool_args: Dict[str, Any] = None) -> PlanStep:
+                 tool_args: dict[str, Any] = None) -> PlanStep:
         """Add a step to the active plan."""
         with self._lock:
             plan = self._active_plan
@@ -102,7 +103,7 @@ class IncrementalPlanner:
             plan.steps.append(step)
             return step
 
-    def get_next_step(self) -> Optional[PlanStep]:
+    def get_next_step(self) -> PlanStep | None:
         """Get the next step that hasn't been executed yet."""
         with self._lock:
             plan = self._active_plan
@@ -143,7 +144,7 @@ class IncrementalPlanner:
             if self._active_plan:
                 self._active_plan.is_complete = True
 
-    def get_progress(self) -> Dict[str, Any]:
+    def get_progress(self) -> dict[str, Any]:
         with self._lock:
             plan = self._active_plan
             if plan is None:
@@ -162,7 +163,7 @@ class IncrementalPlanner:
                 "is_complete": plan.is_complete,
             }
 
-    def get_plan(self) -> Optional[Dict[str, Any]]:
+    def get_plan(self) -> dict[str, Any] | None:
         with self._lock:
             plan = self._active_plan
             if plan is None:
@@ -183,7 +184,7 @@ class IncrementalPlanner:
                 "progress": self.get_progress(),
             }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "plans_created": self._plans_created,
             "steps_executed": self._steps_executed,
@@ -191,7 +192,7 @@ class IncrementalPlanner:
         }
 
 
-_incremental_instance: Optional[IncrementalPlanner] = None
+_incremental_instance: IncrementalPlanner | None = None
 
 
 def get_incremental_planner(llm_fn=None) -> IncrementalPlanner:

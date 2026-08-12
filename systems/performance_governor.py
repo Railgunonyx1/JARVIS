@@ -3,11 +3,11 @@
 Every processing cycle: Measure → Predict → Adjust → Maintain Target Latency.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import time
 from collections import deque
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("systems.performance_governor")
 
@@ -42,7 +42,7 @@ class PerformanceGovernor:
 
     def __init__(self, overall_target_ms: float = 500.0):
         self._target_ms = overall_target_ms
-        self._budgets: Dict[str, LatencyBudget] = {}
+        self._budgets: dict[str, LatencyBudget] = {}
         self._history: deque = deque(maxlen=500)
         self._lock = threading.Lock()
         self._active = True
@@ -67,7 +67,7 @@ class PerformanceGovernor:
         """Mark the start of a processing frame. Returns a context for tracking."""
         return FrameContext(governor=self)
 
-    def record_stage(self, stage_name: str, elapsed_ms: float) -> Dict[str, Any]:
+    def record_stage(self, stage_name: str, elapsed_ms: float) -> dict[str, Any]:
         """Record actual latency for a stage. Returns violation info."""
         with self._lock:
             budget = self._budgets.get(stage_name)
@@ -93,7 +93,7 @@ class PerformanceGovernor:
 
             return result
 
-    def end_frame(self) -> Dict[str, Any]:
+    def end_frame(self) -> dict[str, Any]:
         """End a processing frame. Returns overall frame stats."""
         self._total_frames += 1
         total = self._budgets.get("total")
@@ -130,7 +130,7 @@ class PerformanceGovernor:
                 return True
             return False
 
-    def get_report(self) -> Dict[str, Any]:
+    def get_report(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "target_ms": self._target_ms,
@@ -156,7 +156,7 @@ class FrameContext:
     def __init__(self, governor: PerformanceGovernor):
         self.governor = governor
         self.start_time = time.perf_counter()
-        self.stages: Dict[str, float] = {}
+        self.stages: dict[str, float] = {}
 
     def stage(self, name: str) -> "StageTimer":
         return StageTimer(context=self, name=name)
@@ -188,7 +188,7 @@ class StageTimer:
         self.context.governor.record_stage(self.name, elapsed_ms)
 
 
-_governor_instance: Optional[PerformanceGovernor] = None
+_governor_instance: PerformanceGovernor | None = None
 
 
 def get_performance_governor() -> PerformanceGovernor:

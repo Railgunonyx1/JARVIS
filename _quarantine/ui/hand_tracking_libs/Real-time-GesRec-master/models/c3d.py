@@ -8,12 +8,10 @@ Proceedings of the IEEE international conference on computer vision. 2015.
 """
 
 import math
+
 import torch
 import torch.nn as nn
-import torch.nn.init as init
-import torch.nn.functional as F
 from torch.autograd import Variable
-from functools import partial
 
 
 class C3D(nn.Module):
@@ -22,7 +20,7 @@ class C3D(nn.Module):
                  sample_duration,
                  num_classes=600):
 
-        super(C3D, self).__init__()
+        super().__init__()
         self.group1 = nn.Sequential(
             nn.Conv3d(3, 64, kernel_size=3, padding=1),
             nn.BatchNorm3d(64),
@@ -69,9 +67,9 @@ class C3D(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.5))
         self.fc = nn.Sequential(
-            nn.Linear(2048, num_classes))         
+            nn.Linear(2048, num_classes))
 
-        
+
 
     def forward(self, x):
         out = self.group1(x)

@@ -9,8 +9,9 @@ import logging
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.pipeline_fusion")
 
@@ -24,7 +25,7 @@ class _Stage:
         self,
         name: str,
         fn: Callable,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         estimated_ms: float = 0.0,
     ):
         self.name = name
@@ -39,9 +40,9 @@ class PipelineFusion:
     """Merges sequential pipeline stages into overlapping execution."""
 
     def __init__(self, max_workers: int = 8):
-        self._stages: Dict[str, _Stage] = {}
-        self._stage_order: List[str] = []
-        self._active_fusions: Dict[str, Dict[str, Any]] = {}
+        self._stages: dict[str, _Stage] = {}
+        self._stage_order: list[str] = []
+        self._active_fusions: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._fusion_count = 0
         self._total_saved_ms = 0.0
@@ -52,7 +53,7 @@ class PipelineFusion:
         self,
         name: str,
         fn: Callable,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
         estimated_ms: float = 0,
     ) -> None:
         """Register a pipeline stage."""
@@ -80,11 +81,11 @@ class PipelineFusion:
             logger.info("Unregistered stage '%s'", name)
             return True
 
-    def get_optimal_order(self) -> List[str]:
+    def get_optimal_order(self) -> list[str]:
         """Returns stages reordered for maximum parallelism using topological sort."""
         with self._lock:
-            in_degree: Dict[str, int] = {name: 0 for name in self._stages}
-            dependents: Dict[str, List[str]] = {name: [] for name in self._stages}
+            in_degree: dict[str, int] = {name: 0 for name in self._stages}
+            dependents: dict[str, list[str]] = {name: [] for name in self._stages}
 
             for name, stage in self._stages.items():
                 for dep in stage.dependencies:
@@ -98,7 +99,7 @@ class PipelineFusion:
             ]
             queue.sort(key=lambda n: self._stages[n].estimated_ms, reverse=True)
 
-            result: List[str] = []
+            result: list[str] = []
             while queue:
                 current = queue.pop(0)
                 result.append(current)
@@ -114,7 +115,7 @@ class PipelineFusion:
 
             return result
 
-    def fuse(self, stage_names: List[str]) -> Dict[str, Any]:
+    def fuse(self, stage_names: list[str]) -> dict[str, Any]:
         """Mark stages as fusible (can overlap in time). Returns fusion metadata."""
         with self._lock:
             valid_names = [n for n in stage_names if n in self._stages]
@@ -159,7 +160,7 @@ class PipelineFusion:
             )
             return fusion_meta
 
-    def execute_fused(self, fusion_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute_fused(self, fusion_id: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         """Execute fused stages concurrently using ThreadPoolExecutor."""
         with self._lock:
             if fusion_id not in self._active_fusions:
@@ -169,8 +170,8 @@ class PipelineFusion:
             fusion["start_time"] = time.perf_counter()
 
         ctx = context or {}
-        results: Dict[str, Any] = {}
-        errors: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
+        errors: dict[str, Any] = {}
         stage_names = fusion["stages"]
 
         def _run_stage(name: str) -> tuple:
@@ -219,7 +220,7 @@ class PipelineFusion:
         )
         return dict(fusion)
 
-    def get_fusion_stats(self) -> Dict[str, Any]:
+    def get_fusion_stats(self) -> dict[str, Any]:
         """Returns fusion_count, avg_saved_ms, pipeline_efficiency."""
         with self._lock:
             completed = [
@@ -244,7 +245,7 @@ class PipelineFusion:
                 "registered_stages": len(self._stages),
             }
 
-    def measure_stage(self, name: str, fn: Callable, *args, **kwargs) -> Dict[str, Any]:
+    def measure_stage(self, name: str, fn: Callable, *args, **kwargs) -> dict[str, Any]:
         """Measure and record a stage's actual execution time."""
         skip = kwargs.pop("_skip", False)
         elapsed = kwargs.pop("_elapsed", None)
@@ -276,7 +277,7 @@ class PipelineFusion:
             "avg_ms": round(stage.actual_ms, 4) if name in self._stages else None,
         }
 
-    def get_stage_timings(self) -> Dict[str, Dict[str, Any]]:
+    def get_stage_timings(self) -> dict[str, dict[str, Any]]:
         """Returns timing data for all registered stages."""
         with self._lock:
             result = {}
@@ -289,7 +290,7 @@ class PipelineFusion:
                 }
             return result
 
-    def get_fusion(self, fusion_id: str) -> Optional[Dict[str, Any]]:
+    def get_fusion(self, fusion_id: str) -> dict[str, Any] | None:
         """Retrieve details of a specific fusion."""
         with self._lock:
             fusion = self._active_fusions.get(fusion_id)
@@ -317,7 +318,7 @@ class PipelineFusion:
             logger.info("PipelineFusion reset")
 
 
-_fusion_instance: Optional[PipelineFusion] = None
+_fusion_instance: PipelineFusion | None = None
 _fusion_lock = threading.RLock()
 
 

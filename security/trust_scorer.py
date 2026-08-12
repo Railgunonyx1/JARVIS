@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import time
-import math
 import logging
 import threading
+import time
 from collections import deque
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("jarvis.security.trust_scorer")
 
@@ -19,21 +17,21 @@ class TrustScorer:
     """Thread-safe trust scorer that adapts to action outcomes."""
 
     def __init__(self) -> None:
-        self._trust_data: Dict[str, dict] = {}
+        self._trust_data: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Scoring
     # ------------------------------------------------------------------
 
-    def score_action(self, action: str, context: Optional[dict] = None) -> dict:
+    def score_action(self, action: str, context: dict | None = None) -> dict:
         """Return a trust assessment for *action*.
 
         Returns dict with keys ``trust_score`` (0-1), ``risk_level``, and
         ``factors`` (list of contributing strings).
         """
         context = context or {}
-        factors: List[str] = []
+        factors: list[str] = []
 
         with self._lock:
             data = self._get_or_create(action)
@@ -171,7 +169,7 @@ def _trust_to_risk(score: float) -> str:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[TrustScorer] = None
+_instance: TrustScorer | None = None
 _instance_lock = threading.Lock()
 
 

@@ -2,9 +2,8 @@
 
 All memory operations go through this API, never directly to MemoryStore.
 """
-import time
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from api.v1.models import MemoryItem
 
@@ -33,14 +32,14 @@ class MemoryAPI:
             logger.error("MemoryAPI.store failed: %s", e)
             return False
 
-    def recall(self, key: str) -> Optional[str]:
+    def recall(self, key: str) -> str | None:
         try:
             return self._store.recall(key)
         except Exception as e:
             logger.error("MemoryAPI.recall failed: %s", e)
             return None
 
-    def search(self, query: str, top_k: int = 5) -> List[MemoryItem]:
+    def search(self, query: str, top_k: int = 5) -> list[MemoryItem]:
         results = []
         try:
             if self._vector:
@@ -61,11 +60,11 @@ class MemoryAPI:
         logger.warning("MemoryAPI.delete: not supported by current MemoryStore")
         return False
 
-    def list_keys(self, prefix: str = "", limit: int = 100) -> List[str]:
+    def list_keys(self, prefix: str = "", limit: int = 100) -> list[str]:
         logger.warning("MemoryAPI.list_keys: not supported by current MemoryStore")
         return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         try:
             return self._store.get_stats()
         except Exception:

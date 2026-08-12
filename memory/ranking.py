@@ -13,7 +13,6 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Dict, Optional
 
 from memory.models import MemoryItem
 
@@ -46,7 +45,7 @@ class ImportanceScorer:
     )
 
     def __init__(self) -> None:
-        self._seen_phrases: Dict[str, int] = {}
+        self._seen_phrases: dict[str, int] = {}
         self._lock = threading.Lock()
 
     def score(self, text: str) -> float:
@@ -121,7 +120,7 @@ class HybridRanker:
         query_project: str = "",
         semantic: float = 0.0,
         lexical: float = 0.0,
-        now: Optional[float] = None,
+        now: float | None = None,
     ) -> float:
         """Final 0..1 hybrid relevance for one candidate."""
         now = now or time.time()

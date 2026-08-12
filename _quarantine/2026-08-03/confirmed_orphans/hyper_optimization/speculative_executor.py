@@ -4,8 +4,9 @@ import logging
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.speculative_executor")
 
@@ -14,8 +15,8 @@ class SpeculativeHyperExecutor:
     """Executes likely next actions before user requests them."""
 
     def __init__(self):
-        self._predictions: Dict[str, Dict] = {}
-        self._cache: Dict[str, tuple] = {}
+        self._predictions: dict[str, dict] = {}
+        self._cache: dict[str, tuple] = {}
         self._thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="spec-hyper")
         self._lock = threading.RLock()
         self._stats = {
@@ -87,7 +88,7 @@ class SpeculativeHyperExecutor:
                 if future.exception() is not None:
                     self._predictions[pred_id]["status"] = "failed"
 
-    def get_cached(self, key: str) -> Optional[Any]:
+    def get_cached(self, key: str) -> Any | None:
         """Get precomputed result if available and not expired."""
         with self._lock:
             entry = self._cache.get(key)
@@ -144,7 +145,7 @@ class SpeculativeHyperExecutor:
                 ),
             }
 
-    def invalidate(self, pattern: Optional[str] = None):
+    def invalidate(self, pattern: str | None = None):
         """Invalidate cached predictions. pattern=None clears all."""
         with self._lock:
             if pattern is None:
@@ -187,7 +188,7 @@ class SpeculativeHyperExecutor:
         logger.info("SpeculativeHyperExecutor shut down")
 
 
-_instance: Optional[SpeculativeHyperExecutor] = None
+_instance: SpeculativeHyperExecutor | None = None
 _instance_lock = threading.RLock()
 
 

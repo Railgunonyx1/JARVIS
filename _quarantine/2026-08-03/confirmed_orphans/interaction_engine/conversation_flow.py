@@ -1,10 +1,8 @@
 """Conversation Flow Optimizer — Analyzes and improves conversation quality metrics."""
 
-import time
-import math
 import logging
+import math
 import threading
-from typing import Optional
 from collections import Counter
 
 logger = logging.getLogger("jarvis.interaction_engine.conversation_flow")
@@ -220,7 +218,7 @@ class ConversationFlowOptimizer:
         return min(score, 1.0)
 
 
-_instance: Optional[ConversationFlowOptimizer] = None
+_instance: ConversationFlowOptimizer | None = None
 _instance_lock = threading.Lock()
 
 

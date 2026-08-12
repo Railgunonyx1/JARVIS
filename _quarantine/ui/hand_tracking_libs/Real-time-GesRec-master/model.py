@@ -1,8 +1,8 @@
+
 import torch
+from models import c3d, mobilenet, mobilenetv2, resnet, resnetl, resnext, shufflenet, shufflenetv2, squeezenet
 from torch import nn
 
-from models import c3d, squeezenet, mobilenet, shufflenet, mobilenetv2, shufflenetv2, resnext, resnet, resnetl
-import pdb
 
 def generate_model(opt):
     assert opt.model in ['c3d', 'squeezenet', 'mobilenet', 'resnext', 'resnet', 'resnetl',
@@ -137,14 +137,14 @@ def generate_model(opt):
         print("Total number of trainable parameters: ", pytorch_total_params)
 
         if opt.pretrain_path:
-            print('loading pretrained model {}'.format(opt.pretrain_path))
+            print(f'loading pretrained model {opt.pretrain_path}')
             pretrain = torch.load(opt.pretrain_path, map_location=torch.device('cpu'))
             # print(opt.arch)
             # print(pretrain['arch'])
             # assert opt.arch == pretrain['arch']
             model = modify_kernels(opt, model, opt.pretrain_modality)
             model.load_state_dict(pretrain['state_dict'])
-            
+
 
             if opt.model in  ['mobilenet', 'mobilenetv2', 'shufflenet', 'shufflenetv2']:
                 model.module.classifier = nn.Sequential(
@@ -170,13 +170,13 @@ def generate_model(opt):
         return model, parameters
     else:
         if opt.pretrain_path:
-            print('loading pretrained model {}'.format(opt.pretrain_path))
+            print(f'loading pretrained model {opt.pretrain_path}')
             pretrain = torch.load(opt.pretrain_path)
 
             model = modify_kernels(opt, model, opt.pretrain_modality)
             model.load_state_dict(pretrain['state_dict'])
 
-            
+
 
             if opt.model in  ['mobilenet', 'mobilenetv2', 'shufflenet', 'shufflenetv2']:
                 model.module.classifier = nn.Sequential(
@@ -261,7 +261,7 @@ def _modify_first_conv_layer(base_model, new_kernel_size1, new_filter_num):
                                                list(range(len(modules)))))[0]
     conv_layer = modules[first_conv_idx]
     container = modules[first_conv_idx - 1]
- 
+
     new_conv = nn.Conv3d(new_filter_num, conv_layer.out_channels, kernel_size=(new_kernel_size1,7,7),
                          stride=(1,2,2), padding=(1,3,3), bias=False)
     layer_name = list(container.state_dict().keys())[0][:-7]

@@ -1,15 +1,14 @@
 """User Model — SQLite-backed preference learning and activity tracking."""
 
 import json
-import time
+import logging
 import math
 import sqlite3
-import logging
 import threading
-from pathlib import Path
-from typing import Optional
-from dataclasses import dataclass, field, asdict
+import time
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger("jarvis.personal_intelligence.user_model")
 
@@ -26,7 +25,7 @@ class Preference:
     source: str = "interaction"
     last_updated: float = field(default_factory=time.time)
 
-    def decayed_confidence(self, now: Optional[float] = None) -> float:
+    def decayed_confidence(self, now: float | None = None) -> float:
         now = now or time.time()
         elapsed = now - self.last_updated
         return self.confidence * math.exp(-0.693 * elapsed / _CONFIDENCE_DECAY_HALF_LIFE)
@@ -94,14 +93,14 @@ class UserProfile:
 
 
 class UserModel:
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         self._data_dir = data_dir or Path.home() / ".jarvis" / "data"
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "user_model.db"
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()
         self._flush_lock = threading.Lock()
-        self._flush_timer: Optional[threading.Timer] = None
+        self._flush_timer: threading.Timer | None = None
         self._dirty = False
         self._profile = UserProfile()
         self._interaction_buffer: list[tuple] = []
@@ -265,7 +264,7 @@ class UserModel:
         pref = Preference(key=key, value=value, confidence=confidence, source=source, last_updated=now)
         self._profile.preferences[key] = pref.to_dict()
 
-    def get_preference(self, key: str) -> Optional[Preference]:
+    def get_preference(self, key: str) -> Preference | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT key, value, confidence, source, last_updated FROM preferences WHERE key = ?", (key,)

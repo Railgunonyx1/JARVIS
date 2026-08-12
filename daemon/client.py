@@ -11,7 +11,7 @@ import asyncio
 import random
 import time
 import uuid
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 from daemon.state import PROTOCOL_VERSION
 from runtime.transport.protocol import (
@@ -37,7 +37,7 @@ from runtime.transport.tcp import open_connection
 
 __all__ = ["DaemonClient", "DaemonError", "DaemonDisconnected"]
 
-EventCallback = Callable[[str, Dict], None]
+EventCallback = Callable[[str, dict], None]
 
 
 class DaemonError(Exception):
@@ -48,8 +48,8 @@ class DaemonDisconnected(Exception):
     """The daemon connection dropped or never authenticated."""
 
 
-def _env(type_: str, payload: Optional[Dict] = None,
-         id_: str = "") -> Dict:
+def _env(type_: str, payload: dict | None = None,
+         id_: str = "") -> dict:
     return {
         "version": PROTOCOL_VERSION,
         "id": id_,
@@ -85,7 +85,7 @@ class DaemonClient:
         self.project_id = project_id
         self._transport = None
         self._connected = False
-        self.cached_status: Dict = {}
+        self.cached_status: dict = {}
         self.last_connect_ms = 0.0
         self.last_request_ms = 0.0
         self.last_run_ms = 0.0
@@ -109,7 +109,7 @@ class DaemonClient:
                 await transport.send(_env(MSG_AUTH, {"token": self.token}))
                 response = await asyncio.wait_for(
                     transport.receive(), timeout=self.CONNECT_TIMEOUT)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise DaemonDisconnected(
                     f"daemon {self.host}:{self.port} did not authenticate within "
                     f"{self.CONNECT_TIMEOUT:.0f}s") from None
@@ -137,9 +137,9 @@ class DaemonClient:
         await self.close()
         await self.connect()
 
-    async def connect_bounded(self, max_attempts: Optional[int] = None,
-                              base_delay: Optional[float] = None,
-                              max_delay: Optional[float] = None) -> None:
+    async def connect_bounded(self, max_attempts: int | None = None,
+                              base_delay: float | None = None,
+                              max_delay: float | None = None) -> None:
         """Connect, retrying with jittered exponential backoff.
 
         Useful on top of a daemon restart: a few quick attempts cover the
@@ -150,7 +150,7 @@ class DaemonClient:
         attempts = max_attempts or self.RECONNECT_MAX_ATTEMPTS
         base = base_delay if base_delay is not None else self.RECONNECT_BASE_DELAY
         ceiling = max_delay or self.RECONNECT_MAX_DELAY
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for attempt in range(1, attempts + 1):
             try:
                 await self.connect()
@@ -167,19 +167,19 @@ class DaemonClient:
 
     # ── low level ────────────────────────────────────────────────────────
 
-    async def _send(self, type_: str, payload: Optional[Dict] = None,
+    async def _send(self, type_: str, payload: dict | None = None,
                     id_: str = "") -> None:
         if self._transport is None:
             raise DaemonDisconnected("not connected")
         await self._transport.send(_env(type_, payload, id_))
 
-    async def _recv(self) -> Dict:
+    async def _recv(self) -> dict:
         if self._transport is None:
             raise DaemonDisconnected("not connected")
         try:
             message = await asyncio.wait_for(
                 self._transport.receive(), timeout=self.IDLE_TIMEOUT)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await self.close()
             raise DaemonError(
                 f"daemon unresponsive — no frame for {self.IDLE_TIMEOUT:.0f}s"
@@ -189,8 +189,8 @@ class DaemonClient:
             raise DaemonDisconnected("daemon connection lost")
         return message
 
-    async def request(self, type_: str, payload: Optional[Dict] = None,
-                      *, id_: str = "") -> Dict:
+    async def request(self, type_: str, payload: dict | None = None,
+                      *, id_: str = "") -> dict:
         """Send a request and await its terminal response payload."""
         t0 = time.perf_counter()
         try:
@@ -210,18 +210,18 @@ class DaemonClient:
 
     # ── convenience requests ─────────────────────────────────────────────
 
-    async def ping(self) -> Dict:
+    async def ping(self) -> dict:
         return await self.request(MSG_PING)
 
-    async def status(self) -> Dict:
+    async def status(self) -> dict:
         payload = await self.request(MSG_STATUS)
         self.cached_status = payload
         return payload
 
-    async def set_mode(self, mode: str) -> Dict:
+    async def set_mode(self, mode: str) -> dict:
         return await self.request(MSG_SET_MODE, {"mode": mode})
 
-    async def memory_search(self, query: str, top_k: int = 5) -> List[Dict]:
+    async def memory_search(self, query: str, top_k: int = 5) -> list[dict]:
         payload = await self.request(MSG_MEMORY_SEARCH, {"query": query, "top_k": top_k})
         return payload.get("hits", [])
 
@@ -232,17 +232,17 @@ class DaemonClient:
         )
         return payload.get("message", "")
 
-    async def models(self) -> Dict:
+    async def models(self) -> dict:
         payload = await self.request(MSG_MODELS)
         return payload.get("data", {})
 
-    async def history(self, task_id: str = "", limit: int = 10) -> Dict:
+    async def history(self, task_id: str = "", limit: int = 10) -> dict:
         payload = {"limit": limit}
         if task_id:
             payload["task_id"] = task_id
         return await self.request(MSG_HISTORY, payload)
 
-    async def issue_bootstrap(self) -> Dict:
+    async def issue_bootstrap(self) -> dict:
         """Ask the daemon for a short-lived dashboard credential.
 
         Returns the bootstrap credential payload (``bootstrap``, ``ws_port``,
@@ -251,8 +251,8 @@ class DaemonClient:
         """
         return await self.request(MSG_BOOTSTRAP)
 
-    async def run(self, goal: str, mode: Optional[str] = None,
-                  on_event: Optional[EventCallback] = None) -> Dict:
+    async def run(self, goal: str, mode: str | None = None,
+                  on_event: EventCallback | None = None) -> dict:
         """Run a goal; stream observer events via ``on_event``, return result dict.
 
         If the connection drops mid-run, reconnects with bounded backoff and
@@ -275,9 +275,9 @@ class DaemonClient:
         finally:
             self.last_run_ms = (time.perf_counter() - t0) * 1000.0
 
-    async def _run_once(self, rid: str, goal: str, mode: Optional[str],
-                        on_event: Optional[EventCallback]) -> Dict:
-        payload: Dict = {"goal": goal}
+    async def _run_once(self, rid: str, goal: str, mode: str | None,
+                        on_event: EventCallback | None) -> dict:
+        payload: dict = {"goal": goal}
         if mode:
             payload["mode"] = mode
         await self._send(MSG_RUN, payload, rid)
@@ -295,14 +295,14 @@ class DaemonClient:
             elif msg_type == MSG_ERROR:
                 raise DaemonError(message.get("payload", {}).get("message", "run failed"))
 
-    async def cancel(self, task_id: str = "") -> Dict:
+    async def cancel(self, task_id: str = "") -> dict:
         """Cancel a running kernel task; defaults to the most recent ``run()``.
 
         The daemon replies ``MSG_OK`` immediately; the running task's terminal
         ``stream.result`` (``cancelled: True``) arrives on the in-flight
         ``run()`` call.
         """
-        payload: Dict = {}
+        payload: dict = {}
         if task_id:
             payload["task_id"] = task_id
         elif self._last_run_id:

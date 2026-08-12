@@ -1,9 +1,8 @@
 """Load Balancer — tracks workers and assigns tasks to the least-loaded one."""
 
-import time
-import threading
 import logging
-from typing import Dict, Optional
+import threading
+import time
 
 logger = logging.getLogger("jarvis.distributed_engine.load_balancer")
 
@@ -12,7 +11,7 @@ class LoadBalancer:
     """Thread-safe load balancer for distributing tasks across named workers."""
 
     def __init__(self) -> None:
-        self._workers: Dict[str, dict] = {}
+        self._workers: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def register_worker(self, name: str, capacity: int = 10) -> None:
@@ -30,10 +29,10 @@ class LoadBalancer:
             }
             logger.info("Registered worker '%s' with capacity %d", name, capacity)
 
-    def assign_task(self, task_id: str) -> Optional[str]:
+    def assign_task(self, task_id: str) -> str | None:
         """Return the least-loaded worker name, or None if no workers registered."""
         with self._lock:
-            best_name: Optional[str] = None
+            best_name: str | None = None
             best_load = float("inf")
             for name, info in self._workers.items():
                 if info["current_load"] < best_load:
@@ -61,10 +60,10 @@ class LoadBalancer:
                 worker, task_id, duration_ms,
             )
 
-    def get_worker_stats(self) -> Dict[str, dict]:
+    def get_worker_stats(self) -> dict[str, dict]:
         """Return per-worker load, average duration, and task count."""
         with self._lock:
-            stats: Dict[str, dict] = {}
+            stats: dict[str, dict] = {}
             for name, info in self._workers.items():
                 stats[name] = {
                     "current_load": info["current_load"],
@@ -77,10 +76,10 @@ class LoadBalancer:
                 }
             return stats
 
-    def get_least_loaded(self) -> Optional[str]:
+    def get_least_loaded(self) -> str | None:
         """Return the worker name with the lowest current load."""
         with self._lock:
-            best_name: Optional[str] = None
+            best_name: str | None = None
             best_load = float("inf")
             for name, info in self._workers.items():
                 if info["current_load"] < best_load:
@@ -102,7 +101,7 @@ class LoadBalancer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[LoadBalancer] = None
+_instance: LoadBalancer | None = None
 _instance_lock = threading.Lock()
 
 

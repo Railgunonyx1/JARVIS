@@ -6,12 +6,12 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import time
-import logging
 import importlib
-from pathlib import Path
+import logging
+import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -21,7 +21,7 @@ logger = logging.getLogger("benchmark.startup")
 @dataclass
 class StartupResult:
     python_import_ms: float = 0.0
-    module_loads: Dict[str, float] = field(default_factory=dict)
+    module_loads: dict[str, float] = field(default_factory=dict)
     total_import_ms: float = 0.0
     construction_ms: float = 0.0
     provider_init_ms: float = 0.0
@@ -34,7 +34,7 @@ class StartupResult:
     thread_count_before: int = 0
     thread_count_after: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "python_import_ms": self.python_import_ms,
             "module_loads": self.module_loads,

@@ -4,16 +4,17 @@ Borrows from: BehaviorTree (sequence/fallback/parallel nodes), Temporal (durable
 Prefect (task graphs), ROS2 (recovery behaviors).
 """
 
-import time
-import json
-import uuid
 import asyncio
+import json
 import logging
 import threading
-from pathlib import Path
-from dataclasses import dataclass, field, asdict
+import time
+import uuid
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.core.workflow")
 
@@ -41,15 +42,15 @@ class WorkflowStep:
     tool: str = ""
     params: dict = field(default_factory=dict)
     description: str = ""
-    depends_on: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
     node_type: NodeType = NodeType.ACTION
-    children: List['WorkflowStep'] = field(default_factory=list)
+    children: list['WorkflowStep'] = field(default_factory=list)
     max_retries: int = 2
     timeout: float = 30.0
     critical: bool = False
     status: StepStatus = StepStatus.PENDING
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     started_at: float = 0.0
     completed_at: float = 0.0
     retry_count: int = 0
@@ -71,11 +72,11 @@ class WorkflowStep:
 class Workflow:
     id: str = ""
     goal: str = ""
-    steps: List[WorkflowStep] = field(default_factory=list)
+    steps: list[WorkflowStep] = field(default_factory=list)
     status: str = "pending"
     created_at: float = 0.0
     updated_at: float = 0.0
-    checkpoint_path: Optional[Path] = None
+    checkpoint_path: Path | None = None
     metadata: dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -91,16 +92,16 @@ class Workflow:
 class Scheduler:
     """Executes workflow steps respecting dependencies, parallelism, and resource pressure."""
 
-    def __init__(self, tool_executor: Optional[Callable] = None,
+    def __init__(self, tool_executor: Callable | None = None,
                  resource_manager=None, task_manager=None):
         self._tool_executor = tool_executor
         self._resource_manager = resource_manager
         self._task_manager = task_manager
 
-    def _topological_sort(self, steps: List[WorkflowStep]) -> List[WorkflowStep]:
+    def _topological_sort(self, steps: list[WorkflowStep]) -> list[WorkflowStep]:
         step_map = {s.id: s for s in steps}
-        visited: Set[str] = set()
-        result: List[WorkflowStep] = []
+        visited: set[str] = set()
+        result: list[WorkflowStep] = []
 
         def _visit(sid: str):
             if sid in visited:
@@ -116,7 +117,7 @@ class Scheduler:
             _visit(s.id)
         return result
 
-    def _get_ready_steps(self, steps: List[WorkflowStep]) -> List[WorkflowStep]:
+    def _get_ready_steps(self, steps: list[WorkflowStep]) -> list[WorkflowStep]:
         status_map = {s.id: s.status for s in steps}
         ready = []
         for s in steps:
@@ -213,7 +214,7 @@ class Scheduler:
                     timeout=step.timeout,
                 )
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 step.error = "Timeout"
                 step.retry_count += 1
                 if step.retry_count <= step.max_retries:
@@ -261,10 +262,10 @@ class Scheduler:
 class WorkflowEngine:
     """Creates and manages workflows with durable execution, checkpoint/resume, and error recovery."""
 
-    def __init__(self, tool_executor: Optional[Callable] = None,
-                 scheduler: Optional[Scheduler] = None,
+    def __init__(self, tool_executor: Callable | None = None,
+                 scheduler: Scheduler | None = None,
                  resource_manager=None, task_manager=None,
-                 checkpoint_dir: Optional[Path] = None):
+                 checkpoint_dir: Path | None = None):
         self._scheduler = scheduler or Scheduler(
             tool_executor=tool_executor,
             resource_manager=resource_manager,
@@ -273,11 +274,11 @@ class WorkflowEngine:
         self._resource_manager = resource_manager
         self._task_manager = task_manager
         self._checkpoint_dir = checkpoint_dir or Path.home() / ".jarvis" / "workflows"
-        self._workflows: Dict[str, Workflow] = {}
+        self._workflows: dict[str, Workflow] = {}
         self._lock = threading.Lock()
 
     def create_workflow(self, goal: str,
-                         steps: Optional[List[dict]] = None) -> Workflow:
+                         steps: list[dict] | None = None) -> Workflow:
         wf = Workflow(
             goal=goal,
             checkpoint_path=self._checkpoint_dir / f"{uuid.uuid4().hex[:8]}.json",
@@ -302,7 +303,7 @@ class WorkflowEngine:
         return wf
 
     async def execute(self, workflow_id: str,
-                       execute_fn: Optional[Callable] = None) -> dict:
+                       execute_fn: Callable | None = None) -> dict:
         wf = self._workflows.get(workflow_id)
         if not wf:
             raise KeyError(f"Workflow {workflow_id} not found")
@@ -315,7 +316,7 @@ class WorkflowEngine:
         logger.info("Executing tool %s with params: %s", tool, params)
         return f"Executed {tool}"
 
-    def resume(self, workflow_id: str) -> Optional[Workflow]:
+    def resume(self, workflow_id: str) -> Workflow | None:
         """Resume a workflow from its checkpoint."""
         wf = self._workflows.get(workflow_id)
         if wf:
@@ -368,7 +369,7 @@ class WorkflowEngine:
         logger.info("Cancelled workflow %s", workflow_id)
         return True
 
-    def get_status(self, workflow_id: str) -> Optional[dict]:
+    def get_status(self, workflow_id: str) -> dict | None:
         wf = self._workflows.get(workflow_id)
         if not wf:
             return None

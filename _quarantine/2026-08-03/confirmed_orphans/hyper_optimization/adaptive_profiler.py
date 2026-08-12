@@ -13,7 +13,7 @@ import threading
 import time
 from collections import deque
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.adaptive_profiler")
 
@@ -25,7 +25,7 @@ class _ProfileData:
 
     def __init__(self, maxlen: int = 10000):
         self.samples: deque = deque(maxlen=maxlen)
-        self.stats: Dict[str, Any] = {}
+        self.stats: dict[str, Any] = {}
         self.last_update: float = 0.0
 
     def record(self, elapsed_ms: float) -> None:
@@ -58,7 +58,7 @@ class _ProfileData:
         }
 
 
-def _percentile(sorted_data: List[float], pct: float) -> float:
+def _percentile(sorted_data: list[float], pct: float) -> float:
     """Calculate percentile from pre-sorted data using linear interpolation."""
     if not sorted_data:
         return 0.0
@@ -76,7 +76,7 @@ class AdaptiveProfiler:
 
     def __init__(self, max_samples: int = 10000):
         self._max_samples = max_samples
-        self._profiles: Dict[str, _ProfileData] = {}
+        self._profiles: dict[str, _ProfileData] = {}
         self._overhead_ms: float = 0.0
         self._sampling_rate: float = 1.0
         self._target_overhead_ms: float = 0.5
@@ -128,7 +128,7 @@ class AdaptiveProfiler:
             self._profiles[name].record(elapsed_ms)
             self._total_profiled_blocks += 1
 
-    def get_profile(self, name: str) -> Dict[str, Any]:
+    def get_profile(self, name: str) -> dict[str, Any]:
         """Returns avg, min, max, p50, p95, p99, count, std_dev."""
         with self._lock:
             data = self._profiles.get(name)
@@ -136,7 +136,7 @@ class AdaptiveProfiler:
                 return {"error": f"No profile data for '{name}'", "count": 0}
             return dict(data.stats)
 
-    def get_all_profiles(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_profiles(self) -> dict[str, dict[str, Any]]:
         """Returns all profiles."""
         with self._lock:
             result = {}
@@ -144,10 +144,10 @@ class AdaptiveProfiler:
                 result[name] = dict(data.stats) if data.stats else {}
             return result
 
-    def get_bottlenecks(self, budget_ms: float = 100) -> List[Dict[str, Any]]:
+    def get_bottlenecks(self, budget_ms: float = 100) -> list[dict[str, Any]]:
         """Returns stages exceeding their latency budget, sorted by severity."""
         with self._lock:
-            bottlenecks: List[Dict[str, Any]] = []
+            bottlenecks: list[dict[str, Any]] = []
             for name, data in self._profiles.items():
                 if not data.stats:
                     continue
@@ -216,7 +216,7 @@ class AdaptiveProfiler:
         with self._lock:
             return self._sampling_rate
 
-    def get_overhead_stats(self) -> Dict[str, Any]:
+    def get_overhead_stats(self) -> dict[str, Any]:
         """Returns overhead measurement stats."""
         with self._lock:
             return {
@@ -227,7 +227,7 @@ class AdaptiveProfiler:
                 "total_skipped": self._total_skipped_blocks,
             }
 
-    def get_top_consumers(self, limit: int = 5) -> List[Dict[str, Any]]:
+    def get_top_consumers(self, limit: int = 5) -> list[dict[str, Any]]:
         """Returns top N stages by average latency."""
         with self._lock:
             items = []
@@ -242,7 +242,7 @@ class AdaptiveProfiler:
             items.sort(key=lambda x: x["avg_ms"], reverse=True)
             return items[:limit]
 
-    def reset(self, name: Optional[str] = None) -> None:
+    def reset(self, name: str | None = None) -> None:
         """Clear profiles. If name given, clear only that profile."""
         with self._lock:
             if name:
@@ -256,7 +256,7 @@ class AdaptiveProfiler:
                 logger.info("Reset all profiles")
 
 
-_profiler_instance: Optional[AdaptiveProfiler] = None
+_profiler_instance: AdaptiveProfiler | None = None
 _profiler_lock = threading.RLock()
 
 

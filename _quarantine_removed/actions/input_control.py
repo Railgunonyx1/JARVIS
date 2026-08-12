@@ -3,10 +3,7 @@
 Direct control of all input devices. Move mouse, click, type text, press keys.
 """
 
-import time
-import subprocess
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.input_control")
 
@@ -58,7 +55,7 @@ def _mouse_click(params: dict) -> str:
         pyautogui.click(int(x), int(y), clicks=clicks, button=button)
         return f"Clicked ({x}, {y})"
     pyautogui.click(clicks=clicks, button=button)
-    return f"Clicked at current position"
+    return "Clicked at current position"
 
 
 def _mouse_double_click(params: dict) -> str:
@@ -169,8 +166,9 @@ def _get_screen_size(params: dict) -> str:
 
 
 def _screenshot(params: dict) -> str:
-    import pyautogui
     from pathlib import Path
+
+    import pyautogui
     save_path = params.get("path", str(Path.home() / "Desktop" / "screenshot.png"))
     region = params.get("region")
     if region:

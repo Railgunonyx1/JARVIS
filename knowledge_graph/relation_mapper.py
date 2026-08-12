@@ -12,17 +12,16 @@ Performance: < 10ms per extraction on typical input.
 
 from __future__ import annotations
 
-import re
 import logging
-from typing import Dict, List, Optional, Set, Tuple
+import re
 from collections import defaultdict
 
-from knowledge_graph.graph import EntityType, RelationType, Entity
+from knowledge_graph.graph import EntityType, RelationType
 
 logger = logging.getLogger("jarvis.knowledge_graph.relations")
 
 # Syntactic relation patterns: (pattern, source_group, target_group, relation_type)
-_RELATION_PATTERNS: List[Tuple[re.Pattern, int, int, RelationType]] = [
+_RELATION_PATTERNS: list[tuple[re.Pattern, int, int, RelationType]] = [
     # "X uses Y"
     (re.compile(r'(\b[\w\s]+?)\s+uses?\s+(\b[\w\s]+)', re.I), 1, 2, RelationType.USES),
     # "X created by Y" / "Y created X"
@@ -49,7 +48,7 @@ _RELATION_PATTERNS: List[Tuple[re.Pattern, int, int, RelationType]] = [
 ]
 
 # Intent-to-relation mappings
-_INTENT_RELATIONS: Dict[str, List[Tuple[str, str, RelationType]]] = {
+_INTENT_RELATIONS: dict[str, list[tuple[str, str, RelationType]]] = {
     "action.open": [("user", "app", RelationType.USES)],
     "action.search": [("user", "query", RelationType.RELATED_TO)],
     "action.file": [("user", "path", RelationType.OWNS)],
@@ -109,7 +108,7 @@ class RelationMapper:
     def __init__(self):
         self._co_occurrence_window = 5  # words
 
-    def extract_from_text(self, text: str) -> List[Tuple[str, str, RelationType, float]]:
+    def extract_from_text(self, text: str) -> list[tuple[str, str, RelationType, float]]:
         """Extract relations from raw text.
 
         Returns: List of (source_name, target_name, relation_type, confidence)
@@ -117,7 +116,7 @@ class RelationMapper:
         if not text or not text.strip():
             return []
 
-        results: List[Tuple[str, str, RelationType, float]] = []
+        results: list[tuple[str, str, RelationType, float]] = []
 
         # 1. Syntactic pattern matching
         for pattern, src_group, tgt_group, rel_type in _RELATION_PATTERNS:
@@ -163,8 +162,8 @@ class RelationMapper:
         # Deduplicate and merge
         return self._merge_relations(results)
 
-    def extract_from_intent(self, intent_name: str, entities: Dict[str, str],
-                            user_name: str = "user") -> List[Tuple[str, str, RelationType, float]]:
+    def extract_from_intent(self, intent_name: str, entities: dict[str, str],
+                            user_name: str = "user") -> list[tuple[str, str, RelationType, float]]:
         """Extract relations from intent classification context."""
         results = []
         if intent_name in _INTENT_RELATIONS:
@@ -176,8 +175,8 @@ class RelationMapper:
         return results
 
     def extract_all(self, text: str, intent_name: str = "",
-                    intent_entities: Optional[Dict] = None,
-                    user_name: str = "user") -> List[Tuple[str, str, RelationType, float]]:
+                    intent_entities: dict | None = None,
+                    user_name: str = "user") -> list[tuple[str, str, RelationType, float]]:
         """Combined extraction: text patterns + intent context."""
         text_relations = self.extract_from_text(text)
         intent_entities = intent_entities or {}
@@ -187,9 +186,9 @@ class RelationMapper:
         all_relations = text_relations + intent_relations
         return self._merge_relations(all_relations)
 
-    def _merge_relations(self, relations: List[Tuple[str, str, RelationType, float]]) -> List[Tuple[str, str, RelationType, float]]:
+    def _merge_relations(self, relations: list[tuple[str, str, RelationType, float]]) -> list[tuple[str, str, RelationType, float]]:
         """Merge duplicate relations, keeping highest confidence."""
-        merged: Dict[Tuple[str, str, RelationType], float] = {}
+        merged: dict[tuple[str, str, RelationType], float] = {}
         for src, tgt, rel_type, confidence in relations:
             key = (src.lower(), tgt.lower(), rel_type)
             if key not in merged or confidence > merged[key]:
@@ -200,9 +199,9 @@ class RelationMapper:
             for (src, tgt, rel_type), conf in merged.items()
         ]
 
-    def build_co_occurrence_graph(self, texts: List[str]) -> Dict[Tuple[str, str], int]:
+    def build_co_occurrence_graph(self, texts: list[str]) -> dict[tuple[str, str], int]:
         """Build a co-occurrence frequency map from multiple texts."""
-        co_counts: Dict[Tuple[str, str], int] = defaultdict(int)
+        co_counts: dict[tuple[str, str], int] = defaultdict(int)
 
         for text in texts:
             relations = self.extract_from_text(text)
@@ -214,7 +213,7 @@ class RelationMapper:
 
 
 def extract_relations(text: str, intent_name: str = "",
-                      intent_entities: Optional[Dict] = None) -> List[Tuple[str, str, RelationType, float]]:
+                      intent_entities: dict | None = None) -> list[tuple[str, str, RelationType, float]]:
     """Convenience function for relation extraction."""
     mapper = RelationMapper()
     return mapper.extract_all(text, intent_name, intent_entities)

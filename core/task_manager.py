@@ -2,13 +2,12 @@
 
 Separate from Scheduler. Manages task lifecycle and progress reporting.
 """
+import logging
 import time
 import uuid
-import asyncio
-import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger("jarvis.task_manager")
 
@@ -30,10 +29,10 @@ class Task:
     progress: float = 0.0
     message: str = ""
     created_at: float = 0.0
-    completed_at: Optional[float] = None
+    completed_at: float | None = None
     result: Any = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.id:
@@ -44,18 +43,18 @@ class Task:
 
 class TaskManager:
     def __init__(self):
-        self._tasks: Dict[str, Task] = {}
-        self._history: List[Task] = []
+        self._tasks: dict[str, Task] = {}
+        self._history: list[Task] = []
         self._max_history = 200
 
-    def create(self, name: str, metadata: Optional[Dict[str, Any]] = None) -> Task:
+    def create(self, name: str, metadata: dict[str, Any] | None = None) -> Task:
         task = Task(name=name, metadata=metadata or {})
         self._tasks[task.id] = task
         return task
 
-    def update(self, task_id: str, status: Optional[TaskStatus] = None,
-               progress: Optional[float] = None, message: Optional[str] = None,
-               result: Any = None, error: Optional[str] = None) -> bool:
+    def update(self, task_id: str, status: TaskStatus | None = None,
+               progress: float | None = None, message: str | None = None,
+               result: Any = None, error: str | None = None) -> bool:
         task = self._tasks.get(task_id)
         if not task:
             return False
@@ -85,17 +84,17 @@ class TaskManager:
         self._archive(task)
         return True
 
-    def get(self, task_id: str) -> Optional[Task]:
+    def get(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)
 
-    def get_active(self) -> List[Task]:
+    def get_active(self) -> list[Task]:
         return [t for t in self._tasks.values()
                 if t.status in (TaskStatus.PENDING, TaskStatus.RUNNING)]
 
-    def get_by_status(self, status: TaskStatus) -> List[Task]:
+    def get_by_status(self, status: TaskStatus) -> list[Task]:
         return [t for t in self._tasks.values() if t.status == status]
 
-    def get_history(self, limit: int = 50) -> List[Task]:
+    def get_history(self, limit: int = 50) -> list[Task]:
         return sorted(self._history, key=lambda t: t.created_at, reverse=True)[:limit]
 
     def _archive(self, task: Task):
@@ -104,7 +103,7 @@ class TaskManager:
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         return {
             "active": len(self.get_active()),
             "pending": len(self.get_by_status(TaskStatus.PENDING)),

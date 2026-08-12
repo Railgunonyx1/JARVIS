@@ -3,11 +3,12 @@
 Removes first-use delays (cold start penalties).
 """
 import logging
-import time
 import re
 import threading
-from typing import Optional, Dict, Any, Callable, List
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("optimization_system.aot_warmup")
 
@@ -22,7 +23,7 @@ class WarmUpTask:
     priority: int = 5  # 1=highest
     completed: bool = False
     latency_ms: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class AOTWarmUp:
@@ -39,9 +40,9 @@ class AOTWarmUp:
     """
 
     def __init__(self):
-        self._tasks: List[WarmUpTask] = []
-        self._compiled_regexes: Dict[str, Any] = {}
-        self._prewarmed: Dict[str, Any] = {}
+        self._tasks: list[WarmUpTask] = []
+        self._compiled_regexes: dict[str, Any] = {}
+        self._prewarmed: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._warmup_complete = False
         self._total_latency_ms = 0.0
@@ -71,7 +72,7 @@ class AOTWarmUp:
                 name=name, func=func, args=args, kwargs=kwargs, priority=priority
             ))
 
-    def compile_regexes(self) -> Dict[str, Any]:
+    def compile_regexes(self) -> dict[str, Any]:
         """Pre-compile all common regexes."""
         start = time.time()
         for name, pattern in self._common_patterns.items():
@@ -92,10 +93,10 @@ class AOTWarmUp:
         """Store a pre-warmed resource."""
         self._prewarmed[key] = value
 
-    def get_prewarmed(self, key: str) -> Optional[Any]:
+    def get_prewarmed(self, key: str) -> Any | None:
         return self._prewarmed.get(key)
 
-    async def run_warmup(self) -> Dict[str, Any]:
+    async def run_warmup(self) -> dict[str, Any]:
         """Execute all registered warm-up tasks."""
         start = time.time()
         results = {}
@@ -139,7 +140,7 @@ class AOTWarmUp:
     def is_complete(self) -> bool:
         return self._warmup_complete
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "warmup_complete": self._warmup_complete,
             "total_latency_ms": round(self._total_latency_ms, 1),
@@ -149,7 +150,7 @@ class AOTWarmUp:
         }
 
 
-_warmup_instance: Optional[AOTWarmUp] = None
+_warmup_instance: AOTWarmUp | None = None
 
 
 def get_aot_warmup() -> AOTWarmUp:

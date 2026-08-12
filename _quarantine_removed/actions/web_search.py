@@ -1,7 +1,7 @@
 """Web search — Gemini (with key) → DuckDuckGo fallback. Supports search, news, research, compare."""
 
-import os
 import logging
+import os
 
 logger = logging.getLogger("jarvis.actions.web_search")
 

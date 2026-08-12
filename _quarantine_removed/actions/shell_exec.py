@@ -7,14 +7,13 @@ matching a SAFE_ALLOWLIST (and not in DANGEROUS_BLOCKLIST) may run. Python and
 pip execution are allowed (they run in a subprocess with cwd=HOME).
 """
 
+import logging
 import os
 import re
-import sys
 import subprocess
-import logging
+import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.shell_exec")
 

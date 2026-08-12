@@ -13,14 +13,11 @@ All queries return formatted strings for direct LLM injection.
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+import time
 
-from knowledge_graph.graph import (
-    KnowledgeGraph, Entity, EntityType, RelationType, get_knowledge_graph
-)
 from knowledge_graph.entity_extractor import EntityExtractor
+from knowledge_graph.graph import EntityType, KnowledgeGraph, RelationType, get_knowledge_graph
 from knowledge_graph.relation_mapper import RelationMapper
 
 logger = logging.getLogger("jarvis.knowledge_graph.query")
@@ -29,13 +26,13 @@ logger = logging.getLogger("jarvis.knowledge_graph.query")
 class GraphQuery:
     """High-level query interface for the knowledge graph."""
 
-    def __init__(self, graph: Optional[KnowledgeGraph] = None):
+    def __init__(self, graph: KnowledgeGraph | None = None):
         self.graph = graph or get_knowledge_graph()
         self.extractor = EntityExtractor()
         self.mapper = RelationMapper()
 
     def ingest_conversation(self, user_text: str, assistant_text: str,
-                            intent_name: str = "", intent_entities: Optional[Dict] = None):
+                            intent_name: str = "", intent_entities: dict | None = None):
         """Extract and store entities/relations from a conversation turn."""
         # Extract from user text
         user_entities = self.extractor.extract_all(user_text, intent_name, intent_entities)
@@ -98,7 +95,6 @@ class GraphQuery:
 
     def query_by_type(self, entity_type: EntityType, limit: int = 20) -> str:
         """Get all entities of a specific type."""
-        from knowledge_graph.graph import EntityType as ET
         conn = self.graph._get_conn()
         rows = conn.execute(
             "SELECT name, entity_type, properties, importance FROM entities "

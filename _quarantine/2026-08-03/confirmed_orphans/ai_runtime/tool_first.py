@@ -4,10 +4,11 @@ Before calling an LLM, check: calculator, database, memory, search, filesystem.
 If a tool answers directly, skip the LLM entirely.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, Callable, List
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.tool_first")
 
@@ -33,7 +34,7 @@ class ToolFirstExecutor:
     """
 
     def __init__(self):
-        self._tools: Dict[str, Dict[str, Any]] = {}
+        self._tools: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._stats = {
             "total_checks": 0,
@@ -44,7 +45,7 @@ class ToolFirstExecutor:
         }
 
     def register_tool(self, name: str, checker: Callable,
-                      keywords: List[str] = None, avg_tokens: int = 50) -> None:
+                      keywords: list[str] = None, avg_tokens: int = 50) -> None:
         """Register a tool that can potentially answer without LLM."""
         with self._lock:
             self._tools[name] = {
@@ -54,7 +55,7 @@ class ToolFirstExecutor:
                 "resolved_count": 0,
             }
 
-    def check_all_tools(self, query: str) -> Optional[ToolCheck]:
+    def check_all_tools(self, query: str) -> ToolCheck | None:
         """Check all registered tools for a direct answer."""
         self._stats["total_checks"] += 1
         query_lower = query.lower()
@@ -100,7 +101,7 @@ class ToolFirstExecutor:
         self._stats["llm_required"] += 1
         return None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             tool_usage = {
                 name: tool["resolved_count"]
@@ -114,7 +115,7 @@ class ToolFirstExecutor:
             }
 
 
-_tool_first_instance: Optional[ToolFirstExecutor] = None
+_tool_first_instance: ToolFirstExecutor | None = None
 
 
 def get_tool_first_executor() -> ToolFirstExecutor:

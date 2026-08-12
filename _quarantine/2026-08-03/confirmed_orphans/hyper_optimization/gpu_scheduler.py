@@ -6,7 +6,8 @@ import logging
 import threading
 import time
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.gpu_scheduler")
 
@@ -15,13 +16,13 @@ class GPUScheduler:
     """Manages GPU workload scheduling across multiple priority-based streams."""
 
     def __init__(self) -> None:
-        self._streams: Dict[str, Dict[str, Any]] = {}
+        self._streams: dict[str, dict[str, Any]] = {}
         self._gpu_available: bool = False
         self._gpu_name: str = "none"
         self._gpu_memory_mb: float = 0.0
         self._cuda_device_count: int = 0
         self._lock = threading.RLock()
-        self._stats: Dict[str, Any] = {
+        self._stats: dict[str, Any] = {
             "tasks_scheduled": 0,
             "tasks_completed": 0,
             "total_gpu_ms": 0.0,
@@ -109,8 +110,8 @@ class GPUScheduler:
         self,
         stream_id: str,
         task_fn: Callable[..., Any],
-        task_args: Optional[tuple] = None,
-        task_kwargs: Optional[dict] = None,
+        task_args: tuple | None = None,
+        task_kwargs: dict | None = None,
         priority: int = 5,
     ) -> None:
         """Submit a task to a GPU stream."""
@@ -140,10 +141,10 @@ class GPUScheduler:
                 len(self._streams[stream_id]["queue"]),
             )
 
-    def get_queue_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_queue_status(self) -> dict[str, dict[str, Any]]:
         """Returns per-stream queue depths and active status."""
         with self._lock:
-            status: Dict[str, Dict[str, Any]] = {}
+            status: dict[str, dict[str, Any]] = {}
             for sid, stream in self._streams.items():
                 status[sid] = {
                     "name": stream["name"],
@@ -155,10 +156,10 @@ class GPUScheduler:
                 }
             return status
 
-    def get_next_task(self) -> Optional[Tuple[str, Dict[str, Any]]]:
+    def get_next_task(self) -> tuple[str, dict[str, Any]] | None:
         """Get the highest-priority task across all streams. Returns (stream_id, task) or None."""
         with self._lock:
-            best_task: Optional[Tuple[str, Dict[str, Any]]] = None
+            best_task: tuple[str, dict[str, Any]] | None = None
             best_priority = 11
             for sid, stream in self._streams.items():
                 if not stream["queue"]:
@@ -170,7 +171,7 @@ class GPUScheduler:
                     best_task = (sid, task)
             return best_task
 
-    def pop_next_task(self) -> Optional[Tuple[str, Dict[str, Any]]]:
+    def pop_next_task(self) -> tuple[str, dict[str, Any]] | None:
         """Pop the highest-priority task from its stream queue."""
         with self._lock:
             result = self.get_next_task()
@@ -200,7 +201,7 @@ class GPUScheduler:
                 "Task completed on stream '%s' (%.2f ms GPU time)", stream_id, gpu_ms
             )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Returns aggregate scheduler statistics."""
         with self._lock:
             completed = self._stats["tasks_completed"]
@@ -226,7 +227,7 @@ class GPUScheduler:
                 "total_streams": total_streams,
             }
 
-    def suggest_parallelism(self) -> Dict[str, Any]:
+    def suggest_parallelism(self) -> dict[str, Any]:
         """Suggest optimal concurrency based on GPU capability."""
         with self._lock:
             if not self._gpu_available:
@@ -338,7 +339,7 @@ class GPUScheduler:
             return count
 
 
-_instance: Optional[GPUScheduler] = None
+_instance: GPUScheduler | None = None
 _instance_lock = threading.RLock()
 
 

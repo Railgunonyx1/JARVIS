@@ -1,13 +1,12 @@
 """Process Optimizer — JARVIS process priority, affinity, memory, and CPU management."""
 
+import ctypes
+import gc
+import logging
 import os
 import sys
-import gc
-import time
-import ctypes
-import logging
 import threading
-from typing import List, Optional
+import time
 
 import psutil
 
@@ -64,7 +63,7 @@ class ProcessOptimizer:
             logger.error("Failed to get process info: %s", e)
             return {"error": str(e)}
 
-    def set_cpu_affinity(self, cores: List[int]) -> dict:
+    def set_cpu_affinity(self, cores: list[int]) -> dict:
         """Set CPU core affinity for the JARVIS process."""
         result = {"cores": cores, "success": False}
         try:
@@ -111,7 +110,7 @@ class ProcessOptimizer:
         logger.info("GC collected %d cycles, freed %d objects", collected, freed)
         return result
 
-    def _get_windows_priority(self) -> Optional[str]:
+    def _get_windows_priority(self) -> str | None:
         if sys.platform != "win32":
             return self._process.nice()
         try:
@@ -135,7 +134,7 @@ class ProcessOptimizer:
             return "unknown"
 
 
-def _get_cpu_freq() -> Optional[float]:
+def _get_cpu_freq() -> float | None:
     try:
         freq = psutil.cpu_freq()
         if freq:
@@ -149,7 +148,7 @@ def time_since(timestamp: float) -> float:
     return round(time.time() - timestamp, 1)
 
 
-_process_optimizer: Optional[ProcessOptimizer] = None
+_process_optimizer: ProcessOptimizer | None = None
 _process_optimizer_lock = threading.Lock()
 
 

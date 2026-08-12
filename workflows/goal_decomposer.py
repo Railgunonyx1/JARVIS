@@ -1,14 +1,13 @@
 import json
+import logging
+import os
 import re
 import sqlite3
 import time
 import uuid
-import logging
-import os
-from pathlib import Path
-from typing import Optional
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 
 logger = logging.getLogger("jarvis.workflows.decomposer")
 
@@ -27,7 +26,7 @@ def _get_api_key() -> str:
         return os.environ["GEMINI_API_KEY"]
     if API_CONFIG_PATH.exists():
         try:
-            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            with open(API_CONFIG_PATH, encoding="utf-8") as f:
                 return json.load(f).get("gemini_api_key", "")
         except Exception:
             pass

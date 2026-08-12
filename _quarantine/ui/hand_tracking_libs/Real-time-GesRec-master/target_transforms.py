@@ -1,8 +1,6 @@
-import random
-import math
 
 
-class Compose(object):
+class Compose:
 
     def __init__(self, transforms):
         self.transforms = transforms
@@ -14,13 +12,13 @@ class Compose(object):
         return dst
 
 
-class ClassLabel(object):
+class ClassLabel:
 
     def __call__(self, target):
         return target['label']
 
 
-class VideoID(object):
+class VideoID:
 
     def __call__(self, target):
         return target['video_id']

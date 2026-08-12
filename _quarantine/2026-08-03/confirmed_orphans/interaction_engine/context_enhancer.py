@@ -1,11 +1,9 @@
 """Context Enhancer — Enriches raw context with knowledge graph, user preferences, and system state."""
 
-import time
 import logging
 import threading
-from typing import Optional
+import time
 from datetime import datetime
-from collections import Counter
 
 logger = logging.getLogger("jarvis.interaction_engine.context_enhancer")
 
@@ -206,7 +204,7 @@ class ContextEnhancer:
             "day_of_week": now.strftime("%A"),
         }
 
-    def _get_cached(self, key: str) -> Optional[dict]:
+    def _get_cached(self, key: str) -> dict | None:
         """Return cached result if still valid."""
         with self._lock:
             if key in self._context_cache:
@@ -265,7 +263,7 @@ class ContextEnhancer:
                 self._keyword_index[token].append(idx)
 
 
-_instance: Optional[ContextEnhancer] = None
+_instance: ContextEnhancer | None = None
 _instance_lock = threading.Lock()
 
 

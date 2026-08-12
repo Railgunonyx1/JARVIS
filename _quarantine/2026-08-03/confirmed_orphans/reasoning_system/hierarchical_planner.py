@@ -10,12 +10,10 @@ Build Application
 Workers execute branches independently.
 """
 import logging
-import time
-import uuid
 import threading
-from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger("reasoning_system.hierarchical_planner")
 
@@ -37,17 +35,17 @@ class PlanNode:
     id: str
     description: str
     state: TaskState = TaskState.PENDING
-    parent_id: Optional[str] = None
-    children_ids: List[str] = field(default_factory=list)
+    parent_id: str | None = None
+    children_ids: list[str] = field(default_factory=list)
     depth: int = 0
     priority: int = 5
     estimated_ms: float = 0.0
     actual_ms: float = 0.0
     result: Any = None
-    error: Optional[str] = None
-    dependencies: List[str] = field(default_factory=list)
+    error: str | None = None
+    dependencies: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "description": self.description,
@@ -71,13 +69,13 @@ class HierarchicalPlanner:
     """
 
     def __init__(self):
-        self._nodes: Dict[str, PlanNode] = {}
-        self._root_id: Optional[str] = None
+        self._nodes: dict[str, PlanNode] = {}
+        self._root_id: str | None = None
         self._lock = threading.Lock()
-        self._execution_log: List[Dict[str, Any]] = []
+        self._execution_log: list[dict[str, Any]] = []
         self._plan_counter = 0
 
-    def create_plan(self, goal: str, subtasks: List[str] = None) -> str:
+    def create_plan(self, goal: str, subtasks: list[str] = None) -> str:
         """Create a new hierarchical plan from a goal."""
         self._plan_counter += 1
         root_id = f"plan_{self._plan_counter}_root"
@@ -106,7 +104,7 @@ class HierarchicalPlanner:
 
         return root_id
 
-    def decompose(self, node_id: str, subtasks: List[str]) -> None:
+    def decompose(self, node_id: str, subtasks: list[str]) -> None:
         """Add subtasks to a node (decompose further)."""
         with self._lock:
             node = self._nodes.get(node_id)
@@ -127,7 +125,7 @@ class HierarchicalPlanner:
 
             node.state = TaskState.READY
 
-    def get_ready_tasks(self) -> List[PlanNode]:
+    def get_ready_tasks(self) -> list[PlanNode]:
         """Get all tasks that are ready to execute (dependencies met)."""
         with self._lock:
             ready = []
@@ -176,7 +174,7 @@ class HierarchicalPlanner:
         if all_done:
             parent.state = TaskState.COMPLETED
 
-    def get_progress(self) -> Dict[str, Any]:
+    def get_progress(self) -> dict[str, Any]:
         """Get overall plan progress."""
         with self._lock:
             total = len(self._nodes)
@@ -193,7 +191,7 @@ class HierarchicalPlanner:
                 "is_complete": completed == total,
             }
 
-    def get_tree(self, node_id: str = None) -> Dict[str, Any]:
+    def get_tree(self, node_id: str = None) -> dict[str, Any]:
         """Get plan as a tree structure."""
         node_id = node_id or self._root_id
         node = self._nodes.get(node_id)
@@ -204,7 +202,7 @@ class HierarchicalPlanner:
             "children": [self.get_tree(cid) for cid in node.children_ids],
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "total_plans": self._plan_counter,
@@ -213,7 +211,7 @@ class HierarchicalPlanner:
             }
 
 
-_planner_instance: Optional[HierarchicalPlanner] = None
+_planner_instance: HierarchicalPlanner | None = None
 
 
 def get_hierarchical_planner() -> HierarchicalPlanner:

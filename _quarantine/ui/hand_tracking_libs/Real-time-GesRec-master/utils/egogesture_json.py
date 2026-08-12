@@ -1,8 +1,9 @@
-from __future__ import print_function, division
+import json
 import os
 import sys
-import json
+
 import pandas as pd
+
 
 def convert_csv_to_dict(csv_path, subset, labels):
     data = pd.read_csv(csv_path, delimiter=' ', header=None)
@@ -21,13 +22,13 @@ def convert_csv_to_dict(csv_path, subset, labels):
         key_labels.append(class_name)
         key_start_frame.append(start_frame)
         key_end_frame.append(end_frame)
-        
+
     database = {}
     for i in range(len(keys)):
-        key = keys[i] 
-        if key in database: # need this because I have the same folder several  times 
-            key = key + '_' + str(i) 
-        
+        key = keys[i]
+        if key in database: # need this because I have the same folder several  times
+            key = key + '_' + str(i)
+
         database[key] = {}
         database[key]['subset'] = subset
         label = key_labels[i]
@@ -35,7 +36,7 @@ def convert_csv_to_dict(csv_path, subset, labels):
         end_frame = key_end_frame[i]
 
         database[key]['annotations'] = {'label': label, 'start_frame':start_frame, 'end_frame':end_frame}
-    
+
     return database
 
 def load_labels(label_csv_path):
@@ -45,13 +46,13 @@ def load_labels(label_csv_path):
         labels.append(data.ix[i, 1])
     return labels
 
-def convert_egogesture_csv_to_activitynet_json(label_csv_path, train_csv_path, 
+def convert_egogesture_csv_to_activitynet_json(label_csv_path, train_csv_path,
                                            val_csv_path, dst_json_path):
     labels = load_labels(label_csv_path)
     train_database = convert_csv_to_dict(train_csv_path, 'training', labels)
     val_database = convert_csv_to_dict(val_csv_path, 'validation', labels)
     test_database = convert_csv_to_dict(test_csv_path, 'testing', labels)
-    
+
     dst_data = {}
     dst_data['labels'] = labels
     dst_data['database'] = {}
@@ -78,7 +79,7 @@ if __name__ == '__main__':
     val_csv_path = os.path.join(csv_dir_path, 'vallist'+ class_types + '.txt')
     test_csv_path = os.path.join(csv_dir_path, 'testlist'+ class_types + '.txt')
     dst_json_path = os.path.join(csv_dir_path, 'egogesture' + class_types + '.json')
-    
+
     convert_egogesture_csv_to_activitynet_json(label_csv_path, train_csv_path,
                                                val_csv_path, dst_json_path)
     print('Successfully wrote to json : ', dst_json_path)

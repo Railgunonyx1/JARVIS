@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 _LANGUAGE_MARKERS = {
     "python": ["pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "Pipfile", "poetry.lock"],
@@ -34,11 +33,11 @@ class ProjectContext:
     root_path: Path
     language: str = ""
     framework: str = ""
-    git_root: Optional[Path] = None
-    config_files: List[str] = field(default_factory=list)
+    git_root: Path | None = None
+    config_files: list[str] = field(default_factory=list)
 
     @classmethod
-    def discover(cls, cwd: Optional[str] = None) -> "ProjectContext":
+    def discover(cls, cwd: str | None = None) -> ProjectContext:
         cwd_path = Path(cwd or os.getcwd()).resolve()
         ctx = cls(root_path=cwd_path)
         ctx._detect_git(cwd_path)
@@ -64,7 +63,7 @@ class ProjectContext:
         self.framework = self._detect_framework(root, files)
 
     @staticmethod
-    def _detect_framework(root: Path, files: List[str]) -> str:
+    def _detect_framework(root: Path, files: list[str]) -> str:
         try:
             if "requirements.txt" in files:
                 text = (root / "requirements.txt").read_text(encoding="utf-8", errors="ignore").lower()

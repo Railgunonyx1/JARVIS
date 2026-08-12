@@ -8,9 +8,10 @@ compact summary. An LLM-based summarizer can swap in later behind the same
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
-SummaryFn = Callable[[List[Dict[str, Any]]], str]
+SummaryFn = Callable[[list[dict[str, Any]]], str]
 
 
 def summarize_text(text: str, max_chars: int = 120) -> str:
@@ -21,7 +22,7 @@ def summarize_text(text: str, max_chars: int = 120) -> str:
 
 
 def summarize_turns(
-    turns: List[Dict[str, Any]],
+    turns: list[dict[str, Any]],
     max_chars: int = 1200,
     per_turn_chars: int = 120,
 ) -> str:
@@ -42,6 +43,6 @@ def summarize_turns(
     return joined[:max_chars]
 
 
-def default_summarizer(turns: List[Dict[str, Any]], max_chars: int = 1200) -> str:
+def default_summarizer(turns: list[dict[str, Any]], max_chars: int = 1200) -> str:
     """The standard folding summarizer used by the compressor."""
     return summarize_turns(turns, max_chars=max_chars)

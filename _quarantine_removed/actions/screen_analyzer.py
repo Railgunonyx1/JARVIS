@@ -9,7 +9,6 @@ Wraps existing screen_capture.py and adds:
 import io
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.screen_analyzer")
 
@@ -40,7 +39,7 @@ def _compress_png(png_bytes: bytes) -> tuple[bytes, str]:
         return png_bytes, "image/png"
 
 
-def _capture_screen_mss() -> Optional[tuple[bytes, str]]:
+def _capture_screen_mss() -> tuple[bytes, str] | None:
     try:
         import mss
         import mss.tools
@@ -58,7 +57,7 @@ def _capture_screen_mss() -> Optional[tuple[bytes, str]]:
         return None
 
 
-def _capture_screen_pil() -> Optional[tuple[bytes, str]]:
+def _capture_screen_pil() -> tuple[bytes, str] | None:
     try:
         from PIL import ImageGrab
         img = ImageGrab.grab()
@@ -70,7 +69,7 @@ def _capture_screen_pil() -> Optional[tuple[bytes, str]]:
         return None
 
 
-def _capture_camera() -> Optional[tuple[bytes, str]]:
+def _capture_camera() -> tuple[bytes, str] | None:
     try:
         import cv2
         from PIL import Image
@@ -140,7 +139,6 @@ def _analyze_with_gemini(image_bytes: bytes, mime_type: str, prompt: str, api_ke
 
 
 def _analyze_with_openrouter(image_bytes: bytes, mime_type: str, prompt: str) -> str:
-    import base64
     try:
         from core.config import Config
         cfg = Config.instance()
@@ -210,7 +208,7 @@ def _analyze_with_openrouter(image_bytes: bytes, mime_type: str, prompt: str) ->
     return f"Screen analysis failed. Error: {last_error}"
 
 
-def _find_element_on_screen(description: str, api_key: str) -> Optional[tuple[int, int]]:
+def _find_element_on_screen(description: str, api_key: str) -> tuple[int, int] | None:
     try:
         import mss
         import mss.tools

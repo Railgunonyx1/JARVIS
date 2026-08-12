@@ -12,16 +12,16 @@ Designed for speed (< 5ms per extraction).
 
 from __future__ import annotations
 
-import re
 import logging
-from typing import Any, Dict, List, Optional, Set, Tuple
+import re
+from typing import Any
 
 from knowledge_graph.graph import EntityType
 
 logger = logging.getLogger("jarvis.knowledge_graph.extractor")
 
 # Entity patterns — ordered by specificity
-_PATTERNS: List[Tuple[EntityType, re.Pattern]] = [
+_PATTERNS: list[tuple[EntityType, re.Pattern]] = [
     # File paths (Windows and Unix)
     (EntityType.FILE, re.compile(
         r'(?:[A-Za-z]:\\[\w\\.\-\s]+|~/[\w/.\-]+|\./[\w/.\-]+|/[\w/.\-]+|[\w/\\]+\.\w{1,5})\b'
@@ -73,7 +73,7 @@ _PATTERNS: List[Tuple[EntityType, re.Pattern]] = [
 ]
 
 # Common intent-to-entity mappings
-_INTENT_ENTITY_MAP: Dict[str, List[Tuple[str, EntityType]]] = {
+_INTENT_ENTITY_MAP: dict[str, list[tuple[str, EntityType]]] = {
     "action.open": [("app", EntityType.APPLICATION)],
     "action.search": [("query", EntityType.CONCEPT)],
     "action.file": [("path", EntityType.FILE)],
@@ -84,7 +84,7 @@ _INTENT_ENTITY_MAP: Dict[str, List[Tuple[str, EntityType]]] = {
 }
 
 # Stopwords to skip
-_STOPWORDS: Set[str] = {
+_STOPWORDS: set[str] = {
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
     "have", "has", "had", "do", "does", "did", "will", "would", "could",
     "should", "may", "might", "can", "shall", "to", "of", "in", "for",
@@ -104,19 +104,19 @@ class EntityExtractor:
     """Extracts entities from natural language text."""
 
     def __init__(self):
-        self._custom_patterns: List[Tuple[EntityType, re.Pattern]] = []
-        self._known_entities: Dict[str, EntityType] = {}  # lowercase name -> type
+        self._custom_patterns: list[tuple[EntityType, re.Pattern]] = []
+        self._known_entities: dict[str, EntityType] = {}  # lowercase name -> type
 
     def register_entity(self, name: str, entity_type: EntityType):
         """Register a known entity for faster extraction."""
         self._known_entities[name.lower()] = entity_type
 
-    def extract_from_text(self, text: str) -> List[Tuple[str, EntityType]]:
+    def extract_from_text(self, text: str) -> list[tuple[str, EntityType]]:
         """Extract entities from raw text. Returns list of (name, type)."""
         if not text or not text.strip():
             return []
 
-        found: Dict[str, EntityType] = {}
+        found: dict[str, EntityType] = {}
 
         # 1. Check known entities first (O(1) per entity)
         words = re.findall(r'\b\w+\b', text.lower())
@@ -146,7 +146,7 @@ class EntityExtractor:
 
         return [(name, etype) for name, etype in found.items()]
 
-    def extract_from_intent(self, intent_name: str, entities: Dict[str, Any]) -> List[Tuple[str, EntityType]]:
+    def extract_from_intent(self, intent_name: str, entities: dict[str, Any]) -> list[tuple[str, EntityType]]:
         """Extract entities from intent classification results."""
         results = []
         if intent_name in _INTENT_ENTITY_MAP:
@@ -157,14 +157,14 @@ class EntityExtractor:
         return results
 
     def extract_all(self, text: str, intent_name: str = "",
-                    intent_entities: Optional[Dict] = None) -> List[Tuple[str, EntityType]]:
+                    intent_entities: dict | None = None) -> list[tuple[str, EntityType]]:
         """Combined extraction: text + intent context."""
         text_entities = self.extract_from_text(text)
         intent_entities = intent_entities or {}
         intent_ents = self.extract_from_intent(intent_name, intent_entities)
 
         # Deduplicate, preferring intent-based type
-        seen: Dict[str, Tuple[str, EntityType]] = {}
+        seen: dict[str, tuple[str, EntityType]] = {}
         for name, etype in text_entities:
             key = name.lower()
             if key not in seen:
@@ -178,7 +178,7 @@ class EntityExtractor:
 
 
 def extract_entities(text: str, intent_name: str = "",
-                     intent_entities: Optional[Dict] = None) -> List[Tuple[str, EntityType]]:
+                     intent_entities: dict | None = None) -> list[tuple[str, EntityType]]:
     """Convenience function for entity extraction."""
     extractor = EntityExtractor()
     return extractor.extract_all(text, intent_name, intent_entities)

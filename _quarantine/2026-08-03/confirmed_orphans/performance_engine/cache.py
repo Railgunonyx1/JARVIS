@@ -1,10 +1,10 @@
 """Semantic Cache — LRU cache with TTL support and glob-based invalidation."""
 
-import time
-import threading
-import logging
 import fnmatch
-from typing import Any, Dict, List, Optional
+import logging
+import threading
+import time
+from typing import Any
 
 logger = logging.getLogger("jarvis.performance_engine.cache")
 
@@ -16,8 +16,8 @@ class SemanticCache:
 
     def __init__(self, max_entries: int = _MAX_ENTRIES) -> None:
         self._max_entries = max_entries
-        self._cache: Dict[str, tuple[Any, float]] = {}
-        self._access_order: List[str] = []
+        self._cache: dict[str, tuple[Any, float]] = {}
+        self._access_order: list[str] = []
         self._lock = threading.Lock()
         self._hits: int = 0
         self._misses: int = 0
@@ -26,7 +26,7 @@ class SemanticCache:
     # Core operations
     # ------------------------------------------------------------------
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Return cached value if present and not expired, else None."""
         with self._lock:
             entry = self._cache.get(key)
@@ -79,7 +79,7 @@ class SemanticCache:
     # Warm-up
     # ------------------------------------------------------------------
 
-    def warm_cache(self, items: Dict[str, Any], ttl_seconds: float = 300.0) -> None:
+    def warm_cache(self, items: dict[str, Any], ttl_seconds: float = 300.0) -> None:
         """Pre-populate the cache with *items*."""
         for key, value in items.items():
             self.put(key, value, ttl_seconds=ttl_seconds)
@@ -89,7 +89,7 @@ class SemanticCache:
     # Stats
     # ------------------------------------------------------------------
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return cache statistics."""
         with self._lock:
             size = len(self._cache)
@@ -128,7 +128,7 @@ class SemanticCache:
 # Singleton
 # ----------------------------------------------------------------------
 
-_cache: Optional[SemanticCache] = None
+_cache: SemanticCache | None = None
 _cache_lock = threading.Lock()
 
 

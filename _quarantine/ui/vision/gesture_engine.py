@@ -7,11 +7,11 @@ This is the higher-level alternative to hand_tracker.py's rule-based classifier.
 Run this for gesture commands; run hand_tracker for cursor/mouse control.
 """
 
-import time
 import logging
-from pathlib import Path
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional, Callable, List
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -22,8 +22,8 @@ _MODEL_DIR = Path(__file__).resolve().parent / "models"
 
 try:
     import mediapipe as mp
-    from mediapipe.tasks.python import vision as mp_vision
     from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python import vision as mp_vision
     MP_TASKS_AVAILABLE = True
 except ImportError:
     MP_TASKS_AVAILABLE = False
@@ -65,7 +65,7 @@ class GestureEngine:
 
     def __init__(
         self,
-        on_gesture: Optional[Callable] = None,
+        on_gesture: Callable | None = None,
         confidence_threshold: float = 0.7,
         cooldown_ms: int = 800,
     ):
@@ -101,7 +101,7 @@ class GestureEngine:
     def available(self) -> bool:
         return self._available
 
-    def process(self, frame: np.ndarray, timestamp_ms: Optional[int] = None) -> List[GestureResult]:
+    def process(self, frame: np.ndarray, timestamp_ms: int | None = None) -> list[GestureResult]:
         """Process a BGR frame and return detected gestures."""
         if not self._available or frame is None:
             return []
@@ -118,7 +118,7 @@ class GestureEngine:
             logger.debug("Gesture recognition error: %s", e)
             return []
 
-        gestures: List[GestureResult] = []
+        gestures: list[GestureResult] = []
 
         if result.gestures:
             for hand_gestures in result.gestures:
@@ -151,7 +151,7 @@ class GestureEngine:
         self._last_gesture_time[gesture] = now
         return True
 
-    def get_action_for_gesture(self, gesture: str) -> Optional[str]:
+    def get_action_for_gesture(self, gesture: str) -> str | None:
         """Map a gesture name to a JARVIS action."""
         return DEFAULT_GESTURE_ACTIONS.get(gesture)
 

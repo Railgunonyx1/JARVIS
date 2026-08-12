@@ -7,7 +7,7 @@ Usage:
     tts = tts_mod.TextToSpeech(config)
 """
 import importlib
-from typing import Optional, Any
+from typing import Any
 
 
 class LazyModule:
@@ -19,7 +19,7 @@ class LazyModule:
 
     def __init__(self, module_name: str):
         self._name = module_name
-        self._module: Optional[Any] = None
+        self._module: Any | None = None
 
     def load(self):
         """Force the import now. Returns the module object."""

@@ -1,15 +1,17 @@
 """Speculative Executor — runs primary with speculative fallback and predicts follow-ups."""
 
-import re
-import time
 import logging
+import re
 import threading
-from typing import Any, Callable, Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
+from typing import Any
 
 logger = logging.getLogger("jarvis.inference_engine.speculative_executor")
 
-_FOLLOWUP_PATTERNS: List[tuple] = [
+_FOLLOWUP_PATTERNS: list[tuple] = [
     (re.compile(r"(?:what|who) is (.+)", re.IGNORECASE), ["tell me more about {0}", "how does {0} work"]),
     (re.compile(r"(?:how to|how do I) (.+)", re.IGNORECASE), ["what tools do I need for {0}", "give an example of {0}"]),
     (re.compile(r"explain (.+)", re.IGNORECASE), ["give a practical example of {0}", "what are the use cases of {0}"]),
@@ -28,7 +30,7 @@ class SpeculativeExecutor:
     """Executes primary call with speculative fallback on timeout and predicts follow-ups."""
 
     def __init__(self) -> None:
-        self._predictions_cache: Dict[str, Any] = {}
+        self._predictions_cache: dict[str, Any] = {}
         self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="spec-exec")
         self._lock = threading.Lock()
         self._speculative_wins: int = 0
@@ -74,7 +76,7 @@ class SpeculativeExecutor:
 
     def predict_next(self, queries: list) -> list:
         """Predict likely follow-up queries based on patterns from *queries*."""
-        all_predictions: List[str] = []
+        all_predictions: list[str] = []
         for query in queries:
             cache_key = query.strip().lower()
             with self._lock:
@@ -82,7 +84,7 @@ class SpeculativeExecutor:
                     all_predictions.extend(self._predictions_cache[cache_key])
                     continue
 
-            predictions: List[str] = []
+            predictions: list[str] = []
             for pattern, templates in _FOLLOWUP_PATTERNS:
                 match = pattern.search(query)
                 if match:
@@ -132,7 +134,7 @@ class SpeculativeExecutor:
             }
 
 
-_speculative_executor: Optional[SpeculativeExecutor] = None
+_speculative_executor: SpeculativeExecutor | None = None
 _speculative_executor_lock = threading.Lock()
 
 

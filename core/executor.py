@@ -1,21 +1,19 @@
 import json
-import re
-import sys
-import time
-import threading
-import subprocess
-import tempfile
 import os
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-from core.utils import get_project_root as _get_base_dir
 from core.async_utils import sync_retry
-from core.mode_manager import get_mode_manager, ExecutionMode
-from core.capability_registry import get_capability
-from security.engine import get_security_engine
 from core.decision_logger import get_decision_logger
-
+from core.mode_manager import get_mode_manager
+from core.utils import get_project_root as _get_base_dir
+from security.engine import get_security_engine
 
 BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -47,7 +45,7 @@ def _ensure_error_handler():
     global _analyze_error, _generate_fix, _ErrorDecision
     if _analyze_error is None:
         try:
-            from core.cog_error_handler import analyze_error, generate_fix, ErrorDecision
+            from core.cog_error_handler import ErrorDecision, analyze_error, generate_fix
             _analyze_error = analyze_error
             _generate_fix = generate_fix
             _ErrorDecision = ErrorDecision
@@ -81,7 +79,7 @@ def _get_api_key() -> str:
         return os.environ["GEMINI_API_KEY"]
     if API_CONFIG_PATH.exists():
         try:
-            with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            with open(API_CONFIG_PATH, encoding="utf-8") as f:
                 return json.load(f).get("gemini_api_key", "")
         except Exception:
             pass
@@ -215,7 +213,7 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
                 combined = "\n\n---\n\n".join(all_results)
                 translated = _translate_to_goal_language(combined, goal)
                 params["content"] = translated
-                print(f"[Executor] INFO: Injected + translated content")
+                print("[Executor] INFO: Injected + translated content")
 
     return params
 def _detect_language(text: str) -> str:
@@ -333,7 +331,8 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         return disk_action(parameters.get("action", "info"), parameters) or "Done."
 
     elif tool == "screen":
-        from actions.screen_capture import capture_screen, analyze_screen
+        from actions.screen_capture import analyze_screen
+
         from core.config import Config
         api_key = Config.instance().api_keys.get("gemini", "")
         return analyze_screen(prompt=parameters.get("prompt", "Describe what's on screen"), api_key=api_key) or "Done."
@@ -376,7 +375,7 @@ class AgentExecutor:
 
         replan_attempts = 0
         completed_steps = []
-        step_results    = {} 
+        step_results    = {}
         plan            = create_plan(goal)
         decision_logger.record(trace_id, "plan.created", {"steps": len(plan.get("steps", [])), "goal": goal[:200]})
 
@@ -438,7 +437,7 @@ class AgentExecutor:
                 if not allowed:
                     print(f"[Executor] Security denied: {sec_reason}")
                     if speak:
-                        speak(f"Security policy blocked that action, sir.")
+                        speak("Security policy blocked that action, sir.")
                     step_results[step_num] = f"Security denied: {sec_reason}"
                     success = False
                     failed_step = step
@@ -457,7 +456,7 @@ class AgentExecutor:
                     try:
                         result = _call_tool(tool, params, speak)
                         _log_step_result(step, tool, params, True, ms=(time.time() - _step_start) * 1000)
-                        step_results[step_num] = result 
+                        step_results[step_num] = result
                         completed_steps.append(step)
                         print(f"[Executor] Step {step_num} done: {str(result)[:100]}")
                         step_ok = True
@@ -492,7 +491,7 @@ class AgentExecutor:
                             if speak: speak(msg)
                             return msg
 
-                        else: 
+                        else:
                             fix_suggestion = recovery.get("fix_suggestion", "")
                             if fix_suggestion and tool != "generated_code":
                                 try:

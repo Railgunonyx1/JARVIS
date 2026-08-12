@@ -1,9 +1,9 @@
 """Ollama Provider - Local inference for privacy-first / offline mode."""
 
 import importlib.util
-import time
 import logging
-from typing import AsyncIterator, Optional
+import time
+from collections.abc import AsyncIterator
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import openai_tools_param, parse_ollama_tool_calls
@@ -41,10 +41,10 @@ class OllamaProvider(LLMProvider):
     async def complete(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> LLMResponse:
         client = self._get_client()
         full_messages = []
@@ -94,10 +94,10 @@ class OllamaProvider(LLMProvider):
     async def complete_stream(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> AsyncIterator[str]:
         client = self._get_client()
         full_messages = []

@@ -1,11 +1,9 @@
 """Speech-to-Text: Groq Whisper Large v3 (cloud) → faster-whisper tiny (local)."""
 
 import io
-import wave
-import time
 import logging
-from pathlib import Path
-from typing import Optional
+import time
+import wave
 
 logger = logging.getLogger("jarvis.pipeline.stt")
 

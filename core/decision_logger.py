@@ -14,7 +14,7 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.event_store import get_event_store
 from security.audit import AuditEntry, get_audit_log
@@ -22,7 +22,7 @@ from security.audit import AuditEntry, get_audit_log
 logger = logging.getLogger("jarvis.decision_logger")
 
 
-def _params_hash(params: Dict[str, Any]) -> str:
+def _params_hash(params: dict[str, Any]) -> str:
     """Stable short hash of tool parameters; raw values never hit the audit store."""
     try:
         import orjson
@@ -67,7 +67,7 @@ class DecisionLogger:
         return trace_id
 
     # -- event store ---------------------------------------------------------
-    def record(self, trace_id: str, name: str, data: Optional[Dict[str, Any]] = None,
+    def record(self, trace_id: str, name: str, data: dict[str, Any] | None = None,
                **extra) -> None:
         """Synchronous event write (safe for executor's thread).
 
@@ -84,7 +84,7 @@ class DecisionLogger:
         except Exception as e:  # pragma: no cover - defensive
             logger.debug("Event record failed: %s", e)
 
-    async def record_async(self, trace_id: str, name: str, data: Optional[Dict[str, Any]] = None,
+    async def record_async(self, trace_id: str, name: str, data: dict[str, Any] | None = None,
                            **extra) -> None:
         """Off-thread event write for the async request path."""
         if not trace_id:
@@ -99,9 +99,9 @@ class DecisionLogger:
             logger.debug("Event record failed: %s", e)
 
     # -- audit store ----------------------------------------------------------
-    def record_tool(self, trace_id: str, tool: str, params: Dict[str, Any],
+    def record_tool(self, trace_id: str, tool: str, params: dict[str, Any],
                     allowed: bool = True, success: bool = True,
-                    duration_ms: float = 0.0, error: Optional[str] = None,
+                    duration_ms: float = 0.0, error: str | None = None,
                     mode: str = "", session_id: str = "") -> None:
         """Write a tool.executed audit entry (buffered AuditLog write)."""
         if not trace_id:
@@ -131,7 +131,7 @@ class DecisionLogger:
             pass
 
 
-_logger: Optional[DecisionLogger] = None
+_logger: DecisionLogger | None = None
 
 
 def get_decision_logger() -> DecisionLogger:

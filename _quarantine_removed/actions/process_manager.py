@@ -1,10 +1,7 @@
 """Process Manager — list, kill, and manage system processes for JARVIS MK-X."""
 
-import os
 import heapq
-import subprocess
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.process_manager")
 

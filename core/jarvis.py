@@ -1,40 +1,50 @@
-"""JARVIS MK-X — Main Orchestrator. Ties all subsystems together."""
+"""JARVIS MK-X — Main Orchestrator (LEGACY).
 
-import re
-import uuid
-import time
+Ties all subsystems together.
+
+**DEPRECATION NOTICE:** This class is in legacy mode. New code should use
+`core.agent.loop.AgentLoop` with `core.agent.permissions.PermissionEngine`
+and `core.agent.tools.AgentToolExecutor` for deterministic, audit-driven
+execution. This class is preserved for backward compatibility only.
+
+The dual-agent-path risk (legacy jarvis.py coexisting with active
+core/agent/loop.py) is addressed by redirecting all new execution through
+the active path.
+"""
+
 import asyncio
-
-
-import logging
 import datetime
+import logging
+import re
+import time
+import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Optional, Callable
-from python.tracing import trace_span
 
+from core.cache import SemanticCache
 from core.config import Config
 from core.context_engine import ContextEngine
+from core.diagnostics_engine import DiagnosticsEngine
 from core.dialogue import DialogueStateMachine
-from core.cache import SemanticCache
-from core.log_queue import log_conversation_async
+from core.health import format_health_report, run_all_checks
 from core.intent_router import IntentRouter
-from memory.store import MemoryStore
+from core.lazy_imports import LazyModule
+from core.log_queue import log_conversation_async
 from core.personality import PersonalityEngine
 from core.personality_responses import generate_deterministic_response
-from core.diagnostics_engine import DiagnosticsEngine
-from core.health import run_all_checks, format_health_report
-from core.telemetry import get_tracker, Stages
-from core.lazy_imports import LazyModule
+from core.telemetry import get_tracker
+from memory.store import MemoryStore
+from python.tracing import trace_span
 
 # Heavy imports deferred to reduce startup time
-_mod_providers = LazyModule("providers.router")
-_mod_stt = LazyModule("pipeline.stt")
-_mod_tts = LazyModule("pipeline.tts")
-_mod_vad = LazyModule("pipeline.vad")
-_mod_wake_word = LazyModule("pipeline.wake_word")
-_mod_kg_graph = LazyModule("knowledge_graph.graph")
-_mod_kg_query = LazyModule("knowledge_graph.query")
-_mod_security = LazyModule("security.engine")
+_Mod_providers = LazyModule("providers.router")
+_Mod_stt = LazyModule("pipeline.stt")
+_Mod_tts = LazyModule("pipeline.tts")
+_Mod_vad = LazyModule("pipeline.vad")
+_Mod_wake_word = LazyModule("pipeline.wake_word")
+_Mod_kg_graph = LazyModule("knowledge_graph.graph")
+_Mod_kg_query = LazyModule("knowledge_graph.query")
+_Mod_security = LazyModule("security.engine")
 
 logger = logging.getLogger("jarvis")
 
@@ -130,7 +140,7 @@ def _flush_phrases(phrase_buf: str, tts_queue: asyncio.Queue) -> str:
 
 
 class JarvisMKX:
-    def __init__(self, on_status_change: Optional[Callable] = None):
+    def __init__(self, on_status_change: Callable | None = None):
         self.session_id = str(uuid.uuid4())[:8]
         self.config = Config.instance()
         api_keys = self.config.api_keys
@@ -193,16 +203,16 @@ class JarvisMKX:
         self.semantic_cache = SemanticCache()
 
         # Action Registry — replaces _handle_action if/elif chain
-        from core.action_registry import ActionRegistry
         from core.action_init import register_all_actions
+        from core.action_registry import ActionRegistry
         self.action_registry = ActionRegistry()
         register_all_actions(self.action_registry)
 
         self._base_prompt = _load_system_prompt()
-        self._system_prompt_cache: Optional[str] = None
+        self._system_prompt_cache: str | None = None
         self._system_prompt_hour: int = -1
-        self._memory_cache: Optional[str] = None
-        self._kg_cache: Optional[str] = None
+        self._memory_cache: str | None = None
+        self._kg_cache: str | None = None
         self._kg_cache_time: float = 0.0
 
         # Optional subsystems: lazy-loaded on first use
@@ -521,7 +531,7 @@ class JarvisMKX:
 
         return response
 
-    async def _handle_action(self, intent, text: str, trace_id: Optional[str] = None) -> Optional[str]:
+    async def _handle_action(self, intent, text: str, trace_id: str | None = None) -> str | None:
         # Delegate to ActionRegistry (replaces 30+ if/elif chain)
         _t0 = time.time()
         result = await self.action_registry.execute(
@@ -574,7 +584,7 @@ class JarvisMKX:
         # Build memory section (cached, only rebuild when memory changes)
         if self._memory_cache is None:
             try:
-                from memory.memory_manager import load_memory, format_memory_for_prompt
+                from memory.memory_manager import format_memory_for_prompt, load_memory
                 mem = format_memory_for_prompt(load_memory())
                 self._memory_cache = mem if mem else ""
             except Exception:
@@ -601,7 +611,7 @@ class JarvisMKX:
         self._system_prompt_cache = "\n".join(parts)
         self._system_prompt_hour = now.hour
         return self._system_prompt_cache
-    
+
     def invalidate_memory_cache(self):
         """Call this when memory changes to rebuild prompt on next request."""
         self._memory_cache = None
@@ -755,7 +765,7 @@ class JarvisMKX:
                     try:
                         item = await asyncio.wait_for(tts_result_queue.get(), timeout=0.1)
                         yield item
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if tts_task.done():
                             break
             finally:
@@ -838,7 +848,7 @@ class JarvisMKX:
                 while True:
                     try:
                         phrase = await asyncio.wait_for(tts_queue.get(), timeout=2.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
                     if phrase is None:
                         tts_done.set()
@@ -880,7 +890,7 @@ class JarvisMKX:
 
                 try:
                     await asyncio.wait_for(tts_done.wait(), timeout=10.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
 
                 while not tts_result_queue.empty():
@@ -1012,7 +1022,7 @@ class JarvisMKX:
             yield ("timing", timing)
             yield ("done", full_response)
 
-    def _get_acknowledgement(self, intent, text: str) -> Optional[str]:
+    def _get_acknowledgement(self, intent, text: str) -> str | None:
         """Immediate acknowledgement for high-confidence action intents."""
         n = intent.name
         if n == "action.open":

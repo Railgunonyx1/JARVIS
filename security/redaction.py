@@ -11,8 +11,8 @@ optional pass that strips configured API key values when they leak into text.
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 
 logger = logging.getLogger("jarvis.security.redaction")
 

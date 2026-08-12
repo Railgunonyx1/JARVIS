@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
+import time
 from collections import deque
-from typing import Any, Dict, Optional
 
 logger = logging.getLogger("jarvis.security.adaptive_policy")
 
@@ -14,7 +13,7 @@ _TIER_HIGH = "high_trust"
 _TIER_MEDIUM = "medium"
 _TIER_LOW = "low"
 
-_DEFAULT_POLICIES: Dict[str, dict] = {
+_DEFAULT_POLICIES: dict[str, dict] = {
     "shell.execute": {
         _TIER_HIGH: {"allowed": True, "requires_approval": False},
         _TIER_MEDIUM: {"allowed": True, "requires_approval": True},
@@ -54,7 +53,7 @@ class AdaptivePolicyEngine:
     """Trust-tiered access control with full audit logging."""
 
     def __init__(self) -> None:
-        self._policies: Dict[str, dict] = {
+        self._policies: dict[str, dict] = {
             action: dict(tiers) for action, tiers in _DEFAULT_POLICIES.items()
         }
         self._audit_log: deque = deque(maxlen=_AUDIT_LIMIT)
@@ -68,7 +67,7 @@ class AdaptivePolicyEngine:
         self,
         action: str,
         user_trust: float,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> dict:
         """Decide whether *action* is allowed for a user with *user_trust*.
 
@@ -165,7 +164,7 @@ class AdaptivePolicyEngine:
             requires_approval,
         )
 
-    def get_active_policies(self) -> Dict[str, dict]:
+    def get_active_policies(self) -> dict[str, dict]:
         """Return a snapshot of all current policies."""
         with self._lock:
             return {
@@ -218,7 +217,7 @@ def _confidence_for_trust(trust: float) -> float:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[AdaptivePolicyEngine] = None
+_instance: AdaptivePolicyEngine | None = None
 _instance_lock = threading.Lock()
 
 

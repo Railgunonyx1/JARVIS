@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
-from typing import Any, Callable, Dict, Optional
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.reliability.graceful_degradation")
 
@@ -28,8 +29,8 @@ class GracefulDegradation:
     """Executes services with automatic fallback based on degradation level."""
 
     def __init__(self) -> None:
-        self._services: Dict[str, dict] = {}
-        self._stats: Dict[str, dict] = {}
+        self._services: dict[str, dict] = {}
+        self._stats: dict[str, dict] = {}
         self._level: int = DEGRADATION_FULL
         self._lock = threading.Lock()
 
@@ -41,7 +42,7 @@ class GracefulDegradation:
         self,
         name: str,
         primary_fn: Callable[..., Any],
-        fallback_fn: Optional[Callable[..., Any]] = None,
+        fallback_fn: Callable[..., Any] | None = None,
         priority: int = 5,
     ) -> None:
         """Register a service with an optional fallback.
@@ -185,7 +186,7 @@ class GracefulDegradation:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_service_status(self) -> Dict[str, dict]:
+    def get_service_status(self) -> dict[str, dict]:
         """Return per-service statistics."""
         with self._lock:
             return {
@@ -205,7 +206,7 @@ class GracefulDegradation:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[GracefulDegradation] = None
+_instance: GracefulDegradation | None = None
 _instance_lock = threading.Lock()
 
 

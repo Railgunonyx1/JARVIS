@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.cache_predictor")
 
@@ -15,9 +15,9 @@ class CachePredictor:
 
     def __init__(self, max_size: int = 2000):
         self._max_size = max_size
-        self._cache: Dict[str, Dict] = {}
+        self._cache: dict[str, dict] = {}
         self._access_history: deque = deque(maxlen=10000)
-        self._prediction_model: Dict[str, Dict] = {}
+        self._prediction_model: dict[str, dict] = {}
         self._lock = threading.RLock()
         self._stats = {
             "hits": 0,
@@ -27,7 +27,7 @@ class CachePredictor:
             "predictions_total": 0,
         }
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -69,7 +69,7 @@ class CachePredictor:
             model["next_keys"][key] = model["next_keys"].get(key, 0) + 1
             model["total"] += 1
 
-    def predict_next(self, current_key: str, top_n: int = 3) -> List[str]:
+    def predict_next(self, current_key: str, top_n: int = 3) -> list[str]:
         with self._lock:
             model = self._prediction_model.get(current_key)
             if model is None or model["total"] == 0:
@@ -82,13 +82,13 @@ class CachePredictor:
             scored.sort(key=lambda x: x[1], reverse=True)
             return [k for k, _ in scored[:top_n]]
 
-    def validate_prediction(self, predicted_keys: List[str], actual_key: str):
+    def validate_prediction(self, predicted_keys: list[str], actual_key: str):
         with self._lock:
             self._stats["predictions_total"] += len(predicted_keys)
             if actual_key in predicted_keys:
                 self._stats["predictions_correct"] += 1
 
-    def _compute_score(self, entry: Dict, now: float) -> float:
+    def _compute_score(self, entry: dict, now: float) -> float:
         age = now - entry["created_at"]
         recency = now - entry["last_access"]
         access_score = entry["access_count"] / (1.0 + age)
@@ -146,7 +146,7 @@ class CachePredictor:
                 del self._cache[k]
             logger.info("Invalidated %d keys matching pattern '%s'", len(keys_to_remove), pattern)
 
-    def get_hot_keys(self, top_n: int = 10) -> List[str]:
+    def get_hot_keys(self, top_n: int = 10) -> list[str]:
         with self._lock:
             scored = []
             for key, entry in self._cache.items():
@@ -163,7 +163,7 @@ class CachePredictor:
             logger.info("Cleared cache (%d entries)", count)
 
 
-_instance: Optional[CachePredictor] = None
+_instance: CachePredictor | None = None
 _instance_lock = threading.RLock()
 
 

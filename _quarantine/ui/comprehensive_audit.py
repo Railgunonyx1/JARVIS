@@ -1,6 +1,9 @@
 """COMPREHENSIVE JARVIS MK-X AUDIT — tests all 15+ phases + prior audit findings."""
-import sys, os, time, json, asyncio, inspect, textwrap, pathlib
+import asyncio
+import inspect
+import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(r'C:\Users\aayan\Desktop\JARVIS')))
 TMP = Path(r'C:\Users\aayan\AppData\Local\Temp\opencode')
 
@@ -40,6 +43,7 @@ for m in ["api.v1.models","api.v1.memory","api.v1.events",
 # ═══════════════════════════════════════════════════
 section("GROUP 3: LAZY IMPORTS")
 from core.lazy_imports import LazyModule
+
 lazy = LazyModule("os.path")
 safe("LazyModule not loaded init", lambda: check("", not lazy.is_loaded))
 lazy.load()
@@ -47,6 +51,7 @@ safe("LazyModule loads on demand", lambda: check("", lazy.is_loaded and hasattr(
 
 section("GROUP 4: DI CONTAINER")
 from core.container import ServiceContainer, ServiceLifetime
+
 c = ServiceContainer()
 safe("Container create", lambda: check("", isinstance(c, ServiceContainer)))
 class _S: pass
@@ -57,29 +62,35 @@ safe("Container singleton reuse", lambda: check("", c.resolve(_S) is sv))
 
 section("GROUP 5: STATE MACHINE + SERVICE REGISTRY")
 from core.state_machine import KernelState, ServiceState
+
 safe("KernelState 3+ members", lambda: check("", len(KernelState.__members__) >= 3))
 safe("ServiceState valid transition",
      lambda: check("", ServiceState.CREATED.can_transition_to(ServiceState.INITIALIZING)))
 safe("ServiceState invalid transition blocked",
      lambda: check("", not ServiceState.STOPPED.can_transition_to(ServiceState.RUNNING)))
 from core.service_registry import ServiceRegistry
+
 sr = ServiceRegistry()
 sr.register("core.test", {"n":"test"})
 safe("ServiceRegistry resolve", lambda: check("", sr.resolve("core.test")["n"]=="test"))
 
 section("GROUP 6: METRICS / EVENT / CONFIG / TASK")
 from core.metrics import MetricsCollector
+
 safe("MetricsCollector", lambda: MetricsCollector().record("t",1))
 from core.event_store import EventStore
+
 es = EventStore()
 es.store("t.e", {"k":"v"})
 safe("EventStore store+count", lambda: check("", es.count()==1))
 from core.config_service import ConfigService
+
 cfg = ConfigService()
 cfg.set("k","v")
 safe("ConfigService get/set", lambda: check("", cfg.get("k")=="v"))
 safe("ConfigService default", lambda: check("", cfg.get("x","d")=="d"))
 from core.task_manager import TaskManager
+
 tm = TaskManager()
 task = tm.create("test")
 tm.update(task.id, "running")
@@ -87,6 +98,7 @@ safe("TaskManager lifecycle", lambda: check("", str(tm.get(task.id).status).find
 
 section("GROUP 7: EVENTBUS v2")
 from systems.event_bus import EventBus
+
 eb = EventBus()
 recv = []
 eb.subscribe("t.*", lambda e: recv.append(e))
@@ -95,18 +107,21 @@ safe("EventBus pub/sub", lambda: check("", len(recv)>=1 and "hi" in str(recv)))
 
 section("GROUP 8: CACHE + ACTION REGISTRY")
 from core.cache import Cache
+
 ca = Cache()
 ca.set("k","v")
 safe("Cache set+get", lambda: check("", ca.get("k")=="v"))
 ca.invalidate("k")
 safe("Cache invalidate", lambda: check("", ca.get("k") is None))
 from core.action_registry import ActionRegistry
+
 ar = ActionRegistry()
 ar.register("ta", lambda p: "ok")
 safe("ActionRegistry execute", lambda: check("", ar.execute("ta",{})=="ok"))
 
 section("GROUP 9: CAPABILITY TREE")
-from core.capability_registry import CapabilityTree, Capability, CapabilityRisk, CapabilityCategory
+from core.capability_registry import Capability, CapabilityCategory, CapabilityRisk, CapabilityTree
+
 ct = CapabilityTree.build_branch([
     Capability(name="search.web", category=CapabilityCategory.SYSTEM,
                risk=CapabilityRisk.LOW, tags=["search","web"], cost=0.01),
@@ -115,8 +130,6 @@ ct = CapabilityTree.build_branch([
 ])
 safe("CapabilityTree build", lambda: check("", False))
 # We check it's not None - build_branch likely modifies tree but might return None
-from core.capability_registry import CapabilityTree as CT2
-import inspect
 sig = inspect.signature(CapabilityTree.build_branch)
 print(f"  build_branch signature: {sig}")
 safe("CapabilityTree search by tag", lambda: check("", len(ct.search(tags=["web"]))>=1))
@@ -125,6 +138,7 @@ safe("CapabilityTree subtree", lambda: check("", bool(ct.subtree("search"))))
 
 section("GROUP 10: MODEL MANAGER")
 from core.model_manager import ModelManager
+
 mm = ModelManager()
 cat, conf = mm.classify("write a poem")
 safe("ModelManager classify", lambda: check("", cat is not None and conf > 0))
@@ -132,6 +146,7 @@ safe("ModelManager cost filter", lambda: check("", isinstance(mm.filter_by_cost(
 
 section("GROUP 11: RESOURCE MANAGER")
 from core.resource_manager import ResourceManager
+
 rm = ResourceManager()
 safe("ResourceManager get_status", lambda: check("", isinstance(rm.get_status(), dict)))
 safe("ResourceManager pressure", lambda: check("", rm.pressure() in ("none","mild","high","critical")))
@@ -139,6 +154,7 @@ safe("ResourceManager throttle", lambda: check("", isinstance(rm.should_throttle
 
 section("GROUP 12: SECURITY")
 from core.security import SecurityManager
+
 sm = SecurityManager()
 ctx = sm.create_context("test_user", ["user"])
 safe("SecurityContext auth_level", lambda: check("", ctx.authorization_level == "standard"))
@@ -150,13 +166,15 @@ safe("Security has format_confirmation_prompt",
      lambda: check("", callable(sm.format_confirmation_prompt)))
 
 section("GROUP 13: PLUGIN SYSTEM")
-from core.plugin_loader import PluginSandbox, PluginManager
+from core.plugin_loader import PluginSandbox
+
 safe("PluginSandbox blocks os", lambda: check("", not PluginSandbox().is_safe("os")))
 safe("PluginSandbox blocks subprocess", lambda: check("", not PluginSandbox().is_safe("subprocess")))
 safe("PluginSandbox allows math", lambda: check("", PluginSandbox().is_safe("math")))
 
 section("GROUP 14: WORKFLOW ENGINE")
 from core.workflow import WorkflowEngine
+
 wfe = WorkflowEngine(checkpoint_dir=TMP/"wf_aud")
 wf = wfe.create_workflow("test_wf", [
     {"tool":"search","params":{"q":"hello"}},
@@ -179,14 +197,15 @@ asyncio.run(_test_wf())
 
 section("GROUP 15: VOICE SERVICE")
 from core.voice_service import VoiceService
+
 vs = VoiceService()
 safe("VoiceService init", lambda: check("", vs is not None))
 safe("VoiceService status has keys",
      lambda: check("", all(k in vs.get_status() for k in ("listening","speaking","vad"))))
 
 section("GROUP 16: MEMORY V2")
-from core.memory_v2 import (MemoryExtractor, ImportanceScorer,
-    KnowledgeGraph, MemoryHierarchy, KnowledgeTriple)
+from core.memory_v2 import ImportanceScorer, KnowledgeGraph, KnowledgeTriple, MemoryExtractor, MemoryHierarchy
+
 ext = MemoryExtractor()
 facts = ext.extract("My name is Alice and I love programming in Python.")
 safe("MemoryExtract identity+preference",
@@ -206,7 +225,8 @@ safe("MemoryHierarchy context retrieval", lambda: check("", len(ctx)>10))
 kg.clear()
 
 section("GROUP 17: TELEMETRY V2")
-from core.telemetry import TraceProvider, LLMObservability, LatencyTracker, Stages
+from core.telemetry import LatencyTracker, LLMObservability, Stages, TraceProvider
+
 tp = TraceProvider()
 root = tp.start_trace("audit")
 with tp.span("child", parent=root):
@@ -230,7 +250,8 @@ lt.end_request()
 safe("LatencyTracker stages", lambda: check("", len(lt.get_summary().get("stages",[]))>=1))
 
 section("GROUP 18: SUPERVISOR (OTP-style)")
-from core.supervisor import Supervisor, ServiceSpec
+from core.supervisor import ServiceSpec, Supervisor
+
 sup = Supervisor()
 async def _dummy():
     while True: await asyncio.sleep(10)
@@ -239,6 +260,8 @@ safe("Supervisor add", lambda: check("", "svc1" in sup.get_status()))
 
 section("GROUP 19: DURABLE TASKS")
 from core.durable_task import DurableExecutor
+
+
 async def _test_dur():
     de = DurableExecutor(db_path=TMP/"dur_aud.db")
     tid = await de.submit("test", lambda: asyncio.sleep(0.01))
@@ -249,7 +272,8 @@ async def _test_dur():
 asyncio.run(_test_dur())
 
 section("GROUP 20: PLUGIN MARKETPLACE")
-from core.plugin_market import PluginMarketplace, PluginMarketEntry
+from core.plugin_market import PluginMarketEntry, PluginMarketplace
+
 mp = PluginMarketplace(plugin_dir=TMP/"mp_aud")
 mp.register(PluginMarketEntry(id="p1",name="P1",version="1.0",author="t",
                               description="test",source="local"))
@@ -258,6 +282,7 @@ safe("PluginMarket search", lambda: check("", len(mp.search("P1"))==1))
 
 section("GROUP 21: WS SERVER")
 from api.ws_server import WSServer
+
 ws = WSServer()
 safe("WSServer init port", lambda: check("", ws.port==8765))
 
@@ -266,6 +291,7 @@ section("GROUP 22: PRIOR AUDIT FINDINGS REMEDIATION")
 
 # CRITICAL-1: _safe_path fix
 import actions.file_manager as fm
+
 _safe = getattr(fm, "_safe_path", None)
 if _safe:
     try:
@@ -303,21 +329,25 @@ _check_src(r'C:\Users\aayan\Desktop\JARVIS\core\jarvis.py', '_handle_action',
 
 section("GROUP 23: EXISTING SYSTEMS")
 from memory.store import MemoryStore
+
 ms = MemoryStore(data_dir=TMP/"ms_aud")
 ms.store("k1","v1")
 safe("MemoryStore store+recall", lambda: check("", ms.recall("k1")=="v1"))
 ms.close()
-from memory.memory_manager import load_memory, remember, forget
+from memory.memory_manager import forget, load_memory, remember
+
 mem = load_memory()
 safe("MemoryManager load", lambda: check("", isinstance(mem, dict)))
 safe("MemoryManager remember", lambda: check("", "Remembered" in remember("tk","tv")))
 safe("MemoryManager forget", lambda: check("", "Forgotten" in forget("tk")))
 
 section("GROUP 24: API v1 ENDPOINTS")
-from api.v1.models import MemoryItem, EventRecord, CapabilityInfo
+from api.v1.models import MemoryItem
+
 mi = MemoryItem(key="k", value="v", tags=["t"])
 safe("API MemoryItem model", lambda: check("", mi.key=="k" and mi.value=="v"))
 from api.v1.memory import MemoryAPI
+
 mapi = MemoryAPI(ms)
 safe("API MemoryAPI store+recall",
      lambda: check("", mapi.store(MemoryItem(key="ak1",value="av1",tags=["t"]))

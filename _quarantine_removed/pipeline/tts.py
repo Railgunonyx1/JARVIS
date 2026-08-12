@@ -1,15 +1,14 @@
 """Text-to-Speech — Piper local (fast) + Edge-TTS cloud fallback.
 Sentence-level streaming: split text, generate each sentence, yield immediately."""
 
+import asyncio
+import io as _io
+import logging
 import re
 import time
 import wave
-import asyncio
-import logging
-import io as _io
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Optional, AsyncIterator
-from functools import lru_cache
 
 logger = logging.getLogger("jarvis.pipeline.tts")
 
@@ -73,10 +72,7 @@ class TextToSpeech:
         Eliminates TTS latency for greetings, time, exit, etc.
         Must be called after warmup().
         """
-        from core.personality import (
-            _GREETINGS, _HOW_ARE_YOU, _EXIT,
-            TimeOfDay
-        )
+        from core.personality import _EXIT, _GREETINGS, _HOW_ARE_YOU, TimeOfDay
 
         responses = []
         # Greetings (all times × all variants)
@@ -119,11 +115,11 @@ class TextToSpeech:
             _response_cache.pop(next(iter(_response_cache)))
         _response_cache[key] = audio
 
-    def get_cached(self, text: str) -> Optional[bytes]:
+    def get_cached(self, text: str) -> bytes | None:
         """Check if audio is cached for this text."""
         return _response_cache.get(text.lower().strip())
 
-    async def synthesize(self, text: str, output_path: Optional[str] = None) -> bytes:
+    async def synthesize(self, text: str, output_path: str | None = None) -> bytes:
         """Full synthesis — returns complete audio bytes. Checks cache first.
         Respects resource governor: skips synthesis under high load."""
         if not text.strip():
@@ -210,6 +206,7 @@ class TextToSpeech:
             return
         try:
             import edge_tts
+
             from security.redaction import redact_sensitive
             redacted = redact_sensitive(text)
             async for chunk in edge_tts.Communicate(redacted, self._voice, rate=self._rate).stream():
@@ -218,8 +215,9 @@ class TextToSpeech:
         except Exception as e:
             logger.error("Streaming TTS failed: %s", e)
 
-    async def _edge(self, text: str, output_path: Optional[str] = None) -> bytes:
+    async def _edge(self, text: str, output_path: str | None = None) -> bytes:
         import edge_tts
+
         from security.redaction import redact_sensitive
         redacted = redact_sensitive(text)
         start = time.time()
@@ -233,7 +231,7 @@ class TextToSpeech:
             Path(output_path).write_bytes(audio)
         return audio
 
-    async def _piper(self, text: str, output_path: Optional[str] = None) -> bytes:
+    async def _piper(self, text: str, output_path: str | None = None) -> bytes:
         def _synthesize():
             model = self._get_piper_model()
             start = time.time()

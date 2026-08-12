@@ -1,10 +1,11 @@
-from datasets.kinetics import Kinetics
-from datasets.ucf101 import UCF101
-from datasets.jester import Jester
 from datasets.egogesture import EgoGesture
-from datasets.nv import NV
 from datasets.egogesture_online import EgoGestureOnline
+from datasets.jester import Jester
+from datasets.kinetics import Kinetics
+from datasets.nv import NV
 from datasets.nv_online import NVOnline
+from datasets.ucf101 import UCF101
+
 
 def get_training_set(opt, spatial_transform, temporal_transform,
                      target_transform):
@@ -189,9 +190,9 @@ def get_online_data(opt, spatial_transform, temporal_transform, target_transform
     whole_path = opt.whole_path
     if opt.dataset == 'egogesture':
         online_data = EgoGestureOnline(
-            opt.annotation_path,  
+            opt.annotation_path,
             opt.video_path,
-            opt.whole_path,  
+            opt.whole_path,
             opt.n_val_samples,
             spatial_transform,
             temporal_transform,
@@ -201,9 +202,9 @@ def get_online_data(opt, spatial_transform, temporal_transform, target_transform
             sample_duration=opt.sample_duration)
     if opt.dataset == 'nvgesture':
         online_data = NVOnline(
-            opt.annotation_path,  
+            opt.annotation_path,
             opt.video_path,
-            opt.whole_path,  
+            opt.whole_path,
             opt.n_val_samples,
             spatial_transform,
             temporal_transform,
@@ -211,5 +212,5 @@ def get_online_data(opt, spatial_transform, temporal_transform, target_transform
             modality="RGB-D",
             stride_len = opt.stride_len,
             sample_duration=opt.sample_duration)
-    
+
     return online_data

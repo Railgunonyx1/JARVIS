@@ -1,9 +1,10 @@
+import math
+from functools import partial
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import math
-from functools import partial
 
 __all__ = ['ResNeXt', 'resnext50', 'resnext101']
 
@@ -37,7 +38,7 @@ class ResNeXtBottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, cardinality, stride=1,
                  downsample=None):
-        super(ResNeXtBottleneck, self).__init__()
+        super().__init__()
         mid_planes = cardinality * int(planes / 32)
         self.conv1 = nn.Conv3d(inplanes, mid_planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(mid_planes)
@@ -91,7 +92,7 @@ class ResNeXt(nn.Module):
                  cardinality=32,
                  num_classes=400):
         self.inplanes = 64
-        super(ResNeXt, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv3d(
             3,
             64,

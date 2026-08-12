@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap");
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  JARVIS console theme — warm-dark technical terminal.
+  Palette (kept tight): near-black warm background, soft off-white text,
+  layered neutral panels/borders, one signature clay/coral accent.
+  Status hues (online/warn/error/info) are functional-only, never decorative.
+*/
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-elevated: var(--elevated);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-muted: var(--accent-muted);
+
+  --color-online: var(--online);
+  --color-warn: var(--warn);
+  --color-error: var(--error);
+  --color-info: var(--info);
+
+  --color-chart-1: var(--accent);
+  --color-chart-2: var(--info);
+  --color-chart-3: var(--online);
+  --color-chart-4: var(--warn);
+  --color-chart-5: var(--muted-foreground);
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+}
+
+:root {
+  color-scheme: dark;
+
+  --background: oklch(0.17 0.006 60);
+  --foreground: oklch(0.92 0.006 70);
+
+  --panel: oklch(0.2 0.006 60);
+  --panel-foreground: oklch(0.92 0.006 70);
+  --elevated: oklch(0.235 0.007 60);
+
+  --muted: oklch(0.27 0.007 60);
+  --muted-foreground: oklch(0.66 0.008 70);
+
+  --border: oklch(0.3 0.008 60);
+  --border-strong: oklch(0.4 0.01 60);
+  --input: oklch(0.26 0.007 60);
+  --ring: oklch(0.7 0.13 45);
+
+  /* signature clay/coral accent */
+  --accent: oklch(0.71 0.135 45);
+  --accent-foreground: oklch(0.18 0.02 45);
+  --accent-muted: oklch(0.4 0.07 45);
+
+  --online: oklch(0.75 0.15 155);
+  --warn: oklch(0.8 0.13 85);
+  --error: oklch(0.65 0.19 25);
+  --info: oklch(0.72 0.11 230);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--accent) 35%, transparent);
+  }
+}
+
+/* Thin technical scrollbars */
+@layer utilities {
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+    background-clip: padding-box;
+  }
+  .scroll-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  .text-2xs {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .grid-scan {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--foreground) 3%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 100% 3px;
+  }
+}
+
+/* ---- dockview theme mapped onto the console tokens ---- */
+.dockview-theme-jarvis {
+  --dv-paneview-active-outline-color: var(--accent);
+  --dv-tabs-and-actions-container-background-color: var(--background);
+  --dv-group-view-background-color: var(--panel);
+  --dv-tabs-and-actions-container-height: 34px;
+
+  --dv-activegroup-visiblepanel-tab-background-color: var(--panel);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--background);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--panel);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--background);
+
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--muted-foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--muted-foreground);
+
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-tab-divider-color: var(--border);
+  --dv-icon-hover-background-color: var(--muted);
+  --dv-background-color: var(--panel);
+
+  --dv-drag-over-background-color: color-mix(in oklch, var(--accent) 18%, transparent);
+  --dv-drag-over-border-color: var(--accent);
+
+  font-family: var(--font-mono);
+}
+
+.dockview-theme-jarvis .dv-tab {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-right: 1px solid var(--border);
+}
+.dockview-theme-jarvis .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.dockview-theme-jarvis .dv-tabs-container {
+  border-bottom: 1px solid var(--border);
+}

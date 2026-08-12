@@ -3,12 +3,10 @@
 Provides feed management, article retrieval, and unread tracking.
 """
 import logging
-import time
 import re
-import json
-import urllib.request
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("external.rss_reader")
 
@@ -38,8 +36,8 @@ class RSSReader:
     """Subscribe to and manage RSS feeds."""
 
     def __init__(self):
-        self._feeds: Dict[str, RSSFeed] = {}
-        self._articles: Dict[str, List[RSSArticle]] = {}
+        self._feeds: dict[str, RSSFeed] = {}
+        self._articles: dict[str, list[RSSArticle]] = {}
         self._read_set: set = set()
         self._fetch_count = 0
 
@@ -50,7 +48,7 @@ class RSSReader:
         self._feeds.pop(name, None)
         self._articles.pop(name, None)
 
-    def fetch_feed(self, name: str, max_articles: int = 20) -> List[RSSArticle]:
+    def fetch_feed(self, name: str, max_articles: int = 20) -> list[RSSArticle]:
         feed = self._feeds.get(name)
         if not feed:
             return []
@@ -72,7 +70,7 @@ class RSSReader:
             logger.warning("RSS fetch failed for %s: %s", name, e)
             return self._articles.get(name, [])
 
-    def _parse_feed(self, xml: str, feed_name: str, max_items: int) -> List[RSSArticle]:
+    def _parse_feed(self, xml: str, feed_name: str, max_items: int) -> list[RSSArticle]:
         articles = []
         items = re.findall(r'<item>(.*?)</item>', xml, re.DOTALL)
         for item in items[:max_items]:
@@ -101,7 +99,7 @@ class RSSReader:
         text = re.sub(r'&\w+;', ' ', text)
         return text.strip()
 
-    def get_all_articles(self, unread_only: bool = False) -> List[RSSArticle]:
+    def get_all_articles(self, unread_only: bool = False) -> list[RSSArticle]:
         all_articles = []
         for articles in self._articles.values():
             all_articles.extend(articles)
@@ -112,12 +110,12 @@ class RSSReader:
     def mark_read(self, title: str) -> None:
         self._read_set.add(title)
 
-    def get_feeds(self) -> List[Dict[str, Any]]:
+    def get_feeds(self) -> list[dict[str, Any]]:
         return [{"name": f.name, "url": f.url, "category": f.category,
                  "last_fetched": f.last_fetched, "articles": f.last_article_count}
                 for f in self._feeds.values()]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total_articles = sum(len(a) for a in self._articles.values())
         unread = sum(1 for a in self.get_all_articles() if not a.is_read)
         return {
@@ -128,7 +126,7 @@ class RSSReader:
         }
 
 
-_rss_instance: Optional[RSSReader] = None
+_rss_instance: RSSReader | None = None
 
 
 def get_rss_reader() -> RSSReader:

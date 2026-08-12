@@ -6,7 +6,6 @@ import gc
 import logging
 import threading
 import time
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("jarvis.hyper_opt.memory_allocator")
 
@@ -15,14 +14,14 @@ class MemoryAllocator:
     """Smart memory management with GC control and allocation tracking."""
 
     def __init__(self) -> None:
-        self._allocations: Dict[str, dict] = {}
-        self._pools: Dict[str, List[bytearray]] = {}
+        self._allocations: dict[str, dict] = {}
+        self._pools: dict[str, list[bytearray]] = {}
         self._gc_disabled_until: float = 0.0
         self._gc_scheduled: bool = False
         self._gc_scheduled_at: float = 0.0
         self._gc_delay: float = 0.0
         self._lock = threading.RLock()
-        self._stats: Dict[str, int | float] = {
+        self._stats: dict[str, int | float] = {
             "allocated": 0,
             "freed": 0,
             "gc_runs": 0,
@@ -84,7 +83,7 @@ class MemoryAllocator:
             )
             return True
 
-    def get_allocation(self, name: str) -> Optional[bytearray]:
+    def get_allocation(self, name: str) -> bytearray | None:
         """Get an allocated buffer by name."""
         with self._lock:
             entry = self._allocations.get(name)
@@ -144,11 +143,11 @@ class MemoryAllocator:
         """Returns total_allocated, by_category, gc_stats."""
         with self._lock:
             total_allocated = sum(e["size"] for e in self._allocations.values())
-            by_category: Dict[str, int] = {}
+            by_category: dict[str, int] = {}
             for entry in self._allocations.values():
                 cat = entry["category"]
                 by_category[cat] = by_category.get(cat, 0) + entry["size"]
-            pool_sizes: Dict[str, int] = {}
+            pool_sizes: dict[str, int] = {}
             for cat, pool in self._pools.items():
                 pool_sizes[cat] = sum(len(b) for b in pool)
             return {
@@ -204,7 +203,7 @@ class MemoryAllocator:
             return result
 
 
-_instance: Optional[MemoryAllocator] = None
+_instance: MemoryAllocator | None = None
 _instance_lock = threading.RLock()
 
 

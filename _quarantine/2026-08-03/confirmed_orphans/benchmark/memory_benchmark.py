@@ -9,10 +9,9 @@ if sys.platform == "win32":
 import gc
 import time
 import tracemalloc
-import threading
-from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Tuple
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -26,14 +25,14 @@ class MemorySnapshot:
     vms_kb: int
     tracemalloc_current_kb: int = 0
     tracemalloc_peak_kb: int = 0
-    top_allocations: List[Tuple[str, int]] = field(default_factory=list)
+    top_allocations: list[tuple[str, int]] = field(default_factory=list)
     timestamp: float = 0.0
 
     def __post_init__(self):
         if self.timestamp == 0.0:
             self.timestamp = time.time()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "rss_kb": self.rss_kb,
@@ -52,10 +51,10 @@ class MemoryBenchmarkResult:
     after_startup: MemorySnapshot = None
     idle_5s: MemorySnapshot = None
     idle_30s: MemorySnapshot = None
-    potential_leaks: List[Dict[str, Any]] = field(default_factory=list)
+    potential_leaks: list[dict[str, Any]] = field(default_factory=list)
     growth_during_idle_kb: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "baseline": self.baseline.to_dict() if self.baseline else None,
             "after_construction": self.after_construction.to_dict() if self.after_construction else None,
@@ -67,7 +66,7 @@ class MemoryBenchmarkResult:
         }
 
 
-def _get_process_info() -> Tuple[int, int]:
+def _get_process_info() -> tuple[int, int]:
     p = psutil.Process(os.getpid())
     mem = p.memory_info()
     return mem.rss // 1024, mem.vms // 1024

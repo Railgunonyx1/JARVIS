@@ -1,9 +1,10 @@
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Any
+from typing import Any
 
 
 class TaskStatus(Enum):
@@ -17,20 +18,20 @@ class TaskStatus(Enum):
 class TaskPriority(Enum):
     LOW    = 3
     NORMAL = 2
-    HIGH   = 1   
+    HIGH   = 1
 
 
 @dataclass(order=True)
 class Task:
-    priority:    int                       
+    priority:    int
     created_at:  float = field(compare=False)
     task_id:     str   = field(compare=False)
     goal:        str   = field(compare=False)
     status:      TaskStatus = field(compare=False, default=TaskStatus.PENDING)
     result:      Any        = field(compare=False, default=None)
     error:       str        = field(compare=False, default="")
-    speak:       Any        = field(compare=False, default=None)   
-    on_complete: Any        = field(compare=False, default=None)  
+    speak:       Any        = field(compare=False, default=None)
+    on_complete: Any        = field(compare=False, default=None)
     cancel_flag: threading.Event = field(compare=False, default_factory=threading.Event)
 
 
@@ -39,7 +40,7 @@ class TaskQueue:
         self._queue:        list[Task]       = []
         self._lock:         threading.Lock   = threading.Lock()
         self._condition:    threading.Condition = threading.Condition(self._lock)
-        self._tasks:        dict[str, Task]  = {} 
+        self._tasks:        dict[str, Task]  = {}
         self._running:      bool             = False
         self._worker_thread: threading.Thread | None = None
         self._max_concurrent = max_concurrent

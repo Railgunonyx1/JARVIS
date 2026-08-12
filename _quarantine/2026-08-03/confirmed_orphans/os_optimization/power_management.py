@@ -4,13 +4,13 @@ Plugged in → maximize performance
 On battery → reduce background work, lower model size
 """
 import logging
-import time
-import threading
-import subprocess
 import platform
-from typing import Optional, Dict, Any
+import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("os_optimization.power_management")
 
@@ -147,7 +147,7 @@ class PowerManager:
     def get_profile(self) -> PowerProfile:
         return POWER_PROFILES.get(self._current_mode, POWER_PROFILES[PerformanceMode.BALANCED])
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "power_state": self._power_state.value,
@@ -158,7 +158,7 @@ class PowerManager:
             }
 
 
-_power_manager_instance: Optional[PowerManager] = None
+_power_manager_instance: PowerManager | None = None
 
 
 def get_power_manager() -> PowerManager:

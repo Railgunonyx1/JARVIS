@@ -1,7 +1,8 @@
+import time
+
 import cv2
 import mediapipe as mp
 import pyautogui
-import time
 
 # Constants for drawing
 CIRCLE_RADIUS = 5

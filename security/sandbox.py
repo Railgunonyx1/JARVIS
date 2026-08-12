@@ -7,18 +7,16 @@ for untrusted or high-risk actions.
 
 from __future__ import annotations
 
-import os
-import sys
-import time
-import signal
-import logging
 import hashlib
-import tempfile
-import threading
+import logging
+import os
 import subprocess
-from pathlib import Path
+import sys
+import threading
+import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.security.sandbox")
 
@@ -29,12 +27,12 @@ class SandboxConfig:
     timeout_seconds: int = 30
     max_output_bytes: int = 1024 * 1024  # 1MB
     max_memory_mb: int = 256
-    allowed_paths: List[str] = field(default_factory=lambda: [str(Path.home())])
-    blocked_commands: List[str] = field(default_factory=lambda: [
+    allowed_paths: list[str] = field(default_factory=lambda: [str(Path.home())])
+    blocked_commands: list[str] = field(default_factory=lambda: [
         "format", "rd", "rmdir", "del /s", "rm -rf /",
         "shutdown", "reboot", "bcdedit", "reg delete",
     ])
-    env_overrides: Dict[str, str] = field(default_factory=dict)
+    env_overrides: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -65,9 +63,9 @@ class SandboxResult:
 class Sandbox:
     """Restricted execution environment."""
 
-    def __init__(self, config: Optional[SandboxConfig] = None):
+    def __init__(self, config: SandboxConfig | None = None):
         self.config = config or SandboxConfig()
-        self._active_processes: Dict[str, subprocess.Popen] = {}
+        self._active_processes: dict[str, subprocess.Popen] = {}
         self._lock = threading.Lock()
 
     def check_command(self, command: str) -> tuple[bool, str]:
@@ -101,8 +99,8 @@ class Sandbox:
         except Exception as e:
             return False, f"Invalid path: {e}"
 
-    def execute(self, command: str, cwd: Optional[str] = None,
-                env: Optional[Dict[str, str]] = None) -> SandboxResult:
+    def execute(self, command: str, cwd: str | None = None,
+                env: dict[str, str] | None = None) -> SandboxResult:
         """Execute a command in the sandbox."""
         # Pre-flight checks
         allowed, reason = self.check_command(command)
@@ -185,7 +183,7 @@ class Sandbox:
                     pass
             self._active_processes.clear()
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "active_processes": len(self._active_processes),

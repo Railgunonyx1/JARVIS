@@ -1,8 +1,9 @@
 """Voice Activity Detection — energy-based speech segment detection."""
 
-import time
 import logging
+import time
 from collections import deque
+
 import numpy as np
 
 logger = logging.getLogger("jarvis.pipeline.vad")

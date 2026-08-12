@@ -10,7 +10,8 @@ import sys
 import threading
 import time
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.hot_reload_engine")
 
@@ -31,15 +32,15 @@ class HotReloadEngine:
     """Reload modules without restarting the system by monitoring file changes."""
 
     def __init__(self) -> None:
-        self._watched: Dict[str, Dict[str, Any]] = {}
-        self._callbacks: Dict[str, List[Callable[..., Any]]] = {}
+        self._watched: dict[str, dict[str, Any]] = {}
+        self._callbacks: dict[str, list[Callable[..., Any]]] = {}
         self._lock = threading.RLock()
         self._reload_log: deque = deque(maxlen=100)
         self._auto_reload: bool = False
-        self._auto_thread: Optional[threading.Thread] = None
+        self._auto_thread: threading.Thread | None = None
         self._auto_interval: float = 5.0
         self._stop_event = threading.Event()
-        self._stats: Dict[str, int] = {
+        self._stats: dict[str, int] = {
             "total_watches": 0,
             "total_checks": 0,
             "total_reloads": 0,
@@ -50,7 +51,7 @@ class HotReloadEngine:
         self,
         module_name: str,
         file_path: str,
-        callback: Optional[Callable[..., Any]] = None,
+        callback: Callable[..., Any] | None = None,
     ) -> None:
         """Watch a module file for changes."""
         abs_path = os.path.abspath(file_path)
@@ -80,9 +81,9 @@ class HotReloadEngine:
             logger.info("Stopped watching module '%s'", module_name)
             return True
 
-    def check_for_changes(self) -> List[str]:
+    def check_for_changes(self) -> list[str]:
         """Check all watched files for changes. Returns list of changed module names."""
-        changed: List[str] = []
+        changed: list[str] = []
         with self._lock:
             watched_copy = dict(self._watched)
         self._stats["total_checks"] += 1
@@ -106,7 +107,7 @@ class HotReloadEngine:
                 logger.info("Change detected in module '%s'", module_name)
         return changed
 
-    def reload(self, module_name: str) -> Dict[str, Any]:
+    def reload(self, module_name: str) -> dict[str, Any]:
         """Reload a specific module. Returns result dict."""
         with self._lock:
             info = self._watched.get(module_name)
@@ -187,10 +188,10 @@ class HotReloadEngine:
                     "Callback error for module '%s'", module_name
                 )
 
-    def reload_all_changed(self) -> List[Dict[str, Any]]:
+    def reload_all_changed(self) -> list[dict[str, Any]]:
         """Check and reload all changed modules. Returns list of results."""
         changed = self.check_for_changes()
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         for name in changed:
             result = self.reload(name)
             results.append(result)
@@ -242,7 +243,7 @@ class HotReloadEngine:
             self._auto_thread = None
         logger.info("Auto-reload disabled")
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Returns watched_count, reload_count, last_reload, auto_reload_enabled."""
         with self._lock:
             total_reload_count = sum(
@@ -252,7 +253,7 @@ class HotReloadEngine:
             for info in self._watched.values():
                 if info["last_reload_time"] > last_reload:
                     last_reload = info["last_reload_time"]
-            watched_details: Dict[str, Dict[str, Any]] = {}
+            watched_details: dict[str, dict[str, Any]] = {}
             for name, info in self._watched.items():
                 watched_details[name] = {
                     "file_path": info["file_path"],
@@ -275,7 +276,7 @@ class HotReloadEngine:
             "watched": watched_details,
         }
 
-    def get_reload_log(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_reload_log(self, limit: int = 20) -> list[dict[str, Any]]:
         """Returns recent reload history entries."""
         with self._lock:
             entries = list(self._reload_log)
@@ -303,13 +304,13 @@ class HotReloadEngine:
             "Registered callback for module '%s'", module_name
         )
 
-    def get_watched_modules(self) -> List[str]:
+    def get_watched_modules(self) -> list[str]:
         """Return list of watched module names."""
         with self._lock:
             return list(self._watched.keys())
 
 
-_instance: Optional[HotReloadEngine] = None
+_instance: HotReloadEngine | None = None
 _instance_lock = threading.RLock()
 
 

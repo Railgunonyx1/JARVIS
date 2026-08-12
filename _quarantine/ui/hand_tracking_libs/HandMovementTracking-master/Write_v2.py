@@ -1,7 +1,8 @@
-import numpy as np
-import cv2
 from collections import deque
+
+import cv2
 import mediapipe as mp
+import numpy as np
 from utils.utils_v2 import get_idx_to_coordinates, rescale_frame
 
 mp_drawing = mp.solutions.drawing_utils

@@ -3,11 +3,10 @@
 Capabilities: create, read, write, delete, copy, move, rename, list, search, info.
 """
 
+import logging
 import os
 import shutil
-import logging
 from pathlib import Path
-from typing import Optional
 
 from core.utils import get_project_root
 

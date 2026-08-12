@@ -11,16 +11,14 @@ import asyncio
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 PYEXE = sys.executable
 
 
 def build_context():
-    from core.agent.state import AgentState
     from core.agent.loop import AgentLoop
+    from core.agent.state import AgentState
     from tools import build_default_registry
 
     registry = build_default_registry()

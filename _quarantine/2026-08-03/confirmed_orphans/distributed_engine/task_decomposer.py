@@ -1,12 +1,11 @@
 """Task Decomposer — breaks high-level tasks into dependency-ordered subtasks."""
 
-import re
-import uuid
-import time
-import threading
 import logging
-from typing import Any, Dict, List, Optional
+import re
+import threading
+import uuid
 from collections import defaultdict, deque
+from typing import Any
 
 logger = logging.getLogger("jarvis.distributed_engine.task_decomposer")
 
@@ -15,7 +14,7 @@ def _make_id() -> str:
     return f"task_{uuid.uuid4().hex[:8]}"
 
 
-def _default_patterns() -> Dict[str, dict]:
+def _default_patterns() -> dict[str, dict]:
     """Return regex → decomposition template mapping."""
     return {
         re.compile(
@@ -66,10 +65,10 @@ class TaskDecomposer:
     """Decomposes high-level task strings into dependency-ordered subtask lists."""
 
     def __init__(self) -> None:
-        self._patterns: Dict[re.Pattern, dict] = _default_patterns()
+        self._patterns: dict[re.Pattern, dict] = _default_patterns()
         self._lock = threading.Lock()
 
-    def decompose(self, task: str, max_depth: int = 3) -> List[Dict[str, Any]]:
+    def decompose(self, task: str, max_depth: int = 3) -> list[dict[str, Any]]:
         """Break *task* into subtasks, up to *max_depth* recursion levels."""
         if not task or not task.strip():
             return []
@@ -83,7 +82,7 @@ class TaskDecomposer:
 
         return self._generic_decompose(task, max_depth)
 
-    def _apply_pattern(self, match: re.Match, spec: dict) -> List[Dict[str, Any]]:
+    def _apply_pattern(self, match: re.Match, spec: dict) -> list[dict[str, Any]]:
         """Instantiate a matched pattern template with captured groups."""
         groups = [match.group(i + 1).strip() for i in range(len(match.groups()))]
         template = spec["template"]
@@ -91,8 +90,8 @@ class TaskDecomposer:
         if template == "auto":
             template = self._auto_template(groups)
 
-        result: List[Dict[str, Any]] = []
-        id_map: Dict[str, str] = {}
+        result: list[dict[str, Any]] = []
+        id_map: dict[str, str] = {}
 
         for idx, entry in enumerate(template):
             new_id = _make_id()
@@ -113,7 +112,7 @@ class TaskDecomposer:
 
         return result
 
-    def _auto_template(self, groups: List[str]) -> List[dict]:
+    def _auto_template(self, groups: list[str]) -> list[dict]:
         """Build a template from an auto-captured group list."""
         non_none = [g for g in groups if g is not None]
         if len(non_none) == 2:
@@ -131,7 +130,7 @@ class TaskDecomposer:
             {"id": None, "description": "{0}", "dependencies": [], "estimated_ms": 3000},
         ]
 
-    def _generic_decompose(self, task: str, max_depth: int) -> List[Dict[str, Any]]:
+    def _generic_decompose(self, task: str, max_depth: int) -> list[dict[str, Any]]:
         """Fallback: return the task as a single subtask."""
         return [{
             "id": _make_id(),
@@ -140,18 +139,18 @@ class TaskDecomposer:
             "estimated_ms": 5000,
         }]
 
-    def get_dependency_graph(self, tasks: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    def get_dependency_graph(self, tasks: list[dict[str, Any]]) -> dict[str, list[str]]:
         """Return an adjacency list mapping each task id to its dependency ids."""
-        graph: Dict[str, List[str]] = {}
+        graph: dict[str, list[str]] = {}
         for t in tasks:
             graph[t["id"]] = list(t.get("dependencies", []))
         return graph
 
-    def topological_sort(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def topological_sort(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return tasks in a valid topological order (dependencies before dependents)."""
         id_to_task = {t["id"]: t for t in tasks}
-        in_degree: Dict[str, int] = {t["id"]: 0 for t in tasks}
-        dependents: Dict[str, List[str]] = defaultdict(list)
+        in_degree: dict[str, int] = {t["id"]: 0 for t in tasks}
+        dependents: dict[str, list[str]] = defaultdict(list)
 
         for t in tasks:
             for dep in t.get("dependencies", []):
@@ -164,7 +163,7 @@ class TaskDecomposer:
             if deg == 0:
                 queue.append(tid)
 
-        order: List[Dict[str, Any]] = []
+        order: list[dict[str, Any]] = []
         while queue:
             tid = queue.popleft()
             order.append(id_to_task[tid])
@@ -184,7 +183,7 @@ class TaskDecomposer:
 
         return order
 
-    def add_pattern(self, pattern: str, template: List[dict], fields: List[str]) -> None:
+    def add_pattern(self, pattern: str, template: list[dict], fields: list[str]) -> None:
         """Register a custom decomposition pattern."""
         with self._lock:
             compiled = re.compile(pattern, re.IGNORECASE)
@@ -200,7 +199,7 @@ class TaskDecomposer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[TaskDecomposer] = None
+_instance: TaskDecomposer | None = None
 _instance_lock = threading.Lock()
 
 

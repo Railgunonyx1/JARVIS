@@ -48,7 +48,8 @@ def _audit_shell_execution(command: str, args: list[str],
         from security.audit import AuditEntry, get_audit_log
         from security.policies import PermissionLevel
 
-        payload = (command or " ".join([command, *args])).encode("utf-8", "replace")
+        cmd = command or " ".join(args or [])
+        payload = cmd.encode("utf-8", "replace")
         get_audit_log().log(AuditEntry(
             action="shell_execute",
             tool="shell.execute",

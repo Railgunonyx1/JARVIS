@@ -4,7 +4,6 @@ import json
 import logging
 from datetime import datetime
 from threading import Lock
-from pathlib import Path
 
 from core.utils import get_project_root
 

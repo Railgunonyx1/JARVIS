@@ -5,9 +5,10 @@ Avoids thread creation/destruction overhead.
 """
 import logging
 import threading
-from typing import Optional, Dict, Any, Callable
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("os_optimization.thread_affinity")
 
@@ -48,7 +49,7 @@ class ThreadAffinityManager:
     }
 
     def __init__(self):
-        self._pools: Dict[str, ThreadPool] = dict(self.DEFAULT_POOLS)
+        self._pools: dict[str, ThreadPool] = dict(self.DEFAULT_POOLS)
         self._lock = threading.Lock()
 
     def submit(self, pool_name: str, fn: Callable, *args, **kwargs):
@@ -71,7 +72,7 @@ class ThreadAffinityManager:
             with self._lock:
                 pool.active_tasks = max(0, pool.active_tasks - 1)
 
-    def get_pool_stats(self) -> Dict[str, Any]:
+    def get_pool_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 name: {
@@ -87,7 +88,7 @@ class ThreadAffinityManager:
             pool.executor.shutdown(wait=False)
 
 
-_affinity_instance: Optional[ThreadAffinityManager] = None
+_affinity_instance: ThreadAffinityManager | None = None
 
 
 def get_thread_affinity_manager() -> ThreadAffinityManager:

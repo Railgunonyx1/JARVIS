@@ -1,17 +1,13 @@
+import copy
+import functools
+import json
+import math
+import os
+
+import cv2
 import torch
 import torch.utils.data as data
 from PIL import Image
-import os
-import math
-import functools
-import json
-import copy
-from numpy.random import randint
-import numpy as np
-import random
-import cv2
-
-from utils import load_value_file
 
 
 def pil_loader(path):
@@ -25,7 +21,7 @@ def accimage_loader(path):
     try:
         import accimage
         return accimage.Image(path)
-    except IOError:
+    except OSError:
         # Potentially a decoding problem, fall back to PIL.Image
         return pil_loader(path)
 
@@ -52,14 +48,14 @@ def video_loader(video_dir_path, frame_indices, sample_duration, image_loader):
             break
 
     cap.release()
-    
+
 
     # Loop as many times for short videos
     for frame in video:
         if len(video) >= sample_duration:
             break
         video.append(frame)
-    
+
     if len(video) == 0: # give an empty clip
         for _ in range(sample_duration):
             video.append(Image.new('RGB', (320, 180)))
@@ -73,7 +69,7 @@ def get_default_video_loader():
 
 
 def load_annotation_data(data_file_path):
-    with open(data_file_path, 'r') as data_file:
+    with open(data_file_path) as data_file:
         return json.load(data_file)
 
 
@@ -96,10 +92,10 @@ def get_video_names_annotations_framenum(data, subset):
         framenum.append(value['n_frames'])
         if this_subset == subset:
             if subset == 'testing':
-                video_names.append('test/{}'.format(key))
+                video_names.append(f'test/{key}')
             else:
                 label = value['annotations']['label']
-                video_names.append('{}/{}'.format(label, key))
+                video_names.append(f'{label}/{key}')
                 annotations.append(value['annotations'])
 
     return video_names, annotations, framenum
@@ -117,7 +113,7 @@ def make_dataset(root_path, annotation_path, subset, n_samples_for_each_video,
     dataset = []
     for i in range(len(video_names)):
         if i % 1000 == 0:
-            print('dataset loading [{}/{}]'.format(i, len(video_names)))
+            print(f'dataset loading [{i}/{len(video_names)}]')
 
         video_path = os.path.join(root_path, video_names[i])
         if not os.path.exists(video_path):

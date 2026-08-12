@@ -3,15 +3,13 @@
 Uses ICS file parsing and local storage for calendar operations.
 """
 import logging
-import time
-import json
-import re
 import sqlite3
+import time
 import uuid
-from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger("external.calendar_manager")
 
@@ -29,7 +27,7 @@ class CalendarEvent:
     reminder_minutes: int = 15
     created_at: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "title": self.title,
             "start": datetime.fromtimestamp(self.start_time).isoformat() if self.start_time else "",
@@ -85,7 +83,7 @@ class CalendarManager:
         conn.close()
         return event
 
-    def get_upcoming(self, hours: int = 24) -> List[CalendarEvent]:
+    def get_upcoming(self, hours: int = 24) -> list[CalendarEvent]:
         now = time.time()
         future = now + hours * 3600
         conn = sqlite3.connect(self._db_path)
@@ -98,7 +96,7 @@ class CalendarManager:
                               end_time=r[4], location=r[5], recurrence=r[6],
                               reminder_minutes=r[7], created_at=r[8]) for r in rows]
 
-    def get_today(self) -> List[CalendarEvent]:
+    def get_today(self) -> list[CalendarEvent]:
         now = datetime.now()
         start = datetime(now.year, now.month, now.day).timestamp()
         end = start + 86400
@@ -119,7 +117,7 @@ class CalendarManager:
         conn.close()
         return cursor.rowcount > 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         conn = sqlite3.connect(self._db_path)
         count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         upcoming = conn.execute("SELECT COUNT(*) FROM events WHERE start_time >= ?", (time.time(),)).fetchone()[0]
@@ -127,7 +125,7 @@ class CalendarManager:
         return {"total_events": count, "upcoming_events": upcoming}
 
 
-_calendar_instance: Optional[CalendarManager] = None
+_calendar_instance: CalendarManager | None = None
 
 
 def get_calendar_manager() -> CalendarManager:

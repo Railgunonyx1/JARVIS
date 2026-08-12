@@ -1,11 +1,9 @@
 """Power Manager — battery monitoring, power plan control, and thermal estimation."""
 
-import sys
-import time
 import logging
-import threading
 import subprocess
-from typing import Dict, List, Optional
+import sys
+import threading
 
 import psutil
 
@@ -18,7 +16,7 @@ class PowerManager:
     """Monitors battery state, controls Windows power plans, and estimates thermal levels."""
 
     def __init__(self) -> None:
-        self._cpu_history: List[float] = []
+        self._cpu_history: list[float] = []
         self._lock = threading.Lock()
 
     def get_power_state(self) -> dict:
@@ -143,7 +141,7 @@ class PowerManager:
         return "unknown"
 
 
-_power_manager: Optional[PowerManager] = None
+_power_manager: PowerManager | None = None
 _power_manager_lock = threading.Lock()
 
 

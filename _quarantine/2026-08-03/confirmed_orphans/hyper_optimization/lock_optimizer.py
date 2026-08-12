@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.lock_optimizer")
 
@@ -54,12 +54,12 @@ class LockOptimizer:
     """Monitors lock contention and suggests optimizations."""
 
     def __init__(self) -> None:
-        self._locks: Dict[str, _MonitoredLockInfo] = {}
+        self._locks: dict[str, _MonitoredLockInfo] = {}
         self._lock = threading.RLock()
         self._monitoring: bool = True
         logger.debug("LockOptimizer initialized")
 
-    def wrap_lock(self, name: str, lock: Optional[threading.RLock] = None) -> threading.RLock:
+    def wrap_lock(self, name: str, lock: threading.RLock | None = None) -> threading.RLock:
         """Create or wrap a lock with contention monitoring. Returns the lock."""
         with self._lock:
             if name in self._locks:
@@ -259,7 +259,7 @@ class LockOptimizer:
             return False
 
 
-_instance: Optional[LockOptimizer] = None
+_instance: LockOptimizer | None = None
 _instance_lock = threading.RLock()
 
 

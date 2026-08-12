@@ -1,10 +1,9 @@
 """JARVIS MK-X — Core Utilities."""
 
-import sys
 import logging
 import logging.handlers
+import sys
 from pathlib import Path
-from datetime import datetime
 
 
 def get_project_root() -> Path:

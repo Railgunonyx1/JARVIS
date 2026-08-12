@@ -8,8 +8,9 @@ import heapq
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.scheduler_optimizer")
 
@@ -30,8 +31,8 @@ class _Task:
         task_id: str,
         fn: Callable,
         priority: int = 5,
-        deadline_ms: Optional[float] = None,
-        dependencies: Optional[List[str]] = None,
+        deadline_ms: float | None = None,
+        dependencies: list[str] | None = None,
     ):
         self.task_id = task_id
         self.fn = fn
@@ -40,11 +41,11 @@ class _Task:
         self.dependencies = dependencies or []
         self.status = "queued"
         self.submitted_at = time.perf_counter()
-        self.started_at: Optional[float] = None
-        self.completed_at: Optional[float] = None
+        self.started_at: float | None = None
+        self.completed_at: float | None = None
         self.result: Any = None
-        self.error: Optional[str] = None
-        self.future: Optional[Future] = None
+        self.error: str | None = None
+        self.future: Future | None = None
 
     def __lt__(self, other: "_Task") -> bool:
         """Comparison for heapq: lower priority number = higher priority = dequeued first."""
@@ -59,12 +60,12 @@ class _Task:
         return (time.perf_counter() - self.submitted_at) * 1000.0
 
     @property
-    def execution_time_ms(self) -> Optional[float]:
+    def execution_time_ms(self) -> float | None:
         if self.started_at is not None and self.completed_at is not None:
             return (self.completed_at - self.started_at) * 1000.0
         return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "priority": self.priority,
@@ -80,10 +81,10 @@ class SchedulerOptimizer:
     """Intelligent task scheduling with priority, deadlines, and resource awareness."""
 
     def __init__(self, thread_pool_size: int = 4, max_queue_size: int = 256):
-        self._task_queue: List[_Task] = []
-        self._running_tasks: Dict[str, _Task] = {}
-        self._completed_tasks: List[_Task] = []
-        self._failed_tasks: List[_Task] = []
+        self._task_queue: list[_Task] = []
+        self._running_tasks: dict[str, _Task] = {}
+        self._completed_tasks: list[_Task] = []
+        self._failed_tasks: list[_Task] = []
         self._thread_pool_size = thread_pool_size
         self._max_queue_size = max_queue_size
         self._lock = threading.RLock()
@@ -100,9 +101,9 @@ class SchedulerOptimizer:
         task_id: str,
         fn: Callable,
         priority: int = 5,
-        deadline_ms: Optional[float] = None,
-        dependencies: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        deadline_ms: float | None = None,
+        dependencies: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Schedule a task with priority (1=highest, 10=lowest)."""
         with self._lock:
             if len(self._task_queue) >= self._max_queue_size:
@@ -127,7 +128,7 @@ class SchedulerOptimizer:
             )
             return task.to_dict()
 
-    def schedule_batch(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def schedule_batch(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Schedule multiple tasks. Each task: {id, fn, priority, deadline_ms}."""
         results = []
         for task_spec in tasks:
@@ -141,7 +142,7 @@ class SchedulerOptimizer:
             results.append(result)
         return results
 
-    def get_queue_status(self) -> Dict[str, Any]:
+    def get_queue_status(self) -> dict[str, Any]:
         """Returns queue_length, running_count, completed_count, avg_wait_ms."""
         with self._lock:
             wait_times = [t.wait_time_ms for t in self._task_queue]
@@ -187,7 +188,7 @@ class SchedulerOptimizer:
             logger.warning("Task '%s' not found for preemption", task_id)
             return False
 
-    def preempt_lowest_priority(self) -> Optional[str]:
+    def preempt_lowest_priority(self) -> str | None:
         """Preempt the lowest-priority (highest number) task in the queue."""
         with self._lock:
             if not self._task_queue:
@@ -213,7 +214,7 @@ class SchedulerOptimizer:
             )
             return preempted_task.task_id
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Returns total_scheduled, total_preempted, avg_completion_ms, queue_utilization."""
         with self._lock:
             completions = [
@@ -266,11 +267,11 @@ class SchedulerOptimizer:
             logger.warning("Task '%s' not found for priority adjustment", task_id)
             return False
 
-    def apply_deadline_pressure(self) -> List[str]:
+    def apply_deadline_pressure(self) -> list[str]:
         """Boost priority of tasks approaching their deadlines. Returns boosted IDs."""
         with self._lock:
             now = time.perf_counter()
-            boosted: List[str] = []
+            boosted: list[str] = []
 
             for task in self._task_queue:
                 if task.deadline_ms is not None and task.status == "queued":
@@ -299,7 +300,7 @@ class SchedulerOptimizer:
 
             return boosted
 
-    def get_overdue_tasks(self) -> List[Dict[str, Any]]:
+    def get_overdue_tasks(self) -> list[dict[str, Any]]:
         """Returns tasks that have exceeded their deadlines."""
         with self._lock:
             now = time.perf_counter()
@@ -317,7 +318,7 @@ class SchedulerOptimizer:
                         })
             return overdue
 
-    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task(self, task_id: str) -> dict[str, Any] | None:
         """Get status of a specific task."""
         with self._lock:
             for task in self._task_queue:
@@ -370,7 +371,7 @@ class SchedulerOptimizer:
             logger.info("SchedulerOptimizer reset")
 
 
-_scheduler_instance: Optional[SchedulerOptimizer] = None
+_scheduler_instance: SchedulerOptimizer | None = None
 _scheduler_lock = threading.RLock()
 
 

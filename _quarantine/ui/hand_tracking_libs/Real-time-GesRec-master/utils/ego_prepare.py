@@ -1,9 +1,8 @@
-from __future__ import print_function, division
-import sys
-import glob 
-import pandas as pd
-import csv
+import glob
 import os
+import sys
+
+import pandas as pd
 
 path_to_dataset = '/usr/home/kop/datasets/EgoGesture'
 
@@ -11,19 +10,19 @@ paths = sorted(glob.glob(os.path.join(path_to_dataset,'labels-final-revised1/*/*
 ########################################################
 ##################### SUBJECT LIST #####################
 ########################################################
-subject_ids = ['{num:02d}'.format(num=i) for i in range(1,51)]
+subject_ids = [f'{i:02d}' for i in range(1,51)]
 
-subject_ids_train = ['{num:02d}'.format(num=i) for i in [3, 4, 5, 6, 8, 10, 15, 16, 17, 20, 21, 22, 23,\
+subject_ids_train = [f'{i:02d}' for i in [3, 4, 5, 6, 8, 10, 15, 16, 17, 20, 21, 22, 23,\
 														 25, 26, 27, 30, 32, 36, 38, 39, 40, 42, 43, 44,\
 														  45, 46, 48, 49, 50]]
-subject_ids_val = ['{num:02d}'.format(num=i) for i in [1, 7, 12, 13, 24, 29, 33, 34, 35, 37]]
-subject_ids_test = ['{num:02d}'.format(num=i) for i in [ 2, 9, 11, 14, 18, 19, 28, 31, 41, 47]]
+subject_ids_val = [f'{i:02d}' for i in [1, 7, 12, 13, 24, 29, 33, 34, 35, 37]]
+subject_ids_test = [f'{i:02d}' for i in [ 2, 9, 11, 14, 18, 19, 28, 31, 41, 47]]
 
 ########################################################
 
 def create_trainlist( subset ,file_name, class_types = 'all'):
-	
-	
+
+
 	folder1 = 'Color'
 	folder2 = 'rgb'
 	if subset == 'training': # Check subject id for validation/train split
@@ -45,15 +44,15 @@ def create_trainlist( subset ,file_name, class_types = 'all'):
 		if subject[-2:] in subjects_to_process:
 
 			index = x[-1].split('.')[0][-1]
-			folder_path = os.path.join(subject.title(), x[3],'{}'.format(folder1),\
-				'{}'.format(folder2)+ index)
-			
+			folder_path = os.path.join(subject.title(), x[3],f'{folder1}',\
+				f'{folder2}'+ index)
+
 
 			full_path = os.path.join('/'+x[0],'images',folder_path)
 			n_images = len(sorted(glob.glob(full_path + '/*')))
 			df_val = df.values
 			start = 1
-			end = df_val[1,1] -1 
+			end = df_val[1,1] -1
 			len_lines = df_val.shape[0]
 			for i in range(len_lines):
 				line = df_val[i,:]
@@ -67,7 +66,7 @@ def create_trainlist( subset ,file_name, class_types = 'all'):
 					if (line[1] - start) >= 8:# Some action starts right away so I do not add None LABEL
 						new_lines.append(folder_path + ' ' + '1' + ' ' + str(start)+ ' ' + str(line[1]-1))
 					new_lines.append(folder_path + ' ' + '2' + ' ' + str(line[1])+ ' ' + str(line[2]))
-				
+
 				start = line[2]+1
 			if (n_images - start >8):
 				# Class 84 is None(Non Gesture) class

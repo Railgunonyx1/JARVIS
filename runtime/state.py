@@ -12,7 +12,7 @@ import json
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 __all__ = ["RuntimeState", "save_snapshot", "load_snapshot"]
 
@@ -27,19 +27,19 @@ class RuntimeState:
     provider: str = ""
     model: str = ""
     tools: int = 0
-    mem_stats: Dict[str, Any] = field(default_factory=dict)
+    mem_stats: dict[str, Any] = field(default_factory=dict)
     last_goal: str = ""
-    last_result: Optional[str] = None  # "completed" | "failed" | None
+    last_result: str | None = None  # "completed" | "failed" | None
     last_trace_id: str = ""
     started_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     pid: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RuntimeState":
+    def from_dict(cls, data: dict[str, Any]) -> RuntimeState:
         known = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in (data or {}).items() if k in known})
 
@@ -55,7 +55,7 @@ def save_snapshot(state: RuntimeState, path: Path) -> None:
         pass
 
 
-def load_snapshot(path: Path) -> Optional[RuntimeState]:
+def load_snapshot(path: Path) -> RuntimeState | None:
     """Read a snapshot, returning ``None`` when missing or corrupt."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

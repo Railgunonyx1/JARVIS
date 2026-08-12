@@ -3,11 +3,11 @@
 Keep GPU utilization above 90% by predicting when current job finishes.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, Callable, List
-from dataclasses import dataclass, field
+import time
 from collections import deque
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("gpu_optimization.predictive_scheduling")
 
@@ -38,9 +38,9 @@ class PredictiveGPUScheduler:
 
     def __init__(self, latency_buffer_ms: float = 5.0):
         self._latency_buffer_ms = latency_buffer_ms
-        self._queue: List[GPUJob] = []
+        self._queue: list[GPUJob] = []
         self._completed: deque = deque(maxlen=200)
-        self._current_job: Optional[GPUJob] = None
+        self._current_job: GPUJob | None = None
         self._lock = threading.Lock()
         self._job_counter = 0
         self._total_jobs = 0
@@ -59,14 +59,14 @@ class PredictiveGPUScheduler:
             self._queue.sort(key=lambda j: (j.priority, j.queued_at))
         return job_id
 
-    def get_next_job(self) -> Optional[GPUJob]:
+    def get_next_job(self) -> GPUJob | None:
         """Get the next job to execute, pre-fetched before GPU is idle."""
         with self._lock:
             if self._queue:
                 return self._queue[0]
         return None
 
-    def start_job(self, job_id: str) -> Optional[GPUJob]:
+    def start_job(self, job_id: str) -> GPUJob | None:
         """Mark a job as started."""
         with self._lock:
             for i, job in enumerate(self._queue):
@@ -98,7 +98,7 @@ class PredictiveGPUScheduler:
             return remaining
         return 0.0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "queue_size": len(self._queue),
@@ -109,7 +109,7 @@ class PredictiveGPUScheduler:
             }
 
 
-_gpu_scheduler_instance: Optional[PredictiveGPUScheduler] = None
+_gpu_scheduler_instance: PredictiveGPUScheduler | None = None
 
 
 def get_predictive_gpu_scheduler() -> PredictiveGPUScheduler:

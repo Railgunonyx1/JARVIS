@@ -1,11 +1,12 @@
 """Parallel Executor — runs independent tasks concurrently with dependency awareness."""
 
-import time
-import threading
 import logging
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import Any, Callable, Dict, List, Optional
+import threading
+import time
 from collections import defaultdict, deque
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any
 
 logger = logging.getLogger("jarvis.distributed_engine.parallel_executor")
 
@@ -21,9 +22,9 @@ class ParallelExecutor:
 
     def execute(
         self,
-        tasks: List[Dict[str, Any]],
+        tasks: list[dict[str, Any]],
         max_workers: int = 4,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Execute tasks respecting dependency order.
 
         Each task dict must contain:
@@ -36,12 +37,12 @@ class ParallelExecutor:
         if not tasks:
             return []
 
-        task_map: Dict[str, Dict[str, Any]] = {t["id"]: t for t in tasks}
-        dep_map: Dict[str, List[str]] = {
+        task_map: dict[str, dict[str, Any]] = {t["id"]: t for t in tasks}
+        dep_map: dict[str, list[str]] = {
             t["id"]: list(t.get("dependencies", [])) for t in tasks
         }
-        in_degree: Dict[str, int] = {t["id"]: 0 for t in tasks}
-        dependents: Dict[str, List[str]] = defaultdict(list)
+        in_degree: dict[str, int] = {t["id"]: 0 for t in tasks}
+        dependents: dict[str, list[str]] = defaultdict(list)
 
         for t in tasks:
             for dep in t.get("dependencies", []):
@@ -49,14 +50,14 @@ class ParallelExecutor:
                     in_degree[t["id"]] += 1
                     dependents[dep].append(t["id"])
 
-        completed: Dict[str, Any] = {}
-        errors: Dict[str, str] = {}
-        futures: Dict[str, Future] = {}
-        results: List[Dict[str, Any]] = []
+        completed: dict[str, Any] = {}
+        errors: dict[str, str] = {}
+        futures: dict[str, Future] = {}
+        results: list[dict[str, Any]] = []
         results_lock = threading.Lock()
         start = time.perf_counter()
 
-        def _run_task(task_id: str) -> Dict[str, Any]:
+        def _run_task(task_id: str) -> dict[str, Any]:
             task = task_map[task_id]
             fn: Callable = task["fn"]
             args: tuple = task.get("args", ())
@@ -121,7 +122,7 @@ class ParallelExecutor:
         )
         return results
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return aggregate execution statistics."""
         with self._lock:
             total = self._total_completed
@@ -148,7 +149,7 @@ class ParallelExecutor:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[ParallelExecutor] = None
+_instance: ParallelExecutor | None = None
 _instance_lock = threading.Lock()
 
 

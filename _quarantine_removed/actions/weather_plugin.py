@@ -2,6 +2,7 @@
 
 from core.plugin_loader import jarvis_plugin
 
+
 @jarvis_plugin(
     name="plugin.weather",
     description="Fetch weather information for a city",

@@ -4,6 +4,7 @@ import logging
 import time
 from collections.abc import AsyncIterator
 
+from reliability_engine.circuit_breaker import CircuitBreaker
 from providers.base import LLMProvider, LLMResponse
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
@@ -34,6 +35,14 @@ class ProviderRouter:
         """Initialize all configured providers."""
         router_cfg = config.get("router", {})
         self._chain = router_cfg.get("fallback_chain", ["groq", "gemini", "openrouter", "ollama"])
+
+        # Circuit breaker tracking per provider, persists across calls
+        self._circuit_breakers: dict[str, CircuitBreaker] = {
+            "groq": CircuitBreaker(),
+            "gemini": CircuitBreaker(),
+            "openrouter": CircuitBreaker(),
+            "ollama": CircuitBreaker(),
+        }
 
         if "groq" in config and api_keys.get("groq"):
             extra_groq = [k for k in api_keys.get("groq_extra", []) if k]
@@ -129,6 +138,14 @@ class ProviderRouter:
             for provider_name in chain:
                 attempts += 1
                 provider = self._providers[provider_name]
+                # Circuit breaker check — skip if this provider is currently open
+                cb = self._circuit_breakers.get(provider_name)
+                if cb and not cb.is_available():
+                    logger.warning(
+                        "Circuit breaker open for %s (consecutive failures: %d), skipping",
+                        provider_name, cb._failures if hasattr(cb, '_failures') else '?'
+                    )
+                    continue
                 try:
                     logger.info("Trying %s (%s)", provider_name, provider.model)
                     response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools)

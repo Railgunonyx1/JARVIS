@@ -7,13 +7,13 @@ Only records semantically meaningful events:
 Not every telemetry point — those go to MetricsCollector.
 """
 import json
-import time
-import sqlite3
 import logging
+import sqlite3
 import threading
-from dataclasses import dataclass, field, asdict
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.event_store")
 
@@ -23,7 +23,7 @@ _EVENT_STORE_SIZE = 5000
 @dataclass
 class StoredEvent:
     name: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     source: str = ""
     trace_id: str = ""
     timestamp: float = 0.0
@@ -36,7 +36,7 @@ class StoredEvent:
 class EventStore:
     """Appends only. Prunes oldest when exceeding max size."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             data_dir = Path.home() / ".jarvis" / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -67,7 +67,7 @@ class EventStore:
         except Exception as e:
             logger.warning("EventStore DB init failed: %s", e)
 
-    def store(self, name: str, data: Optional[Dict[str, Any]] = None,
+    def store(self, name: str, data: dict[str, Any] | None = None,
               source: str = "", trace_id: str = ""):
         event = StoredEvent(
             name=name,
@@ -94,10 +94,10 @@ class EventStore:
         except Exception as e:
             logger.debug("EventStore write failed: %s", e)
 
-    def query(self, name: Optional[str] = None,
+    def query(self, name: str | None = None,
               limit: int = 100,
-              since: Optional[float] = None,
-              trace_id: Optional[str] = None) -> List[StoredEvent]:
+              since: float | None = None,
+              trace_id: str | None = None) -> list[StoredEvent]:
         try:
             conn = sqlite3.connect(self._db_path, timeout=2.0)
             conditions, params = [], []
@@ -131,7 +131,7 @@ class EventStore:
         except Exception:
             return []
 
-    def recent_traces(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def recent_traces(self, limit: int = 20) -> list[dict[str, Any]]:
         """Distinct trace_ids with their latest event timestamp, newest first."""
         try:
             conn = sqlite3.connect(self._db_path, timeout=2.0)
@@ -159,7 +159,7 @@ class EventStore:
             return 0
 
 
-_store: Optional[EventStore] = None
+_store: EventStore | None = None
 
 
 def get_event_store() -> EventStore:

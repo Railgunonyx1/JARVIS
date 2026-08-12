@@ -1,4 +1,4 @@
-from distributed_engine.task_decomposer import TaskDecomposer, get_task_decomposer
-from distributed_engine.parallel_executor import ParallelExecutor, get_parallel_executor
 from distributed_engine.load_balancer import LoadBalancer, get_load_balancer
+from distributed_engine.parallel_executor import ParallelExecutor, get_parallel_executor
 from distributed_engine.result_aggregator import ResultAggregator, get_result_aggregator
+from distributed_engine.task_decomposer import TaskDecomposer, get_task_decomposer

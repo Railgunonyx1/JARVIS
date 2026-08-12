@@ -11,11 +11,12 @@ fields. They live here.
 
 from __future__ import annotations
 
+import builtins
 import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = __import__("logging").getLogger("jarvis.memory.metadata")
 
@@ -26,7 +27,7 @@ _ACCESS_SATURATION = 20            # above this, further touches stop boosting
 class MetadataStore:
     """SQLite-backed per-memory metadata: importance, confidence, recency, usage."""
 
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
+    def __init__(self, data_dir: Path | None = None) -> None:
         self._data_dir = data_dir or (Path.home() / ".jarvis" / "data")
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "memory_metadata.db"
@@ -79,7 +80,7 @@ class MetadataStore:
             )
             self._conn.commit()
 
-    def get(self, memory_key: str) -> Optional[Dict[str, Any]]:
+    def get(self, memory_key: str) -> dict[str, Any] | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT * FROM memory_metadata WHERE memory_key = ?", (memory_key,),
@@ -116,7 +117,7 @@ class MetadataStore:
             self._conn.commit()
         return cur.rowcount > 0
 
-    def list(self, project: str = "", limit: int = 1000) -> List[Dict[str, Any]]:
+    def list(self, project: str = "", limit: int = 1000) -> builtins.list[dict[str, Any]]:
         sql = "SELECT * FROM memory_metadata"
         params: list = []
         if project:

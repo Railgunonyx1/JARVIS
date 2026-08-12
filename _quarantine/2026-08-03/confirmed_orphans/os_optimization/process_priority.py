@@ -6,9 +6,9 @@ import logging
 import os
 import platform
 import threading
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("os_optimization.process_priority")
 
@@ -54,7 +54,7 @@ TASK_PRIORITIES = {
 class PriorityProfile:
     """A named priority configuration."""
     name: str
-    task_priorities: Dict[str, PriorityLevel] = None
+    task_priorities: dict[str, PriorityLevel] = None
 
     def __post_init__(self):
         if self.task_priorities is None:
@@ -66,10 +66,10 @@ class ProcessPriorityManager:
 
     def __init__(self):
         self._current_priority = PriorityLevel.NORMAL
-        self._active_tasks: Dict[str, PriorityLevel] = {}
+        self._active_tasks: dict[str, PriorityLevel] = {}
         self._lock = threading.Lock()
         self._switch_count = 0
-        self._profiles: Dict[str, PriorityProfile] = {
+        self._profiles: dict[str, PriorityProfile] = {
             "default": PriorityProfile("default"),
             "voice_active": PriorityProfile("voice_active", {
                 **TASK_PRIORITIES,
@@ -109,7 +109,6 @@ class ProcessPriorityManager:
                 win_priority = PRIORITY_MAP.get(priority, PRIORITY_MAP[PriorityLevel.NORMAL])
                 ctypes.windll.kernel32.SetPriorityClass(handle, win_priority)
             else:
-                import signal
                 nice_map = {
                     PriorityLevel.IDLE: 19,
                     PriorityLevel.BELOW_NORMAL: 10,
@@ -122,7 +121,7 @@ class ProcessPriorityManager:
         except Exception as e:
             logger.debug("Priority set failed: %s", e)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "current_priority": self._current_priority.name,
@@ -132,7 +131,7 @@ class ProcessPriorityManager:
             }
 
 
-_priority_instance: Optional[ProcessPriorityManager] = None
+_priority_instance: ProcessPriorityManager | None = None
 
 
 def get_process_priority_manager() -> ProcessPriorityManager:

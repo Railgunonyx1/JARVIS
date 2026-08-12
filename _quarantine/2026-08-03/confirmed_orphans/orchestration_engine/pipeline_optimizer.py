@@ -1,10 +1,11 @@
 """Pipeline Optimizer — topological sort, critical-path analysis, and stage timing."""
 
-import time
-import threading
 import logging
+import threading
+import time
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.orchestration_engine.pipeline_optimizer")
 
@@ -13,14 +14,14 @@ class PipelineOptimizer:
     """Analyzes pipeline stages, reorders for maximum parallelism, and records timings."""
 
     def __init__(self) -> None:
-        self._stage_stats: Dict[str, dict] = {}
+        self._stage_stats: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def optimize_pipeline(self, stages: List[dict]) -> List[dict]:
+    def optimize_pipeline(self, stages: list[dict]) -> list[dict]:
         """Reorder *stages* for maximum parallelism.
 
         Each stage dict must contain:
@@ -35,9 +36,9 @@ class PipelineOptimizer:
         if not stages:
             return []
 
-        stage_map: Dict[str, dict] = {s["name"]: s for s in stages}
-        in_degree: Dict[str, int] = {s["name"]: 0 for s in stages}
-        dependents: Dict[str, List[str]] = {s["name"]: [] for s in stages}
+        stage_map: dict[str, dict] = {s["name"]: s for s in stages}
+        in_degree: dict[str, int] = {s["name"]: 0 for s in stages}
+        dependents: dict[str, list[str]] = {s["name"]: [] for s in stages}
 
         for s in stages:
             for dep in s.get("dependencies", []):
@@ -50,7 +51,7 @@ class PipelineOptimizer:
             if deg == 0:
                 queue.append(name)
 
-        ordered: List[str] = []
+        ordered: list[str] = []
         while queue:
             current = queue.popleft()
             ordered.append(current)
@@ -64,8 +65,8 @@ class PipelineOptimizer:
             logger.warning("Cycle detected; appending remaining stages: %s", remaining)
             ordered.extend(remaining)
 
-        group_assignment: Dict[str, int] = {}
-        level: Dict[str, int] = {}
+        group_assignment: dict[str, int] = {}
+        level: dict[str, int] = {}
         for name in ordered:
             deps = [d for d in stage_map[name].get("dependencies", []) if d in level]
             level[name] = (max(level[d] for d in deps) + 1) if deps else 0
@@ -83,7 +84,7 @@ class PipelineOptimizer:
                 else:
                     group_assignment[name] = max(group_assignment.values(), default=-1) + 1
 
-        result: List[dict] = []
+        result: list[dict] = []
         for name in ordered:
             enriched = dict(stage_map[name])
             enriched["parallel_group"] = group_assignment[name]
@@ -107,10 +108,10 @@ class PipelineOptimizer:
             ms = (time.perf_counter() - start) * 1000
             self._record(name, ms, error)
 
-    def get_stage_stats(self) -> Dict[str, dict]:
+    def get_stage_stats(self) -> dict[str, dict]:
         """Return per-stage ``avg_ms``, ``call_count``, ``p95_ms``."""
         with self._lock:
-            stats: Dict[str, dict] = {}
+            stats: dict[str, dict] = {}
             for name, data in self._stage_stats.items():
                 timings = data["timings"]
                 count = len(timings)
@@ -125,17 +126,17 @@ class PipelineOptimizer:
                 }
             return stats
 
-    def identify_critical_path(self, stages: List[dict]) -> List[str]:
+    def identify_critical_path(self, stages: list[dict]) -> list[str]:
         """Return the longest dependency chain (by estimated_ms) through *stages*."""
         if not stages:
             return []
 
-        stage_map: Dict[str, dict] = {s["name"]: s for s in stages}
-        dist: Dict[str, float] = {s["name"]: 0.0 for s in stages}
-        predecessor: Dict[str, Optional[str]] = {s["name"]: None for s in stages}
+        stage_map: dict[str, dict] = {s["name"]: s for s in stages}
+        dist: dict[str, float] = {s["name"]: 0.0 for s in stages}
+        predecessor: dict[str, str | None] = {s["name"]: None for s in stages}
 
-        in_degree: Dict[str, int] = {s["name"]: 0 for s in stages}
-        dependents: Dict[str, List[str]] = {s["name"]: [] for s in stages}
+        in_degree: dict[str, int] = {s["name"]: 0 for s in stages}
+        dependents: dict[str, list[str]] = {s["name"]: [] for s in stages}
         for s in stages:
             for dep in s.get("dependencies", []):
                 if dep in stage_map:
@@ -147,7 +148,7 @@ class PipelineOptimizer:
             if deg == 0:
                 queue.append(name)
 
-        topo_order: List[str] = []
+        topo_order: list[str] = []
         while queue:
             current = queue.popleft()
             topo_order.append(current)
@@ -170,17 +171,17 @@ class PipelineOptimizer:
         if end_node is None or dist[end_node] == 0:
             return []
 
-        path: List[str] = []
-        node: Optional[str] = end_node
+        path: list[str] = []
+        node: str | None = end_node
         while node is not None:
             path.append(node)
             node = predecessor[node]
         path.reverse()
         return path
 
-    def suggest_optimizations(self) -> List[dict]:
+    def suggest_optimizations(self) -> list[dict]:
         """Analyse recorded stage stats and return concrete suggestions."""
-        suggestions: List[dict] = []
+        suggestions: list[dict] = []
         stats = self.get_stage_stats()
 
         slow_stages = [n for n, s in stats.items() if s["avg_ms"] > 500]
@@ -256,7 +257,7 @@ class PipelineOptimizer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[PipelineOptimizer] = None
+_instance: PipelineOptimizer | None = None
 _lock = threading.Lock()
 
 

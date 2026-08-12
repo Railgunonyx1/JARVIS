@@ -1,6 +1,5 @@
 """API v1 factory — wires APIs to kernel services within the DI container."""
-from api.v1 import MemoryAPI, EventAPI, CapabilityAPI, SecurityAPI
-from api.v1.models import MemoryItem, EventRecord, CapabilityInfo, PermissionRequest
+from api.v1 import CapabilityAPI, EventAPI, MemoryAPI, SecurityAPI
 
 
 def create_memory_api(container) -> MemoryAPI:

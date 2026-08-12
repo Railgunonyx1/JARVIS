@@ -9,12 +9,10 @@ import concurrent.futures
 import logging
 import os
 import platform
-import shutil
 import subprocess
 import threading
 import webbrowser
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.browser_control")
 
@@ -22,7 +20,8 @@ _OS = platform.system()
 _playwright_available = False
 
 try:
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+    from playwright.async_api import TimeoutError as PlaywrightTimeout
+    from playwright.async_api import async_playwright
     _playwright_available = True
 except ImportError:
     logger.warning("playwright not installed. Run: pip install playwright && playwright install chromium")
@@ -85,7 +84,7 @@ def _real_profile_dir(browser: str) -> str:
     return str(fallback)
 
 
-def _open_native(url: str, browser_name: Optional[str] = None) -> str:
+def _open_native(url: str, browser_name: str | None = None) -> str:
     url = _normalize_url(url) if url and url.strip() else ""
     if url == "about:blank":
         url = ""
@@ -115,8 +114,8 @@ def _open_native(url: str, browser_name: Optional[str] = None) -> str:
 class _BrowserSession:
     def __init__(self, browser_name: str):
         self.browser_name = browser_name
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thread: Optional[threading.Thread] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
         self._ready = threading.Event()
         self._pw = None
         self._context = None
@@ -374,7 +373,7 @@ class _SessionRegistry:
         self._active_browser: str = ""
         self._lock = threading.Lock()
 
-    def get(self, browser_name: Optional[str] = None) -> _BrowserSession:
+    def get(self, browser_name: str | None = None) -> _BrowserSession:
         if not browser_name:
             browser_name = self._active_browser or "chrome"
         browser_name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
@@ -444,7 +443,7 @@ def browser_action(params: dict) -> str:
             else:
                 return sess.run(sess.go_to(params.get("url", "")))
         except concurrent.futures.TimeoutError:
-            return f"Browser action timed out."
+            return "Browser action timed out."
         except Exception as e:
             return f"Browser error: {e}"
 

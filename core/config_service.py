@@ -4,7 +4,8 @@ All services read config through this, never directly from config files.
 Supports runtime changes with subscriber notification.
 """
 import logging
-from typing import Any, Callable, Dict, List, Optional, Set
+from collections.abc import Callable
+from typing import Any
 
 from core.config import Config
 
@@ -17,8 +18,8 @@ class ConfigService:
     def __init__(self, config: Config):
         self._config = config
         self._profile: str = "default"
-        self._overrides: Dict[str, Any] = {}
-        self._listeners: List[Callable[[str, Any, Any], None]] = []
+        self._overrides: dict[str, Any] = {}
+        self._listeners: list[Callable[[str, Any, Any], None]] = []
 
     def get(self, section: str, key: str, default: Any = None) -> Any:
         if section in self._overrides and key in self._overrides[section]:
@@ -36,7 +37,7 @@ class ConfigService:
             except Exception as e:
                 logger.debug("Config listener error: %s", e)
 
-    def get_section(self, section: str) -> Dict[str, Any]:
+    def get_section(self, section: str) -> dict[str, Any]:
         base = dict(getattr(self._config, "get_section", lambda s: {})(section))
         if section in self._overrides:
             base.update(self._overrides[section])

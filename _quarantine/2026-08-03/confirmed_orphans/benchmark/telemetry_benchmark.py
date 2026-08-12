@@ -6,12 +6,12 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import time
 import json
 import statistics
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -20,15 +20,15 @@ import psutil
 
 @dataclass
 class TelemetryBenchmarkResult:
-    system_stats_ms: List[float] = field(default_factory=list)
-    telemetry_collection_ms: List[float] = field(default_factory=list)
+    system_stats_ms: list[float] = field(default_factory=list)
+    telemetry_collection_ms: list[float] = field(default_factory=list)
     cpu_overhead_percent: float = 0.0
     memory_overhead_kb: int = 0
-    json_serialization_ms: List[float] = field(default_factory=list)
+    json_serialization_ms: list[float] = field(default_factory=list)
     sse_message_count: int = 0
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "avg_system_stats_ms": round(statistics.mean(self.system_stats_ms), 2) if self.system_stats_ms else 0,
             "avg_telemetry_collection_ms": round(statistics.mean(self.telemetry_collection_ms), 2) if self.telemetry_collection_ms else 0,
@@ -125,13 +125,13 @@ def print_telemetry_result(result: TelemetryBenchmarkResult):
 
     if result.system_stats_ms:
         avg_stats = statistics.mean(result.system_stats_ms)
-        print(f"\n  System Stats Collection:")
+        print("\n  System Stats Collection:")
         print(f"    Average:  {avg_stats:.2f}ms")
         print(f"    Min:      {min(result.system_stats_ms):.2f}ms")
         print(f"    Max:      {max(result.system_stats_ms):.2f}ms")
 
     if result.telemetry_collection_ms:
-        print(f"\n  Collection Overhead (50 iterations):")
+        print("\n  Collection Overhead (50 iterations):")
         print(f"    Total:    {result.telemetry_collection_ms[0]:.1f}ms")
         print(f"    Per-call: {result.telemetry_collection_ms[0] / 50:.2f}ms")
 
@@ -139,7 +139,7 @@ def print_telemetry_result(result: TelemetryBenchmarkResult):
 
     if result.json_serialization_ms:
         avg_json = statistics.mean(result.json_serialization_ms)
-        print(f"\n  JSON Serialization:")
+        print("\n  JSON Serialization:")
         print(f"    Average:  {avg_json:.3f}ms")
         print(f"    Per 1KB:  {avg_json:.3f}ms")
 

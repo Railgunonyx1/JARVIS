@@ -1,8 +1,8 @@
 import asyncio
 import json
 import time
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 try:
     import aiosqlite
@@ -48,7 +48,7 @@ class Telemetry:
                 # Wait for at least one event
                 item = await asyncio.wait_for(self.queue.get(), timeout=self.flush_interval)
                 batch.append(item)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             # Drain up to batch_size without waiting
             while len(batch) < self.batch_size:

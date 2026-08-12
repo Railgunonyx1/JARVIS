@@ -4,8 +4,8 @@ Uses wttr.in (free, no API key) or OpenWeatherMap API.
 """
 import logging
 import time
-from typing import Optional, Dict, Any
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("external.weather")
 
@@ -24,7 +24,7 @@ class WeatherData:
     uv_index: int = 0
     fetched_at: float = 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "location": self.location,
             "temperature_c": self.temperature_c,
@@ -43,11 +43,11 @@ class WeatherService:
 
     def __init__(self, api_key: str = ""):
         self._api_key = api_key
-        self._cache: Dict[str, WeatherData] = {}
+        self._cache: dict[str, WeatherData] = {}
         self._cache_ttl = 600  # 10 minutes
         self._last_fetch = 0.0
 
-    def get_current(self, location: str = "") -> Optional[WeatherData]:
+    def get_current(self, location: str = "") -> WeatherData | None:
         """Get current weather for a location."""
         if not location:
             location = "auto:ip"
@@ -94,7 +94,7 @@ class WeatherService:
             f"humidity {data.humidity}%, wind {data.wind_kph} km/h"
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "cached_locations": len(self._cache),
             "last_fetch": self._last_fetch,
@@ -102,7 +102,7 @@ class WeatherService:
         }
 
 
-_weather_instance: Optional[WeatherService] = None
+_weather_instance: WeatherService | None = None
 
 
 def get_weather_service() -> WeatherService:

@@ -2,12 +2,13 @@
 
 Prefetch data, warm caches, pre-compute results before they're needed.
 """
-import logging
-import time
-import threading
 import asyncio
-from typing import Optional, Dict, Any, Callable, List, Set
-from dataclasses import dataclass, field
+import logging
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("inference_optimization.async_deps")
 
@@ -30,8 +31,8 @@ class AsyncDependencyResolver:
     """
 
     def __init__(self):
-        self._dependencies: Dict[str, Dependency] = {}
-        self._load_order: List[str] = []
+        self._dependencies: dict[str, Dependency] = {}
+        self._load_order: list[str] = []
         self._lock = threading.Lock()
         self._prefetch_count = 0
         self._cache_hits = 0
@@ -40,7 +41,7 @@ class AsyncDependencyResolver:
         with self._lock:
             self._dependencies[name] = Dependency(name=name, loader=loader, priority=priority)
 
-    async def prefetch(self, names: List[str] = None) -> Dict[str, Any]:
+    async def prefetch(self, names: list[str] = None) -> dict[str, Any]:
         """Prefetch dependencies in background."""
         with self._lock:
             deps = list(self._dependencies.values())
@@ -77,7 +78,7 @@ class AsyncDependencyResolver:
             if name in self._dependencies:
                 self._dependencies[name].loaded = True
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "registered": len(self._dependencies),
@@ -87,7 +88,7 @@ class AsyncDependencyResolver:
             }
 
 
-_dep_resolver_instance: Optional[AsyncDependencyResolver] = None
+_dep_resolver_instance: AsyncDependencyResolver | None = None
 
 
 def get_dependency_resolver() -> AsyncDependencyResolver:

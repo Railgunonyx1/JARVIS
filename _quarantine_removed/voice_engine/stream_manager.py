@@ -3,7 +3,7 @@
 import heapq
 import logging
 import threading
-from typing import List, Optional
+from typing import Optional
 
 logger = logging.getLogger("jarvis.voice_engine.stream_manager")
 
@@ -50,7 +50,7 @@ class AudioBuffer:
             heapq.heappush(self._heap, (neg, self._counter, chunk))
             return True
 
-    def pop(self) -> Optional[bytes]:
+    def pop(self) -> bytes | None:
         """Remove and return the highest-priority chunk, or None if empty."""
         with self._lock:
             if not self._heap:
@@ -58,14 +58,14 @@ class AudioBuffer:
             _, _, chunk = heapq.heappop(self._heap)
             return chunk
 
-    def peek(self) -> Optional[bytes]:
+    def peek(self) -> bytes | None:
         """Return the highest-priority chunk without removing it."""
         with self._lock:
             if not self._heap:
                 return None
             return self._heap[0][2]
 
-    def flush(self) -> List[bytes]:
+    def flush(self) -> list[bytes]:
         """Return all chunks in priority order and clear the buffer."""
         with self._lock:
             chunks = []

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
 
 
 class EventBus:
@@ -13,7 +14,7 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        self._subs: Dict[str, List[Callable[[str, Any], Any]]] = {}
+        self._subs: dict[str, list[Callable[[str, Any], Any]]] = {}
 
     def subscribe(self, name: str, handler: Callable[[str, Any], Any]) -> None:
         self._subs.setdefault(name, []).append(handler)

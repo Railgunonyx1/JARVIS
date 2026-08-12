@@ -4,11 +4,11 @@ Before inference, score every memory and keep only active/relevant/recent.
 Discard unrelated/obsolete context to reduce token count.
 """
 import logging
-import time
-import threading
 import math
-from typing import Optional, Dict, Any, List, Tuple
-from dataclasses import dataclass, field
+import threading
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.context_pruning")
 
@@ -43,10 +43,10 @@ class IntelligentContextPruner:
     def __init__(self, max_tokens: int = 8000, keep_recent: int = 5):
         self._max_tokens = max_tokens
         self._keep_recent = keep_recent
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
-    def prune(self, items: List[ContextItem], current_query: str = "") -> List[ContextItem]:
+    def prune(self, items: list[ContextItem], current_query: str = "") -> list[ContextItem]:
         """Prune context items to fit within token budget."""
         if not items:
             return []
@@ -109,7 +109,7 @@ class IntelligentContextPruner:
             score += 0.1
         return min(score, 1.0)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = len(self._history)
         avg_saved = sum(h["tokens_saved"] for h in self._history) / max(total, 1)
         return {
@@ -118,7 +118,7 @@ class IntelligentContextPruner:
         }
 
 
-_pruner_instance: Optional[IntelligentContextPruner] = None
+_pruner_instance: IntelligentContextPruner | None = None
 
 
 def get_context_pruner() -> IntelligentContextPruner:

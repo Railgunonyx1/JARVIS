@@ -1,15 +1,12 @@
-import torch
-from torch.autograd import Variable
 import time
-import os
-import sys
 
+from torch.autograd import Variable
 from utils import *
 
 
 def train_epoch(epoch, data_loader, model, criterion, optimizer, opt,
                 epoch_logger, batch_logger):
-    print('train at epoch {}'.format(epoch))
+    print(f'train at epoch {epoch}')
 
     model.train()
 

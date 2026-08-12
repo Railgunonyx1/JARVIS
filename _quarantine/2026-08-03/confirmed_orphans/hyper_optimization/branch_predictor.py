@@ -7,8 +7,8 @@ likely next actions using n-gram frequency analysis with backoff.
 import logging
 import threading
 import time
-from collections import Counter, defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from collections import Counter
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.branch_predictor")
 
@@ -19,12 +19,12 @@ class BranchPredictor:
     def __init__(self, max_history: int = 500, max_ngram: int = 4):
         self._max_history = max_history
         self._max_ngram = max_ngram
-        self._sequences: List[List[str]] = []
-        self._ngram_counts: Dict[Tuple[str, ...], Counter] = {}
-        self._context_counts: Dict[Tuple[str, ...], Counter] = {}
+        self._sequences: list[list[str]] = []
+        self._ngram_counts: dict[tuple[str, ...], Counter] = {}
+        self._context_counts: dict[tuple[str, ...], Counter] = {}
         self._predictions_made = 0
         self._predictions_correct = 0
-        self._recent_predictions: List[Dict[str, Any]] = []
+        self._recent_predictions: list[dict[str, Any]] = []
         self._intent_frequencies: Counter = Counter()
         self._lock = threading.RLock()
         logger.info(
@@ -32,7 +32,7 @@ class BranchPredictor:
             max_history, max_ngram,
         )
 
-    def record_sequence(self, intents: List[str]) -> None:
+    def record_sequence(self, intents: list[str]) -> None:
         """Record a sequence of intents (last 5-10 actions)."""
         if not intents:
             return
@@ -62,13 +62,13 @@ class BranchPredictor:
 
             logger.debug("Recorded sequence of %d intents", len(intents))
 
-    def predict(self, recent_intents: List[str], top_n: int = 5) -> List[Dict[str, Any]]:
+    def predict(self, recent_intents: list[str], top_n: int = 5) -> list[dict[str, Any]]:
         """Predict likely next intents. Returns list of {intent, probability, reason}."""
         if not recent_intents:
             return self._fallback_predictions(top_n)
 
         with self._lock:
-            candidates: Dict[str, Dict[str, Any]] = {}
+            candidates: dict[str, dict[str, Any]] = {}
 
             # Try longest n-gram first, back off to shorter
             for n in range(min(len(recent_intents), self._max_ngram), 0, -1):
@@ -130,7 +130,7 @@ class BranchPredictor:
 
             return sorted_candidates
 
-    def _fallback_predictions(self, top_n: int) -> List[Dict[str, Any]]:
+    def _fallback_predictions(self, top_n: int) -> list[dict[str, Any]]:
         """Provide fallback predictions based on global frequency."""
         with self._lock:
             if not self._intent_frequencies:
@@ -159,7 +159,7 @@ class BranchPredictor:
             )
             return is_correct
 
-    def get_accuracy(self) -> Dict[str, Any]:
+    def get_accuracy(self) -> dict[str, Any]:
         """Returns accuracy, total_predictions, correct_predictions."""
         with self._lock:
             total = self._predictions_made
@@ -173,10 +173,10 @@ class BranchPredictor:
                 "missed_predictions": total - correct,
             }
 
-    def get_patterns(self, min_support: int = 3) -> List[Dict[str, Any]]:
+    def get_patterns(self, min_support: int = 3) -> list[dict[str, Any]]:
         """Returns most frequent behavior patterns (n-grams with sufficient support)."""
         with self._lock:
-            patterns: List[Dict[str, Any]] = []
+            patterns: list[dict[str, Any]] = []
             for context, next_counts in self._ngram_counts.items():
                 for intent, count in next_counts.items():
                     if count >= min_support:
@@ -199,7 +199,7 @@ class BranchPredictor:
             patterns.sort(key=lambda p: (p["support"], p["confidence"]), reverse=True)
             return patterns
 
-    def get_popular_sequences(self, length: int = 3) -> List[Dict[str, Any]]:
+    def get_popular_sequences(self, length: int = 3) -> list[dict[str, Any]]:
         """Returns most common intent sequences of given length."""
         with self._lock:
             seq_counter: Counter = Counter()
@@ -219,12 +219,12 @@ class BranchPredictor:
                 })
             return results
 
-    def get_intent_distribution(self) -> Dict[str, int]:
+    def get_intent_distribution(self) -> dict[str, int]:
         """Returns the frequency distribution of all observed intents."""
         with self._lock:
             return dict(self._intent_frequencies.most_common())
 
-    def get_recent_predictions(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_predictions(self, limit: int = 20) -> list[dict[str, Any]]:
         """Returns recent prediction attempts."""
         with self._lock:
             return list(reversed(self._recent_predictions[-limit:]))
@@ -240,10 +240,10 @@ class BranchPredictor:
                 return 0.0
             return self._ngram_counts[key].get(to_intent, 0) / total
 
-    def get_transition_matrix(self, min_probability: float = 0.05) -> Dict[str, Dict[str, float]]:
+    def get_transition_matrix(self, min_probability: float = 0.05) -> dict[str, dict[str, float]]:
         """Returns a transition probability matrix for all intents."""
         with self._lock:
-            matrix: Dict[str, Dict[str, float]] = {}
+            matrix: dict[str, dict[str, float]] = {}
             for context, next_counts in self._ngram_counts.items():
                 if len(context) != 1:
                     continue
@@ -251,7 +251,7 @@ class BranchPredictor:
                 total = sum(next_counts.values())
                 if total == 0:
                     continue
-                transitions: Dict[str, float] = {}
+                transitions: dict[str, float] = {}
                 for intent, count in next_counts.most_common():
                     prob = count / total
                     if prob >= min_probability:
@@ -275,7 +275,7 @@ class BranchPredictor:
             logger.info("BranchPredictor reset")
 
 
-_predictor_instance: Optional[BranchPredictor] = None
+_predictor_instance: BranchPredictor | None = None
 _predictor_lock = threading.RLock()
 
 

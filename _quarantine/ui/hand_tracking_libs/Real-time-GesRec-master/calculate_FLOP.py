@@ -1,6 +1,5 @@
-import torch.nn as nn
+from models import c3d
 from thop import profile
-from models import squeezenet, shufflenetv2, shufflenet, mobilenet, mobilenetv2, c3d, resnext, resnet
 
 # %%%%%%%%--------------------- SELECT THE MODEL BELOW ---------------------%%%%%%%%
 
@@ -27,7 +26,7 @@ from models import squeezenet, shufflenetv2, shufflenet, mobilenet, mobilenetv2,
 # model = resnet.resnet101( num_classes=27, shortcut_type='A', sample_size=112, sample_duration=16)
 model = c3d.get_model( num_classes=27, sample_size=112, sample_duration=32)
 #model = model.cuda()
-#model = nn.DataParallel(model)	
+#model = nn.DataParallel(model)
 print(model)
 
 flops, prms = profile(model, input_size=(1, 3, 64, 224, 224))

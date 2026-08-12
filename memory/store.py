@@ -1,13 +1,11 @@
 """Memory Store - JSON + SQLite persistent memory for JARVIS MK-X."""
 
-import json
-import time
 import logging
 import sqlite3
 import threading
-from pathlib import Path
-from typing import Optional
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger("jarvis.memory")
 
@@ -38,17 +36,17 @@ class MemoryStore:
 
     _CONV_FLUSH_INTERVAL = 5.0  # seconds between conversation flushes
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         self._data_dir = data_dir or Path.home() / ".jarvis" / "data"
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "jarvis.db"
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()
         self._init_db()
 
         # Write-behind for conversation logs
         self._conv_buffer: list[tuple] = []
-        self._conv_timer: Optional[threading.Timer] = None
+        self._conv_timer: threading.Timer | None = None
         self._conv_flush_lock = threading.Lock()
         self._closed = False
 
@@ -106,7 +104,7 @@ class MemoryStore:
             self._conn.commit()
         logger.info("Memory stored: %s [%s]", key, category)
 
-    def recall(self, key: str) -> Optional[str]:
+    def recall(self, key: str) -> str | None:
         """Recall a memory by key."""
         with self._lock:
             row = self._conn.execute(
@@ -130,7 +128,7 @@ class MemoryStore:
             self._conn.commit()
         return cur.rowcount > 0
 
-    def search(self, query: str, category: Optional[str] = None, limit: int = 10) -> list[dict]:
+    def search(self, query: str, category: str | None = None, limit: int = 10) -> list[dict]:
         """Search memories by value content."""
         sql = "SELECT key, value, category, importance FROM memories WHERE value LIKE ?"
         params = [f"%{query}%"]

@@ -14,19 +14,19 @@ audit trail; this estimator is for pre-flight budgeting only.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 CHARS_PER_TOKEN = 4
 
 
-def estimate_tokens(text: Optional[str]) -> int:
+def estimate_tokens(text: str | None) -> int:
     """Estimate tokens in a string using the 4-char heuristic."""
     if not text:
         return 0
     return max(1, round(len(text) / CHARS_PER_TOKEN))
 
 
-def estimate_messages_tokens(messages: Optional[List[Dict[str, Any]]]) -> int:
+def estimate_messages_tokens(messages: list[dict[str, Any]] | None) -> int:
     """Estimate tokens across a list of chat messages."""
     if not messages:
         return 0
@@ -65,7 +65,7 @@ class ContextBudget:
     def section(self, name: str) -> int:
         return getattr(self, name, 0)
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> dict[str, int]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
 
 
@@ -90,7 +90,7 @@ class SectionUsage:
             return 1.0 if self.tokens else 0.0
         return round(self.tokens / self.budget, 2)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "section": self.section,
             "tokens": self.tokens,
@@ -110,7 +110,7 @@ class ContextReport:
     messages_tokens: int = 0
     budget: ContextBudget = field(default_factory=ContextBudget)
     compacted: bool = False
-    sections: List[SectionUsage] = field(default_factory=list)
+    sections: list[SectionUsage] = field(default_factory=list)
 
     @property
     def total_tokens(self) -> int:
@@ -125,7 +125,7 @@ class ContextReport:
     def any_over(self) -> bool:
         return any(s.over for s in self.sections)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_tokens": self.total_tokens,
             "total_budget": self.total_budget,

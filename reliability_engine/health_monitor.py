@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
-from typing import Any, Callable, Dict, Optional
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.reliability.health_monitor")
 
@@ -14,12 +15,12 @@ class HealthMonitor:
     """Background health-check orchestrator with callback support."""
 
     def __init__(self) -> None:
-        self._checks: Dict[str, dict] = {}
-        self._results: Dict[str, dict] = {}
-        self._callbacks: Dict[str, list[Callable]] = {}
+        self._checks: dict[str, dict] = {}
+        self._results: dict[str, dict] = {}
+        self._callbacks: dict[str, list[Callable]] = {}
         self._lock = threading.Lock()
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._last_run: float = 0.0
 
     # ------------------------------------------------------------------
@@ -103,7 +104,7 @@ class HealthMonitor:
         message = ""
 
         result_box: list[Any] = [None]
-        exc_box: list[Optional[Exception]] = [None]
+        exc_box: list[Exception | None] = [None]
 
         def _target() -> None:
             try:
@@ -204,7 +205,7 @@ class HealthMonitor:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[HealthMonitor] = None
+_instance: HealthMonitor | None = None
 _instance_lock = threading.Lock()
 
 

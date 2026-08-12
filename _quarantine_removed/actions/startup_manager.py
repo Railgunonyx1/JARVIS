@@ -1,7 +1,7 @@
 """Startup Manager — manage Windows startup programs for JARVIS MK-X."""
 
-import subprocess
 import logging
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.startup_manager")
 

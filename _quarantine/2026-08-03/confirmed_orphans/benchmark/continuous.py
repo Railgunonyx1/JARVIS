@@ -11,12 +11,13 @@ Every commit/session automatically measures:
 Reject changes that regress performance beyond threshold.
 """
 import logging
-import time
-import threading
 import statistics
-from typing import Optional, Dict, Any, List, Callable
-from dataclasses import dataclass, field
+import threading
+import time
 from collections import deque
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("benchmark.continuous")
 
@@ -27,7 +28,7 @@ class BenchmarkResult:
     name: str
     value_ms: float
     timestamp: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.timestamp == 0.0:
@@ -54,14 +55,14 @@ class ContinuousBenchmark:
     """
 
     def __init__(self, max_history: int = 1000):
-        self._benchmarks: Dict[str, deque] = {}
-        self._baselines: Dict[str, BenchmarkBaseline] = {}
+        self._benchmarks: dict[str, deque] = {}
+        self._baselines: dict[str, BenchmarkBaseline] = {}
         self._max_history = max_history
         self._lock = threading.Lock()
-        self._regression_callbacks: List[Callable] = []
+        self._regression_callbacks: list[Callable] = []
         self._active = True
 
-    def measure(self, name: str, value_ms: float, **metadata) -> Dict[str, Any]:
+    def measure(self, name: str, value_ms: float, **metadata) -> dict[str, Any]:
         """Record a benchmark measurement. Returns regression check."""
         result = BenchmarkResult(name=name, value_ms=value_ms, metadata=metadata)
 
@@ -83,7 +84,7 @@ class ContinuousBenchmark:
 
         return {"recorded": True, "regression": regression}
 
-    def _check_regression(self, name: str, value_ms: float) -> Optional[Dict[str, Any]]:
+    def _check_regression(self, name: str, value_ms: float) -> dict[str, Any] | None:
         """Check if a measurement represents a regression."""
         baseline = self._baselines.get(name)
         if baseline is None or baseline.sample_count < 10:
@@ -123,7 +124,7 @@ class ContinuousBenchmark:
     def on_regression(self, callback: Callable) -> None:
         self._regression_callbacks.append(callback)
 
-    def get_report(self) -> Dict[str, Any]:
+    def get_report(self) -> dict[str, Any]:
         """Get comprehensive benchmark report."""
         report = {}
         with self._lock:
@@ -152,7 +153,7 @@ class ContinuousBenchmark:
 
         return report
 
-    def get_benchmark_names(self) -> List[str]:
+    def get_benchmark_names(self) -> list[str]:
         with self._lock:
             return list(self._benchmarks.keys())
 
@@ -163,7 +164,7 @@ class ContinuousBenchmark:
             else:
                 self._benchmarks.clear()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "active_benchmarks": len(self._benchmarks),
@@ -173,7 +174,7 @@ class ContinuousBenchmark:
             }
 
 
-_benchmark_instance: Optional[ContinuousBenchmark] = None
+_benchmark_instance: ContinuousBenchmark | None = None
 
 
 def get_continuous_benchmark() -> ContinuousBenchmark:

@@ -3,15 +3,15 @@
 Instead of re-indexing the entire project:
   Git Diff → Changed Files → Update Index
 """
-import logging
-import time
-import subprocess
 import hashlib
+import logging
 import sqlite3
+import subprocess
 import threading
-from typing import Optional, Dict, Any, List, Set
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("optimization_system.incremental_indexing")
 
@@ -42,7 +42,7 @@ class IncrementalIndexer:
         self._db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._indexed_files: Dict[str, FileIndex] = {}
+        self._indexed_files: dict[str, FileIndex] = {}
         self._init_db()
         self._load_index()
 
@@ -74,7 +74,7 @@ class IncrementalIndexer:
                     line_count=row[4], last_modified=row[5],
                 )
 
-    def get_changed_files(self) -> List[str]:
+    def get_changed_files(self) -> list[str]:
         """Get list of files changed since last index, using git or hash comparison."""
         # Try git first
         git_files = self._get_git_changed_files()
@@ -84,7 +84,7 @@ class IncrementalIndexer:
         # Fallback to hash-based detection
         return self._get_hash_changed_files()
 
-    def _get_git_changed_files(self) -> Optional[List[str]]:
+    def _get_git_changed_files(self) -> list[str] | None:
         """Use git diff to find changed files."""
         try:
             result = subprocess.run(
@@ -107,7 +107,7 @@ class IncrementalIndexer:
             pass
         return None
 
-    def _get_hash_changed_files(self) -> List[str]:
+    def _get_hash_changed_files(self) -> list[str]:
         """Compare file hashes to find changed files."""
         changed = []
         project_dir = Path(self._project_path)
@@ -133,7 +133,7 @@ class IncrementalIndexer:
 
         return changed
 
-    def index_file(self, file_path: str) -> Optional[FileIndex]:
+    def index_file(self, file_path: str) -> FileIndex | None:
         """Index a single file."""
         full_path = Path(self._project_path) / file_path
         try:
@@ -165,7 +165,7 @@ class IncrementalIndexer:
             logger.debug("Cannot index %s: %s", file_path, e)
             return None
 
-    def index_changed_files(self) -> Dict[str, Any]:
+    def index_changed_files(self) -> dict[str, Any]:
         """Index only changed files. Returns indexing report."""
         start = time.time()
         changed = self.get_changed_files()
@@ -198,7 +198,7 @@ class IncrementalIndexer:
         with self._lock:
             return len(self._indexed_files)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             total_size = sum(f.size_bytes for f in self._indexed_files.values())
             return {
@@ -209,7 +209,7 @@ class IncrementalIndexer:
             }
 
 
-_indexer_instance: Optional[IncrementalIndexer] = None
+_indexer_instance: IncrementalIndexer | None = None
 
 
 def get_incremental_indexer(project_path: str = ".") -> IncrementalIndexer:

@@ -71,6 +71,16 @@ Screen {
     color: black;
 }
 
+/* ---- Toggleable border classes ---- */
+.panel-collapsed {
+    border: solid #666666;
+    background: #f0f0f0;
+}
+.panel-expanded {
+    border: solid black;
+    background: white;
+}
+
 /* ---- Grid ---- */
 #dashboard-grid {
     grid-size: 3 3;
@@ -84,6 +94,21 @@ Screen {
 #panel-tasks     { column-span: 2; row-span: 1; }
 #panel-logs      { column-span: 1; row-span: 1; }
 #panel-tokens    { column-span: 2; row-span: 1; }
+#panel-todo      { column-span: 1; row-span: 1; }
+#panel-context   { column-span: 1; row-span: 2; }
+
+/* ---- Token usage display ---- */
+.token-count {
+    text-align: right;
+    margin-top: 1;
+
+    color: #1DB954;
+}
+
+/* ---- System stats numbers ---- */
+#ov-details {
+
+}
 
 /* ---- Status colors: green means active/healthy, nothing else ---- */
 .status-online { color: #1DB954; text-style: bold; }

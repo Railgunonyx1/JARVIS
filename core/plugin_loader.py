@@ -3,17 +3,16 @@
 Backward-compatible with the legacy @jarvis_plugin decorator and PluginLoader API.
 """
 
-import os
-import re
-import sys
+import importlib.util
 import json
-import yaml
 import logging
 import threading
-import importlib.util
-from pathlib import Path
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger("jarvis.core.plugin_loader")
 
@@ -21,17 +20,17 @@ logger = logging.getLogger("jarvis.core.plugin_loader")
 
 class PluginInfo:
     """Legacy plugin info — kept for backward compatibility."""
-    def __init__(self, name: str, description: str, handler: Callable, patterns: List[str] = None):
+    def __init__(self, name: str, description: str, handler: Callable, patterns: list[str] = None):
         self.name = name
         self.description = description
         self.handler = handler
         self.patterns = patterns or []
 
 
-_REGISTERED_PLUGINS: Dict[str, PluginInfo] = {}
+_REGISTERED_PLUGINS: dict[str, PluginInfo] = {}
 
 
-def jarvis_plugin(name: str, description: str = "", patterns: List[str] = None):
+def jarvis_plugin(name: str, description: str = "", patterns: list[str] = None):
     """Legacy decorator to register a function as a JARVIS plugin."""
     def decorator(func: Callable):
         _REGISTERED_PLUGINS[name] = PluginInfo(
@@ -49,7 +48,7 @@ class PluginCapabilityDef:
     category: str = "custom"
     risk: str = "safe"
     description: str = ""
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     requires_confirmation: bool = False
     is_destructive: bool = False
 
@@ -60,12 +59,12 @@ class PluginManifest:
     version: str
     author: str = "unknown"
     description: str = ""
-    capabilities: List[PluginCapabilityDef] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    capabilities: list[PluginCapabilityDef] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     min_api_version: str = "1.0.0"
-    hooks: Dict[str, str] = field(default_factory=dict)
-    config_defaults: Dict[str, Any] = field(default_factory=dict)
+    hooks: dict[str, str] = field(default_factory=dict)
+    config_defaults: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,7 +73,7 @@ class PluginState:
     module: Any = None
     file_path: Path = None
     enabled: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 # Restricted builtins for sandbox
@@ -105,7 +104,7 @@ _BLOCKED_IMPORTS = [
 class PluginSandbox:
     """Restricted execution environment for plugin code."""
 
-    def __init__(self, plugin_name: str, allowed_imports: Optional[List[str]] = None):
+    def __init__(self, plugin_name: str, allowed_imports: list[str] | None = None):
         self.plugin_name = plugin_name
         self.allowed_imports = set(allowed_imports or [])
 
@@ -137,7 +136,7 @@ class PluginManager:
     Integrates with SecurityManager, CapabilityRegistry, ConfigService, EventBus.
     """
 
-    def __init__(self, plugins_dir: Optional[Path] = None,
+    def __init__(self, plugins_dir: Path | None = None,
                  security_manager=None,
                  capability_registry=None,
                  config_service=None,
@@ -152,14 +151,14 @@ class PluginManager:
         self._config_service = config_service
         self._event_bus = event_bus
 
-        self._plugins: Dict[str, PluginState] = {}
-        self._legacy_loaded: Dict[str, PluginInfo] = {}
-        self._discovered: Dict[str, Path] = {}
+        self._plugins: dict[str, PluginState] = {}
+        self._legacy_loaded: dict[str, PluginInfo] = {}
+        self._discovered: dict[str, Path] = {}
         self._lock = threading.Lock()
 
     # ── Discovery ─────────────────────────────
 
-    def discover(self) -> Dict[str, str]:
+    def discover(self) -> dict[str, str]:
         result = {}
         for file_path in self.plugins_dir.glob("*.py"):
             if file_path.name.startswith("_"):
@@ -181,7 +180,7 @@ class PluginManager:
         logger.info("Discovered %d plugins in %s", len(result), self.plugins_dir)
         return result
 
-    def load_manifest(self, name: str) -> Optional[PluginManifest]:
+    def load_manifest(self, name: str) -> PluginManifest | None:
         base = self.plugins_dir / name
         for ext in ['.yaml', '.yml', '.json']:
             mf = base.with_suffix(ext)
@@ -284,10 +283,8 @@ class PluginManager:
         logger.info("Loaded plugin '%s' v%s by %s", manifest.name, manifest.version, manifest.author)
         return True
 
-    def _register_capabilities(self, plugin_name: str, caps: List[PluginCapabilityDef]):
-        from core.capability_registry import (
-            Capability, CapabilityRisk, CapabilityCategory, merge_capabilities
-        )
+    def _register_capabilities(self, plugin_name: str, caps: list[PluginCapabilityDef]):
+        from core.capability_registry import Capability, CapabilityCategory, CapabilityRisk, merge_capabilities
         risk_map = {'safe': CapabilityRisk.SAFE, 'low': CapabilityRisk.LOW,
                      'medium': CapabilityRisk.MEDIUM, 'high': CapabilityRisk.HIGH,
                      'critical': CapabilityRisk.CRITICAL}
@@ -313,7 +310,7 @@ class PluginManager:
         merge_capabilities(capabilities)
         logger.info("Plugin '%s' registered %d capabilities", plugin_name, len(capabilities))
 
-    def load_all(self) -> Dict[str, PluginState]:
+    def load_all(self) -> dict[str, PluginState]:
         self.discover()
         for name in list(self._discovered.keys()):
             self.load_plugin(name)
@@ -430,7 +427,7 @@ class PluginManager:
         }
 
     @property
-    def plugin_names(self) -> List[str]:
+    def plugin_names(self) -> list[str]:
         return list(self._plugins.keys())
 
 
@@ -439,11 +436,11 @@ class PluginManager:
 class PluginLoader(PluginManager):
     """Backward-compatible alias — wraps PluginManager with the old API."""
 
-    def __init__(self, plugins_dir: Optional[Path] = None):
+    def __init__(self, plugins_dir: Path | None = None):
         super().__init__(plugins_dir=plugins_dir)
         self.loaded_plugins = {}
 
-    def discover_and_load(self) -> Dict[str, PluginInfo]:
+    def discover_and_load(self) -> dict[str, PluginInfo]:
         self.discover()
         self.load_all()
         self.loaded_plugins = dict(_REGISTERED_PLUGINS)

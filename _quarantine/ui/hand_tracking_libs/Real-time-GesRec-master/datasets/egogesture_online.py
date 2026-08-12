@@ -1,18 +1,16 @@
+import copy
+import functools
+import json
+import math
+import os
+import pdb
+
+import numpy as np
 import torch
 import torch.utils.data as data
 from PIL import Image
 from spatial_transforms import *
 from temporal_transforms import *
-import os
-import math
-import functools
-import json
-import copy
-from numpy.random import randint
-import numpy as np
-import random
-
-import pdb
 
 
 def pil_loader(path, modality):
@@ -32,7 +30,7 @@ def accimage_loader(path, modality):
     try:
         import accimage
         return accimage.Image(path)
-    except IOError:
+    except OSError:
         # Potentially a decoding problem, fall back to PIL.Image
         return pil_loader(path)
 
@@ -46,13 +44,13 @@ def get_default_image_loader():
 
 
 def video_loader(video_dir_path, frame_indices, modality, sample_duration, image_loader):
-    
+
     video = []
     if modality == 'RGB':
         for i in frame_indices:
-            image_path = os.path.join(video_dir_path, '{:06d}.jpg'.format(i))
+            image_path = os.path.join(video_dir_path, f'{i:06d}.jpg')
             if os.path.exists(image_path):
-                
+
                 video.append(image_loader(image_path, modality))
             else:
                 print(image_path, "------- Does not exist")
@@ -60,7 +58,7 @@ def video_loader(video_dir_path, frame_indices, modality, sample_duration, image
     elif modality == 'Depth':
 
         for i in frame_indices:
-            image_path = os.path.join(video_dir_path.rsplit(os.sep,2)[0] , 'Depth','depth' + video_dir_path[-1], '{:06d}.jpg'.format(i) )
+            image_path = os.path.join(video_dir_path.rsplit(os.sep,2)[0] , 'Depth','depth' + video_dir_path[-1], f'{i:06d}.jpg' )
             if os.path.exists(image_path):
                 video.append(image_loader(image_path, modality))
             else:
@@ -68,9 +66,9 @@ def video_loader(video_dir_path, frame_indices, modality, sample_duration, image
                 return video
     elif modality == 'RGB-D':
         for i in frame_indices: # index 35 is used to change img to flow
-            image_path = os.path.join(video_dir_path, '{:06d}.jpg'.format(i))
-            image_path_depth = os.path.join(video_dir_path.rsplit(os.sep,2)[0] , 'Depth','depth' + video_dir_path[-1], '{:06d}.jpg'.format(i) )
-            
+            image_path = os.path.join(video_dir_path, f'{i:06d}.jpg')
+            image_path_depth = os.path.join(video_dir_path.rsplit(os.sep,2)[0] , 'Depth','depth' + video_dir_path[-1], f'{i:06d}.jpg' )
+
 
             image = image_loader(image_path, 'RGB')
             image_depth = image_loader(image_path_depth, 'Depth')
@@ -81,7 +79,7 @@ def video_loader(video_dir_path, frame_indices, modality, sample_duration, image
             else:
                 print(image_path, "------- Does not exist")
                 return video
-    
+
     return video
 
 def get_default_video_loader():
@@ -90,7 +88,7 @@ def get_default_video_loader():
 
 
 def load_annotation_data(data_file_path):
-    with open(data_file_path, 'r') as data_file:
+    with open(data_file_path) as data_file:
         return json.load(data_file)
 
 
@@ -115,7 +113,7 @@ def get_annotation(data, whole_path):
 
 
 def make_dataset( annotation_path, video_path , whole_path,sample_duration, n_samples_for_each_video, stride_len):
-    
+
     data = load_annotation_data(annotation_path)
     whole_video_path = os.path.join(video_path, whole_path)
     annotation = get_annotation(data, whole_path)
@@ -141,14 +139,14 @@ def make_dataset( annotation_path, video_path , whole_path,sample_duration, n_sa
 
     label_list = np.array(label_list)
     for _ in range(1,n_frames+1 - sample_duration,stride_len):
-        
+
         sample = {
                 'video': whole_video_path,
                 'index': _ ,
-                'video_id' : _ 
+                'video_id' : _
 
             }
-        
+
         # print(range(_    - int(sample_duration/8), _   ))
         counts = np.bincount(label_list[np.array(list(range(_    - int(sample_duration/8), _   )))])
         sample['label'] = np.argmax(counts)
@@ -204,7 +202,7 @@ class EgoGestureOnline(data.Dataset):
                  get_loader=get_default_video_loader):
         self.data, self.class_names = make_dataset(
          annotation_path, video_path, whole_path, sample_duration,n_samples_for_each_video, stride_len)
-        
+
         self.spatial_transform = spatial_transform
         self.temporal_transform = temporal_transform
         self.target_transform = target_transform
@@ -227,7 +225,7 @@ class EgoGestureOnline(data.Dataset):
 
         if self.temporal_transform is not None:
             frame_indices = self.temporal_transform(frame_indices)
-        
+
         clip = self.loader(path, frame_indices, self.modality, self.sample_duration)
         oversample_clip =[]
         if self.spatial_transform is not None:
@@ -240,13 +238,13 @@ class EgoGestureOnline(data.Dataset):
         except Exception as e:
             pdb.set_trace()
             raise e
-        
-        
+
+
         # clip = torch.stack(clip, 0).permute(1, 0, 2, 3)
         target = self.data[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
-        
+
         return clip, target
 
     def __len__(self):

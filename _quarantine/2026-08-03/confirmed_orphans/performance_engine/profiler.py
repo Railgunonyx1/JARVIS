@@ -1,12 +1,12 @@
 """Performance Profiler — context-manager-based execution timing with bottleneck detection."""
 
-import time
 import json
+import logging
 import math
 import threading
-import logging
+import time
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.performance_engine.profiler")
 
@@ -17,8 +17,8 @@ class PerformanceProfiler:
     """Records execution times and arbitrary metrics, computes stats, detects bottlenecks."""
 
     def __init__(self) -> None:
-        self._profiles: Dict[str, List[float]] = {}
-        self._metrics: Dict[str, List[tuple[float, Optional[Dict[str, str]]]]] = {}
+        self._profiles: dict[str, list[float]] = {}
+        self._metrics: dict[str, list[tuple[float, dict[str, str] | None]]] = {}
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -48,7 +48,7 @@ class PerformanceProfiler:
     # Arbitrary metrics
     # ------------------------------------------------------------------
 
-    def record_metric(self, name: str, value: float, tags: Optional[Dict[str, str]] = None) -> None:
+    def record_metric(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
         """Record an arbitrary metric value with optional tags."""
         with self._lock:
             if name not in self._metrics:
@@ -62,7 +62,7 @@ class PerformanceProfiler:
     # Stats
     # ------------------------------------------------------------------
 
-    def _compute_stats(self, values: List[float]) -> Dict[str, Any]:
+    def _compute_stats(self, values: list[float]) -> dict[str, Any]:
         n = len(values)
         if n == 0:
             return {"avg": 0.0, "min": 0.0, "max": 0.0, "p95": 0.0, "count": 0}
@@ -77,7 +77,7 @@ class PerformanceProfiler:
             "count": n,
         }
 
-    def get_profile(self, name: str) -> Dict[str, Any]:
+    def get_profile(self, name: str) -> dict[str, Any]:
         """Return stats for a single profiled stage."""
         with self._lock:
             values = list(self._profiles.get(name, []))
@@ -85,7 +85,7 @@ class PerformanceProfiler:
         stats["name"] = name
         return stats
 
-    def get_all_profiles(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_profiles(self) -> dict[str, dict[str, Any]]:
         """Return stats for every profiled stage."""
         with self._lock:
             names = list(self._profiles.keys())
@@ -95,11 +95,11 @@ class PerformanceProfiler:
     # Bottleneck detection
     # ------------------------------------------------------------------
 
-    def get_bottlenecks(self, threshold_ms: float = 100.0) -> List[Dict[str, Any]]:
+    def get_bottlenecks(self, threshold_ms: float = 100.0) -> list[dict[str, Any]]:
         """Return stages whose average time exceeds *threshold_ms*."""
         with self._lock:
             names = list(self._profiles.keys())
-        bottlenecks: List[Dict[str, Any]] = []
+        bottlenecks: list[dict[str, Any]] = []
         for name in names:
             stats = self.get_profile(name)
             if stats["avg"] > threshold_ms:
@@ -140,7 +140,7 @@ class PerformanceProfiler:
 # Singleton
 # ----------------------------------------------------------------------
 
-_profiler: Optional[PerformanceProfiler] = None
+_profiler: PerformanceProfiler | None = None
 _profiler_lock = threading.Lock()
 
 

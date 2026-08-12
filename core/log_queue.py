@@ -5,25 +5,24 @@ Prevents blocking the event loop during streaming while maintaining bounded thre
 
 import asyncio
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.core.log_queue")
 
 
 class LogQueue:
     """Async queue for conversation logging with background writer."""
-    
+
     def __init__(self, max_size: int = 1000):
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_size)
-        self._worker_task: Optional[asyncio.Task] = None
+        self._worker_task: asyncio.Task | None = None
         self._memory_store = None
-    
+
     async def start(self, memory_store):
         """Start the background writer task."""
         self._memory_store = memory_store
         self._worker_task = asyncio.create_task(self._worker())
         logger.info("Log queue started (max_size=%d)", self._queue.maxsize)
-    
+
     async def _worker(self):
         """Background worker that writes logs to SQLite."""
         while True:
@@ -42,14 +41,14 @@ class LogQueue:
             except Exception as e:
                 logger.error("Log queue worker error: %s", e)
                 await asyncio.sleep(0.1)
-    
+
     async def put(self, session_id: str, role: str, content: str):
         """Add a log entry to the queue (non-blocking)."""
         try:
             self._queue.put_nowait((session_id, role, content))
         except asyncio.QueueFull:
             logger.warning("Log queue full, dropping entry")
-    
+
     async def stop(self):
         """Stop the background writer task."""
         if self._worker_task:
@@ -62,7 +61,7 @@ class LogQueue:
 
 
 # Global instance
-_log_queue: Optional[LogQueue] = None
+_log_queue: LogQueue | None = None
 
 
 async def get_log_queue() -> LogQueue:

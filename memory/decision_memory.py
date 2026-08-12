@@ -15,20 +15,20 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.context.selector import score as _lexical_score
 
 logger = logging.getLogger("jarvis.memory.decisions")
 
-_instance: Optional["DecisionMemory"] = None
+_instance: DecisionMemory | None = None
 _instance_lock = threading.Lock()
 
 
 class DecisionMemory:
     """SQLite-backed store of agent decisions with project scoping."""
 
-    def __init__(self, data_dir: Optional[Path] = None):
+    def __init__(self, data_dir: Path | None = None):
         self._data_dir = data_dir or (Path.home() / ".jarvis" / "data")
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._data_dir / "decisions.db"
@@ -60,7 +60,7 @@ class DecisionMemory:
         rationale: str = "",
         outcome: str = "",
         project: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> int:
         """Persist a decision; returns the row id."""
         with self._lock:
@@ -80,7 +80,7 @@ class DecisionMemory:
         project: str = "",
         query: str = "",
         limit: int = 5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Most relevant decisions for a project, optionally ranked by query."""
         sql = "SELECT * FROM decisions"
         params: list = []
@@ -101,10 +101,10 @@ class DecisionMemory:
         scored.sort(key=lambda item: item[0], reverse=True)
         return [r for s, r in scored if s > 0.0][:limit]
 
-    def recent(self, project: str = "", limit: int = 5) -> List[Dict[str, Any]]:
+    def recent(self, project: str = "", limit: int = 5) -> list[dict[str, Any]]:
         return self.recall(project=project, query="", limit=limit)
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         with self._lock:
             total = self._conn.execute("SELECT COUNT(*) AS c FROM decisions").fetchone()["c"]
         return {"decisions": total}

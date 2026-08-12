@@ -7,14 +7,13 @@ SQLite-backed with buffered writes for performance.
 
 from __future__ import annotations
 
-import json
-import time
-import sqlite3
 import logging
+import sqlite3
 import threading
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.security.audit")
 
@@ -32,7 +31,7 @@ class AuditEntry:
     confirmed: bool = False
     duration_ms: float = 0.0
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
     params_hash: str = ""
     mode: str = ""
 
@@ -42,14 +41,14 @@ class AuditLog:
 
     _FLUSH_INTERVAL = 5.0
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or (Path.home() / ".jarvis" / "data" / "audit.db")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.Lock()
-        self._buffer: List[tuple] = []
+        self._buffer: list[tuple] = []
         self._buffer_lock = threading.Lock()
-        self._timer: Optional[threading.Timer] = None
+        self._timer: threading.Timer | None = None
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -138,8 +137,8 @@ class AuditLog:
     def flush(self):
         self._flush()
 
-    def query(self, session_id: Optional[str] = None, tool: Optional[str] = None,
-              since: Optional[float] = None, limit: int = 100) -> List[Dict[str, Any]]:
+    def query(self, session_id: str | None = None, tool: str | None = None,
+              since: float | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """Query audit log entries."""
         sql = "SELECT * FROM audit_log WHERE 1=1"
         params = []
@@ -159,7 +158,7 @@ class AuditLog:
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    def query_trace(self, trace_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+    def query_trace(self, trace_id: str, limit: int = 200) -> list[dict[str, Any]]:
         """Return all audit entries for a trace, oldest first."""
         conn = self._get_conn()
         rows = conn.execute(
@@ -168,7 +167,7 @@ class AuditLog:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_stats(self, since: Optional[float] = None) -> Dict[str, Any]:
+    def get_stats(self, since: float | None = None) -> dict[str, Any]:
         """Get audit statistics."""
         conn = self._get_conn()
         where = "WHERE timestamp > ?" if since else ""
@@ -198,7 +197,7 @@ class AuditLog:
                 self._conn = None
 
 
-_audit_log: Optional[AuditLog] = None
+_audit_log: AuditLog | None = None
 
 
 def get_audit_log() -> AuditLog:

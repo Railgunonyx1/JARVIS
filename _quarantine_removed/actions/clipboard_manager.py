@@ -1,7 +1,6 @@
 """Clipboard Manager — read, write, and manage clipboard for JARVIS MK-X."""
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.actions.clipboard_manager")
 

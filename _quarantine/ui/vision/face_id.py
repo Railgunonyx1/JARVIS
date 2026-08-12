@@ -6,13 +6,12 @@ Runs every N seconds to check if the user is present and who they are.
 Face DB stored as pickle files in vision/face_db/.
 """
 
-import os
-import time
-import pickle
 import logging
-from pathlib import Path
-from typing import Optional, List, Tuple
+import os
+import pickle
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -34,8 +33,8 @@ class FaceResult:
     """Result from face identity check."""
     name: str  # "unknown" or registered name
     confidence: float
-    emotion: Optional[str] = None  # if emotion analysis enabled
-    age: Optional[int] = None
+    emotion: str | None = None  # if emotion analysis enabled
+    age: int | None = None
     is_owner: bool = False
 
 
@@ -54,7 +53,7 @@ class FaceIdentity:
         self._enforce_detection = enforce_detection
         self._owner_name = owner_name
         self._last_check = 0.0
-        self._last_result: Optional[FaceResult] = None
+        self._last_result: FaceResult | None = None
         self._encoding_cache: dict = {}
 
         # Ensure face DB directory exists
@@ -70,7 +69,7 @@ class FaceIdentity:
     def available(self) -> bool:
         return DEEPFACE_AVAILABLE
 
-    def check(self, frame: np.ndarray, force: bool = False) -> Optional[FaceResult]:
+    def check(self, frame: np.ndarray, force: bool = False) -> FaceResult | None:
         """Check face in frame. Respects check_interval unless force=True."""
         if not self.available or frame is None:
             return None
@@ -134,7 +133,7 @@ class FaceIdentity:
             logger.error("Enrollment failed: %s", e)
             return False
 
-    def _identify(self, frame: np.ndarray) -> Optional[FaceResult]:
+    def _identify(self, frame: np.ndarray) -> FaceResult | None:
         """Identify face in frame against enrolled database."""
         if not self._encoding_cache:
             # No enrolled faces — just detect emotion/age
@@ -178,7 +177,7 @@ class FaceIdentity:
             logger.debug("Identification error: %s", e)
             return self._analyze_only(frame)
 
-    def _analyze_only(self, frame: np.ndarray) -> Optional[FaceResult]:
+    def _analyze_only(self, frame: np.ndarray) -> FaceResult | None:
         """Analyze face without identity matching (emotion + age)."""
         try:
             temp_path = str(FACE_DB_DIR / "_temp_analyze.jpg")
@@ -218,12 +217,12 @@ class FaceIdentity:
             except Exception as e:
                 logger.warning("Failed to load face DB %s: %s", pkl_file.name, e)
 
-    def list_enrolled(self) -> List[str]:
+    def list_enrolled(self) -> list[str]:
         """List all enrolled face names."""
         return list(self._encoding_cache.keys())
 
     @property
-    def last_result(self) -> Optional[FaceResult]:
+    def last_result(self) -> FaceResult | None:
         return self._last_result
 
     @property

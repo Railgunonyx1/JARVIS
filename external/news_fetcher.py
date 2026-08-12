@@ -3,12 +3,10 @@
 Uses RSS feeds and web scraping for news aggregation.
 """
 import logging
-import json
-import time
 import re
-import urllib.request
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("external.news")
 
@@ -23,7 +21,7 @@ class NewsArticle:
     published: str = ""
     category: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "title": self.title,
             "url": self.url,
@@ -43,15 +41,15 @@ class NewsFetcher:
     }
 
     def __init__(self):
-        self._feeds: Dict[str, str] = dict(self.DEFAULT_FEEDS)
-        self._cache: Dict[str, List[NewsArticle]] = {}
-        self._cache_time: Dict[str, float] = {}
+        self._feeds: dict[str, str] = dict(self.DEFAULT_FEEDS)
+        self._cache: dict[str, list[NewsArticle]] = {}
+        self._cache_time: dict[str, float] = {}
         self._cache_ttl = 900  # 15 minutes
 
     def add_feed(self, category: str, url: str) -> None:
         self._feeds[category] = url
 
-    def fetch(self, category: str = "tech", max_articles: int = 10) -> List[NewsArticle]:
+    def fetch(self, category: str = "tech", max_articles: int = 10) -> list[NewsArticle]:
         """Fetch news from a specific category."""
         # Check cache
         if category in self._cache:
@@ -79,7 +77,7 @@ class NewsFetcher:
             logger.warning("News fetch failed for %s: %s", category, e)
             return self._cache.get(category, [])[:max_articles]
 
-    def _parse_rss(self, xml_content: str, category: str) -> List[NewsArticle]:
+    def _parse_rss(self, xml_content: str, category: str) -> list[NewsArticle]:
         """Simple RSS parser (no external dependencies)."""
         articles = []
         items = re.findall(r'<item>(.*?)</item>', xml_content, re.DOTALL)
@@ -111,11 +109,11 @@ class NewsFetcher:
         text = re.sub(r'&\w+;', ' ', text)
         return text.strip()
 
-    def get_headlines(self, category: str = "tech", count: int = 5) -> List[str]:
+    def get_headlines(self, category: str = "tech", count: int = 5) -> list[str]:
         articles = self.fetch(category, max_articles=count)
         return [a.title for a in articles if a.title]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "feeds": list(self._feeds.keys()),
             "cached_categories": len(self._cache),
@@ -123,7 +121,7 @@ class NewsFetcher:
         }
 
 
-_news_instance: Optional[NewsFetcher] = None
+_news_instance: NewsFetcher | None = None
 
 
 def get_news_fetcher() -> NewsFetcher:

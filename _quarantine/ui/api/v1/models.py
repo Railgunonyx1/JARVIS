@@ -1,22 +1,22 @@
 """Shared data models for API v1 — stable contracts, not tied to internal types."""
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
 class MemoryItem:
     key: str
     value: str
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     source: str = ""
     timestamp: float = 0.0
-    ttl: Optional[float] = None
+    ttl: float | None = None
 
 
 @dataclass
 class EventRecord:
     name: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     source: str = ""
     trace_id: str = ""
 
@@ -25,8 +25,8 @@ class EventRecord:
 class CapabilityInfo:
     name: str
     description: str = ""
-    tags: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
     risk: str = "safe"
 
 
@@ -42,4 +42,4 @@ class PermissionRequest:
 class PermissionDecision:
     approved: bool
     reason: str = ""
-    handler: Optional[str] = None
+    handler: str | None = None

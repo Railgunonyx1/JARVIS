@@ -1,8 +1,7 @@
 """System monitor — CPU, RAM, GPU, temperature tracking with caching."""
 
-import time
-import threading
 import logging
+import time
 
 import psutil
 

@@ -2,15 +2,14 @@
 Mode Manager — handles execution modes and permission resolution.
 """
 
-import os
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import toml
 
-from core.capability_registry import Capability, CapabilityRisk, get_all_capabilities
+from core.capability_registry import Capability, get_all_capabilities
 
 _CAPABILITY_REGISTRY = get_all_capabilities()
 
@@ -55,9 +54,9 @@ EXEC_TOOL_ALIASES = {
 
 @dataclass
 class ModePermissions:
-    allowed: Set[str] = field(default_factory=set)
-    blocked: Set[str] = field(default_factory=set)
-    confirmation_required: Set[str] = field(default_factory=set)
+    allowed: set[str] = field(default_factory=set)
+    blocked: set[str] = field(default_factory=set)
+    confirmation_required: set[str] = field(default_factory=set)
     sandbox: bool = False
 
 
@@ -70,12 +69,12 @@ class ModeConfig:
 class ModeManager:
     """Manages execution modes and capability permissions."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         if config_dir is None:
             config_dir = Path(__file__).resolve().parent.parent / "config" / "modes"
         self.config_dir = config_dir
         self.current_mode = ExecutionMode.SMART
-        self._mode_configs: Dict[ExecutionMode, ModeConfig] = {}
+        self._mode_configs: dict[ExecutionMode, ModeConfig] = {}
         self._load_all_modes()
 
     def _load_all_modes(self) -> None:
@@ -94,7 +93,7 @@ class ModeManager:
             except Exception as e:
                 logger.error("Failed to load mode %s: %s", mode_name, e)
 
-    def _parse_mode_config(self, mode_name: str, data: Dict[str, Any]) -> ModeConfig:
+    def _parse_mode_config(self, mode_name: str, data: dict[str, Any]) -> ModeConfig:
         """Parse mode configuration from TOML data."""
         perms = data.get("permissions", {})
         permissions = ModePermissions(
@@ -118,23 +117,23 @@ class ModeManager:
         """Get current execution mode."""
         return self.current_mode
 
-    def get_mode_config(self, mode: Optional[ExecutionMode] = None) -> Optional[ModeConfig]:
+    def get_mode_config(self, mode: ExecutionMode | None = None) -> ModeConfig | None:
         """Get configuration for a mode (defaults to current)."""
         mode = mode or self.current_mode
         return self._mode_configs.get(mode)
 
-    def _resolve(self, capability: str) -> List[str]:
+    def _resolve(self, capability: str) -> list[str]:
         """Expand a legacy underscore tool name to its capability names."""
         return EXEC_TOOL_ALIASES.get(capability, [capability])
 
-    def is_allowed(self, capability: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def is_allowed(self, capability: str, mode: ExecutionMode | None = None) -> bool:
         """Check if a capability is allowed in the given mode."""
         for cap in self._resolve(capability):
             if self._is_allowed_cap(cap, mode):
                 return True
         return False
 
-    def _is_allowed_cap(self, capability: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def _is_allowed_cap(self, capability: str, mode: ExecutionMode | None = None) -> bool:
         config = self.get_mode_config(mode)
         if not config:
             return False
@@ -151,7 +150,7 @@ class ModeManager:
 
         return False
 
-    def is_blocked(self, capability: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def is_blocked(self, capability: str, mode: ExecutionMode | None = None) -> bool:
         """Check if a capability is explicitly blocked."""
         config = self.get_mode_config(mode)
         if not config:
@@ -161,7 +160,7 @@ class ModeManager:
                 return True
         return False
 
-    def requires_confirmation(self, capability: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def requires_confirmation(self, capability: str, mode: ExecutionMode | None = None) -> bool:
         """Check if a capability requires confirmation."""
         config = self.get_mode_config(mode)
         if not config:
@@ -171,7 +170,7 @@ class ModeManager:
                 return True
         return False
 
-    def get_allowed_capabilities(self, mode: Optional[ExecutionMode] = None) -> List[Capability]:
+    def get_allowed_capabilities(self, mode: ExecutionMode | None = None) -> list[Capability]:
         """Get all allowed capabilities for a mode as Capability objects."""
         mode = mode or self.current_mode
         allowed_names = []
@@ -180,11 +179,11 @@ class ModeManager:
                 allowed_names.append(cap_name)
         return [_CAPABILITY_REGISTRY[name] for name in allowed_names]
 
-    def get_available_tool_names(self, mode: Optional[ExecutionMode] = None) -> List[str]:
+    def get_available_tool_names(self, mode: ExecutionMode | None = None) -> list[str]:
         """Get tool names available in current mode (for planner)."""
         return [cap.name for cap in self.get_allowed_capabilities(mode)]
 
-    def get_confirmation_required(self, capability: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def get_confirmation_required(self, capability: str, mode: ExecutionMode | None = None) -> bool:
         """Check if capability requires confirmation (includes registry default)."""
         # Check mode config first
         if self.requires_confirmation(capability, mode):
@@ -196,12 +195,12 @@ class ModeManager:
                 return reg.requires_confirmation
         return True  # Unknown = confirm
 
-    def is_sandboxed(self, mode: Optional[ExecutionMode] = None) -> bool:
+    def is_sandboxed(self, mode: ExecutionMode | None = None) -> bool:
         """Check if mode runs in sandbox."""
         config = self.get_mode_config(mode)
         return config.permissions.sandbox if config else False
 
-    def get_mode_summary(self) -> Dict[str, Any]:
+    def get_mode_summary(self) -> dict[str, Any]:
         """Get summary of current mode for UI/diagnostics."""
         config = self.get_mode_config()
         if not config:
@@ -219,7 +218,7 @@ class ModeManager:
 
 
 # Global singleton
-_mode_manager: Optional[ModeManager] = None
+_mode_manager: ModeManager | None = None
 
 
 def get_mode_manager() -> ModeManager:

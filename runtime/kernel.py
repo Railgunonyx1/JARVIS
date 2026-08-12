@@ -11,7 +11,6 @@ The legacy :class:`JarvisKernel` OS-style skeleton is kept for compatibility.
 
 import asyncio
 import atexit
-from typing import Optional
 
 from runtime.startup_profile import get_profiler
 
@@ -29,8 +28,8 @@ def _telemetry():
 
 
 def build_kernel(mode: str = "agent", max_iterations: int = 10,
-                 max_tokens: Optional[int] = None,
-                 project_dir: Optional[str] = None):
+                 max_tokens: int | None = None,
+                 project_dir: str | None = None):
     """Assemble a ready AgentLoop (config, tools, project, router, memory)."""
     profiler = get_profiler()
     with profiler.phase("import.config"):

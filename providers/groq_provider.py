@@ -4,9 +4,9 @@ Supports multi-key rotation on rate limit / quota error.
 """
 
 import importlib.util
-import time
 import logging
-from typing import AsyncIterator, Optional
+import time
+from collections.abc import AsyncIterator
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import openai_tools_param, parse_openai_tool_calls
@@ -15,7 +15,7 @@ logger = logging.getLogger("jarvis.providers.groq")
 
 
 class GroqProvider(LLMProvider):
-    def __init__(self, config: dict, api_key: str, extra_keys: Optional[list[str]] = None):
+    def __init__(self, config: dict, api_key: str, extra_keys: list[str] | None = None):
         super().__init__("groq", config)
         self._keys = [k for k in [api_key] + (extra_keys or []) if k]
         self._key_index = 0
@@ -60,10 +60,10 @@ class GroqProvider(LLMProvider):
     async def complete(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> LLMResponse:
         full_messages = []
         if system_prompt:
@@ -119,10 +119,10 @@ class GroqProvider(LLMProvider):
     async def complete_stream(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> AsyncIterator[str]:
         full_messages = []
         if system_prompt:

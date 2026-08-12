@@ -19,10 +19,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from memory.api import MemoryAPI
-from memory.lifecycle import PRIORITY_HIGH, PRIORITY_LOW, MemoryWorker
 from memory.decision_memory import DecisionMemory
-from memory.metadata import MetadataStore
-from memory.models import DECISION, EPISODIC, PROCEDURAL, PROJECT, SEMANTIC
+from memory.lifecycle import PRIORITY_HIGH, PRIORITY_LOW, MemoryWorker
+from memory.models import EPISODIC, PROCEDURAL, PROJECT, SEMANTIC
 from memory.project_knowledge import ProjectKnowledge
 from memory.store import MemoryStore
 from memory.vector_store import VectorMemoryStore

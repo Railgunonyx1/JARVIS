@@ -2,13 +2,12 @@
 
 See the paper "MobileNetV2: Inverted Residuals and Linear Bottlenecks" for more details.
 '''
-import torch
 import math
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-
-
 
 
 def conv_bn(inp, oup, stride):
@@ -29,7 +28,7 @@ def conv_1x1x1_bn(inp, oup):
 
 class InvertedResidual(nn.Module):
     def __init__(self, inp, oup, stride, expand_ratio):
-        super(InvertedResidual, self).__init__()
+        super().__init__()
         self.stride = stride
 
         hidden_dim = round(inp * expand_ratio)
@@ -69,7 +68,7 @@ class InvertedResidual(nn.Module):
 
 class MobileNetV2(nn.Module):
     def __init__(self, num_classes=1000, sample_size=224, width_mult=1.):
-        super(MobileNetV2, self).__init__()
+        super().__init__()
         block = InvertedResidual
         input_channel = 32
         last_channel = 1280
@@ -153,7 +152,7 @@ def get_fine_tuning_parameters(model, ft_portion):
     else:
         raise ValueError("Unsupported ft_portion: 'complete' or 'last_layer' expected")
 
-    
+
 def get_model(**kwargs):
     """
     Returns the model.

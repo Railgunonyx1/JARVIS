@@ -1,9 +1,8 @@
 """Intent Router - Deterministic pattern matching + LLM fallback for intent classification."""
 
-import re
 import json
 import logging
-from typing import Optional
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger("jarvis.cognition.intent")
@@ -267,7 +266,7 @@ class IntentRouter:
             source="default",
         )
 
-    def classify_with_llm(self, text: str, llm_response: Optional[str] = None) -> Intent:
+    def classify_with_llm(self, text: str, llm_response: str | None = None) -> Intent:
         """Classify using LLM when pattern matching is uncertain."""
         if llm_response:
             return self._parse_llm_classification(llm_response, text)

@@ -1,9 +1,10 @@
-from __future__ import print_function, division
-import os
-import cv2
-import sys
 import json
+import os
+import sys
+
+import cv2
 import pandas as pd
+
 
 def convert_csv_to_dict(csv_path, dataset_path, subset):
     data = pd.read_csv(csv_path)

@@ -3,7 +3,6 @@
 Run: python -m pytest tests/benchmarks.py --benchmark-only
 """
 import asyncio
-import time
 
 
 def _seed_memory(tmp_path, n=50, project="/proj"):

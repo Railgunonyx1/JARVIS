@@ -9,7 +9,8 @@ injected memory, and pruning file excerpts via ``selector`` — and reports a
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from core.context.budget import (
     DEFAULT_BUDGET,
@@ -29,19 +30,19 @@ class ContextManager:
 
     def __init__(
         self,
-        budget: Optional[ContextBudget] = None,
+        budget: ContextBudget | None = None,
         summarizer: SummaryFn = default_summarizer,
-        on_report: Optional[ReportFn] = None,
+        on_report: ReportFn | None = None,
     ) -> None:
         self.budget = budget or DEFAULT_BUDGET
         self.summarizer = summarizer
         self.on_report = on_report
-        self.last_report: Optional[ContextReport] = None
+        self.last_report: ContextReport | None = None
 
     def report(
         self,
         system_tokens: int,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         memory_text: str = "",
         files_text: str = "",
         compacted: bool = False,
@@ -73,10 +74,10 @@ class ContextManager:
     def fit(
         self,
         system_tokens: int,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         memory_text: str = "",
         files_text: str = "",
-    ) -> tuple[List[Dict[str, Any]], ContextReport]:
+    ) -> tuple[list[dict[str, Any]], ContextReport]:
         """Trim messages/injection to budget; return (messages, report)."""
         compacted = False
         fitted = messages
@@ -93,13 +94,13 @@ class ContextManager:
 
     def fit_for_loop(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         system_tokens: int,
-    ) -> tuple[List[Dict[str, Any]], ContextReport]:
+    ) -> tuple[list[dict[str, Any]], ContextReport]:
         """Convenience for the agent loop: fit messages under the window."""
         return self.fit(system_tokens, messages)
 
     @staticmethod
-    def _messages_tokens(messages: Optional[List[Dict[str, Any]]]) -> int:
+    def _messages_tokens(messages: list[dict[str, Any]] | None) -> int:
         from core.context.budget import estimate_messages_tokens
         return estimate_messages_tokens(messages)

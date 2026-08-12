@@ -7,7 +7,7 @@ and maintains a full optimization history with improvement tracking.
 import logging
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.optimization_manager")
 
@@ -16,9 +16,9 @@ class OptimizationManager:
     """Central coordinator for all hyper-optimization subsystems."""
 
     def __init__(self):
-        self._engines: Dict[str, Any] = {}
-        self._optimization_history: List[Dict[str, Any]] = []
-        self._latency_budgets: Dict[str, float] = {
+        self._engines: dict[str, Any] = {}
+        self._optimization_history: list[dict[str, Any]] = []
+        self._latency_budgets: dict[str, float] = {
             "voice": 80,
             "memory": 40,
             "planning": 30,
@@ -26,7 +26,7 @@ class OptimizationManager:
             "execution": 70,
             "speech": 80,
         }
-        self._budget_violations: List[Dict[str, Any]] = []
+        self._budget_violations: list[dict[str, Any]] = []
         self._lock = threading.RLock()
         self._initialization_time = time.perf_counter()
         logger.info("OptimizationManager initialized")
@@ -49,15 +49,15 @@ class OptimizationManager:
             logger.info("Unregistered engine '%s'", name)
             return True
 
-    def get_engine(self, name: str) -> Optional[Any]:
+    def get_engine(self, name: str) -> Any | None:
         """Retrieve a registered engine by name."""
         with self._lock:
             return self._engines.get(name)
 
-    def get_overall_health(self) -> Dict[str, Any]:
+    def get_overall_health(self) -> dict[str, Any]:
         """Returns aggregate metrics from all engines."""
         with self._lock:
-            engine_health: Dict[str, Any] = {}
+            engine_health: dict[str, Any] = {}
             total_score = 0.0
             engine_count = 0
 
@@ -80,7 +80,7 @@ class OptimizationManager:
                 "status": "healthy" if avg_score >= 70 else "degraded" if avg_score >= 40 else "critical",
             }
 
-    def _extract_engine_health(self, name: str, engine: Any) -> Dict[str, Any]:
+    def _extract_engine_health(self, name: str, engine: Any) -> dict[str, Any]:
         """Extract health metrics from an engine via standard interface."""
         try:
             if hasattr(engine, "get_stats"):
@@ -100,7 +100,7 @@ class OptimizationManager:
             logger.error("Failed to extract health from engine '%s': %s", name, exc)
         return {"score": 50.0, "details": {"note": "no standard health interface"}}
 
-    def get_latency_budgets(self) -> Dict[str, float]:
+    def get_latency_budgets(self) -> dict[str, float]:
         """Returns current latency budgets per stage."""
         with self._lock:
             return dict(self._latency_budgets)
@@ -112,14 +112,14 @@ class OptimizationManager:
             self._latency_budgets[stage] = budget_ms
             logger.info("Latency budget for '%s': %s ms -> %s ms", stage, old, budget_ms)
 
-    def enforce_budget(self, stage: str, actual_ms: float) -> Dict[str, Any]:
+    def enforce_budget(self, stage: str, actual_ms: float) -> dict[str, Any]:
         """Check if stage exceeded budget, return degradation suggestion."""
         with self._lock:
             budget = self._latency_budgets.get(stage, 100.0)
             overage = actual_ms - budget
             within_budget = actual_ms <= budget
 
-            result: Dict[str, Any] = {
+            result: dict[str, Any] = {
                 "stage": stage,
                 "budget_ms": budget,
                 "actual_ms": round(actual_ms, 3),
@@ -157,16 +157,16 @@ class OptimizationManager:
 
             return result
 
-    def get_violations(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_violations(self, limit: int = 50) -> list[dict[str, Any]]:
         """Returns recent budget violations, most recent first."""
         with self._lock:
             return list(reversed(self._budget_violations[-limit:]))
 
-    def get_optimization_report(self) -> Dict[str, Any]:
+    def get_optimization_report(self) -> dict[str, Any]:
         """Full system report with all metrics."""
         with self._lock:
             health = self.get_overall_health()
-            violations_summary: Dict[str, int] = {}
+            violations_summary: dict[str, int] = {}
             for v in self._budget_violations:
                 stage = v["stage"]
                 violations_summary[stage] = violations_summary.get(stage, 0) + 1
@@ -215,12 +215,12 @@ class OptimizationManager:
                 name, before, after, entry["improvement_pct"],
             )
 
-    def get_improvements(self) -> List[Dict[str, Any]]:
+    def get_improvements(self) -> list[dict[str, Any]]:
         """Returns list of applied optimizations with gains."""
         with self._lock:
             return list(self._optimization_history)
 
-    def get_top_improvements(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_top_improvements(self, limit: int = 10) -> list[dict[str, Any]]:
         """Returns top improvements sorted by absolute time saved."""
         with self._lock:
             sorted_opts = sorted(
@@ -239,7 +239,7 @@ class OptimizationManager:
             logger.info("OptimizationManager reset")
 
 
-_manager_instance: Optional[OptimizationManager] = None
+_manager_instance: OptimizationManager | None = None
 _manager_lock = threading.RLock()
 
 

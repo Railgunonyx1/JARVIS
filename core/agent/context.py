@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from tools.registry import ToolRegistry
 
@@ -13,7 +13,7 @@ class AgentContextBuilder:
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
-    def build(self, goal: str, project, mem=None) -> Tuple[List[Dict[str, Any]], str]:
+    def build(self, goal: str, project, mem=None) -> tuple[list[dict[str, Any]], str]:
         """Return (messages, system_prompt) for the first loop iteration."""
         return [{"role": "user", "content": goal}], self._system_prompt(project, mem)
 

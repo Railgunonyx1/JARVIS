@@ -1,13 +1,14 @@
 import json
+import logging
+import sqlite3
+import threading
 import time
 import uuid
-import sqlite3
-import logging
-import threading
-from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 from workflows.goal_decomposer import GoalDecomposer, GoalType
 

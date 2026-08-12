@@ -3,13 +3,11 @@
 See the paper "ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design" for more details.
 '''
 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from collections import OrderedDict
-from torch.nn import init
-import math
 
 
 def conv_bn(inp, oup, stride):
@@ -31,22 +29,22 @@ def channel_shuffle(x, groups):
     batchsize, num_channels, depth, height, width = x.data.size()
     channels_per_group = num_channels // groups
     # reshape
-    x = x.view(batchsize, groups, 
+    x = x.view(batchsize, groups,
         channels_per_group, depth, height, width)
     #permute
     x = x.permute(0,2,1,3,4,5).contiguous()
     # flatten
     x = x.view(batchsize, num_channels, depth, height, width)
     return x
-    
+
 class InvertedResidual(nn.Module):
     def __init__(self, inp, oup, stride):
-        super(InvertedResidual, self).__init__()
+        super().__init__()
         self.stride = stride
         assert stride in [1, 2]
 
         oup_inc = oup//2
-        
+
         if self.stride == 1:
             #assert inp == oup_inc
         	self.banch2 = nn.Sequential(
@@ -61,8 +59,8 @@ class InvertedResidual(nn.Module):
                 nn.Conv3d(oup_inc, oup_inc, 1, 1, 0, bias=False),
                 nn.BatchNorm3d(oup_inc),
                 nn.ReLU(inplace=True),
-            )                
-        else:                  
+            )
+        else:
             self.banch1 = nn.Sequential(
                 # dw
                 nn.Conv3d(inp, inp, 3, stride, 1, groups=inp, bias=False),
@@ -71,8 +69,8 @@ class InvertedResidual(nn.Module):
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
                 nn.BatchNorm3d(oup_inc),
                 nn.ReLU(inplace=True),
-            )        
-    
+            )
+
             self.banch2 = nn.Sequential(
                 # pw
                 nn.Conv3d(inp, oup_inc, 1, 1, 0, bias=False),
@@ -86,11 +84,11 @@ class InvertedResidual(nn.Module):
                 nn.BatchNorm3d(oup_inc),
                 nn.ReLU(inplace=True),
             )
-          
+
     @staticmethod
     def _concat(x, out):
         # concatenate along channel axis
-        return torch.cat((x, out), 1)        
+        return torch.cat((x, out), 1)
 
     def forward(self, x):
         if self.stride == 1:
@@ -105,9 +103,9 @@ class InvertedResidual(nn.Module):
 
 class ShuffleNetV2(nn.Module):
     def __init__(self, num_classes=600, sample_size=112, width_mult=1.):
-        super(ShuffleNetV2, self).__init__()
+        super().__init__()
         assert sample_size % 16 == 0
-        
+
         self.stage_repeats = [4, 8, 4]
         # index 0 is invalid and should never be called.
         # only used for indexing convenience.
@@ -123,14 +121,14 @@ class ShuffleNetV2(nn.Module):
             self.stage_out_channels = [-1, 24, 224, 488, 976, 2048]
         else:
             raise ValueError(
-                """{} groups is not supported for
-                       1x1 Grouped Convolutions""".format(num_groups))
+                f"""{num_groups} groups is not supported for
+                       1x1 Grouped Convolutions""")
 
         # building first layer
         input_channel = self.stage_out_channels[1]
         self.conv1 = conv_bn(3, input_channel, stride=(1,2,2))
         self.maxpool = nn.MaxPool3d(kernel_size=3, stride=2, padding=1)
-        
+
         self.features = []
         # building inverted residual blocks
         for idxstage in range(len(self.stage_repeats)):
@@ -140,13 +138,13 @@ class ShuffleNetV2(nn.Module):
                 stride = 2 if i == 0 else 1
                 self.features.append(InvertedResidual(input_channel, output_channel, stride))
                 input_channel = output_channel
-                
+
         # make it nn.Sequential
         self.features = nn.Sequential(*self.features)
 
         # building last several layers
         self.conv_last      = conv_1x1x1_bn(input_channel, self.stage_out_channels[-1])
-    
+
 	    # building classifier
         self.classifier = nn.Sequential(
                             nn.Dropout(0.2),
@@ -192,7 +190,7 @@ def get_model(**kwargs):
     """
     model = ShuffleNetV2(**kwargs)
     return model
-   
+
 
 if __name__ == "__main__":
     model = get_model(num_classes=600, sample_size=112, width_mult=1.)

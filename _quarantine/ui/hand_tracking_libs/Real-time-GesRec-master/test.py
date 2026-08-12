@@ -1,11 +1,10 @@
-import torch
-from torch.autograd import Variable
-import torch.nn.functional as F
-import time
-import os
-import sys
 import json
+import os
+import time
 
+import torch
+import torch.nn.functional as F
+from torch.autograd import Variable
 from utils import AverageMeter
 
 
@@ -55,21 +54,16 @@ def test(data_loader, model, opt, class_names):
 
         if (i % 100) == 0:
             with open(
-                    os.path.join(opt.result_path, '{}.json'.format(
-                        opt.test_subset)), 'w') as f:
+                    os.path.join(opt.result_path, f'{opt.test_subset}.json'), 'w') as f:
                 json.dump(test_results, f)
 
         batch_time.update(time.time() - end_time)
         end_time = time.time()
 
-        print('[{}/{}]\t'
-              'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-              'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'.format(
-                  i + 1,
-                  len(data_loader),
-                  batch_time=batch_time,
-                  data_time=data_time))
+        print(f'[{i + 1}/{len(data_loader)}]\t'
+              f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+              f'Data {data_time.val:.3f} ({data_time.avg:.3f})\t')
     with open(
-            os.path.join(opt.result_path, '{}.json'.format(opt.test_subset)),
+            os.path.join(opt.result_path, f'{opt.test_subset}.json'),
             'w') as f:
         json.dump(test_results, f)

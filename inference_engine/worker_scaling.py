@@ -3,11 +3,10 @@
 Idle: 2 workers | Heavy workload: 12 workers
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any
+import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("inference_optimization.worker_scaling")
 
@@ -72,7 +71,7 @@ class DynamicWorkerScaler:
             self._scale_events = self._scale_events[-100:]
         logger.info("Worker pool: %d → %d", old, new_count)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "current_workers": self._current_workers,
@@ -83,7 +82,7 @@ class DynamicWorkerScaler:
             }
 
 
-_worker_scaler_instance: Optional[DynamicWorkerScaler] = None
+_worker_scaler_instance: DynamicWorkerScaler | None = None
 
 
 def get_worker_scaler() -> DynamicWorkerScaler:

@@ -7,20 +7,20 @@ Provides the main API for permission checking and secure execution.
 
 from __future__ import annotations
 
-import time
-import hashlib
 import logging
 import threading
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+import time
+from collections.abc import Callable
+from typing import Any
 
+from security.audit import AuditEntry, get_audit_log
+from security.executor import ExecRequest, get_secure_executor
 from security.policies import (
-    Policy, PolicyRule, PermissionLevel, get_policy,
-    build_controlled_policy, build_smart_policy, build_agent_policy,
+    PermissionLevel,
+    Policy,
+    get_policy,
 )
 from security.sandbox import Sandbox, SandboxConfig, SandboxResult
-from security.executor import ExecRequest, get_secure_executor
-from security.audit import AuditEntry, get_audit_log
 
 logger = logging.getLogger("jarvis.security.engine")
 
@@ -38,11 +38,11 @@ class SecurityEngine:
         self._lock = threading.Lock()
 
         # Rate limiting
-        self._action_counts: Dict[str, List[float]] = {}
+        self._action_counts: dict[str, list[float]] = {}
         self._rate_window = 60.0  # 1 minute window
 
         # Confirmation callbacks
-        self._confirmation_handler: Optional[Callable[[str, Dict], bool]] = None
+        self._confirmation_handler: Callable[[str, dict], bool] | None = None
 
         logger.info("Security engine initialized (mode=%s)", mode)
 
@@ -64,12 +64,12 @@ class SecurityEngine:
             ))
             logger.info("Security mode changed to: %s", mode)
 
-    def set_confirmation_handler(self, handler: Callable[[str, Dict], bool]):
+    def set_confirmation_handler(self, handler: Callable[[str, dict], bool]):
         """Set a callback for user confirmation prompts."""
         self._confirmation_handler = handler
 
     def check_permission(self, tool_name: str, session_id: str = "",
-                         params: Optional[Dict] = None) -> tuple[bool, str]:
+                         params: dict | None = None) -> tuple[bool, str]:
         """Check if an action is permitted.
 
         Returns: (allowed, reason)
@@ -107,8 +107,8 @@ class SecurityEngine:
         return True, ""
 
     def execute_sandboxed(self, command: str, session_id: str = "",
-                          cwd: Optional[str] = None,
-                          env: Optional[Dict[str, str]] = None) -> SandboxResult:
+                          cwd: str | None = None,
+                          env: dict[str, str] | None = None) -> SandboxResult:
         """Execute a command through the authoritative Secure Executor.
 
         The executor (security.executor) is the single execution boundary:
@@ -154,7 +154,7 @@ class SecurityEngine:
         )
 
     def validate_action(self, tool_name: str, session_id: str = "",
-                        mode: str = "") -> tuple[bool, str, Dict[str, Any]]:
+                        mode: str = "") -> tuple[bool, str, dict[str, Any]]:
         """Full validation: permission + sandbox + audit.
 
         Returns: (allowed, reason, metadata)
@@ -237,10 +237,10 @@ class SecurityEngine:
         )
         self._audit.log(entry)
 
-    def get_audit_stats(self, since: Optional[float] = None) -> Dict[str, Any]:
+    def get_audit_stats(self, since: float | None = None) -> dict[str, Any]:
         return self._audit.get_stats(since)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         return {
             "mode": self._mode,
             "policy": self._policy.to_dict(),
@@ -256,7 +256,7 @@ class SecurityEngine:
 
 
 # Global singleton
-_engine: Optional[SecurityEngine] = None
+_engine: SecurityEngine | None = None
 _engine_lock = threading.Lock()
 
 

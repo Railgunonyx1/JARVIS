@@ -12,8 +12,9 @@ import threading
 from collections import OrderedDict
 from enum import Enum, auto
 from typing import (
-    Any, Callable, Dict, Generic, List, Optional,
-    Set, Tuple, Type, TypeVar, Union,
+    Any,
+    Optional,
+    TypeVar,
 )
 
 logger = logging.getLogger("jarvis.container")
@@ -53,16 +54,16 @@ class ServiceRecord:
     __slots__ = ("interface", "implementation", "lifetime", "dependencies",
                  "instance", "state", "scope_owner")
 
-    def __init__(self, interface: Type, implementation: Type,
+    def __init__(self, interface: type, implementation: type,
                  lifetime: ServiceLifetime,
-                 dependencies: Optional[List[str]] = None):
+                 dependencies: list[str] | None = None):
         self.interface = interface
         self.implementation = implementation
         self.lifetime = lifetime
         self.dependencies = dependencies or []
         self.instance: Any = None
         self.state = ServiceState.CREATED
-        self.scope_owner: Optional[str] = None
+        self.scope_owner: str | None = None
 
 
 class ServiceContainer:
@@ -70,19 +71,19 @@ class ServiceContainer:
 
     def __init__(self, parent: Optional["ServiceContainer"] = None):
         self._parent = parent
-        self._services: Dict[str, ServiceRecord] = OrderedDict()
-        self._instances: Dict[str, Any] = {}
+        self._services: dict[str, ServiceRecord] = OrderedDict()
+        self._instances: dict[str, Any] = {}
         self._lock = threading.Lock()
-        self._scope_name: Optional[str] = None
+        self._scope_name: str | None = None
 
     # ── Registration ──────────────────────────────────────────────
 
     def register(self,
-                 interface: Type[T],
-                 implementation: Optional[Type] = None,
+                 interface: type[T],
+                 implementation: type | None = None,
                  *,
                  lifetime: ServiceLifetime = ServiceLifetime.SINGLETON,
-                 dependencies: Optional[List[str]] = None,
+                 dependencies: list[str] | None = None,
                  instance: Any = None,
                  ) -> "ServiceContainer":
         key = self._key(interface)
@@ -105,15 +106,15 @@ class ServiceContainer:
         logger.debug("Registered %s → %s (%s)", key, impl.__name__, lifetime.name)
         return self
 
-    def register_instance(self, interface: Type[T], instance: T) -> "ServiceContainer":
+    def register_instance(self, interface: type[T], instance: T) -> "ServiceContainer":
         return self.register(interface, instance=instance)
 
-    def is_registered(self, interface: Type) -> bool:
+    def is_registered(self, interface: type) -> bool:
         return self._key(interface) in self._services
 
     # ── Resolution ────────────────────────────────────────────────
 
-    def resolve(self, interface: Type[T]) -> T:
+    def resolve(self, interface: type[T]) -> T:
         key = self._key(interface)
         record = self._services.get(key)
         if record is None:
@@ -200,9 +201,9 @@ class ServiceContainer:
             record.state = ServiceState.STOPPED
             logger.info("Stopped %s", key)
 
-    def _topological_sort(self) -> List[str]:
-        visited: Set[str] = set()
-        result: List[str] = []
+    def _topological_sort(self) -> list[str]:
+        visited: set[str] = set()
+        result: list[str] = []
 
         def _visit(key: str):
             if key in visited:
@@ -219,15 +220,15 @@ class ServiceContainer:
 
     # ── Health ────────────────────────────────────────────────────
 
-    def get_all_states(self) -> Dict[str, str]:
+    def get_all_states(self) -> dict[str, str]:
         return {k: v.state.name for k, v in self._services.items()}
 
-    def get_failed(self) -> List[str]:
+    def get_failed(self) -> list[str]:
         return [k for k, v in self._services.items()
                 if v.state == ServiceState.FAILED]
 
     @staticmethod
-    def _key(interface: Type) -> str:
+    def _key(interface: type) -> str:
         return getattr(interface, "__name__", str(interface))
 
 
@@ -235,14 +236,13 @@ def get_container() -> ServiceContainer:
     """Initialize the default container with all standard services wired."""
     from core.config import Config
     from core.config_service import ConfigService
-    from core.metrics import MetricsCollector
     from core.event_store import EventStore
+    from core.metrics import MetricsCollector
     from core.service_registry import ServiceRegistry
-    from core.state_machine import ServiceState
     from core.task_manager import TaskManager
-    from systems.event_bus import EventBus
-    from reliability_engine.health_monitor import HealthMonitor
     from reliability_engine.circuit_breaker import CircuitBreaker
+    from reliability_engine.health_monitor import HealthMonitor
+    from systems.event_bus import EventBus
 
     container = ServiceContainer()
 

@@ -1,14 +1,13 @@
 """Context Engine — conversation history, user profile, situational context.
 Uses write-behind cache: profile saves are queued and flushed every 30s."""
 
-import time
+import datetime
 import json
 import logging
 import threading
-import datetime
-from pathlib import Path
-from typing import Optional
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger("jarvis.context")
 
@@ -31,7 +30,7 @@ class UserProfile:
 
 
 class ContextEngine:
-    def __init__(self, config: dict, data_dir: Optional[Path] = None):
+    def __init__(self, config: dict, data_dir: Path | None = None):
         # Read config with defaults
         self.MAX_HISTORY = config.get("max_history", 20)
         self.COMPRESS_THRESHOLD = config.get("compress_threshold", 15)
@@ -46,14 +45,14 @@ class ContextEngine:
         self.active_topic: str = ""
         self.session_start: float = time.time()
         self._conversation_summary: str = ""
-        self._messages_cache: Optional[list[dict]] = None
+        self._messages_cache: list[dict] | None = None
         self._messages_cache_len: int = 0
         self._load_profile()
 
         # Write-behind cache
         self._dirty = False
         self._flush_lock = threading.Lock()
-        self._flush_timer: Optional[threading.Timer] = None
+        self._flush_timer: threading.Timer | None = None
 
     def add_turn(self, role: str, content: str, **kwargs) -> ContextFrame:
         frame = ContextFrame(role=role, content=content, **kwargs)
@@ -94,7 +93,7 @@ class ContextEngine:
         logger.info("Compressed history: summary=%d chars, %d recent turns kept",
                      len(self._conversation_summary), len(recent_turns))
 
-    def get_messages(self, max_turns: Optional[int] = None) -> list[dict]:
+    def get_messages(self, max_turns: int | None = None) -> list[dict]:
         # Return cached version if history hasn't changed
         effective_max = max_turns or self.MAX_HISTORY
         if (self._messages_cache is not None

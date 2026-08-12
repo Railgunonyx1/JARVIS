@@ -9,17 +9,17 @@ candidates for compression because they are bulk and rarely re-read.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 from core.context.budget import estimate_messages_tokens
 from core.context.summarizer import SummaryFn, default_summarizer
 
 
 def compress(
-    messages: List[Dict[str, Any]],
+    messages: list[dict[str, Any]],
     budget_tokens: int,
     summarizer: SummaryFn = default_summarizer,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Shrink a message list so it fits ``budget_tokens``.
 
     Strategy:
@@ -53,7 +53,7 @@ def compress(
     foldable = others[goal_idx + 1:last_user] if goal is not None else others[:last_user]
 
     # 4. Tool results in the kept window are the first candidates for trimming.
-    kept: List[Dict[str, Any]] = list(system_msgs) + goal_msgs + recent
+    kept: list[dict[str, Any]] = list(system_msgs) + goal_msgs + recent
     for _ in range(4):  # bounded retries, deterministic
         if estimate_messages_tokens(kept) <= budget_tokens:
             break
@@ -87,9 +87,9 @@ def compress(
     return kept
 
 
-def trim_tool_outputs(messages: List[Dict[str, Any]], max_content_chars: int = 2000) -> List[Dict[str, Any]]:
+def trim_tool_outputs(messages: list[dict[str, Any]], max_content_chars: int = 2000) -> list[dict[str, Any]]:
     """Truncate long tool-result contents in place (returns new list)."""
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for message in messages:
         if message.get("role") == "tool":
             content = message.get("content") or ""

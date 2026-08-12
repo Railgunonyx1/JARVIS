@@ -9,11 +9,10 @@
 | OCR          | OCR model    |
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("optimization_system.dynamic_model_router")
 
@@ -40,7 +39,7 @@ class ModelConfig:
     max_tokens: int = 4096
     cost_per_1k_tokens: float = 0.0
     avg_latency_ms: float = 0.0
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     tier: int = 1  # 1=tiny, 2=small, 3=medium, 4=large
 
 
@@ -52,7 +51,7 @@ class RoutingDecision:
     provider: str
     confidence: float
     reasoning: str
-    alternatives: List[str] = field(default_factory=list)
+    alternatives: list[str] = field(default_factory=list)
 
 
 # Keyword patterns for task classification
@@ -77,11 +76,11 @@ class DynamicModelRouter:
     """
 
     def __init__(self):
-        self._models: Dict[str, ModelConfig] = {}
-        self._category_history: Dict[str, List[float]] = {}
+        self._models: dict[str, ModelConfig] = {}
+        self._category_history: dict[str, list[float]] = {}
         self._lock = threading.Lock()
         self._routing_count = 0
-        self._category_counts: Dict[str, int] = {}
+        self._category_counts: dict[str, int] = {}
         self._register_defaults()
 
     def _register_defaults(self) -> None:
@@ -110,7 +109,7 @@ class DynamicModelRouter:
         with self._lock:
             self._models[name] = config
 
-    def classify_task(self, text: str) -> Tuple[TaskCategory, float]:
+    def classify_task(self, text: str) -> tuple[TaskCategory, float]:
         """Classify a task into a category with confidence."""
         text_lower = text.lower().strip()
 
@@ -181,14 +180,14 @@ class DynamicModelRouter:
             if len(self._category_history[model_name]) > 100:
                 self._category_history[model_name] = self._category_history[model_name][-100:]
 
-    def get_model_for_latency(self, target_ms: float) -> Optional[str]:
+    def get_model_for_latency(self, target_ms: float) -> str | None:
         """Find the best model that can meet a latency target."""
         for name, config in sorted(self._models.items(), key=lambda x: x[1].tier):
             if config.avg_latency_ms <= target_ms:
                 return name
         return None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "routing_count": self._routing_count,
@@ -206,7 +205,7 @@ class DynamicModelRouter:
             }
 
 
-_router_instance: Optional[DynamicModelRouter] = None
+_router_instance: DynamicModelRouter | None = None
 
 
 def get_dynamic_model_router() -> DynamicModelRouter:

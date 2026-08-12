@@ -1,11 +1,10 @@
 """IO Optimizer — disk I/O stats, batch writes, read-ahead, and disk health heuristics."""
 
+import logging
 import os
 import sys
-import time
-import logging
 import threading
-from typing import List, Tuple, Optional
+import time
 
 import psutil
 
@@ -17,7 +16,7 @@ class IOOptimizer:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._batch_history: List[dict] = []
+        self._batch_history: list[dict] = []
 
     def get_io_stats(self) -> dict:
         """Return current system I/O counters."""
@@ -73,7 +72,7 @@ class IOOptimizer:
                 result["method"] = "failed"
         return result
 
-    def batch_writes(self, writes: List[Tuple[str, bytes]]) -> int:
+    def batch_writes(self, writes: list[tuple[str, bytes]]) -> int:
         """Write multiple (path, data) pairs. Returns count of successful writes."""
         completed = 0
         for path, data in writes:
@@ -101,7 +100,7 @@ class IOOptimizer:
 
         return completed
 
-    def get_disk_info(self) -> List[dict]:
+    def get_disk_info(self) -> list[dict]:
         """Return total, used, free, and percent for each disk partition."""
         results = []
         for partition in psutil.disk_partitions(all=False):
@@ -132,7 +131,7 @@ class IOOptimizer:
         return False
 
 
-_io_optimizer: Optional[IOOptimizer] = None
+_io_optimizer: IOOptimizer | None = None
 _io_optimizer_lock = threading.Lock()
 
 

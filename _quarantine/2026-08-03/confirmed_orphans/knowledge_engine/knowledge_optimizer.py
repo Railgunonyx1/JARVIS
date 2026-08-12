@@ -1,10 +1,8 @@
 """Knowledge Optimizer — Analyzes, prunes, and optimizes the knowledge graph."""
 
-import math
-import time
 import logging
 import threading
-from typing import Optional
+import time
 from collections import defaultdict
 
 logger = logging.getLogger("jarvis.knowledge_engine.knowledge_optimizer")
@@ -402,7 +400,7 @@ class KnowledgeOptimizer:
         return components + len(unvisited)
 
 
-_instance: Optional[KnowledgeOptimizer] = None
+_instance: KnowledgeOptimizer | None = None
 _instance_lock = threading.Lock()
 
 

@@ -4,17 +4,18 @@ Extends WorkflowEngine concepts for individual durable tasks.
 Tasks survive restarts via SQLite-backed checkpoint.
 """
 
-import time
-import uuid
-import json
 import asyncio
+import json
 import logging
 import sqlite3
 import threading
-from pathlib import Path
-from typing import Optional, Callable, Any
+import time
+import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.core.durable_task")
 
@@ -51,7 +52,7 @@ class DurableExecutor:
         result = await executor.wait(task_id)
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or Path.home() / ".jarvis" / "durable_tasks.db"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
@@ -122,7 +123,7 @@ class DurableExecutor:
                     future.set_result(result)
                 logger.info("Durable task %s completed", task_id)
                 return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 retries += 1
                 logger.warning("Task %s timeout (retry %d/%d)", task_id, retries, task.max_retries)
             except Exception as e:
@@ -154,7 +155,7 @@ class DurableExecutor:
             raise KeyError(f"Unknown task: {task_id}")
         return await asyncio.wait_for(future, timeout=timeout)
 
-    def get_status(self, task_id: str) -> Optional[dict]:
+    def get_status(self, task_id: str) -> dict | None:
         task = self._load_sync(task_id)
         if not task:
             return None
@@ -176,7 +177,7 @@ class DurableExecutor:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    async def _load(self, task_id: str) -> Optional[DurableTask]:
+    async def _load(self, task_id: str) -> DurableTask | None:
         row = self._conn.execute(
             "SELECT * FROM tasks WHERE id = ?", (task_id,)
         ).fetchone()
@@ -196,7 +197,7 @@ class DurableExecutor:
             checkpoint_data=json.loads(row["checkpoint_data"] or "{}"),
         )
 
-    def _load_sync(self, task_id: str) -> Optional[DurableTask]:
+    def _load_sync(self, task_id: str) -> DurableTask | None:
         row = self._conn.execute(
             "SELECT * FROM tasks WHERE id = ?", (task_id,)
         ).fetchone()

@@ -3,7 +3,8 @@
 Plugins use this API to communicate through the EventBus.
 """
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from api.v1.models import EventRecord
 
@@ -45,7 +46,7 @@ class EventAPI:
             logger.error("EventAPI.unsubscribe failed: %s", e)
             return False
 
-    def get_recent(self, count: int = 20) -> List[Dict[str, Any]]:
+    def get_recent(self, count: int = 20) -> list[dict[str, Any]]:
         try:
             return self._bus.get_recent_events(count=count)
         except Exception:

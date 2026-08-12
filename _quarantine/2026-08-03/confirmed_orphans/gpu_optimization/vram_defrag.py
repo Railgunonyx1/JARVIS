@@ -4,10 +4,10 @@ Monitor fragmentation, allocation patterns, tensor lifetime.
 Defragment when system is idle.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
+import time
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("gpu_optimization.vram_defrag")
 
@@ -34,7 +34,7 @@ class VRAMDefragmenter:
 
     def __init__(self):
         self._frag_info = FragmentationInfo()
-        self._allocation_log: List[Dict[str, Any]] = []
+        self._allocation_log: list[dict[str, Any]] = []
         self._lock = threading.Lock()
         self._defrag_count = 0
 
@@ -74,7 +74,7 @@ class VRAMDefragmenter:
         """Check if defragmentation is needed."""
         return self._frag_info.fragmentation_pct > self.DEFRAG_THRESHOLD_PCT
 
-    def defragment(self) -> Dict[str, Any]:
+    def defragment(self) -> dict[str, Any]:
         """Perform VRAM defragmentation."""
         start = time.time()
         with self._lock:
@@ -93,7 +93,7 @@ class VRAMDefragmenter:
             "latency_ms": round(elapsed_ms, 1),
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "fragmentation_pct": round(self._frag_info.fragmentation_pct, 1),
             "defrag_count": self._defrag_count,
@@ -101,7 +101,7 @@ class VRAMDefragmenter:
         }
 
 
-_defrag_instance: Optional[VRAMDefragmenter] = None
+_defrag_instance: VRAMDefragmenter | None = None
 
 
 def get_vram_defragmenter() -> VRAMDefragmenter:

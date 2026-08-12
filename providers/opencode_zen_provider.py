@@ -4,9 +4,9 @@ Uses OpenAI-compatible endpoint at https://opencode.ai/zen/v1/chat/completions
 Free models: Big Pickle, DeepSeek V4 Flash Free, MiMo-V2.5 Free, etc.
 """
 
-import time
 import logging
-from typing import AsyncIterator, Optional
+import time
+from collections.abc import AsyncIterator
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import openai_tools_param, parse_openai_tool_calls
@@ -34,10 +34,10 @@ class OpenCodeZenProvider(LLMProvider):
     async def complete(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> LLMResponse:
         client = self._get_client()
         full_messages = []
@@ -82,10 +82,10 @@ class OpenCodeZenProvider(LLMProvider):
     async def complete_stream(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> AsyncIterator[str]:
         client = self._get_client()
         full_messages = []

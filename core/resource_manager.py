@@ -4,16 +4,15 @@ Absorbs ResourceGovernor (CPU/RAM throttle), GracefulDegradation monitor,
 resource_predictor, and CPUAffinityManager into one service-oriented component.
 """
 
-import os
-import time
-import math
-import logging
 import asyncio
+import logging
+import os
 import threading
-from enum import IntEnum
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from enum import IntEnum
 
 logger = logging.getLogger("jarvis.core.resource_manager")
 
@@ -34,10 +33,10 @@ class PressureLevel(IntEnum):
 @dataclass
 class CpuSnapshot:
     percent: float = 0.0
-    per_core: List[float] = field(default_factory=list)
+    per_core: list[float] = field(default_factory=list)
     count: int = 0
     frequency_mhz: float = 0.0
-    temperature_c: Optional[float] = None
+    temperature_c: float | None = None
 
 
 @dataclass
@@ -67,7 +66,7 @@ class GpuSnapshot:
     memory_total_gb: float = 0.0
     memory_percent: float = 0.0
     utilization_percent: float = 0.0
-    temperature_c: Optional[float] = None
+    temperature_c: float | None = None
 
 
 @dataclass
@@ -82,7 +81,7 @@ class BatterySnapshot:
     available: bool = False
     percent: float = 0.0
     is_charging: bool = False
-    time_left_sec: Optional[float] = None
+    time_left_sec: float | None = None
 
 
 @dataclass
@@ -112,7 +111,7 @@ class ResourceManager:
         self._snapshot: SystemSnapshot = SystemSnapshot()
         self._pressure: PressureLevel = PressureLevel.NONE
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
         # Quotas
@@ -125,7 +124,7 @@ class ResourceManager:
         )
 
         # Pressure callbacks
-        self._pressure_callbacks: Dict[PressureLevel, List[Callable]] = {
+        self._pressure_callbacks: dict[PressureLevel, list[Callable]] = {
             level: [] for level in PressureLevel
         }
 

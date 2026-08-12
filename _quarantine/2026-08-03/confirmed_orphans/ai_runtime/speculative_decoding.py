@@ -4,10 +4,11 @@ Run small model → predict next 32 tokens → large model verifies.
 Only regenerate incorrect tokens. 30-70% speedup.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, Callable, List, Tuple
-from dataclasses import dataclass, field
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.speculative_decoding")
 
@@ -97,12 +98,12 @@ class SpeculativeDecoder:
 
         return result
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return dict(self._stats)
 
 
-_speculative_instance: Optional[SpeculativeDecoder] = None
+_speculative_instance: SpeculativeDecoder | None = None
 
 
 def get_speculative_decoder() -> SpeculativeDecoder:

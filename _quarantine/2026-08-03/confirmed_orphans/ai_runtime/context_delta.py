@@ -3,10 +3,10 @@
 Previous Prompt → Only append changes.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List
+import time
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.context_delta")
 
@@ -15,9 +15,9 @@ logger = logging.getLogger("ai_runtime.context_delta")
 class ContextDelta:
     """A delta (change) to the context."""
     delta_id: str = ""
-    added: List[str] = field(default_factory=list)
-    removed: List[str] = field(default_factory=list)
-    modified: Dict[str, str] = field(default_factory=dict)
+    added: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+    modified: dict[str, str] = field(default_factory=dict)
     timestamp: float = 0.0
     token_delta: int = 0
 
@@ -32,13 +32,13 @@ class ContextDeltaManager:
     """
 
     def __init__(self):
-        self._previous_context: Dict[str, str] = {}
-        self._deltas: List[ContextDelta] = []
+        self._previous_context: dict[str, str] = {}
+        self._deltas: list[ContextDelta] = []
         self._lock = threading.Lock()
         self._delta_count = 0
         self._total_tokens_saved = 0
 
-    def compute_delta(self, new_context: Dict[str, str]) -> ContextDelta:
+    def compute_delta(self, new_context: dict[str, str]) -> ContextDelta:
         """Compute the delta between previous and new context."""
         self._delta_count += 1
         delta = ContextDelta(
@@ -67,7 +67,7 @@ class ContextDeltaManager:
         return delta
 
     def apply_delta(self, base_prompt: str, delta: ContextDelta,
-                    context: Dict[str, str]) -> str:
+                    context: dict[str, str]) -> str:
         """Apply a delta to the base prompt."""
         lines = base_prompt.split('\n')
 
@@ -80,7 +80,7 @@ class ContextDeltaManager:
 
         return '\n'.join(lines)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "total_deltas": self._delta_count,
@@ -90,7 +90,7 @@ class ContextDeltaManager:
             }
 
 
-_delta_manager_instance: Optional[ContextDeltaManager] = None
+_delta_manager_instance: ContextDeltaManager | None = None
 
 
 def get_context_delta_manager() -> ContextDeltaManager:

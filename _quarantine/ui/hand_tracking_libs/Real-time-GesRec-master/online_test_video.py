@@ -1,29 +1,20 @@
-import os
-import glob
 import json
-import pandas as pd
-import numpy as np
-import csv
-import torch
+import os
+import pdb
 import time
-from torch.autograd import Variable
-from PIL import Image
-import cv2
-from torch.nn import functional as F
 
-from opts import parse_opts_online
-from model import generate_model
+import cv2
+import numpy as np
+import torch
 from mean import get_mean, get_std
+from model import generate_model
+from opts import parse_opts_online
+from PIL import Image
 from spatial_transforms import *
 from temporal_transforms import *
-from target_transforms import ClassLabel
-from dataset import get_online_data
-from utils import  AverageMeter, LevenshteinDistance, Queue
-
-import pdb
-import numpy as np
-import datetime
-
+from torch.autograd import Variable
+from torch.nn import functional as F
+from utils import Queue
 
 ###Pretrained RGB models
 ##Google Drive
@@ -62,7 +53,7 @@ def load_models(opt):
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
-    opt.arch = '{}'.format(opt.model)
+    opt.arch = f'{opt.model}'
     opt.mean = get_mean(opt.norm_value)
     opt.std = get_std(opt.norm_value)
 
@@ -76,7 +67,7 @@ def load_models(opt):
     detector = detector.cuda()
     if opt.resume_path:
         opt.resume_path = os.path.join(opt.root_path, opt.resume_path)
-        print('loading checkpoint {}'.format(opt.resume_path))
+        print(f'loading checkpoint {opt.resume_path}')
         checkpoint = torch.load(opt.resume_path)
 
         detector.load_state_dict(checkpoint['state_dict'])
@@ -108,7 +99,7 @@ def load_models(opt):
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
-    opt.arch = '{}'.format(opt.model)
+    opt.arch = f'{opt.model}'
     opt.mean = get_mean(opt.norm_value)
     opt.std = get_std(opt.norm_value)
 
@@ -120,7 +111,7 @@ def load_models(opt):
     classifier, parameters = generate_model(opt)
     classifier = classifier.cuda()
     if opt.resume_path:
-        print('loading checkpoint {}'.format(opt.resume_path))
+        print(f'loading checkpoint {opt.resume_path}')
         checkpoint = torch.load(opt.resume_path)
 
         classifier.load_state_dict(checkpoint['state_dict'])
@@ -216,7 +207,7 @@ while cap.isOpened():
         prediction_det = np.argmax(det_selected_queue)
 
         prob_det = det_selected_queue[prediction_det]
-        
+
         #### State of the detector is checked here as detector act as a switch for the classifier
         if prediction_det == 1:
             inputs_clf = inputs[:, :, :, :, :]
@@ -242,7 +233,7 @@ while cap.isOpened():
             # Push the probabilities to queue
             myqueue_clf.enqueue(outputs_clf.tolist())
             passive_count += 1
-    
+
     if passive_count >= opt.det_counter:
         active = False
     else:
@@ -295,13 +286,13 @@ while cap.isOpened():
             prev_best1 = best1
 
         cum_sum = np.zeros(opt.n_classes_clf, )
-    
+
     if active == False and prev_active == True:
         pre_predict = False
 
     prev_active = active
     elapsedTime = time.time() - t1
-    fps = "(Playback) {:.1f} FPS".format(1/elapsedTime)
+    fps = f"(Playback) {1/elapsedTime:.1f} FPS"
 
     if len(results) != 0:
         predicted = np.array(results)[:, 1]

@@ -5,11 +5,10 @@ plugins from local or remote sources.
 """
 
 import json
-import time
 import logging
+import time
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional, List
-from dataclasses import dataclass, field, asdict
 
 logger = logging.getLogger("jarvis.core.plugin_market")
 
@@ -27,9 +26,9 @@ class PluginMarketEntry:
     description: str
     source: str  # "local" | "url" | "github"
     url: str = ""
-    permissions: List[str] = field(default_factory=list)
-    capabilities: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     installed: bool = False
     installed_version: str = ""
     updated_at: float = field(default_factory=time.time)
@@ -45,7 +44,7 @@ class PluginMarketEntry:
 class PluginMarketplace:
     """Discovers, indexes, and installs plugins."""
 
-    def __init__(self, plugin_manager=None, plugin_dir: Optional[Path] = None):
+    def __init__(self, plugin_manager=None, plugin_dir: Path | None = None):
         self._pm = plugin_manager
         self._plugin_dir = plugin_dir or PLUGIN_DIR
         self._plugin_dir.mkdir(parents=True, exist_ok=True)
@@ -114,7 +113,7 @@ class PluginMarketplace:
             self._save_index()
         return count
 
-    def search(self, query: str = "") -> List[PluginMarketEntry]:
+    def search(self, query: str = "") -> list[PluginMarketEntry]:
         """Search indexed plugins by name, author, or description."""
         query = query.lower().strip()
         results = []
@@ -127,13 +126,13 @@ class PluginMarketplace:
                 results.append(entry)
         return results
 
-    def list_installed(self) -> List[PluginMarketEntry]:
+    def list_installed(self) -> list[PluginMarketEntry]:
         return [e for e in self._index.values() if e.installed]
 
-    def list_available(self) -> List[PluginMarketEntry]:
+    def list_available(self) -> list[PluginMarketEntry]:
         return [e for e in self._index.values() if not e.installed]
 
-    def get(self, plugin_id: str) -> Optional[PluginMarketEntry]:
+    def get(self, plugin_id: str) -> PluginMarketEntry | None:
         return self._index.get(plugin_id)
 
     # ── Installation ───────────────────────────

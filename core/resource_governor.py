@@ -1,9 +1,9 @@
 """Resource Governor — monitors CPU/RAM and provides throttling signals.
 Used by other modules to degrade gracefully under load."""
 
-import time
 import logging
 import threading
+import time
 
 logger = logging.getLogger("jarvis.resource_governor")
 

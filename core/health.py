@@ -2,9 +2,7 @@
 
 import json
 import os
-import time
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -12,7 +10,7 @@ class HealthCheck:
     name: str
     ok: bool
     message: str
-    details: Optional[str] = None
+    details: str | None = None
 
 
 def check_python() -> HealthCheck:

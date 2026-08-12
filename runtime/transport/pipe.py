@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 from runtime.transport.base import Transport
 from runtime.transport.protocol import MAX_FRAME_SIZE, decode_line, encode_line
@@ -13,7 +12,7 @@ logger = logging.getLogger("jarvis.transport.pipe")
 
 class PipeProtocol(asyncio.Protocol):
     def __init__(self, on_connect: asyncio.Future[PipeProtocol]) -> None:
-        self.transport: Optional[asyncio.WriteTransport] = None
+        self.transport: asyncio.WriteTransport | None = None
         self.queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         self.buffer = b""
         self._on_connect = on_connect
@@ -39,7 +38,6 @@ class PipeProtocol(asyncio.Protocol):
             if not line:
                 continue
             try:
-                from runtime.transport.protocol import Envelope
                 decoded = decode_line(line + b"\n")
                 env_dict = {
                     "version": decoded.version,
@@ -52,7 +50,7 @@ class PipeProtocol(asyncio.Protocol):
             except Exception as e:
                 logger.error("Failed to decode pipe frame: %s", e)
 
-    def connection_lost(self, exc: Optional[Exception]) -> None:
+    def connection_lost(self, exc: Exception | None) -> None:
         self.queue.put_nowait(None)
 
 
@@ -64,7 +62,7 @@ class NamedPipeTransport(Transport):
     async def send(self, message: dict[str, Any]) -> None:
         if self._closed or not self._protocol.transport:
             raise ConnectionError("transport is closed")
-        
+
         from runtime.transport.protocol import Envelope
         env = Envelope(
             type=str(message.get("type", "")),
@@ -121,13 +119,13 @@ async def start_pipe_server(
 
     def protocol_factory():
         future = loop.create_future()
-        
+
         async def run_handler(f):
             try:
                 protocol = await f
                 transport = NamedPipeTransport(protocol)
                 await handler(transport)
-            except Exception as e:
+            except Exception:
                 logger.exception("Error in pipe server handler")
 
         asyncio.create_task(run_handler(future))

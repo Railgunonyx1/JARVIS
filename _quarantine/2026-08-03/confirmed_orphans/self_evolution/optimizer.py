@@ -1,14 +1,13 @@
 """Self-Optimizer — Analyzes performance, applies safe optimizations with rollback."""
 
-import time
 import json
-import copy
-import sqlite3
 import logging
+import sqlite3
 import threading
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Any, Optional
+from typing import Any
 
 from self_evolution.performance_monitor import PerformanceMonitor
 
@@ -57,7 +56,7 @@ class SelfOptimizer:
     def __init__(
         self,
         monitor: PerformanceMonitor,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
     ):
         self._monitor = monitor
         self._db_path = db_path or _DB_PATH

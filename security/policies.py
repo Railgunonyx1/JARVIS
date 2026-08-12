@@ -7,14 +7,11 @@ Policies are loaded from TOML config files and can be hot-reloaded.
 
 from __future__ import annotations
 
-import re
-import json
 import logging
-import threading
-from enum import IntEnum
-from pathlib import Path
+import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from enum import IntEnum
+from typing import Any
 
 logger = logging.getLogger("jarvis.security.policies")
 
@@ -39,7 +36,7 @@ class PolicyRule:
     requires_confirmation: bool = False
     max_frequency: int = 0  # 0 = unlimited
     description: str = ""
-    _compiled: Optional[re.Pattern] = field(default=None, repr=False)
+    _compiled: re.Pattern | None = field(default=None, repr=False)
 
     def matches(self, tool_name: str) -> bool:
         if self._compiled is None:
@@ -61,13 +58,13 @@ class Policy:
     """A complete security policy (maps to an execution mode)."""
     name: str
     level: PermissionLevel
-    rules: List[PolicyRule] = field(default_factory=list)
+    rules: list[PolicyRule] = field(default_factory=list)
     default_level: PermissionLevel = PermissionLevel.SAFE
     sandbox_enabled: bool = False
     audit_enabled: bool = True
     max_concurrent_actions: int = 5
     timeout_seconds: int = 300
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def check_permission(self, tool_name: str) -> tuple[PermissionLevel, PolicyRule | None]:
         """Check if a tool is allowed. Returns (level, matching_rule)."""
@@ -180,7 +177,7 @@ def build_agent_policy() -> Policy:
 
 
 # Global policy cache
-_policies: Dict[str, Policy] = {}
+_policies: dict[str, Policy] = {}
 
 
 def get_policy(name: str) -> Policy:

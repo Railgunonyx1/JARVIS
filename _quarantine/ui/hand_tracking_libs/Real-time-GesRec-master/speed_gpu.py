@@ -1,24 +1,8 @@
 import time
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch import optim
-from torch.autograd import Variable
-import torch.onnx
-import onnx
-from onnx import optimizer
-import os
 
-import tensorrt as trt
 import numpy as np
-import pycuda.autoinit
-import pycuda.driver as cuda 
-import time
-
-
-from utils import AverageMeter, calculate_accuracy
-from models import squeezenet, shufflenetv2, shufflenet, mobilenet, mobilenetv2, c3d, resnetl
-
+import pycuda.driver as cuda
+import tensorrt as trt
 
 model_folder = 'results'
 model_name = 'onnx_model'
@@ -45,7 +29,7 @@ onnx_model = 'results/ortho_model_shufflenetv2_unet_1120x224_best2.onnx'
 # # model = squeezenet.get_model( version=1.1, num_classes=600, sample_size = 112, sample_duration = 8)
 # # model = resnetl.resnetl10(num_classes=2, sample_size = 112, sample_duration = 8)
 # # model = model.cuda()
-# # model = nn.DataParallel(model, device_ids=None)  
+# # model = nn.DataParallel(model, device_ids=None)
 # print(model)
 
 # # create the imput placeholder for the model
@@ -64,7 +48,7 @@ TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 def build_engine(model_path):
     with trt.Builder(TRT_LOGGER) as builder, \
         builder.create_network() as network, \
-        trt.OnnxParser(network, TRT_LOGGER) as parser: 
+        trt.OnnxParser(network, TRT_LOGGER) as parser:
         builder.max_workspace_size = 1<<30
         builder.max_batch_size = 1
         with open(model_path, "rb") as f:
@@ -180,7 +164,7 @@ if __name__ == "__main__":
 # # model = squeezenet.get_model( version=1.1, num_classes=600, sample_size = 112, sample_duration = 8)
 # model = resnetl.resnetl10(num_classes=2, sample_size = 112, sample_duration = 8)
 # model = model.cuda()
-# #model = nn.DataParallel(model, device_ids=None)	
+# #model = nn.DataParallel(model, device_ids=None)
 # optimizer = optim.SGD(
 #             model.parameters(),
 #             lr=0.001)

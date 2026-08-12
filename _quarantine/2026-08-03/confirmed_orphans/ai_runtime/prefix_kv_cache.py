@@ -3,12 +3,12 @@
 If conversation history hasn't changed, don't recompute attention.
 Cache the key-value pairs and continue generation from the cache point.
 """
-import logging
-import time
-import threading
 import hashlib
-from typing import Optional, Dict, Any, List, Tuple
-from dataclasses import dataclass, field
+import logging
+import threading
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.prefix_kv_cache")
 
@@ -38,7 +38,7 @@ class PrefixKVCache:
     """
 
     def __init__(self, max_entries: int = 50, max_bytes: int = 500 * 1024 * 1024):
-        self._cache: Dict[str, KVEntry] = {}
+        self._cache: dict[str, KVEntry] = {}
         self._max_entries = max_entries
         self._max_bytes = max_bytes
         self._current_bytes = 0
@@ -48,12 +48,12 @@ class PrefixKVCache:
         self._total_reuse_ms = 0.0
 
     @staticmethod
-    def hash_prefix(tokens: List[str]) -> str:
+    def hash_prefix(tokens: list[str]) -> str:
         """Hash a list of tokens to create a cache key."""
         combined = "|".join(tokens)
         return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
-    def get(self, tokens: List[str]) -> Optional[Any]:
+    def get(self, tokens: list[str]) -> Any | None:
         """Get cached KV pairs for a token prefix."""
         key = self.hash_prefix(tokens)
 
@@ -68,7 +68,7 @@ class PrefixKVCache:
         self._misses += 1
         return None
 
-    def put(self, tokens: List[str], kv_data: Any, size_bytes: int = 0) -> None:
+    def put(self, tokens: list[str], kv_data: Any, size_bytes: int = 0) -> None:
         """Cache KV pairs for a token prefix."""
         key = self.hash_prefix(tokens)
 
@@ -85,7 +85,7 @@ class PrefixKVCache:
             self._current_bytes += entry.size_bytes
             self._evict()
 
-    def find_longest_match(self, tokens: List[str]) -> Tuple[int, Any]:
+    def find_longest_match(self, tokens: list[str]) -> tuple[int, Any]:
         """Find the longest cached prefix match.
 
         Returns (match_length, kv_data) or (0, None).
@@ -119,7 +119,7 @@ class PrefixKVCache:
             entry = self._cache.pop(oldest_key)
             self._current_bytes -= entry.size_bytes
 
-    def invalidate(self, tokens: List[str] = None) -> None:
+    def invalidate(self, tokens: list[str] = None) -> None:
         """Invalidate cache entries. If tokens provided, invalidate only that entry."""
         with self._lock:
             if tokens:
@@ -131,7 +131,7 @@ class PrefixKVCache:
                 self._cache.clear()
                 self._current_bytes = 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "cached_entries": len(self._cache),
@@ -143,7 +143,7 @@ class PrefixKVCache:
         }
 
 
-_kv_cache_instance: Optional[PrefixKVCache] = None
+_kv_cache_instance: PrefixKVCache | None = None
 
 
 def get_prefix_kv_cache() -> PrefixKVCache:

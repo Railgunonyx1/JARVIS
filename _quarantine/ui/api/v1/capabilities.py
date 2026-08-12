@@ -4,7 +4,7 @@ Plugins register their capabilities through this API.
 The CapabilityRegistry remains the single source of truth.
 """
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from api.v1.models import CapabilityInfo
 
@@ -18,7 +18,7 @@ class CapabilityAPI:
         self._cap_registry = capability_registry
         self._action_registry = action_registry
 
-    def query(self, name: str) -> Optional[CapabilityInfo]:
+    def query(self, name: str) -> CapabilityInfo | None:
         try:
             cap = self._cap_registry.get(name)
             if cap:
@@ -33,7 +33,7 @@ class CapabilityAPI:
             logger.error("CapabilityAPI.query failed: %s", e)
         return None
 
-    def search(self, tags: List[str] = None, query: str = "") -> List[CapabilityInfo]:
+    def search(self, tags: list[str] = None, query: str = "") -> list[CapabilityInfo]:
         results = []
         try:
             if self._cap_registry and hasattr(self._cap_registry, "search"):
@@ -50,12 +50,12 @@ class CapabilityAPI:
             logger.error("CapabilityAPI.search failed: %s", e)
         return results
 
-    def list_all(self) -> List[str]:
+    def list_all(self) -> list[str]:
         if self._action_registry:
             return self._action_registry.get_names()
         return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "registered_actions": len(self.list_all()),
         }

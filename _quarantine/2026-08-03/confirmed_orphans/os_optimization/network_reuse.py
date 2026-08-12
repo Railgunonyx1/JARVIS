@@ -4,12 +4,12 @@ Maintain persistent connections to frequently used services
 instead of reconnecting for each request.
 """
 import logging
-import time
 import threading
-import urllib.request
+import time
 import urllib.error
-from typing import Optional, Dict, Any
-from dataclasses import dataclass, field
+import urllib.request
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("os_optimization.network_reuse")
 
@@ -35,7 +35,7 @@ class NetworkConnectionPool:
 
     def __init__(self, max_idle_seconds: int = 300):
         self._max_idle = max_idle_seconds
-        self._connections: Dict[str, PooledConnection] = {}
+        self._connections: dict[str, PooledConnection] = {}
         self._lock = threading.Lock()
         self._total_requests = 0
         self._connection_reuse = 0
@@ -64,7 +64,7 @@ class NetworkConnectionPool:
             self._total_requests += 1
             return conn
 
-    def fetch(self, url: str, timeout: int = 10) -> Dict[str, Any]:
+    def fetch(self, url: str, timeout: int = 10) -> dict[str, Any]:
         """Fetch a URL using pooled connection."""
         from urllib.parse import urlparse
         parsed = urlparse(url)
@@ -99,7 +99,7 @@ class NetworkConnectionPool:
             conn.is_alive = False
             return {"error": str(e), "latency_ms": round((time.time() - start) * 1000, 1)}
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "pooled_connections": len(self._connections),
@@ -109,7 +109,7 @@ class NetworkConnectionPool:
             }
 
 
-_network_pool_instance: Optional[NetworkConnectionPool] = None
+_network_pool_instance: NetworkConnectionPool | None = None
 
 
 def get_network_pool() -> NetworkConnectionPool:

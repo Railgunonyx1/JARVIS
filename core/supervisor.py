@@ -5,10 +5,10 @@ and restarts with configurable backoff. Integrates with ServiceRegistry,
 StateMachine, and EventBus.
 """
 
-import time
 import asyncio
 import logging
-from typing import Optional, Callable
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("jarvis.core.supervisor")
@@ -19,8 +19,8 @@ class ServiceSpec:
     """Specification for a supervised service."""
     name: str
     start: Callable
-    stop: Optional[Callable] = None
-    health_check: Optional[Callable] = None
+    stop: Callable | None = None
+    health_check: Callable | None = None
     restart_policy: str = "permanent"  # permanent | temporary | never
     max_restarts: int = 5
     backoff_base: float = 1.0
@@ -36,7 +36,7 @@ class ServiceInstance:
     last_start: float = 0.0
     last_failure: float = 0.0
     error: str = ""
-    task: Optional[asyncio.Task] = None
+    task: asyncio.Task | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -57,7 +57,7 @@ class Supervisor:
         self._services: dict[str, ServiceInstance] = {}
         self._event_bus = event_bus
         self._running = False
-        self._monitor_task: Optional[asyncio.Task] = None
+        self._monitor_task: asyncio.Task | None = None
 
     def add(self, spec: ServiceSpec):
         if spec.name in self._services:

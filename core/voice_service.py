@@ -4,10 +4,8 @@ Integrates with DI container, ResourceManager, and EventBus.
 Optimizes streaming latency via Silero VAD hints and resource-aware execution.
 """
 
-import time
-import asyncio
 import logging
-from typing import AsyncIterator, Callable, Optional
+from collections.abc import AsyncIterator, Callable
 
 logger = logging.getLogger("jarvis.core.voice_service")
 
@@ -18,7 +16,7 @@ class VoiceService:
     Manages VAD, wake word, STT, and TTS as a cohesive service.
     """
 
-    def __init__(self, config: Optional[dict] = None,
+    def __init__(self, config: dict | None = None,
                  resource_manager=None, event_bus=None):
         self._config = config or {}
         self._resource_manager = resource_manager
@@ -36,10 +34,10 @@ class VoiceService:
     async def initialize(self):
         """Lazy-initialize all voice components."""
         try:
-            from pipeline.vad import VoiceActivityDetector
-            from pipeline.wake_word import WakeWordDetector
             from pipeline.stt import SpeechToText
             from pipeline.tts import TextToSpeech
+            from pipeline.vad import VoiceActivityDetector
+            from pipeline.wake_word import WakeWordDetector
         except ImportError:
             logger.warning("Voice pipeline unavailable; voice service disabled")
             self._vad = self._wake_word = self._stt = self._tts = None

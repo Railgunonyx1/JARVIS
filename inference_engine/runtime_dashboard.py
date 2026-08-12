@@ -4,9 +4,9 @@ Shows: First Token, Token Rate, GPU Util, CPU Util, KV Cache Hit,
 Prompt Compression, Pipeline Overlap, Average Response, Status.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any
+import time
+from typing import Any
 
 logger = logging.getLogger("inference_optimization.runtime_dashboard")
 
@@ -18,7 +18,7 @@ class AIRuntimeDashboard:
     """
 
     def __init__(self):
-        self._metrics: Dict[str, Any] = {}
+        self._metrics: dict[str, Any] = {}
         self._history: list = []
         self._lock = threading.lock() if hasattr(threading, 'lock') else threading.Lock()
         self._last_update = 0.0
@@ -28,12 +28,12 @@ class AIRuntimeDashboard:
             self._metrics[key] = value
             self._last_update = time.time()
 
-    def update_metrics(self, metrics: Dict[str, Any]) -> None:
+    def update_metrics(self, metrics: dict[str, Any]) -> None:
         with self._lock:
             self._metrics.update(metrics)
             self._last_update = time.time()
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         with self._lock:
             return dict(self._metrics)
 
@@ -57,7 +57,7 @@ class AIRuntimeDashboard:
         ]
         return "\n".join(lines)
 
-    def get_status_summary(self) -> Dict[str, Any]:
+    def get_status_summary(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "metrics_count": len(self._metrics),
@@ -66,7 +66,7 @@ class AIRuntimeDashboard:
             }
 
 
-_dashboard_instance: Optional[AIRuntimeDashboard] = None
+_dashboard_instance: AIRuntimeDashboard | None = None
 
 
 def get_runtime_dashboard() -> AIRuntimeDashboard:

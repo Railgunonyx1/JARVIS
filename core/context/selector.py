@@ -9,7 +9,8 @@ retrieval.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 from core.context.budget import estimate_tokens
 
@@ -34,24 +35,24 @@ def score(text: str, query: str) -> float:
     return round(overlap / len(query_words), 3)
 
 
-def rank(candidates: Iterable[Tuple[str, str]], query: str) -> List[Tuple[str, float]]:
+def rank(candidates: Iterable[tuple[str, str]], query: str) -> list[tuple[str, float]]:
     """Rank (key, content) candidates by relevance to the query."""
     scored = [(key, score(content, query)) for key, content in candidates]
     return sorted(scored, key=lambda item: item[1], reverse=True)
 
 
 def select_files(
-    files: Sequence[Dict[str, Any]],
+    files: Sequence[dict[str, Any]],
     query: str,
     top_k: int = 5,
     max_tokens: int = 30_000,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Choose the most relevant file excerpts that fit the token budget.
 
     ``files`` items are dicts with at least ``path`` and ``content``.
     """
     ranked = rank([(f.get("path", ""), f.get("content", "")) for f in files], query)
-    selected: List[Dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
     used_tokens = 0
     for path, relevance in ranked:
         if relevance <= 0.0:

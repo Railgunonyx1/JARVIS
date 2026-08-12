@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Memory types (Stage 1C). Decision/project entries map onto real backends
 # (DecisionMemory / ProjectKnowledge); semantic/episodic/procedural/note live
@@ -39,26 +39,26 @@ PROJECT_SECTIONS = ("architecture", "decisions", "bugs", "benchmarks", "todo", "
 class MemoryItem:
     """A single unit of memory, regardless of which backend persists it."""
 
-    id: Optional[str] = None                 # stable logical key ("" or None until stored)
+    id: str | None = None                 # stable logical key ("" or None until stored)
     content: str = ""                        # the actual remembered text
     type: str = SEMANTIC                     # MemoryType
     project: str = ""                        # project scope ("" = global)
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     importance: float = 0.5                  # 0..1 — "does this matter?"
     confidence: float = 1.0                  # 0..1 — "how sure are we?"
     created_at: float = field(default_factory=time.time)
     last_accessed: float = field(default_factory=time.time)
     access_count: int = 0                    # prior usefulness signal
-    embedding: Optional[List[float]] = None  # precomputed vector (optional)
+    embedding: list[float] | None = None  # precomputed vector (optional)
     source: str = ""                         # session/conversation/syslog origin
-    relationships: List[str] = field(default_factory=list)  # related memory keys/entities
-    metadata: Dict[str, Any] = field(default_factory=dict)  # type-specific extras
+    relationships: list[str] = field(default_factory=list)  # related memory keys/entities
+    metadata: dict[str, Any] = field(default_factory=dict)  # type-specific extras
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MemoryItem":
+    def from_dict(cls, data: dict[str, Any]) -> MemoryItem:
         allowed = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in data.items() if k in allowed})
 
@@ -74,9 +74,9 @@ class KnowledgeTriple:
     timestamp: float = field(default_factory=time.time)
     source: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "KnowledgeTriple":
+    def from_dict(cls, data: dict[str, Any]) -> KnowledgeTriple:
         return cls(**data)

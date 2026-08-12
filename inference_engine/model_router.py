@@ -1,10 +1,8 @@
 """Model Router — intelligent query-to-model selection with performance tracking."""
 
-import re
-import time
-import threading
 import logging
-from typing import Dict, Optional
+import re
+import threading
 
 logger = logging.getLogger("jarvis.inference_engine.model_router")
 
@@ -47,7 +45,7 @@ class ModelRouter:
     }
 
     def __init__(self) -> None:
-        self._stats: Dict[str, dict] = {}
+        self._stats: dict[str, dict] = {}
         self._preference: str = "balanced"
         self._lock = threading.Lock()
 
@@ -151,7 +149,7 @@ class ModelRouter:
         logger.info("Model preference set to %s", preference)
 
 
-_model_router: Optional[ModelRouter] = None
+_model_router: ModelRouter | None = None
 _model_router_lock = threading.Lock()
 
 

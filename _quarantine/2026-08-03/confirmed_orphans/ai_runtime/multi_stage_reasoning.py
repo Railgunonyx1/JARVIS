@@ -4,10 +4,11 @@ Tiny Router → Medium Planner → Large Reasoner → Tiny Formatter
 Most requests never reach the expensive model.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, Callable, List
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.multi_stage_reasoning")
 
@@ -28,7 +29,7 @@ class MultiStageResult:
     stages_completed: int = 0
     total_stages: int = 0
     final_output: Any = None
-    stages_used: List[str] = field(default_factory=list)
+    stages_used: list[str] = field(default_factory=list)
     total_latency_ms: float = 0.0
     cost_estimate: float = 0.0
 
@@ -52,7 +53,7 @@ class MultiStageReasoner:
     # Complexity thresholds: skip expensive stages if simple
     SKIP_REASONING_THRESHOLD = 0.4
 
-    def __init__(self, pipeline: List[ReasoningStage] = None):
+    def __init__(self, pipeline: list[ReasoningStage] = None):
         self._pipeline = pipeline or list(self.DEFAULT_PIPELINE)
         self._lock = threading.Lock()
         self._stats = {
@@ -64,7 +65,7 @@ class MultiStageReasoner:
         }
 
     async def reason(self, query: str, complexity: float = 0.5,
-                     handlers: Dict[str, Callable] = None) -> MultiStageResult:
+                     handlers: dict[str, Callable] = None) -> MultiStageResult:
         """Run multi-stage reasoning on a query."""
         start = time.time()
         result = MultiStageResult(total_stages=len(self._pipeline))
@@ -113,12 +114,12 @@ class MultiStageReasoner:
 
         return result
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return dict(self._stats)
 
 
-_multi_stage_instance: Optional[MultiStageReasoner] = None
+_multi_stage_instance: MultiStageReasoner | None = None
 
 
 def get_multi_stage_reasoner() -> MultiStageReasoner:

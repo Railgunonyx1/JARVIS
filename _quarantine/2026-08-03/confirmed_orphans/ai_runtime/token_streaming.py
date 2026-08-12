@@ -3,13 +3,14 @@
 Generate Token → Immediately Display → Generate Next Token → Continue.
 Everything downstream consumes streamed output for minimum perceived latency.
 """
-import logging
-import time
-import threading
 import asyncio
-from typing import Optional, Dict, Any, Callable, AsyncGenerator, List
-from dataclasses import dataclass, field
+import logging
+import threading
+import time
 from collections import deque
+from collections.abc import AsyncGenerator, Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.token_streaming")
 
@@ -39,9 +40,9 @@ class TokenStreamingPipeline:
     """
 
     def __init__(self, max_tokens: int = 4096):
-        self._consumers: List[Callable] = []
+        self._consumers: list[Callable] = []
         self._token_buffer: deque = deque(maxlen=max_tokens)
-        self._prefix_buffer: List[str] = []
+        self._prefix_buffer: list[str] = []
         self._lock = threading.Lock()
         self._stats = {
             "total_tokens": 0,
@@ -59,7 +60,7 @@ class TokenStreamingPipeline:
         self._consumers.append(callback)
 
     async def stream(self, token_generator: AsyncGenerator[str, None],
-                     response_id: str = "") -> Dict[str, Any]:
+                     response_id: str = "") -> dict[str, Any]:
         """Stream tokens from an async generator, forwarding to all consumers."""
         self._stream_start = time.time()
         self._last_token_time = self._stream_start
@@ -117,15 +118,15 @@ class TokenStreamingPipeline:
         with self._lock:
             return "".join(list(self._prefix_buffer)[-length:])
 
-    def get_recent_tokens(self, count: int = 20) -> List[str]:
+    def get_recent_tokens(self, count: int = 20) -> list[str]:
         with self._lock:
             return list(self._token_buffer)[-count:]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return dict(self._stats)
 
 
-_streaming_pipeline_instance: Optional[TokenStreamingPipeline] = None
+_streaming_pipeline_instance: TokenStreamingPipeline | None = None
 
 
 def get_token_streaming_pipeline() -> TokenStreamingPipeline:

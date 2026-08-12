@@ -16,7 +16,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.context.selector import score as _lexical_score
 from memory.extractor import MemoryExtractor
@@ -48,12 +48,12 @@ class MemoryController:
         decisions=None,
         knowledge=None,
         tiers=None,
-        graph: Optional[KnowledgeGraph] = None,
-        metadata: Optional[MetadataStore] = None,
-        extractor: Optional[MemoryExtractor] = None,
-        scorer: Optional[ImportanceScorer] = None,
-        ranker: Optional[HybridRanker] = None,
-        lifecycle: Optional[MemoryLifecycle] = None,
+        graph: KnowledgeGraph | None = None,
+        metadata: MetadataStore | None = None,
+        extractor: MemoryExtractor | None = None,
+        scorer: ImportanceScorer | None = None,
+        ranker: HybridRanker | None = None,
+        lifecycle: MemoryLifecycle | None = None,
     ):
         self._kv = kv
         self._vector = vector
@@ -72,7 +72,7 @@ class MemoryController:
         self._lifecycle = lifecycle or MemoryLifecycle()
 
     # ── write path ────────────────────────────────────────────────────
-    def store(self, item: MemoryItem, key: Optional[str] = None) -> str:
+    def store(self, item: MemoryItem, key: str | None = None) -> str:
         """Persist an item across backends. Returns the stable key."""
         item = _as_item(item)
         key = key or item.id or _make_key(item)
@@ -122,9 +122,9 @@ class MemoryController:
         project: str = "",
         top_k: int = 3,
         min_score: float = 0.15,
-    ) -> List[MemoryItem]:
+    ) -> list[MemoryItem]:
         """Merged candidates from every source, hybrid-ranked, top_k returned."""
-        candidates: List[MemoryItem] = []
+        candidates: list[MemoryItem] = []
 
         if self._vector is not None:
             for hit in self._vector.search_similar(query, top_k=max(top_k * 3, 3), min_score=min_score):
@@ -225,7 +225,7 @@ class MemoryController:
         project: str = "",
         top_k: int = 3,
         min_score: float = 0.15,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Legacy-shaped results for existing callers (CLI/cockpit/tests)."""
         _SOURCE_NAMES = {"v": "vector", "kv": "kv", "d": "decision", "k": "knowledge"}
         out = []
@@ -241,12 +241,12 @@ class MemoryController:
         return out
 
     # ── decision / knowledge helpers ──────────────────────────────────
-    def record_decision(self, item: MemoryItem) -> Optional[int]:
+    def record_decision(self, item: MemoryItem) -> int | None:
         if self._decisions is None:
             return None
         return self._store_decision(item)
 
-    def _store_decision(self, item: MemoryItem) -> Optional[int]:
+    def _store_decision(self, item: MemoryItem) -> int | None:
         meta = item.metadata or {}
         return self._decisions.record(
             goal=meta.get("goal") or item.content,
@@ -293,7 +293,7 @@ class MemoryController:
         self._lifecycle.enqueue(PRIORITY_LOW, self.decay_and_compact)
 
     # ── conversation pipeline ─────────────────────────────────────────
-    def process_conversation(self, text: str, source: str = "", project: str = "") -> List[MemoryItem]:
+    def process_conversation(self, text: str, source: str = "", project: str = "") -> list[MemoryItem]:
         """Extract facts off the chat path, buffer as session memory, and
         promote important ones to long-term (HIGH queue)."""
         items = self._extractor.extract(text, source=source, project=project)
@@ -302,8 +302,8 @@ class MemoryController:
         return items
 
     # ── stats / lifecycle ─────────────────────────────────────────────
-    def get_stats(self) -> Dict[str, Any]:
-        stats: Dict[str, Any] = {}
+    def get_stats(self) -> dict[str, Any]:
+        stats: dict[str, Any] = {}
         if self._kv is not None:
             kv_stats = self._kv.get_stats()
             stats["memories"] = kv_stats.get("memories", 0)
@@ -337,7 +337,7 @@ class MemoryController:
                 backend.close()
 
 
-def _as_item(item: MemoryItem | str | Dict[str, Any]) -> MemoryItem:
+def _as_item(item: MemoryItem | str | dict[str, Any]) -> MemoryItem:
     if isinstance(item, MemoryItem):
         return item
     if isinstance(item, str):

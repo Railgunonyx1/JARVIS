@@ -4,7 +4,6 @@ Each handler wraps the existing module function for backward compatibility.
 """
 import asyncio
 import logging
-from typing import Optional
 
 from core.action_registry import ActionHandler
 
@@ -13,7 +12,7 @@ logger = logging.getLogger("jarvis.actions")
 # ── Screen Capture ──────────────────────────────────────────────
 
 class ScreenCaptureHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         try:
             from actions.screen_capture import analyze_screen
             key = (api_keys or {}).get("gemini", "")
@@ -25,21 +24,21 @@ class ScreenCaptureHandler(ActionHandler):
 # ── Screen Analyzer ─────────────────────────────────────────────
 
 class ScreenAnalyzerHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.screen_analyzer import screen_analyze
         return await asyncio.to_thread(screen_analyze, intent.entities)
 
 # ── Browser ─────────────────────────────────────────────────────
 
 class BrowserHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.browser_control import browser_action
         return await asyncio.to_thread(browser_action, intent.entities)
 
 # ── Desktop Control ─────────────────────────────────────────────
 
 class DesktopControlHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         try:
             from actions.desktop_automation import execute_desktop_action
             return await asyncio.to_thread(execute_desktop_action, action=text)
@@ -53,7 +52,7 @@ class OpenAppHandler(ActionHandler):
     def __init__(self):
         self._fn = None
 
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         app_name = intent.entities.get("app", "")
         if not app_name:
             return None
@@ -71,7 +70,7 @@ class WebSearchHandler(ActionHandler):
     def __init__(self):
         self._fn = None
 
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         query = intent.entities.get("query", text)
         if not query:
             return None
@@ -93,7 +92,7 @@ class SystemStatusHandler(ActionHandler):
     def __init__(self):
         self._fn = None
 
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         try:
             if self._fn is None:
                 from actions.system_monitor import get_system_status as _get_system_status
@@ -115,7 +114,7 @@ class SystemStatusHandler(ActionHandler):
 # ── File Manager ────────────────────────────────────────────────
 
 class FileHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.file_manager import file_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(file_action, action_name, intent.entities)
@@ -123,7 +122,7 @@ class FileHandler(ActionHandler):
 # ── Process Manager ─────────────────────────────────────────────
 
 class ProcessHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.process_manager import process_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(process_action, action_name, intent.entities)
@@ -131,7 +130,7 @@ class ProcessHandler(ActionHandler):
 # ── Shell ───────────────────────────────────────────────────────
 
 class ShellHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.shell_exec import shell_action
         action_name = intent.entities.get("action", "run")
         return await asyncio.to_thread(shell_action, action_name, intent.entities)
@@ -139,7 +138,7 @@ class ShellHandler(ActionHandler):
 # ── Window Manager ──────────────────────────────────────────────
 
 class WindowHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.window_manager import window_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(window_action, action_name, intent.entities)
@@ -147,7 +146,7 @@ class WindowHandler(ActionHandler):
 # ── Clipboard ───────────────────────────────────────────────────
 
 class ClipboardHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.clipboard_manager import clipboard_action
         action_name = intent.entities.get("action", "read")
         return await asyncio.to_thread(clipboard_action, action_name, intent.entities)
@@ -155,7 +154,7 @@ class ClipboardHandler(ActionHandler):
 # ── System Settings ─────────────────────────────────────────────
 
 class SettingsHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.system_settings import settings_action
         action_name = intent.entities.get("action", "")
         return await asyncio.to_thread(settings_action, action_name, intent.entities)
@@ -163,7 +162,7 @@ class SettingsHandler(ActionHandler):
 # ── Input Control ───────────────────────────────────────────────
 
 class InputHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.input_control import input_action
         action_name = intent.entities.get("action", "")
         return await asyncio.to_thread(input_action, action_name, intent.entities)
@@ -171,7 +170,7 @@ class InputHandler(ActionHandler):
 # ── Network Manager ─────────────────────────────────────────────
 
 class NetworkHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.network_manager import network_action
         action_name = intent.entities.get("action", "status")
         return await asyncio.to_thread(network_action, action_name, intent.entities)
@@ -179,7 +178,7 @@ class NetworkHandler(ActionHandler):
 # ── Service Manager ─────────────────────────────────────────────
 
 class ServiceHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.service_manager import service_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(service_action, action_name, intent.entities)
@@ -187,7 +186,7 @@ class ServiceHandler(ActionHandler):
 # ── Disk Manager ────────────────────────────────────────────────
 
 class DiskHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.disk_manager import disk_action
         action_name = intent.entities.get("action", "info")
         return await asyncio.to_thread(disk_action, action_name, intent.entities)
@@ -195,7 +194,7 @@ class DiskHandler(ActionHandler):
 # ── Audio Manager ───────────────────────────────────────────────
 
 class AudioHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.audio_manager import audio_action
         action_name = intent.entities.get("action", "devices")
         return await asyncio.to_thread(audio_action, action_name, intent.entities)
@@ -203,7 +202,7 @@ class AudioHandler(ActionHandler):
 # ── Display Manager ─────────────────────────────────────────────
 
 class DisplayHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.display_manager import display_action
         action_name = intent.entities.get("action", "")
         return await asyncio.to_thread(display_action, action_name, intent.entities)
@@ -211,7 +210,7 @@ class DisplayHandler(ActionHandler):
 # ── Startup Manager ─────────────────────────────────────────────
 
 class StartupHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.startup_manager import startup_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(startup_action, action_name, intent.entities)
@@ -219,7 +218,7 @@ class StartupHandler(ActionHandler):
 # ── Task Scheduler ──────────────────────────────────────────────
 
 class TaskHandler(ActionHandler):
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         from actions.task_scheduler import task_action
         action_name = intent.entities.get("action", "list")
         return await asyncio.to_thread(task_action, action_name, intent.entities)
@@ -230,7 +229,7 @@ class TaskHandler(ActionHandler):
 class VectorQueryHandler(ActionHandler):
     """Queries vector memory. Requires vector_memory to be set on the instance."""
 
-    async def handle(self, intent, text: str, api_keys: dict = None) -> Optional[str]:
+    async def handle(self, intent, text: str, api_keys: dict = None) -> str | None:
         query = intent.entities.get("query", text)
         if not query:
             return None

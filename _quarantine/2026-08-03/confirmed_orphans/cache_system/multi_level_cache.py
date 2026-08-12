@@ -2,16 +2,15 @@
 
 Each level is slower but larger. Lookup cascades from fastest to slowest.
 """
-import logging
-import time
 import json
-import hashlib
+import logging
 import sqlite3
 import threading
-from typing import Optional, Any, Dict, List, Tuple
-from pathlib import Path
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("cache_system.multi_level")
 
@@ -45,7 +44,7 @@ class L1RAMCache:
         self._hits = 0
         self._misses = 0
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         with self._lock:
             entry = self._cache.get(key)
             if entry is None:
@@ -96,7 +95,7 @@ class L1RAMCache:
             self._cache.clear()
             self._current_bytes = 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             total = self._hits + self._misses
             return {
@@ -138,7 +137,7 @@ class L3SQLiteCache:
             conn.commit()
             conn.close()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         with self._lock:
             conn = sqlite3.connect(self._db_path)
             row = conn.execute(
@@ -200,7 +199,7 @@ class L3SQLiteCache:
             conn.close()
             return row[0] if row else 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "level": "L3_SQLite",
@@ -224,7 +223,7 @@ class MultiLevelCache:
         self._l3 = L3SQLiteCache(db_path=db_path)
         self._lock = threading.Lock()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         # L1 fast path
         value = self._l1.get(key)
         if value is not None:
@@ -259,14 +258,14 @@ class MultiLevelCache:
             conn.commit()
             conn.close()
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         return {
             "l1": self._l1.get_stats(),
             "l3": self._l3.get_stats(),
         }
 
 
-_cache_instance: Optional[MultiLevelCache] = None
+_cache_instance: MultiLevelCache | None = None
 
 
 def get_multi_level_cache() -> MultiLevelCache:

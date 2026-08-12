@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import time
 import logging
 import threading
-from typing import Any, Callable, Dict, Optional
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.reliability.circuit_breaker")
 
@@ -18,7 +19,7 @@ class CircuitBreaker:
     """Thread-safe circuit breaker for fault isolation."""
 
     def __init__(self) -> None:
-        self._circuits: Dict[str, dict] = {}
+        self._circuits: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def register(
@@ -144,7 +145,7 @@ class CircuitBreaker:
             self._ensure_registered(name)
             return self._circuits[name]["state"]
 
-    def get_all_states(self) -> Dict[str, str]:
+    def get_all_states(self) -> dict[str, str]:
         """Return a mapping of circuit name -> state."""
         with self._lock:
             return {name: c["state"] for name, c in self._circuits.items()}
@@ -170,7 +171,7 @@ class CircuitBreaker:
 # Singleton
 # ---------------------------------------------------------------------------
 
-_instance: Optional[CircuitBreaker] = None
+_instance: CircuitBreaker | None = None
 _instance_lock = threading.Lock()
 
 

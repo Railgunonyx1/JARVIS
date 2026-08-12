@@ -2,12 +2,11 @@
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from pathlib import Path
 
-from core.mode_manager import get_mode_manager, ExecutionMode
-from core.capability_registry import get_capability, CAPABILITY_REGISTRY
+from core.capability_registry import CAPABILITY_REGISTRY
+from core.mode_manager import ExecutionMode, get_mode_manager
 
 logger = logging.getLogger("jarvis.skills")
 
@@ -17,21 +16,21 @@ class SkillManifest:
     name: str
     version: str
     description: str
-    capabilities: List[str]
-    permissions: List[str]
-    supported_modes: List[ExecutionMode]
+    capabilities: list[str]
+    permissions: list[str]
+    supported_modes: list[ExecutionMode]
     entry_point: str
 
 
 class SkillLoader:
     """Loads skill manifests and validates against current execution mode."""
 
-    def __init__(self, manifests_dir: Optional[Path] = None):
+    def __init__(self, manifests_dir: Path | None = None):
         if manifests_dir is None:
             manifests_dir = Path(__file__).resolve().parent.parent / "skills" / "manifests"
         self.manifests_dir = manifests_dir
         self.manifests_dir.mkdir(parents=True, exist_ok=True)
-        self._skills: Dict[str, SkillManifest] = {}
+        self._skills: dict[str, SkillManifest] = {}
         self._load_all()
 
     def _load_all(self) -> None:
@@ -42,7 +41,7 @@ class SkillLoader:
 
         for json_file in self.manifests_dir.glob("*.json"):
             try:
-                with open(json_file, "r", encoding="utf-8") as f:
+                with open(json_file, encoding="utf-8") as f:
                     data = json.load(f)
 
                 manifest = SkillManifest(
@@ -66,15 +65,15 @@ class SkillLoader:
             except Exception as e:
                 logger.error("Failed to load skill manifest %s: %s", json_file, e)
 
-    def get_skill(self, name: str) -> Optional[SkillManifest]:
+    def get_skill(self, name: str) -> SkillManifest | None:
         """Get a skill manifest by name."""
         return self._skills.get(name)
 
-    def get_all_skills(self) -> Dict[str, SkillManifest]:
+    def get_all_skills(self) -> dict[str, SkillManifest]:
         """Get all loaded skill manifests."""
         return self._skills.copy()
 
-    def get_skills_for_mode(self, mode: Optional[ExecutionMode] = None) -> Dict[str, SkillManifest]:
+    def get_skills_for_mode(self, mode: ExecutionMode | None = None) -> dict[str, SkillManifest]:
         """Get skills compatible with the given mode."""
         if mode is None:
             mode = get_mode_manager().get_mode()
@@ -85,7 +84,7 @@ class SkillLoader:
             if mode in skill.supported_modes
         }
 
-    def get_capabilities_for_mode(self, mode: Optional[ExecutionMode] = None) -> List[str]:
+    def get_capabilities_for_mode(self, mode: ExecutionMode | None = None) -> list[str]:
         """Get all capabilities from skills compatible with the given mode."""
         skills = self.get_skills_for_mode(mode)
         capabilities = []
@@ -100,7 +99,7 @@ class SkillLoader:
                 unique.append(cap)
         return unique
 
-    def validate_skill_for_mode(self, skill_name: str, mode: Optional[ExecutionMode] = None) -> bool:
+    def validate_skill_for_mode(self, skill_name: str, mode: ExecutionMode | None = None) -> bool:
         """Check if a skill is valid for the given mode."""
         skill = self._skills.get(skill_name)
         if not skill:
@@ -110,7 +109,7 @@ class SkillLoader:
         return mode in skill.supported_modes
 
 
-_skill_loader: Optional[SkillLoader] = None
+_skill_loader: SkillLoader | None = None
 
 
 def get_skill_loader() -> SkillLoader:

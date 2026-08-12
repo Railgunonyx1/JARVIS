@@ -1,8 +1,9 @@
-from __future__ import print_function, division
+import json
 import os
 import sys
-import json
+
 import pandas as pd
+
 
 def convert_csv_to_dict(csv_path, subset, labels):
     data = pd.read_csv(csv_path, delimiter=' ', header=None)
@@ -13,7 +14,7 @@ def convert_csv_to_dict(csv_path, subset, labels):
     for i in range(data.shape[0]):
         row = data.ix[i, :]
         class_name = labels[row[1]-1]
-        
+
         basename = str(row[0])
         start_frame = str(row[2])
         end_frame = str(row[3])
@@ -22,12 +23,12 @@ def convert_csv_to_dict(csv_path, subset, labels):
         key_labels.append(class_name)
         key_start_frame.append(start_frame)
         key_end_frame.append(end_frame)
-        
+
     database = {}
     for i in range(len(keys)):
-        key = keys[i]  
+        key = keys[i]
         if key in database: # need this because I have the same folder 3  times
-            key = key + '^' + str(i) 
+            key = key + '^' + str(i)
         database[key] = {}
         database[key]['subset'] = subset
         label = key_labels[i]
@@ -35,7 +36,7 @@ def convert_csv_to_dict(csv_path, subset, labels):
         end_frame = key_end_frame[i]
 
         database[key]['annotations'] = {'label': label, 'start_frame':start_frame, 'end_frame':end_frame}
-    
+
     return database
 
 def load_labels(label_csv_path):
@@ -45,12 +46,12 @@ def load_labels(label_csv_path):
         labels.append(str(data.ix[i, 1]))
     return labels
 
-def convert_nv_csv_to_activitynet_json(label_csv_path, train_csv_path, 
+def convert_nv_csv_to_activitynet_json(label_csv_path, train_csv_path,
                                            val_csv_path, dst_json_path):
     labels = load_labels(label_csv_path)
     train_database = convert_csv_to_dict(train_csv_path, 'training', labels)
     val_database = convert_csv_to_dict(val_csv_path, 'validation', labels)
-    
+
     dst_data = {}
     dst_data['labels'] = labels
     dst_data['database'] = {}

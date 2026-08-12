@@ -12,11 +12,11 @@ then classifies gestures using geometric rules (fast, no ML overhead).
   - Dynamic: rotate_clockwise, rotate_counter, push, pull, clap
 """
 
-import time
-import math
 import logging
+import math
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple, Callable
 
 import cv2
 import numpy as np
@@ -27,8 +27,8 @@ _MODEL_DIR = __import__("pathlib").Path(__file__).resolve().parent / "models"
 
 try:
     import mediapipe as mp
-    from mediapipe.tasks.python import vision as mp_vision
     from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python import vision as mp_vision
     MP_AVAILABLE = True
 except ImportError:
     MP_AVAILABLE = False
@@ -123,15 +123,15 @@ class HandLandmarks:
     gesture: str = "none"
     finger_count: int = 0
     confidence: float = 0.0
-    bbox: Optional[Tuple[int, int, int, int]] = None  # (x, y, w, h) in pixel coords
+    bbox: tuple[int, int, int, int] | None = None  # (x, y, w, h) in pixel coords
     finger_mask: int = 0  # 5-bit mask of extended fingers
 
 
 @dataclass
 class WaveDetector:
     """Detects hand waving by tracking horizontal position over time."""
-    _positions: List[float] = field(default_factory=list)
-    _timestamps: List[float] = field(default_factory=list)
+    _positions: list[float] = field(default_factory=list)
+    _timestamps: list[float] = field(default_factory=list)
     _direction_changes: int = 0
     _last_direction: int = 0
     _window: float = 1.0  # seconds
@@ -175,11 +175,11 @@ class WaveDetector:
 @dataclass
 class MotionTracker:
     """Tracks hand motion for dynamic gesture detection."""
-    _positions: List[Tuple[float, float]] = field(default_factory=list)
-    _timestamps: List[float] = field(default_factory=list)
+    _positions: list[tuple[float, float]] = field(default_factory=list)
+    _timestamps: list[float] = field(default_factory=list)
     _window: float = 0.5  # seconds
 
-    def update(self, cx: float, cy: float) -> Optional[str]:
+    def update(self, cx: float, cy: float) -> str | None:
         """Add center position, return dynamic gesture if detected."""
         now = time.time()
         self._positions.append((cx, cy))
@@ -222,7 +222,7 @@ class HandTracker:
         max_hands: int = 2,
         detection_confidence: float = 0.5,
         tracking_confidence: float = 0.5,
-        on_gesture: Optional[Callable] = None,
+        on_gesture: Callable | None = None,
     ):
         if not MP_AVAILABLE:
             raise ImportError("mediapipe is required for HandTracker")
@@ -250,7 +250,7 @@ class HandTracker:
 
         logger.info("HandTracker initialized (100+ gestures, Tasks API)")
 
-    def process(self, frame: np.ndarray, timestamp_ms: Optional[int] = None) -> List[HandLandmarks]:
+    def process(self, frame: np.ndarray, timestamp_ms: int | None = None) -> list[HandLandmarks]:
         """Process a BGR frame and return detected hands with classified gestures."""
         if frame is None:
             return []
@@ -268,7 +268,7 @@ class HandTracker:
             logger.debug("Hand detection error: %s", e)
             return []
 
-        detected: List[HandLandmarks] = []
+        detected: list[HandLandmarks] = []
 
         if result.landmarks and result.handedness:
             for hand_lms, handedness_list in zip(result.landmarks, result.handedness):
@@ -327,7 +327,7 @@ class HandTracker:
 
         return detected
 
-    def _classify_gesture(self, lm: np.ndarray, handedness: str) -> Tuple[str, int, int]:
+    def _classify_gesture(self, lm: np.ndarray, handedness: str) -> tuple[str, int, int]:
         """Classify gesture from 21 landmarks. Returns (gesture_name, finger_count, finger_mask)."""
         fingers = self._fingers_up(lm, handedness)
         mask = 0
@@ -465,7 +465,7 @@ class HandTracker:
 
         return gesture
 
-    def _fingers_up(self, lm: np.ndarray, handedness: str) -> List[bool]:
+    def _fingers_up(self, lm: np.ndarray, handedness: str) -> list[bool]:
         """Detect which fingers are extended. Returns [thumb, index, middle, ring, pinky]."""
         if handedness == "Right":
             thumb_up = lm[4][0] < lm[3][0]

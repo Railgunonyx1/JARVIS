@@ -22,7 +22,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 __all__ = [
     "PROTOCOL_VERSION",
@@ -88,12 +88,12 @@ class Envelope:
 
     type: str = ""
     id: str = ""
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     version: int = PROTOCOL_VERSION
     timestamp: float = field(default_factory=time.time)
 
 
-def make_envelope(type_: str, payload: Optional[Dict[str, Any]] = None,
+def make_envelope(type_: str, payload: dict[str, Any] | None = None,
                   id_: str = "") -> Envelope:
     return Envelope(
         type=type_,
@@ -102,7 +102,7 @@ def make_envelope(type_: str, payload: Optional[Dict[str, Any]] = None,
     )
 
 
-def _dumps(data: Dict[str, Any]) -> str:
+def _dumps(data: dict[str, Any]) -> str:
     try:
         import orjson  # type: ignore[import-not-found]
 
@@ -111,7 +111,7 @@ def _dumps(data: Dict[str, Any]) -> str:
         return json.dumps(data, default=str)
 
 
-def _loads(line: str) -> Dict[str, Any]:
+def _loads(line: str) -> dict[str, Any]:
     try:
         import orjson  # type: ignore[import-not-found]
 

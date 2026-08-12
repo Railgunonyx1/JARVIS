@@ -1,9 +1,10 @@
+import math
+from functools import partial
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import math
-from functools import partial
 
 __all__ = [
     'ResNetL', 'resnetl10'
@@ -38,7 +39,7 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         self.conv1 = conv3x3x3(inplanes, planes, stride)
         self.bn1 = nn.BatchNorm3d(planes)
         self.relu = nn.ReLU(inplace=True)
@@ -70,7 +71,7 @@ class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(planes)
         self.conv2 = nn.Conv3d(
@@ -115,7 +116,7 @@ class ResNetL(nn.Module):
                  shortcut_type='B',
                  num_classes=400):
         self.inplanes = 16
-        super(ResNetL, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv3d(
             3,
             16,

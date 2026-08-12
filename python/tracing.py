@@ -10,11 +10,10 @@ Usage:
         response = await router.complete(...)
 """
 
-import time
-import threading
 import logging
+import threading
 from contextlib import contextmanager
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -23,10 +22,10 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 logger = logging.getLogger("jarvis.tracing")
 
-_provider: Optional[TracerProvider] = None
-_tracer: Optional[trace.Tracer] = None
-_exporter: Optional[InMemorySpanExporter] = None
-_trace_history: List[Dict[str, Any]] = []
+_provider: TracerProvider | None = None
+_tracer: trace.Tracer | None = None
+_exporter: InMemorySpanExporter | None = None
+_trace_history: list[dict[str, Any]] = []
 _history_lock = threading.Lock()
 _MAX_HISTORY = 200
 
@@ -96,7 +95,7 @@ def trace_span(name: str, **attributes):
             _export_and_record()
 
 
-def get_trace_history(limit: int = 50) -> List[Dict[str, Any]]:
+def get_trace_history(limit: int = 50) -> list[dict[str, Any]]:
     """Get recent traces from the in-memory buffer."""
     _export_and_record()
     with _history_lock:

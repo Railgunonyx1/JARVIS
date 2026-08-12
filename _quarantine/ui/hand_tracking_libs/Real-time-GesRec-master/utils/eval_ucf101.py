@@ -3,14 +3,15 @@ import json
 import numpy as np
 import pandas as pd
 
-class UCFclassification(object):
+
+class UCFclassification:
 
     def __init__(self, ground_truth_filename=None, prediction_filename=None,
                  subset='validation', verbose=False, top_k=1):
         if not ground_truth_filename:
-            raise IOError('Please input a valid ground truth file.')
+            raise OSError('Please input a valid ground truth file.')
         if not prediction_filename:
-            raise IOError('Please input a valid prediction file.')
+            raise OSError('Please input a valid prediction file.')
         self.subset = subset
         self.verbose = verbose
         self.top_k = top_k
@@ -22,11 +23,11 @@ class UCFclassification(object):
         self.prediction = self._import_prediction(prediction_filename)
 
         if self.verbose:
-            print('[INIT] Loaded annotations from {} subset.'.format(subset))
+            print(f'[INIT] Loaded annotations from {subset} subset.')
             nr_gt = len(self.ground_truth)
-            print('\tNumber of ground truth instances: {}'.format(nr_gt))
+            print(f'\tNumber of ground truth instances: {nr_gt}')
             nr_pred = len(self.prediction)
-            print('\tNumber of predictions: {}'.format(nr_pred))
+            print(f'\tNumber of predictions: {nr_pred}')
 
     def _import_ground_truth(self, ground_truth_filename):
         """Reads ground truth file, checks if it is well formatted, and returns
@@ -44,7 +45,7 @@ class UCFclassification(object):
         activity_index : dict
             Dictionary containing class index.
         """
-        with open(ground_truth_filename, 'r') as fobj:
+        with open(ground_truth_filename) as fobj:
             data = json.load(fobj)
         # Checking format
         # if not all([field in data.keys() for field in self.gt_fields]):
@@ -81,7 +82,7 @@ class UCFclassification(object):
         prediction : df
             Data frame containing the prediction instances.
         """
-        with open(prediction_filename, 'r') as fobj:
+        with open(prediction_filename) as fobj:
             data = json.load(fobj)
         # Checking format...
         # if not all([field in data.keys() for field in self.pred_fields]):
@@ -110,7 +111,7 @@ class UCFclassification(object):
         if self.verbose:
             print('[RESULTS] Performance on ActivityNet untrimmed video '
                    'classification task.')
-            print('\tError@{}: {}'.format(self.top_k, 1.0 - hit_at_k))
+            print(f'\tError@{self.top_k}: {1.0 - hit_at_k}')
             #print '\tAvg Hit@{}: {}'.format(self.top_k, avg_hit_at_k)
         self.hit_at_k = hit_at_k
 

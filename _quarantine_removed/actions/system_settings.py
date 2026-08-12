@@ -3,9 +3,8 @@
 Uses PowerShell and Windows APIs for system control.
 """
 
-import subprocess
 import logging
-from typing import Optional
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.system_settings")
 

@@ -23,7 +23,6 @@ Endpoints:
 """
 
 import asyncio
-import json
 import logging
 import os
 import secrets
@@ -37,12 +36,12 @@ from core.utils import async_sleep
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.json_fast import dumps as fast_dumps
-
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+
+from core.json_fast import dumps as fast_dumps
 
 logger = logging.getLogger("jarvis.web")
 

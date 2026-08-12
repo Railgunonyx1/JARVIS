@@ -1,8 +1,7 @@
 """Service Manager — Windows services control for JARVIS MK-X."""
 
-import subprocess
 import logging
-from typing import Optional
+import subprocess
 
 logger = logging.getLogger("jarvis.actions.service_manager")
 

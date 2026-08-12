@@ -4,15 +4,15 @@ Single bus with logical channels (system, app, user), priority queues, and middl
 
 Every event carries a trace_id for end-to-end request tracking.
 """
-import time
-import uuid
 import asyncio
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional, Set, Union
-from dataclasses import dataclass, field
+import time
 from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger("jarvis.event_bus")
 
@@ -36,7 +36,7 @@ class EventStatus(Enum):
 @dataclass
 class Event:
     name: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     source: str = ""
     priority: EventPriority = EventPriority.NORMAL
     trace_id: str = ""
@@ -68,19 +68,19 @@ class EventBus:
     """
 
     def __init__(self, max_queue_size: int = 1000):
-        self._subscribers: Dict[str, List[Callable]] = defaultdict(list)
-        self._wildcard_subscribers: List[Callable] = []
-        self._middleware: List[tuple[str, Callable]] = []
-        self._queue: List[Event] = []
+        self._subscribers: dict[str, list[Callable]] = defaultdict(list)
+        self._wildcard_subscribers: list[Callable] = []
+        self._middleware: list[tuple[str, Callable]] = []
+        self._queue: list[Event] = []
         self._max_queue = max_queue_size
         self._lock = threading.Lock()
         self._dispatch_count = 0
         self._drop_count = 0
         self._handler_errors = 0
-        self._event_log: List[Dict[str, Any]] = []
+        self._event_log: list[dict[str, Any]] = []
         self._max_log = 200
         self._running = True
-        self._metrics: Dict[str, float] = defaultdict(float)
+        self._metrics: dict[str, float] = defaultdict(float)
 
     # ── Subscription ──────────────────────────────────────────
 
@@ -176,7 +176,7 @@ class EventBus:
         if len(self._event_log) > self._max_log:
             self._event_log = self._event_log[-self._max_log:]
 
-    def emit(self, event_name: str, data: Dict[str, Any] = None,
+    def emit(self, event_name: str, data: dict[str, Any] = None,
              source: str = "", priority: EventPriority = EventPriority.NORMAL,
              trace_id: str = "") -> Event:
         event = Event(
@@ -236,7 +236,7 @@ class EventBus:
 
     # ── Stats ─────────────────────────────────────────────────
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "dispatch_count": self._dispatch_count,
@@ -251,7 +251,7 @@ class EventBus:
                 ),
             }
 
-    def get_recent_events(self, count: int = 20) -> List[Dict[str, Any]]:
+    def get_recent_events(self, count: int = 20) -> list[dict[str, Any]]:
         return self._event_log[-count:]
 
     def shutdown(self) -> None:
@@ -264,7 +264,7 @@ class EventBus:
             self._event_log.clear()
 
 
-_bus_instance: Optional[EventBus] = None
+_bus_instance: EventBus | None = None
 
 
 def get_event_bus() -> EventBus:

@@ -4,10 +4,10 @@
 """
 import logging
 import re
-import time
 import threading
-from typing import Optional, Dict, Any, List, Tuple
+import time
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("ai_runtime.prompt_compression")
 
@@ -36,7 +36,7 @@ class PromptCompressor:
     """
 
     def __init__(self):
-        self._history: List[CompressionResult] = []
+        self._history: list[CompressionResult] = []
         self._lock = threading.Lock()
 
     def compress(self, prompt: str, target_ratio: float = 0.3) -> CompressionResult:
@@ -117,7 +117,7 @@ class PromptCompressor:
     def estimate_tokens(self, text: str) -> int:
         return len(text.split())
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             total = len(self._history)
             if total == 0:
@@ -132,7 +132,7 @@ class PromptCompressor:
             }
 
 
-_compressor_instance: Optional[PromptCompressor] = None
+_compressor_instance: PromptCompressor | None = None
 
 
 def get_prompt_compressor() -> PromptCompressor:

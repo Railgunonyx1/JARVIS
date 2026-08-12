@@ -3,8 +3,9 @@
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.prefetch_engine")
 
@@ -13,9 +14,9 @@ class HyperPrefetchEngine:
     """Predictive data prefetching that uses idle CPU cycles."""
 
     def __init__(self):
-        self._sources: Dict[str, Dict] = {}
-        self._cache: Dict[str, tuple] = {}
-        self._patterns: Dict[str, Dict] = {}
+        self._sources: dict[str, dict] = {}
+        self._cache: dict[str, tuple] = {}
+        self._patterns: dict[str, dict] = {}
         self._lock = threading.RLock()
         self._thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="prefetch")
         self._stats = {
@@ -30,7 +31,7 @@ class HyperPrefetchEngine:
         fetch_fn: Callable,
         priority: int = 5,
         ttl_seconds: float = 300,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
     ):
         """Register a prefetchable data source."""
         with self._lock:
@@ -45,7 +46,7 @@ class HyperPrefetchEngine:
             }
             logger.debug("Registered prefetch source '%s' (priority=%d, ttl=%.0fs)", name, priority, ttl_seconds)
 
-    def prefetch(self, names: Optional[List[str]] = None):
+    def prefetch(self, names: list[str] | None = None):
         """Fetch specified sources (or all high-priority) in background threads."""
         with self._lock:
             if names is None:
@@ -86,7 +87,7 @@ class HyperPrefetchEngine:
         except Exception as exc:
             logger.warning("Prefetch of '%s' failed: %s", name, exc)
 
-    def get(self, name: str) -> Optional[Any]:
+    def get(self, name: str) -> Any | None:
         """Get prefetched data. Returns None if not available or expired."""
         with self._lock:
             entry = self._cache.get(name)
@@ -99,7 +100,7 @@ class HyperPrefetchEngine:
             self._stats["cache_hits"] += 1
             return data
 
-    def get_with_fallback(self, name: str) -> Optional[Any]:
+    def get_with_fallback(self, name: str) -> Any | None:
         """Get prefetched data; if missing, fetch synchronously as fallback."""
         result = self.get(name)
         if result is not None:
@@ -189,7 +190,7 @@ class HyperPrefetchEngine:
         logger.info("HyperPrefetchEngine shut down")
 
 
-_instance: Optional[HyperPrefetchEngine] = None
+_instance: HyperPrefetchEngine | None = None
 _instance_lock = threading.RLock()
 
 

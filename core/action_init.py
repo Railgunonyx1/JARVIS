@@ -1,13 +1,29 @@
 """Factory: registers all built-in action handlers in the ActionRegistry."""
-from core.action_registry import ActionRegistry
 from core.action_handlers import (
-    ScreenCaptureHandler, ScreenAnalyzerHandler, BrowserHandler,
-    DesktopControlHandler, OpenAppHandler, WebSearchHandler,
-    SystemStatusHandler, FileHandler, ProcessHandler, ShellHandler,
-    WindowHandler, ClipboardHandler, SettingsHandler, InputHandler,
-    NetworkHandler, ServiceHandler, DiskHandler, AudioHandler,
-    DisplayHandler, StartupHandler, TaskHandler, VectorQueryHandler,
+    AudioHandler,
+    BrowserHandler,
+    ClipboardHandler,
+    DesktopControlHandler,
+    DiskHandler,
+    DisplayHandler,
+    FileHandler,
+    InputHandler,
+    NetworkHandler,
+    OpenAppHandler,
+    ProcessHandler,
+    ScreenAnalyzerHandler,
+    ScreenCaptureHandler,
+    ServiceHandler,
+    SettingsHandler,
+    ShellHandler,
+    StartupHandler,
+    SystemStatusHandler,
+    TaskHandler,
+    VectorQueryHandler,
+    WebSearchHandler,
+    WindowHandler,
 )
+from core.action_registry import ActionRegistry
 
 
 def register_all_actions(registry: ActionRegistry):

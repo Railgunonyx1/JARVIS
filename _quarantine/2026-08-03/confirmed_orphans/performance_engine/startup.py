@@ -1,9 +1,10 @@
 """Startup Optimizer — dependency-ordered lazy module initialization."""
 
-import time
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional, Set
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.performance_engine.startup")
 
@@ -43,8 +44,8 @@ class StartupOptimizer:
     """Manages module initialization order based on declared dependencies and priority."""
 
     def __init__(self) -> None:
-        self._modules: Dict[str, Dict[str, Any]] = {}
-        self._initialized: Dict[str, Any] = {}
+        self._modules: dict[str, dict[str, Any]] = {}
+        self._initialized: dict[str, Any] = {}
         self._lock = threading.Lock()
         self._total_startup_time_ms: float = 0.0
 
@@ -57,7 +58,7 @@ class StartupOptimizer:
         name: str,
         init_fn: Callable[[], Any],
         priority: int = 50,
-        dependencies: Optional[List[str]] = None,
+        dependencies: list[str] | None = None,
     ) -> None:
         """Register a module for deferred startup.
 
@@ -136,13 +137,13 @@ class StartupOptimizer:
     # Dependency resolution (topological sort)
     # ------------------------------------------------------------------
 
-    def _resolve_order(self) -> List[str]:
+    def _resolve_order(self) -> list[str]:
         """Return module names in a valid initialization order (topological sort)."""
         with self._lock:
             modules = dict(self._modules)
 
-        visited: Set[str] = set()
-        order: List[str] = []
+        visited: set[str] = set()
+        order: list[str] = []
 
         def dfs(name: str) -> None:
             if name in visited:
@@ -165,7 +166,7 @@ class StartupOptimizer:
     # Status / introspection
     # ------------------------------------------------------------------
 
-    def get_module_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_module_status(self) -> dict[str, dict[str, Any]]:
         """Return initialization status for every registered module."""
         with self._lock:
             return {
@@ -210,7 +211,7 @@ class StartupOptimizer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_startup_optimizer: Optional[StartupOptimizer] = None
+_startup_optimizer: StartupOptimizer | None = None
 _startup_lock = threading.Lock()
 
 

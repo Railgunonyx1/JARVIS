@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -17,7 +17,7 @@ class ToolCall:
     """A normalized function-call request from an LLM."""
 
     name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
     id: str = ""
 
 
@@ -50,7 +50,7 @@ class LLMResponse:
     tokens_completion: int = 0
     latency_ms: float = 0.0
     finish_reason: str = "stop"
-    tool_calls: List[ToolCall] = field(default_factory=list)
+    tool_calls: list[ToolCall] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
     @property
@@ -58,14 +58,14 @@ class LLMResponse:
         return bool(self.tool_calls)
 
 
-def openai_tools_param(tools: Optional[list]) -> Optional[list]:
+def openai_tools_param(tools: list | None) -> list | None:
     """Return OpenAI-style tools (the canonical form) or None when empty."""
     return tools or None
 
 
-def parse_openai_tool_calls(choice_message) -> List[ToolCall]:
+def parse_openai_tool_calls(choice_message) -> list[ToolCall]:
     """Extract ToolCalls from an OpenAI-style chat completion message."""
-    calls: List[ToolCall] = []
+    calls: list[ToolCall] = []
     raw = getattr(choice_message, "tool_calls", None) or []
     for entry in raw:
         fn = getattr(entry, "function", None)
@@ -81,9 +81,9 @@ def parse_openai_tool_calls(choice_message) -> List[ToolCall]:
     return calls
 
 
-def parse_ollama_tool_calls(message: dict) -> List[ToolCall]:
+def parse_ollama_tool_calls(message: dict) -> list[ToolCall]:
     """Extract ToolCalls from an Ollama message dict."""
-    calls: List[ToolCall] = []
+    calls: list[ToolCall] = []
     for entry in (message.get("tool_calls") or []):
         fn = entry.get("function", {}) if isinstance(entry, dict) else {}
         name = fn.get("name", "")
@@ -92,7 +92,7 @@ def parse_ollama_tool_calls(message: dict) -> List[ToolCall]:
     return calls
 
 
-def to_gemini_tools(tools: Optional[list]) -> Optional[list]:
+def to_gemini_tools(tools: list | None) -> list | None:
     """Convert OpenAI-style tool schemas to Gemini function_declarations."""
     if not tools:
         return None
@@ -107,9 +107,9 @@ def to_gemini_tools(tools: Optional[list]) -> Optional[list]:
     return [{"function_declarations": declarations}]
 
 
-def parse_gemini_function_calls(response) -> List[ToolCall]:
+def parse_gemini_function_calls(response) -> list[ToolCall]:
     """Extract ToolCalls from a Gemini generate_content response."""
-    calls: List[ToolCall] = []
+    calls: list[ToolCall] = []
     try:
         for candidate in response.candidates:
             for part in candidate.content.parts:
@@ -121,7 +121,7 @@ def parse_gemini_function_calls(response) -> List[ToolCall]:
     return calls
 
 
-def json_args(arguments_json: str) -> Dict[str, Any]:
+def json_args(arguments_json: str) -> dict[str, Any]:
     """Safely parse a JSON-encoded arguments string into a dict."""
     try:
         parsed = json.loads(arguments_json or "{}")

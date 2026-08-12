@@ -2,8 +2,8 @@
 
 import asyncio
 import random
-from typing import Callable, Any, Optional, TypeVar
-from functools import wraps
+from collections.abc import Callable
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -50,8 +50,8 @@ def sync_retry(
     **kwargs,
 ) -> T:
     """Execute sync function with exponential backoff retry (blocking)."""
-    import time
     import random
+    import time
     last_error = None
     for attempt in range(1, max_attempts + 1):
         try:

@@ -1,14 +1,14 @@
 """Deterministic response generator — no LLM needed for simple intents."""
 
 import datetime
-from typing import Optional
+
 from core.intent_router import Intent
 from core.personality import PersonalityEngine
 
 
 def generate_deterministic_response(
-    intent: Intent, text: str, personality: PersonalityEngine, memory_facts: Optional[list] = None,
-) -> Optional[str]:
+    intent: Intent, text: str, personality: PersonalityEngine, memory_facts: list | None = None,
+) -> str | None:
     """Returns a response for deterministic intents, or None if LLM is needed."""
     n = intent.name
 
@@ -17,7 +17,7 @@ def generate_deterministic_response(
     if n == "system.config":   return "Configuration panel not yet available in MK-X."
     if n == "query.time":      return datetime.datetime.now().strftime("It's %I:%M %p.")
     if n == "query.date":      return datetime.datetime.now().strftime("Today is %A, %B %d, %Y.")
-    if n == "query.weather":   return f"I don't have weather API access yet. Check weather manually for now."
+    if n == "query.weather":   return "I don't have weather API access yet. Check weather manually for now."
     if n == "query.status":    return None  # Handled by _handle_action
     if n == "meta.greet":      return personality.get_greeting()
     if n == "meta.howareyou":  return personality.get_how_are_you()

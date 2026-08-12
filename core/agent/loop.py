@@ -8,8 +8,9 @@ permission engine + executor, and closes the task with a final answer.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from core import events
 from core.agent.context import AgentContextBuilder
@@ -35,10 +36,10 @@ class AgentResult:
     trace_id: str
     state: AgentState
     error: str = ""
-    observation: Dict[str, Any] = field(default_factory=dict)
-    perf: Dict[str, Any] = field(default_factory=dict)
+    observation: dict[str, Any] = field(default_factory=dict)
+    perf: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "success": self.success,
             "response": self.response,
@@ -57,15 +58,15 @@ class AgentLoop:
         self,
         router: ProviderRouter,
         registry: ToolRegistry,
-        project: Optional[ProjectContext] = None,
-        decision_logger: Optional[DecisionLogger] = None,
+        project: ProjectContext | None = None,
+        decision_logger: DecisionLogger | None = None,
         mode: str = "agent",
         max_iterations: int = 10,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         temperature: float = 0.4,
-        confirmation_handler: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
-        observer: Optional[TaskObserver] = None,
-        context_manager: Optional[ContextManager] = None,
+        confirmation_handler: Callable[[str, dict[str, Any]], bool] | None = None,
+        observer: TaskObserver | None = None,
+        context_manager: ContextManager | None = None,
         mem=None,
     ) -> None:
         self.router = router
@@ -201,7 +202,7 @@ class AgentLoop:
         )
 
     @staticmethod
-    def _end_perf(tracer, root, status: str = "OK", error: str = "") -> Dict[str, Any]:
+    def _end_perf(tracer, root, status: str = "OK", error: str = "") -> dict[str, Any]:
         trace = tracer.end(root, status=status, error=error)
         return trace or {}
 
@@ -236,19 +237,19 @@ class AgentLoop:
         except Exception:
             pass
 
-    def _result_observation(self, state: AgentState) -> Dict[str, Any]:
+    def _result_observation(self, state: AgentState) -> dict[str, Any]:
         observation = self.observer.summary()
         observation["context_usage"] = state.context_usage
         return observation
 
     @staticmethod
-    def _system_tokens(system_prompt: str, tools: Optional[list]) -> int:
+    def _system_tokens(system_prompt: str, tools: list | None) -> int:
         tokens = estimate_tokens(system_prompt)
         if tools:
             tokens += estimate_tokens(json.dumps(tools))
         return tokens
 
-    async def _handle_call(self, messages: List[Dict[str, Any]], call, state: AgentState,
+    async def _handle_call(self, messages: list[dict[str, Any]], call, state: AgentState,
                            trace_id: str, session_id: str) -> None:
         step = self.observer.step_started(call.name, call.arguments, call.id)
         tool = self.registry.get(call.name)

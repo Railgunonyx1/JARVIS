@@ -20,10 +20,9 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import json
-import time
 import logging
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Setup path
 BENCHMARK_DIR = Path(__file__).resolve().parent
@@ -35,11 +34,11 @@ logging.basicConfig(level=logging.WARNING, handlers=[logging.NullHandler()])
 for name in ["jarvis", "urllib3", "httpx", "httpcore", "asyncio", "groq", "piper", "edge_tts"]:
     logging.getLogger(name).setLevel(logging.ERROR)
 
-from benchmark.startup_benchmark import run_startup_benchmark, print_startup_result
-from benchmark.memory_benchmark import run_memory_benchmark, print_memory_result
-from benchmark.latency_benchmark import run_latency_benchmark, print_latency_result
-from benchmark.voice_benchmark import run_voice_benchmark, print_voice_result
-from benchmark.telemetry_benchmark import run_telemetry_benchmark, print_telemetry_result
+from benchmark.latency_benchmark import print_latency_result, run_latency_benchmark
+from benchmark.memory_benchmark import print_memory_result, run_memory_benchmark
+from benchmark.startup_benchmark import print_startup_result, run_startup_benchmark
+from benchmark.telemetry_benchmark import print_telemetry_result, run_telemetry_benchmark
+from benchmark.voice_benchmark import print_voice_result, run_voice_benchmark
 
 
 def banner(msg):

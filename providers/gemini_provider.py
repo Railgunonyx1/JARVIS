@@ -1,20 +1,13 @@
 """Google Gemini Provider - Multi-modal AI via Google AI Studio."""
 
-import time
 import logging
-import warnings
-from typing import AsyncIterator, Optional
+import time
+from collections.abc import AsyncIterator
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import json_args, parse_gemini_function_calls, to_gemini_tools
 
 logger = logging.getLogger("jarvis.providers.gemini")
-
-# The deprecated google.generativeai SDK raises a FutureWarning at import that
-# is attributed to importlib via stacklevel, so it evades module-scoped
-# filters. Match on the message text to keep it out of user-facing output.
-warnings.filterwarnings("ignore", category=FutureWarning,
-                        message=r"(?s).*google\.generativeai")
 
 
 class GeminiProvider(LLMProvider):
@@ -26,14 +19,13 @@ class GeminiProvider(LLMProvider):
 
     def _get_client(self):
         if self._client is None:
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
-            self._client = genai.GenerativeModel(
-                model_name=self.config.get("model", "gemini-2.0-flash"),
-            )
+            from google import genai
+            self._client = genai.Client(api_key=self.api_key)
+            # Store model name for generate_content calls
+            self._model = self.config.get("model", "gemini-2.0-flash")
         return self._client
 
-    def _convert_messages(self, messages: list[dict], system_prompt: Optional[str]):
+    def _convert_messages(self, messages: list[dict], system_prompt: str | None):
         """Convert OpenAI-format messages (incl. tool_calls) to Gemini format."""
         contents = []
         if system_prompt:
@@ -90,10 +82,10 @@ class GeminiProvider(LLMProvider):
     async def complete(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> LLMResponse:
         client = self._get_client()
         contents = self._convert_messages(messages, system_prompt)
@@ -107,8 +99,9 @@ class GeminiProvider(LLMProvider):
         try:
             import asyncio
             response = await asyncio.to_thread(
-                client.generate_content,
-                contents,
+                client.models.generate_content,
+                model=self._model,
+                contents=contents,
                 generation_config={
                     "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
                     "temperature": temperature or self.config.get("temperature", 0.7),
@@ -144,10 +137,10 @@ class GeminiProvider(LLMProvider):
     async def complete_stream(
         self,
         messages: list[dict],
-        system_prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        tools: Optional[list] = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
     ) -> AsyncIterator[str]:
         client = self._get_client()
         contents = self._convert_messages(messages, system_prompt)

@@ -1,12 +1,11 @@
 """Optimized Screen Analyzer — fast screen capture and change detection."""
 
-import time
-import math
 import hashlib
 import logging
 import threading
+import time
 from collections import deque
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("jarvis.perception_engine.screen_analyzer_opt")
 
@@ -24,14 +23,14 @@ class ScreenAnalyzerOptimized:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._last_capture: Optional[Dict[str, Any]] = None
-        self._last_analysis: Optional[Dict[str, Any]] = None
+        self._last_capture: dict[str, Any] | None = None
+        self._last_analysis: dict[str, Any] | None = None
         self._capture_history: deque = deque(maxlen=10)
         self._captures_count: int = 0
         self._analyses_count: int = 0
         self._cache_hits: int = 0
 
-    def capture_screen(self, region: Optional[Tuple[int, int, int, int]] = None) -> Optional[Dict[str, Any]]:
+    def capture_screen(self, region: tuple[int, int, int, int] | None = None) -> dict[str, Any] | None:
         """Capture the screen (or a region) and return image bytes with metadata.
 
         Returns dict with keys: "image" (bytes), "timestamp" (float),
@@ -71,7 +70,7 @@ class ScreenAnalyzerOptimized:
             logger.error("Screen capture failed: %s", e)
             return None
 
-    def analyze_screen(self, capture: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def analyze_screen(self, capture: dict[str, Any] | None = None) -> dict[str, Any]:
         """Analyze the current screen state.
 
         Returns dict with keys: "description" (str), "elements" (list),
@@ -83,7 +82,7 @@ class ScreenAnalyzerOptimized:
         if capture is None:
             return {"description": "Screen capture unavailable", "elements": [], "timestamp": time.perf_counter()}
 
-        analysis: Dict[str, Any] = {
+        analysis: dict[str, Any] = {
             "description": f"Screen captured at {capture['size'][0]}x{capture['size'][1]}",
             "elements": [],
             "timestamp": capture["timestamp"],
@@ -91,8 +90,9 @@ class ScreenAnalyzerOptimized:
         }
 
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
             img = Image.open(io.BytesIO(capture["image"])).convert("RGB")
             pixels = list(img.getdata())
             total = len(pixels)
@@ -121,7 +121,7 @@ class ScreenAnalyzerOptimized:
 
         return analysis
 
-    def get_change_ratio(self, prev: Dict[str, Any], curr: Dict[str, Any]) -> float:
+    def get_change_ratio(self, prev: dict[str, Any], curr: dict[str, Any]) -> float:
         """Compare two captures and return a 0–1 change ratio."""
         if prev is None or curr is None:
             return 1.0
@@ -137,8 +137,9 @@ class ScreenAnalyzerOptimized:
             return 1.0
 
         try:
-            from PIL import Image
             import io
+
+            from PIL import Image
             img1 = Image.open(io.BytesIO(prev_img)).convert("L").resize((64, 64))
             img2 = Image.open(io.BytesIO(curr_img)).convert("L").resize((64, 64))
 
@@ -167,17 +168,17 @@ class ScreenAnalyzerOptimized:
         ratio = self.get_change_ratio(prev, curr)
         return ratio >= threshold
 
-    def get_last_capture(self) -> Optional[Dict[str, Any]]:
+    def get_last_capture(self) -> dict[str, Any] | None:
         """Return the most recent capture dict."""
         with self._lock:
             return self._last_capture
 
-    def get_last_analysis(self) -> Optional[Dict[str, Any]]:
+    def get_last_analysis(self) -> dict[str, Any] | None:
         """Return the most recent analysis dict."""
         with self._lock:
             return self._last_analysis
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return capture and analysis statistics."""
         with self._lock:
             return {
@@ -213,7 +214,7 @@ class ScreenAnalyzerOptimized:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[ScreenAnalyzerOptimized] = None
+_instance: ScreenAnalyzerOptimized | None = None
 _instance_lock = threading.Lock()
 
 

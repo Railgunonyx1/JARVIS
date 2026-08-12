@@ -1,10 +1,10 @@
 """App launcher — cross-platform app opening with alias resolution."""
 
-import time
-import subprocess
+import logging
 import platform
 import shutil
-import logging
+import subprocess
+import time
 
 logger = logging.getLogger("jarvis.actions.open_app")
 _OS = platform.system()

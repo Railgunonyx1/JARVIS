@@ -3,14 +3,14 @@
 SHA256(text) → cached embedding vector.
 Huge savings during repeated coding sessions and similar queries.
 """
-import logging
-import time
 import hashlib
-import sqlite3
 import json
+import logging
+import sqlite3
 import threading
-from typing import Optional, Dict, Any, List, Tuple
+import time
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("cache_system.shared_embedding_cache")
 
@@ -26,7 +26,7 @@ class SharedEmbeddingCache:
         self._db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._mem_cache: Dict[str, List[float]] = {}
+        self._mem_cache: dict[str, list[float]] = {}
         self._hits = 0
         self._misses = 0
         self._generated = 0
@@ -54,7 +54,7 @@ class SharedEmbeddingCache:
     def hash_text(text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    def get(self, text: str, model: str = "default") -> Optional[List[float]]:
+    def get(self, text: str, model: str = "default") -> list[float] | None:
         key = self.hash_text(text)
 
         # Check memory cache first
@@ -85,7 +85,7 @@ class SharedEmbeddingCache:
         self._misses += 1
         return None
 
-    def put(self, text: str, embedding: List[float], model: str = "default") -> None:
+    def put(self, text: str, embedding: list[float], model: str = "default") -> None:
         key = self.hash_text(text)
         self._mem_cache[key] = embedding
 
@@ -99,7 +99,7 @@ class SharedEmbeddingCache:
             conn.commit()
             conn.close()
 
-    def get_or_generate(self, text: str, generator_fn, model: str = "default") -> List[float]:
+    def get_or_generate(self, text: str, generator_fn, model: str = "default") -> list[float]:
         """Get cached embedding or generate and cache it."""
         cached = self.get(text, model)
         if cached is not None:
@@ -110,7 +110,7 @@ class SharedEmbeddingCache:
         self._generated += 1
         return embedding
 
-    def batch_get(self, texts: List[str], model: str = "default") -> Tuple[List[Optional[List[float]]], List[int]]:
+    def batch_get(self, texts: list[str], model: str = "default") -> tuple[list[list[float] | None], list[int]]:
         """Get multiple embeddings. Returns (results, missing_indices)."""
         results = []
         missing = []
@@ -121,7 +121,7 @@ class SharedEmbeddingCache:
                 missing.append(i)
         return results, missing
 
-    def batch_put(self, texts: List[str], embeddings: List[List[float]], model: str = "default") -> None:
+    def batch_put(self, texts: list[str], embeddings: list[list[float]], model: str = "default") -> None:
         for text, embedding in zip(texts, embeddings):
             self.put(text, embedding, model)
 
@@ -132,7 +132,7 @@ class SharedEmbeddingCache:
             conn.close()
             return row[0] if row else 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "cached_embeddings": self.get_size(),
@@ -152,7 +152,7 @@ class SharedEmbeddingCache:
             conn.close()
 
 
-_embedding_cache_instance: Optional[SharedEmbeddingCache] = None
+_embedding_cache_instance: SharedEmbeddingCache | None = None
 
 
 def get_shared_embedding_cache() -> SharedEmbeddingCache:

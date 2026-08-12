@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core import events
 from core.decision_logger import DecisionLogger
 from tools.registry import ToolRegistry
-from tools.schema import Tool, ToolResult
+from tools.schema import ToolResult
 
 
 def generate_tool_call_id(counter: int) -> str:
@@ -33,7 +33,7 @@ class AgentToolExecutor:
     async def execute(
         self,
         name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         trace_id: str,
         mode: str = "",
         session_id: str = "",

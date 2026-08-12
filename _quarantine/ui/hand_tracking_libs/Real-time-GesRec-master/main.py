@@ -1,26 +1,20 @@
-import os
-import sys
 import json
-import numpy as np
-import torch
-from torch import nn
-from torch import optim
-from torch.optim import lr_scheduler
+import os
 
-from opts import parse_opts
-from model import generate_model
-from mean import get_mean, get_std
-from spatial_transforms import *
-from temporal_transforms import *
-from target_transforms import ClassLabel, VideoID
-from target_transforms import Compose as TargetCompose
-from dataset import get_training_set, get_validation_set, get_test_set
-from utils import *
-from train import train_epoch
-from validation import val_epoch
 import test
-
-
+import torch
+from dataset import get_test_set, get_training_set, get_validation_set
+from mean import get_mean, get_std
+from model import generate_model
+from opts import parse_opts
+from spatial_transforms import *
+from target_transforms import ClassLabel, VideoID
+from temporal_transforms import *
+from torch import nn, optim
+from torch.optim import lr_scheduler
+from train import train_epoch
+from utils import *
+from validation import val_epoch
 
 if __name__ == '__main__':
     opt = parse_opts()
@@ -37,7 +31,7 @@ if __name__ == '__main__':
     opt.scales = [opt.initial_scale]
     for i in range(1, opt.n_scales):
         opt.scales.append(opt.scales[-1] * opt.scale_step)
-    opt.arch = '{}'.format(opt.model)
+    opt.arch = f'{opt.model}'
     opt.mean = get_mean(opt.norm_value, dataset=opt.mean_dataset)
     opt.std = get_std(opt.norm_value)
     opt.store_name = '_'.join([opt.dataset, opt.model, str(opt.width_mult) + 'x',
@@ -143,7 +137,7 @@ if __name__ == '__main__':
 
     best_prec1 = 0
     if opt.resume_path:
-        print('loading checkpoint {}'.format(opt.resume_path))
+        print(f'loading checkpoint {opt.resume_path}')
         checkpoint = torch.load(opt.resume_path)
         assert opt.arch == checkpoint['arch']
         best_prec1 = checkpoint['best_prec1']
@@ -166,7 +160,7 @@ if __name__ == '__main__':
                 'best_prec1': best_prec1
                 }
             save_checkpoint(state, False, opt)
-            
+
         if not opt.no_val:
             validation_loss, prec1 = val_epoch(i, val_loader, model, criterion, opt,
                                         val_logger)

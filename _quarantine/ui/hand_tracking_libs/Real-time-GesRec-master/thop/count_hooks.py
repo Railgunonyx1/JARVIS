@@ -1,7 +1,5 @@
-import argparse
 
 import torch
-import torch.nn as nn
 
 multiply_adds = 1
 
@@ -42,7 +40,7 @@ def count_conv3d(m, x, y):
 	cout = m.out_channels
 	kd, kh, kw = m.kernel_size
 	batch_size = x.size()[0]
-    
+
 	out_d = y.size(2) // m.stride[0]
 	out_w = y.size(3) // m.stride[1]
 	out_h = y.size(4) // m.stride[2]

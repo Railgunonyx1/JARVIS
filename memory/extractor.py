@@ -8,7 +8,6 @@ Promoted from core/memory_v2.py into the memory package.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
 
 from memory.models import IDENTITY, NOTE, PREFERENCE, PROJECT, RELATIONSHIP, MemoryItem
 from memory.ranking import ImportanceScorer
@@ -17,10 +16,10 @@ from memory.ranking import ImportanceScorer
 class MemoryExtractor:
     """Extract structured MemoryItems from free-form conversation text."""
 
-    def __init__(self, importance_scorer: Optional[ImportanceScorer] = None) -> None:
+    def __init__(self, importance_scorer: ImportanceScorer | None = None) -> None:
         self._scorer = importance_scorer or ImportanceScorer()
 
-    def extract(self, text: str, source: str = "", project: str = "") -> List[MemoryItem]:
+    def extract(self, text: str, source: str = "", project: str = "") -> list[MemoryItem]:
         """Turn a text chunk into candidate MemoryItems (unpersisted)."""
         items = []
         text = text.strip()

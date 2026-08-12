@@ -3,14 +3,15 @@
 Instead of: Tool completes → LLM responds
 Use:        Tool starts → LLM narrates → Tool streams output → User sees updates
 """
-import logging
-import time
-import threading
 import asyncio
-from typing import Optional, Dict, Any, Callable, AsyncGenerator
+import logging
+import threading
+import time
+from collections import deque
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from collections import deque
+from typing import Any
 
 logger = logging.getLogger("reasoning_system.streaming_tool")
 
@@ -42,10 +43,10 @@ class StreamingTool:
     """A tool that streams output in real time."""
     name: str
     state: ToolState = ToolState.PENDING
-    input_data: Dict[str, Any] = field(default_factory=dict)
+    input_data: dict[str, Any] = field(default_factory=dict)
     chunks: list = field(default_factory=list)
     result: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     started_at: float = 0.0
     completed_at: float = 0.0
     total_chunks: int = 0
@@ -69,18 +70,18 @@ class StreamingToolExecutor:
     """
 
     def __init__(self):
-        self._active_tools: Dict[str, StreamingTool] = {}
+        self._active_tools: dict[str, StreamingTool] = {}
         self._completed_tools: deque = deque(maxlen=100)
         self._lock = threading.Lock()
         self._sequence_counter = 0
-        self._callbacks: Dict[str, Callable] = {}
+        self._callbacks: dict[str, Callable] = {}
 
     def register_callback(self, tool_name: str, callback: Callable) -> None:
         """Register a callback for streaming chunks from a tool."""
         self._callbacks[tool_name] = callback
 
     async def execute_streaming(self, tool_name: str, tool_fn: Callable,
-                                 input_data: Dict[str, Any] = None,
+                                 input_data: dict[str, Any] = None,
                                  **kwargs) -> AsyncGenerator[ToolChunk, None]:
         """Execute a tool and yield streaming chunks."""
         tool = StreamingTool(
@@ -175,7 +176,7 @@ class StreamingToolExecutor:
                 self._completed_tools.append(tool)
 
     def execute_sync(self, tool_name: str, tool_fn: Callable,
-                     input_data: Dict[str, Any] = None) -> Dict[str, Any]:
+                     input_data: dict[str, Any] = None) -> dict[str, Any]:
         """Execute a tool synchronously with status tracking."""
         tool = StreamingTool(
             name=tool_name,
@@ -208,7 +209,7 @@ class StreamingToolExecutor:
             "latency_ms": tool.latency_ms,
         }
 
-    def get_active_tools(self) -> Dict[str, Dict[str, Any]]:
+    def get_active_tools(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             return {
                 name: {
@@ -219,7 +220,7 @@ class StreamingToolExecutor:
                 for name, tool in self._active_tools.items()
             }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             completed = list(self._completed_tools)
             total = len(completed)
@@ -235,7 +236,7 @@ class StreamingToolExecutor:
             }
 
 
-_streaming_executor_instance: Optional[StreamingToolExecutor] = None
+_streaming_executor_instance: StreamingToolExecutor | None = None
 
 
 def get_streaming_tool_executor() -> StreamingToolExecutor:

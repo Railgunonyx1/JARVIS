@@ -1,15 +1,16 @@
 import asyncio
-import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from daemon.server import DaemonServer
 from tests.test_daemon import StubKernel
+
 
 # Helper protocol to act as a client over the Named Pipe
 class ClientProtocol(asyncio.Protocol):
@@ -65,12 +66,12 @@ async def test_named_pipe_ipc_lifecycle():
         # Connect to the pipe
         conn_fut = loop.create_future()
         received_messages = []
-        
+
         def handle_message(msg):
             received_messages.append(msg)
 
         protocol_factory = lambda: ClientProtocol(conn_fut, handle_message)
-        
+
         # Connect to pipe on Windows
         transport, protocol = await loop.create_pipe_connection(protocol_factory, pipe_name)
         await conn_fut
@@ -84,7 +85,7 @@ async def test_named_pipe_ipc_lifecycle():
             "payload": {"token": server.token}
         }
         transport.write(json_encode_msg(auth_msg))
-        
+
         # Wait for auth response
         await asyncio.sleep(0.1)
         assert len(received_messages) == 1

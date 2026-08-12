@@ -1,19 +1,19 @@
-import random
-import math
-import numbers
 import collections
+import numbers
+import random
+
 import numpy as np
-import torch
-import cv2
 import scipy.ndimage
-from PIL import Image, ImageOps
+import torch
+from PIL import Image
+
 try:
     import accimage
 except ImportError:
     accimage = None
 
 
-class Compose(object):
+class Compose:
     """Composes several transforms together.
     Args:
         transforms (list of ``Transform`` objects): list of transforms to compose.
@@ -37,7 +37,7 @@ class Compose(object):
             t.randomize_parameters()
 
 
-class ToTensor(object):
+class ToTensor:
     """Convert a ``PIL.Image`` or ``numpy.ndarray`` to tensor.
     Converts a PIL.Image or numpy.ndarray (H x W x C) in the range
     [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0].
@@ -92,7 +92,7 @@ class ToTensor(object):
         pass
 
 
-class Normalize(object):
+class Normalize:
     """Normalize an tensor image with mean and standard deviation.
     Given mean: (R, G, B) and std: (R, G, B),
     will normalize each channel of the torch.*Tensor, i.e.
@@ -123,7 +123,7 @@ class Normalize(object):
         pass
 
 
-class Scale(object):
+class Scale:
     """Rescale the input PIL.Image to the given size.
     Args:
         size (sequence or int): Desired output size. If size is a sequence like
@@ -168,7 +168,7 @@ class Scale(object):
         pass
 
 
-class CenterCrop(object):
+class CenterCrop:
     """Crops the given PIL.Image at the center.
     Args:
         size (sequence or int): Desired output size of the crop. If size is an
@@ -199,7 +199,7 @@ class CenterCrop(object):
         pass
 
 
-class CornerCrop(object):
+class CornerCrop:
 
     def __init__(self, size, crop_position=None):
         self.size = size
@@ -252,7 +252,7 @@ class CornerCrop(object):
                 len(self.crop_positions) - 1)]
 
 
-class RandomHorizontalFlip(object):
+class RandomHorizontalFlip:
     """Horizontally flip the given PIL.Image randomly with a probability of 0.5."""
 
     def __call__(self, img):
@@ -270,7 +270,7 @@ class RandomHorizontalFlip(object):
         self.p = random.random()
 
 
-class MultiScaleCornerCrop(object):
+class MultiScaleCornerCrop:
     """Crop the given PIL.Image to randomly selected size.
     A crop of size is selected from scales of the original size.
     A position of cropping is randomly selected from 4 corners and 1 center.
@@ -339,7 +339,7 @@ class MultiScaleCornerCrop(object):
             len(self.scales) - 1)]
 
 
-class MultiScaleRandomCrop(object):
+class MultiScaleRandomCrop:
 
     def __init__(self, scales, size, interpolation=Image.BILINEAR):
         self.scales = scales
@@ -375,7 +375,7 @@ class MultiScaleRandomCrop(object):
 
 
 
-class SpatialElasticDisplacement(object):
+class SpatialElasticDisplacement:
 
     def __init__(self, sigma=3.0, alpha=1.0, order=3, cval=0, mode="constant"):
         self.alpha = alpha
@@ -436,7 +436,7 @@ class SpatialElasticDisplacement(object):
        self.p = random.random()
 
 
-class RandomRotate(object):
+class RandomRotate:
 
     def __init__(self):
         self.interpolation = Image.BILINEAR
@@ -451,7 +451,7 @@ class RandomRotate(object):
         self.rotate_angle = random.randint(-10, 10)
 
 
-class RandomResize(object):
+class RandomResize:
 
     def __init__(self):
         self.interpolation = Image.BILINEAR
@@ -468,7 +468,7 @@ class RandomResize(object):
 
 
 
-class Gaussian_blur(object):
+class Gaussian_blur:
 
     def __init__(self, radius=0.0):
         self.radius = radius
@@ -485,7 +485,7 @@ class Gaussian_blur(object):
         self.radius = random.uniform(0.0, 0.1)
 
 
-class SaltImage(object):
+class SaltImage:
     def __init__(self, ratio=100):
         self.ratio = ratio
 
@@ -513,7 +513,7 @@ class SaltImage(object):
         self.ratio = random.randint(80, 120)
 
 
-class Dropout(object):
+class Dropout:
 
     def __init__(self, ratio=100):
         self.ratio = ratio
@@ -541,7 +541,7 @@ class Dropout(object):
         self.ratio = random.randint(30, 50)
 
 
-class MultiplyValues():
+class MultiplyValues:
 
     def __init__(self, value=0.2, per_channel=False):
         self.value = value

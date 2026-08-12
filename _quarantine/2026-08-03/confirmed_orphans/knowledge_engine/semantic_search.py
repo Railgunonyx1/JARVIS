@@ -1,12 +1,11 @@
 """Semantic Search Engine — TF-IDF-like search across all knowledge sources."""
 
-import re
-import math
-import time
 import logging
+import math
+import re
 import threading
-from typing import Optional, List, Dict, Any
-from collections import Counter, defaultdict
+import time
+from collections import Counter
 
 logger = logging.getLogger("jarvis.knowledge_engine.semantic_search")
 
@@ -37,11 +36,11 @@ class SemanticSearchEngine:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._index: Dict[str, dict] = {}
+        self._index: dict[str, dict] = {}
         self._doc_count = 0
         self._total_search_ms = 0.0
         self._search_count = 0
-        self._idf_cache: Dict[str, float] = {}
+        self._idf_cache: dict[str, float] = {}
         self._idf_dirty = True
 
     def index_document(self, doc_id: str, content: str, metadata: dict = None) -> None:
@@ -117,7 +116,7 @@ class SemanticSearchEngine:
         """Public tokenize method."""
         return _tokenize(text)
 
-    def search(self, query: str, max_results: int = 5, min_score: float = 0.3) -> List[dict]:
+    def search(self, query: str, max_results: int = 5, min_score: float = 0.3) -> list[dict]:
         """Semantic search across all indexed documents."""
         start = time.perf_counter()
         query_tokens = _tokenize(query)
@@ -170,7 +169,7 @@ class SemanticSearchEngine:
             }
 
 
-_instance: Optional[SemanticSearchEngine] = None
+_instance: SemanticSearchEngine | None = None
 
 
 def get_semantic_search() -> SemanticSearchEngine:

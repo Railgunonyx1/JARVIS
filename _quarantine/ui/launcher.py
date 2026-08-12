@@ -12,12 +12,13 @@ Usage:
 """
 
 import os
-import sys
-import subprocess
 import shutil
-import urllib.request
+import subprocess
+import sys
 import time
+import urllib.request
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -27,14 +28,16 @@ PYTHON_EXE = VENV_DIR / "Scripts" / "python.exe"
 REQUIREMENTS = ROOT / "requirements.txt"
 
 BANNER = r"""
-     ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
+     ██╗ █████╗ ██████╗ ██╗   ██╗██╗██████6╗
      ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝
-     ██║███████║██████╔╝██║   ██║██║███████╗
-██   ██║██╔══██║██╔══██║╚██╗ ██╔╝██║╚════██║
-╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
- ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
+     ██║█████6║██████╔╝██║   ██║██║█████6╗
+ ██   ██║██╔══██║██╔══██║╚██╗ ██╔╝██║╚════██║
+ ╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║█████6║
+  ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═╝  ╚═╝╚═╝╚═════╝
             MARK LXXXV - Cloud-First AI Assistant
 """
+
+NEW_TUI_BANNER = "JARVIS MK-X Terminal UI"
 
 PYTHON_SEARCH_PATHS = [
     Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Python" / "Python311" / "python.exe",
@@ -87,7 +90,7 @@ def _ensure_venv():
 
     # If we're not in the venv, check if venv exists and re-exec inside it
     if PYTHON_EXE.exists():
-        print(f"[INFO] Activating venv...")
+        print("[INFO] Activating venv...")
         os.execv(str(PYTHON_EXE), [str(PYTHON_EXE)] + sys.argv)
         return False
 
@@ -220,6 +223,11 @@ def main():
         if arg in ("--gui", "--text", "--voice", "--full", "--health", "--web"):
             _ensure_ollama()
             _run_main(arg.lstrip("-"))
+            return
+        if arg == "--tui":
+            _ensure_ollama()
+            # Launch the new Textual TUI
+            os.execv(str(PYTHON_EXE), [str(PYTHON_EXE), "-m", "ui.tui"] + sys.argv[1:])
             return
 
     if len(sys.argv) > 1:

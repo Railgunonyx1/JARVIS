@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -13,20 +13,20 @@ class AgentState:
 
     task_id: str
     goal: str
-    messages: List[Dict[str, Any]] = field(default_factory=list)
-    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
-    files_changed: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
+    messages: list[dict[str, Any]] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    files_changed: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
     tokens_used: int = 0
     start_time: float = field(default_factory=time.time)
     iteration: int = 0
     provider: str = ""
     model: str = ""
-    context_usage: Dict[str, Any] = field(default_factory=dict)
+    context_usage: dict[str, Any] = field(default_factory=dict)
 
     def record_tool(self, name: str, tool_call_id: str, success: bool,
                     duration_ms: float, output: str = "", error: str = "",
-                    metadata: Optional[Dict[str, Any]] = None) -> None:
+                    metadata: dict[str, Any] | None = None) -> None:
         entry = {
             "id": tool_call_id,
             "name": name,
@@ -44,7 +44,7 @@ class AgentState:
     def add_tokens(self, prompt: int, completion: int) -> None:
         self.tokens_used += prompt + completion
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
             "goal": self.goal,

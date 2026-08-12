@@ -1,9 +1,9 @@
 """Result Aggregator — collects and merges results from parallel task batches."""
 
-import time
-import threading
 import logging
-from typing import Any, Dict, List, Optional
+import threading
+import time
+from typing import Any
 
 logger = logging.getLogger("jarvis.distributed_engine.result_aggregator")
 
@@ -14,7 +14,7 @@ class ResultAggregator:
     """Thread-safe result collector for parallel task batches."""
 
     def __init__(self) -> None:
-        self._batches: Dict[str, dict] = {}
+        self._batches: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     def create_batch(self, batch_id: str, expected_count: int) -> None:
@@ -36,7 +36,7 @@ class ResultAggregator:
         batch_id: str,
         task_id: str,
         result: Any,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Add a task result to the named batch."""
         with self._lock:
@@ -69,7 +69,7 @@ class ResultAggregator:
             total = len(batch["results"]) + len(batch["errors"])
             return total >= batch["expected"]
 
-    def get_results(self, batch_id: str) -> Dict[str, Any]:
+    def get_results(self, batch_id: str) -> dict[str, Any]:
         """Return a snapshot of the batch with results, errors, and elapsed time."""
         with self._lock:
             batch = self._batches.get(batch_id)
@@ -104,7 +104,7 @@ class ResultAggregator:
             return None
 
         if strategy == "merge":
-            merged: Dict[str, Any] = {}
+            merged: dict[str, Any] = {}
             for r in results:
                 if isinstance(r, dict):
                     merged.update(r)
@@ -133,11 +133,11 @@ class ResultAggregator:
         if expired:
             logger.debug("Cleaned %d expired batches", len(expired))
 
-    def get_all_batches(self) -> Dict[str, dict]:
+    def get_all_batches(self) -> dict[str, dict]:
         """Return metadata for all active batches (for diagnostics)."""
         with self._lock:
             self._clean_expired()
-            summary: Dict[str, dict] = {}
+            summary: dict[str, dict] = {}
             for bid, b in self._batches.items():
                 elapsed = (time.monotonic() - b["start_time"]) * 1000.0
                 summary[bid] = {
@@ -154,7 +154,7 @@ class ResultAggregator:
 # Singleton
 # ----------------------------------------------------------------------
 
-_instance: Optional[ResultAggregator] = None
+_instance: ResultAggregator | None = None
 _instance_lock = threading.Lock()
 
 

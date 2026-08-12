@@ -5,14 +5,13 @@ Allows external clients to call JARVIS capabilities as MCP tools.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, CallToolResult
+from mcp.types import CallToolResult, TextContent, Tool
 
-from core.mode_manager import get_mode_manager, ExecutionMode
-from core.capability_registry import get_capability, CAPABILITY_REGISTRY
+from core.capability_registry import get_capability
+from core.mode_manager import get_mode_manager
 from core.skill_loader import get_skill_loader
 
 logger = logging.getLogger("jarvis.mcp_server")

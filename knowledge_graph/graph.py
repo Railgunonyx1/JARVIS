@@ -17,15 +17,15 @@ O(V+E) full graph scan. All queries bounded by depth/limit params.
 from __future__ import annotations
 
 import json
-import time
-import sqlite3
 import logging
+import sqlite3
 import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from collections import deque, defaultdict
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 logger = logging.getLogger("jarvis.knowledge_graph")
 
@@ -69,7 +69,7 @@ class Entity:
     id: int = 0
     name: str = ""
     entity_type: EntityType = EntityType.OTHER
-    properties: Dict[str, Any] = field(default_factory=dict)
+    properties: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     access_count: int = 0
@@ -83,7 +83,7 @@ class Relation:
     source_id: int = 0
     target_id: int = 0
     relation_type: RelationType = RelationType.RELATED_TO
-    properties: Dict[str, Any] = field(default_factory=dict)
+    properties: dict[str, Any] = field(default_factory=dict)
     weight: float = 1.0
     created_at: float = field(default_factory=time.time)
 
@@ -91,23 +91,23 @@ class Relation:
 @dataclass
 class GraphPath:
     """A path between two entities."""
-    entities: List[Entity]
-    relations: List[Relation]
+    entities: list[Entity]
+    relations: list[Relation]
     total_weight: float = 0.0
 
 
 class KnowledgeGraph:
     """SQLite-backed knowledge graph with in-memory caches for hot paths."""
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or (Path.home() / ".jarvis" / "data" / "knowledge_graph.db")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._lock = threading.RLock()
         # Caches for hot paths
-        self._entity_cache: Dict[int, Entity] = {}
-        self._name_cache: Dict[str, int] = {}  # name.lower() -> id
-        self._neighbor_cache: Dict[int, List[Tuple[int, RelationType]]] = {}
+        self._entity_cache: dict[int, Entity] = {}
+        self._name_cache: dict[str, int] = {}  # name.lower() -> id
+        self._neighbor_cache: dict[int, list[tuple[int, RelationType]]] = {}
         self._init_db()
         self._load_caches()
 
@@ -182,7 +182,7 @@ class KnowledgeGraph:
         logger.info("Knowledge graph loaded: %d entities, %d relations", len(self._entity_cache), len(rels))
 
     def add_entity(self, name: str, entity_type: EntityType = EntityType.OTHER,
-                   properties: Optional[Dict] = None, importance: float = 0.5) -> Entity:
+                   properties: dict | None = None, importance: float = 0.5) -> Entity:
         """Add or update an entity. Returns the entity with its ID."""
         name = name.strip()
         if not name:
@@ -234,19 +234,19 @@ class KnowledgeGraph:
             self._name_cache[cache_key] = eid
             return e
 
-    def get_entity(self, name: str) -> Optional[Entity]:
+    def get_entity(self, name: str) -> Entity | None:
         """Get entity by name (case-insensitive)."""
         cache_key = name.lower()
         if cache_key in self._name_cache:
             return self._entity_cache.get(self._name_cache[cache_key])
         return None
 
-    def get_entity_by_id(self, eid: int) -> Optional[Entity]:
+    def get_entity_by_id(self, eid: int) -> Entity | None:
         return self._entity_cache.get(eid)
 
     def add_relation(self, source_name: str, target_name: str,
                      relation_type: RelationType = RelationType.RELATED_TO,
-                     properties: Optional[Dict] = None, weight: float = 1.0) -> Optional[Relation]:
+                     properties: dict | None = None, weight: float = 1.0) -> Relation | None:
         """Add a directed relation between two entities. Creates entities if needed."""
         source = self.get_entity(source_name)
         if not source:
@@ -287,8 +287,8 @@ class KnowledgeGraph:
             )
 
     def get_neighbors(self, entity_name: str, direction: str = "both",
-                      relation_type: Optional[RelationType] = None,
-                      max_depth: int = 1) -> List[Tuple[Entity, RelationType, int]]:
+                      relation_type: RelationType | None = None,
+                      max_depth: int = 1) -> list[tuple[Entity, RelationType, int]]:
         """Get neighbors of an entity up to max_depth hops.
 
         Returns: List of (entity, relation_type, depth)
@@ -341,7 +341,7 @@ class KnowledgeGraph:
         return results
 
     def find_path(self, source_name: str, target_name: str,
-                  max_depth: int = 6) -> Optional[GraphPath]:
+                  max_depth: int = 6) -> GraphPath | None:
         """BFS shortest path between two entities."""
         source = self.get_entity(source_name)
         target = self.get_entity(target_name)
@@ -351,7 +351,7 @@ class KnowledgeGraph:
             return GraphPath(entities=[source], relations=[], total_weight=0.0)
 
         # BFS with parent tracking
-        parent: Dict[int, Tuple[int, RelationType]] = {}
+        parent: dict[int, tuple[int, RelationType]] = {}
         visited = {source.id}
         queue = deque([source.id])
 
@@ -398,8 +398,8 @@ class KnowledgeGraph:
 
         return None  # No path found
 
-    def search_entities(self, query: str, entity_type: Optional[EntityType] = None,
-                        limit: int = 20) -> List[Entity]:
+    def search_entities(self, query: str, entity_type: EntityType | None = None,
+                        limit: int = 20) -> list[Entity]:
         """Search entities by name (case-insensitive LIKE)."""
         conn = self._get_conn()
         sql = "SELECT id, name, entity_type, properties, importance FROM entities WHERE name LIKE ?"
@@ -417,7 +417,7 @@ class KnowledgeGraph:
             for r in rows
         ]
 
-    def get_central_entities(self, top_k: int = 10) -> List[Tuple[Entity, int]]:
+    def get_central_entities(self, top_k: int = 10) -> list[tuple[Entity, int]]:
         """Get entities ranked by degree centrality (most connections)."""
         degree = defaultdict(int)
         for src, neighbors in self._neighbor_cache.items():
@@ -447,7 +447,7 @@ class KnowledgeGraph:
 
         return "\n".join(parts)
 
-    def get_graph_stats(self) -> Dict[str, Any]:
+    def get_graph_stats(self) -> dict[str, Any]:
         """Get graph statistics."""
         conn = self._get_conn()
         entity_count = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
@@ -487,7 +487,7 @@ class KnowledgeGraph:
 
 
 # Global singleton
-_kg: Optional[KnowledgeGraph] = None
+_kg: KnowledgeGraph | None = None
 _kg_lock = threading.Lock()
 
 

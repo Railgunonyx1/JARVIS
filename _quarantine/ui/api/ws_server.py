@@ -10,8 +10,9 @@ cleanup of dead connections, and a shutdown path.
 
 import asyncio
 import json
-import time
 import logging
+import time
+
 import psutil
 
 try:
@@ -55,7 +56,7 @@ class WSServer:
         try:
             await asyncio.wait_for(websocket.send(msg), timeout=_SEND_TIMEOUT)
             return True
-        except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed, OSError):
+        except (TimeoutError, websockets.exceptions.ConnectionClosed, OSError):
             return False
 
     async def _handler(self, websocket):
@@ -107,8 +108,7 @@ class WSServer:
             data = json.loads(message)
             if data.get("type") == "auth" and data.get("token") == self._auth_token:
                 return True
-        except (asyncio.TimeoutError, websockets.exceptions.ConnectionClosed,
-                json.JSONDecodeError, KeyError, ValueError):
+        except (TimeoutError, websockets.exceptions.ConnectionClosed, json.JSONDecodeError, KeyError, ValueError):
             pass
         except Exception:
             pass
@@ -168,7 +168,7 @@ class WSServer:
             try:
                 event = await asyncio.wait_for(self._event_queue.get(), timeout=1.0)
                 await self._broadcast(event)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     def publish(self, event_type: str, message: str = "", payload: dict = None):

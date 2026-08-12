@@ -6,11 +6,10 @@ import ctypes
 import logging
 import os
 import threading
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("jarvis.hyper_opt.cpu_affinity")
 
-_WORKLOAD_PREFERENCES: Dict[str, dict] = {
+_WORKLOAD_PREFERENCES: dict[str, dict] = {
     "audio": {
         "preferred_cores": [0, 1],
         "priority": "high",
@@ -43,12 +42,12 @@ class CPUAffinityManager:
     """Pin threads to CPU cores for better cache locality."""
 
     def __init__(self) -> None:
-        self._assignments: Dict[str, List[int]] = {}
-        self._core_usage: Dict[int, int] = {}
+        self._assignments: dict[str, list[int]] = {}
+        self._core_usage: dict[int, int] = {}
         self._cpu_count: int = os.cpu_count() or 4
         self._lock = threading.RLock()
         self._available: bool = self._check_affinity_support()
-        self._thread_handles: Dict[str, int] = {}
+        self._thread_handles: dict[str, int] = {}
         for core_id in range(self._cpu_count):
             self._core_usage[core_id] = 0
         logger.debug(
@@ -69,7 +68,7 @@ class CPUAffinityManager:
         except Exception:
             return False
 
-    def set_affinity(self, thread_name: str, core_ids: List[int]) -> bool:
+    def set_affinity(self, thread_name: str, core_ids: list[int]) -> bool:
         """Pin a named thread to specific cores. Returns True on success."""
         with self._lock:
             if not core_ids:
@@ -98,7 +97,7 @@ class CPUAffinityManager:
             )
             return success
 
-    def _apply_affinity(self, core_ids: List[int]) -> bool:
+    def _apply_affinity(self, core_ids: list[int]) -> bool:
         """Apply CPU affinity to the current thread using OS APIs."""
         try:
             if os.name == "nt":
@@ -116,7 +115,7 @@ class CPUAffinityManager:
             logger.exception("Failed to apply CPU affinity")
         return False
 
-    def get_affinity(self, thread_name: str) -> List[int]:
+    def get_affinity(self, thread_name: str) -> list[int]:
         """Get current core assignment for a thread."""
         with self._lock:
             return list(self._assignments.get(thread_name, []))
@@ -144,7 +143,7 @@ class CPUAffinityManager:
         except Exception:
             return os.cpu_count() or 4
 
-    def suggest_assignment(self, workload_type: str) -> List[int]:
+    def suggest_assignment(self, workload_type: str) -> list[int]:
         """Suggest core assignment for workload type."""
         with self._lock:
             prefs = _WORKLOAD_PREFERENCES.get(workload_type)
@@ -170,7 +169,7 @@ class CPUAffinityManager:
             )
             return available
 
-    def auto_assign(self) -> Dict[str, List[int]]:
+    def auto_assign(self) -> dict[str, list[int]]:
         """Automatically assign JARVIS threads to cores. Returns assignments."""
         with self._lock:
             jarvis_threads = ["jarvis_audio", "jarvis_inference", "jarvis_vision", "jarvis_io", "jarvis_general"]
@@ -181,7 +180,7 @@ class CPUAffinityManager:
                 "jarvis_io": "io",
                 "jarvis_general": "general",
             }
-            assignments: Dict[str, List[int]] = {}
+            assignments: dict[str, list[int]] = {}
             for thread_name in jarvis_threads:
                 workload = workload_map.get(thread_name, "general")
                 cores = self.suggest_assignment(workload)
@@ -239,7 +238,7 @@ class CPUAffinityManager:
             return True
 
 
-_instance: Optional[CPUAffinityManager] = None
+_instance: CPUAffinityManager | None = None
 _instance_lock = threading.RLock()
 
 

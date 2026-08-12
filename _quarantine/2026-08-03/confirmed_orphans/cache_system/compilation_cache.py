@@ -2,15 +2,15 @@
 
 Avoid rebuilding them every launch.
 """
-import logging
-import time
-import json
-import hashlib
-import sqlite3
 import ast
+import hashlib
+import json
+import logging
+import sqlite3
 import threading
-from typing import Optional, Dict, Any, List
+import time
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("cache_system.compilation_cache")
 
@@ -29,7 +29,7 @@ class CompilationCache:
         self._db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._mem_cache: Dict[str, Any] = {}
+        self._mem_cache: dict[str, Any] = {}
         self._hits = 0
         self._misses = 0
         self._init_db()
@@ -56,7 +56,7 @@ class CompilationCache:
     def _hash(content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
 
-    def get(self, key: str, category: str = "default") -> Optional[Any]:
+    def get(self, key: str, category: str = "default") -> Any | None:
         cache_key = f"{category}:{key}"
 
         # Memory cache
@@ -108,7 +108,7 @@ class CompilationCache:
             conn.commit()
             conn.close()
 
-    def cache_ast(self, source_code: str, file_path: str = "") -> Dict[str, Any]:
+    def cache_ast(self, source_code: str, file_path: str = "") -> dict[str, Any]:
         """Parse and cache AST analysis of Python source."""
         source_hash = self._hash(source_code)
         cached = self.get(source_hash, "ast")
@@ -138,7 +138,7 @@ class CompilationCache:
         except SyntaxError as e:
             return {"error": str(e)}
 
-    def cache_file_graph(self, project_path: str, file_list: List[str]) -> Dict[str, Any]:
+    def cache_file_graph(self, project_path: str, file_list: list[str]) -> dict[str, Any]:
         """Cache project file dependency graph."""
         key = self._hash(project_path + str(sorted(file_list)))
         cached = self.get(key, "file_graph")
@@ -158,14 +158,14 @@ class CompilationCache:
         self.put(key, graph, "file_graph")
         return graph
 
-    def cache_import_tree(self, module_name: str, imports: List[str]) -> None:
+    def cache_import_tree(self, module_name: str, imports: list[str]) -> None:
         """Cache import dependency tree for a module."""
         self.put(module_name, imports, "import_tree")
 
-    def get_import_tree(self, module_name: str) -> Optional[List[str]]:
+    def get_import_tree(self, module_name: str) -> list[str] | None:
         return self.get(module_name, "import_tree")
 
-    def get_size(self) -> Dict[str, int]:
+    def get_size(self) -> dict[str, int]:
         with self._lock:
             conn = sqlite3.connect(self._db_path)
             rows = conn.execute(
@@ -174,7 +174,7 @@ class CompilationCache:
             conn.close()
             return {row[0]: row[1] for row in rows}
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = self._hits + self._misses
         return {
             "cached_items": sum(self.get_size().values()),
@@ -197,7 +197,7 @@ class CompilationCache:
             conn.close()
 
 
-_compilation_cache_instance: Optional[CompilationCache] = None
+_compilation_cache_instance: CompilationCache | None = None
 
 
 def get_compilation_cache() -> CompilationCache:

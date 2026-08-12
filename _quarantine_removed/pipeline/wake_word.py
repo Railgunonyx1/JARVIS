@@ -1,15 +1,16 @@
 """Wake Word Detection — openWakeWord (local, always-on)."""
 
-import time
 import logging
-from typing import Optional, Callable
+import time
+from collections.abc import Callable
+
 import numpy as np
 
 logger = logging.getLogger("jarvis.pipeline.wake_word")
 
 
 class WakeWordDetector:
-    def __init__(self, config: dict, on_wake: Optional[Callable] = None):
+    def __init__(self, config: dict, on_wake: Callable | None = None):
         cfg = config.get("wake_word", {})
         self._enabled = cfg.get("enabled", True)
         self._sensitivity = cfg.get("sensitivity", 0.5)

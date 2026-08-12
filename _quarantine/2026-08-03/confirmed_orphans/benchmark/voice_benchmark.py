@@ -1,35 +1,34 @@
 """Voice Benchmark — Measures TTS synthesis time, STT transcription time, voice pipeline latency."""
-import os
 import sys
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import time
 import asyncio
 import statistics
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 @dataclass
 class VoiceBenchmarkResult:
-    tts_synthesis_ms: List[float] = field(default_factory=list)
-    tts_first_chunk_ms: List[float] = field(default_factory=list)
+    tts_synthesis_ms: list[float] = field(default_factory=list)
+    tts_first_chunk_ms: list[float] = field(default_factory=list)
     tts_warmup_ms: float = 0.0
     tts_precache_ms: float = 0.0
-    stt_transcription_ms: List[float] = field(default_factory=list)
-    vad_detection_ms: List[float] = field(default_factory=list)
-    full_voice_roundtrip_ms: List[float] = field(default_factory=list)
+    stt_transcription_ms: list[float] = field(default_factory=list)
+    vad_detection_ms: list[float] = field(default_factory=list)
+    full_voice_roundtrip_ms: list[float] = field(default_factory=list)
     tts_backend: str = "unknown"
     stt_backend: str = "unknown"
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tts_avg_synthesis_ms": round(statistics.mean(self.tts_synthesis_ms), 1) if self.tts_synthesis_ms else 0,
             "tts_avg_first_chunk_ms": round(statistics.mean(self.tts_first_chunk_ms), 1) if self.tts_first_chunk_ms else 0,
@@ -63,8 +62,9 @@ def run_voice_benchmark(rounds: int = 1) -> VoiceBenchmarkResult:
 
 
 def _run_single_voice_benchmark(result: VoiceBenchmarkResult):
-    from core.config import Config
     from pipeline.tts import TextToSpeech
+
+    from core.config import Config
 
     config = Config()
     voice_cfg = config.get_section("voice")

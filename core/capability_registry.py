@@ -7,10 +7,9 @@ The old flat CAPABILITY_REGISTRY dict is preserved as a compatibility
 shim built from the tree.
 """
 import logging
-from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger("jarvis.capability.v2")
 
@@ -60,23 +59,23 @@ class Capability:
     description: str = ""
     requires_confirmation: bool = False
     is_destructive: bool = False
-    affected_resources: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
-    permissions: List[str] = field(default_factory=list)
+    affected_resources: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    permissions: list[str] = field(default_factory=list)
     cost: float = 0.0
     latency: str = "medium"
     provider: str = ""
-    examples: List[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
 
 
 @dataclass
 class _BranchNode:
     name: str
-    capabilities: Dict[str, Capability] = field(default_factory=dict)
-    children: Dict[str, "_BranchNode"] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    capabilities: dict[str, Capability] = field(default_factory=dict)
+    children: dict[str, "_BranchNode"] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def flatten(self, prefix: str = "") -> Dict[str, Capability]:
+    def flatten(self, prefix: str = "") -> dict[str, Capability]:
         result = {}
         full_prefix = f"{prefix}.{self.name}" if prefix else self.name
         for c in self.capabilities.values():
@@ -91,13 +90,13 @@ class CapabilityTree:
 
     def __init__(self):
         self._root = _BranchNode(name="")
-        self._flat_cache: Dict[str, Capability] = {}
+        self._flat_cache: dict[str, Capability] = {}
         self._dirty = True
 
     # ── Build from flat dict ────────────────────────────────────
 
     @classmethod
-    def from_registry(cls, registry: Dict[str, Capability]) -> "CapabilityTree":
+    def from_registry(cls, registry: dict[str, Capability]) -> "CapabilityTree":
         tree = cls()
         for cap in registry.values():
             tree._insert_into_tree(cap)
@@ -139,7 +138,7 @@ class CapabilityTree:
     # ── Build branch (for plugins) ──────────────────────────────
 
     @staticmethod
-    def build_branch(caps: List[Capability]) -> "CapabilityTree":
+    def build_branch(caps: list[Capability]) -> "CapabilityTree":
         tree = CapabilityTree()
         for cap in caps:
             tree._insert_into_tree(cap)
@@ -147,23 +146,23 @@ class CapabilityTree:
 
     # ── Resolution ──────────────────────────────────────────────
 
-    def resolve(self, path: str) -> Optional[Capability]:
+    def resolve(self, path: str) -> Capability | None:
         self._ensure_cache()
         return self._flat_cache.get(path)
 
-    def subtree(self, prefix: str) -> Dict[str, Capability]:
+    def subtree(self, prefix: str) -> dict[str, Capability]:
         self._ensure_cache()
         return {k: v for k, v in self._flat_cache.items()
                 if k.startswith(prefix)}
 
     # ── Search ──────────────────────────────────────────────────
 
-    def search(self, tags: Optional[List[str]] = None,
-               risk: Optional[CapabilityRisk] = None,
-               max_risk: Optional[CapabilityRisk] = None,
-               permissions: Optional[List[str]] = None,
-               max_cost: Optional[float] = None,
-               latency: Optional[str] = None) -> List[Capability]:
+    def search(self, tags: list[str] | None = None,
+               risk: CapabilityRisk | None = None,
+               max_risk: CapabilityRisk | None = None,
+               permissions: list[str] | None = None,
+               max_cost: float | None = None,
+               latency: str | None = None) -> list[Capability]:
         self._ensure_cache()
         results = list(self._flat_cache.values())
 
@@ -193,9 +192,9 @@ class CapabilityTree:
 
         return results
 
-    def query(self, tags: Optional[List[str]] = None,
-              risk: Optional[CapabilityRisk] = None,
-              permissions: Optional[List[str]] = None) -> List[str]:
+    def query(self, tags: list[str] | None = None,
+              risk: CapabilityRisk | None = None,
+              permissions: list[str] | None = None) -> list[str]:
         results = self.search(tags=tags, risk=risk, permissions=permissions)
         return [c.name for c in results]
 
@@ -205,7 +204,7 @@ class CapabilityTree:
         self._ensure_cache()
         return len(self._flat_cache)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         self._ensure_cache()
         by_risk = {}
         for c in self._flat_cache.values():
@@ -237,7 +236,7 @@ class CapabilityTree:
 # ── Flat registry (backward compatibility) ─────────────────────
 # Built from the tree. Same content as the old CAPABILITY_REGISTRY.
 
-_FLAT_REGISTRY: Dict[str, Capability] = {
+_FLAT_REGISTRY: dict[str, Capability] = {
     # App
     "app.launch": Capability(name="app.launch", category=CapabilityCategory.APP, risk=CapabilityRisk.SAFE, description="Launch installed applications", tags=["app", "launch"]),
     "app.close": Capability(name="app.close", category=CapabilityCategory.APP, risk=CapabilityRisk.LOW, description="Close running applications", is_destructive=True, tags=["app", "close"]),
@@ -334,7 +333,7 @@ _FLAT_REGISTRY: Dict[str, Capability] = {
 }
 
 # Build tree from flat registry
-_tree: Optional[CapabilityTree] = None
+_tree: CapabilityTree | None = None
 
 
 def _get_tree() -> CapabilityTree:
@@ -346,39 +345,39 @@ def _get_tree() -> CapabilityTree:
 
 # ── Public API (v1 compatibility) ──────────────────────────────
 
-def get_capability(name: str) -> Optional[Capability]:
+def get_capability(name: str) -> Capability | None:
     return _FLAT_REGISTRY.get(name)
 
 
-def get_all_capabilities() -> Dict[str, Capability]:
+def get_all_capabilities() -> dict[str, Capability]:
     return _FLAT_REGISTRY.copy()
 
 
-def get_capabilities_by_category(category: CapabilityCategory) -> List[Capability]:
+def get_capabilities_by_category(category: CapabilityCategory) -> list[Capability]:
     return [c for c in _FLAT_REGISTRY.values() if c.category == category]
 
 
-def get_capabilities_by_risk(risk: CapabilityRisk) -> List[Capability]:
+def get_capabilities_by_risk(risk: CapabilityRisk) -> list[Capability]:
     return [c for c in _FLAT_REGISTRY.values() if c.risk == risk]
 
 
-def get_destructive_capabilities() -> List[Capability]:
+def get_destructive_capabilities() -> list[Capability]:
     return [c for c in _FLAT_REGISTRY.values() if c.is_destructive]
 
 
 # ── New tree API ───────────────────────────────────────────────
 
-def resolve_capability(path: str) -> Optional[Capability]:
+def resolve_capability(path: str) -> Capability | None:
     """Resolve a capability by dot path (e.g., 'AI.LLM.query')."""
     return _get_tree().resolve(path)
 
 
-def search_capabilities(tags: Optional[List[str]] = None,
-                        risk: Optional[CapabilityRisk] = None,
-                        max_risk: Optional[CapabilityRisk] = None,
-                        permissions: Optional[List[str]] = None,
-                        max_cost: Optional[float] = None,
-                        latency: Optional[str] = None) -> List[Capability]:
+def search_capabilities(tags: list[str] | None = None,
+                        risk: CapabilityRisk | None = None,
+                        max_risk: CapabilityRisk | None = None,
+                        permissions: list[str] | None = None,
+                        max_cost: float | None = None,
+                        latency: str | None = None) -> list[Capability]:
     """Search capabilities by tags, risk, permissions, cost, latency."""
     return _get_tree().search(tags=tags, risk=risk, max_risk=max_risk,
                               permissions=permissions, max_cost=max_cost, latency=latency)
@@ -388,7 +387,7 @@ def get_capability_tree() -> CapabilityTree:
     return _get_tree()
 
 
-def merge_capabilities(caps: List[Capability]) -> bool:
+def merge_capabilities(caps: list[Capability]) -> bool:
     """Register new capabilities via atomic merge (for plugins)."""
     branch = CapabilityTree.build_branch(caps)
     return _get_tree().merge(branch)

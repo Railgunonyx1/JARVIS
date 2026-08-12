@@ -5,10 +5,9 @@ Provides static analysis, complexity metrics, and quality scoring.
 import logging
 import re
 import time
-import hashlib
-from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("se_factory.code_analyzer")
 
@@ -21,9 +20,9 @@ class AnalysisResult:
     lines_of_code: int = 0
     complexity_score: float = 0.0  # 0-100 (lower = simpler)
     quality_score: float = 0.0    # 0-100 (higher = better)
-    issues: List[Dict[str, Any]] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    suggestions: List[str] = field(default_factory=list)
+    issues: list[dict[str, Any]] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    suggestions: list[str] = field(default_factory=list)
     analysis_ms: float = 0.0
 
 
@@ -45,7 +44,7 @@ class CodeAnalyzer:
     ]
 
     def __init__(self):
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
     def analyze_code(self, code: str, file_path: str = "", language: str = "python") -> AnalysisResult:
         """Analyze code and return quality/complexity metrics."""
@@ -118,7 +117,7 @@ class CodeAnalyzer:
 
         return max(0, min(100, round(score, 1)))
 
-    def _find_issues(self, code: str) -> List[Dict[str, Any]]:
+    def _find_issues(self, code: str) -> list[dict[str, Any]]:
         issues = []
         lines = code.split("\n")
         for i, line in enumerate(lines, 1):
@@ -132,7 +131,7 @@ class CodeAnalyzer:
                     })
         return issues
 
-    def _generate_suggestions(self, result: AnalysisResult) -> List[str]:
+    def _generate_suggestions(self, result: AnalysisResult) -> list[str]:
         suggestions = []
         if result.complexity_score > 60:
             suggestions.append("High complexity detected — consider breaking into smaller functions")
@@ -161,7 +160,7 @@ class CodeAnalyzer:
         except Exception as e:
             return AnalysisResult(file_path=file_path, error=str(e))
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = len(self._history)
         avg_quality = sum(h["quality"] for h in self._history) / max(total, 1)
         avg_complexity = sum(h["complexity"] for h in self._history) / max(total, 1)
@@ -174,7 +173,7 @@ class CodeAnalyzer:
         }
 
 
-_analyzer_instance: Optional[CodeAnalyzer] = None
+_analyzer_instance: CodeAnalyzer | None = None
 
 
 def get_code_analyzer() -> CodeAnalyzer:

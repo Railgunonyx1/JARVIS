@@ -2,12 +2,12 @@
 
 Prevent paging of hot model weights and metadata.
 """
+import ctypes
 import logging
 import platform
-import ctypes
 import threading
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("os_optimization.memory_locking")
 
@@ -29,7 +29,7 @@ class MemoryLocker:
 
     def __init__(self, max_lock_mb: float = 512):
         self._max_lock_bytes = int(max_lock_mb * 1024 * 1024)
-        self._locked: Dict[str, LockedRegion] = {}
+        self._locked: dict[str, LockedRegion] = {}
         self._current_bytes = 0
         self._lock = threading.Lock()
         self._platform = platform.system()
@@ -63,7 +63,7 @@ class MemoryLocker:
             if region:
                 self._current_bytes -= region.size_bytes
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "locked_regions": len(self._locked),
@@ -75,7 +75,7 @@ class MemoryLocker:
             }
 
 
-_memory_locker_instance: Optional[MemoryLocker] = None
+_memory_locker_instance: MemoryLocker | None = None
 
 
 def get_memory_locker() -> MemoryLocker:

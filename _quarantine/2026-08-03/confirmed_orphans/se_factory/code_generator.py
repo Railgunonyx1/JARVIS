@@ -3,12 +3,10 @@
 Uses LLM to translate natural language specifications into executable code.
 """
 import logging
-import json
 import re
 import time
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("se_factory.code_generator")
 
@@ -30,7 +28,7 @@ class CodeResult:
     code: str
     language: str
     explanation: str = ""
-    files: Dict[str, str] = field(default_factory=dict)
+    files: dict[str, str] = field(default_factory=dict)
     generation_ms: float = 0.0
     success: bool = True
     error: str = ""
@@ -46,10 +44,10 @@ class CodeGenerator:
                     If None, uses a template-based fallback.
         """
         self._llm_fn = llm_fn
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
         self._templates = self._load_templates()
 
-    def _load_templates(self) -> Dict[str, str]:
+    def _load_templates(self) -> dict[str, str]:
         return {
             "function": 'def {name}({params}):\n    """{docstring}"""\n    {body}\n',
             "class": 'class {name}:\n    """{docstring}"""\n\n    def __init__(self{params}):\n{init_body}\n\n{methods}',
@@ -156,10 +154,10 @@ class CodeGenerator:
             return name
         return "generated_function"
 
-    def get_history(self) -> List[Dict[str, Any]]:
+    def get_history(self) -> list[dict[str, Any]]:
         return list(self._history)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = len(self._history)
         successful = sum(1 for h in self._history if h["success"])
         avg_ms = sum(h["ms"] for h in self._history) / max(total, 1)
@@ -171,7 +169,7 @@ class CodeGenerator:
         }
 
 
-_generator_instance: Optional[CodeGenerator] = None
+_generator_instance: CodeGenerator | None = None
 
 
 def get_code_generator(llm_fn=None) -> CodeGenerator:

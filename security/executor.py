@@ -16,18 +16,18 @@ output capture.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shlex
 import shutil
 import signal
-import logging
 import subprocess  # nosec B404 -- subprocess is required for the executor; see module docstring
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.security.executor")
 
@@ -71,7 +71,7 @@ class ExecMode(Enum):
     CMD = "cmd"
 
 
-def sanitize_environment(env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def sanitize_environment(env: dict[str, str] | None = None) -> dict[str, str]:
     """Environment copy with credential-like variables removed."""
     base = dict(os.environ)
     for key in list(base):
@@ -84,7 +84,7 @@ def sanitize_environment(env: Optional[Dict[str, str]] = None) -> Dict[str, str]
     return base
 
 
-def _resolve_executable(name: str) -> Optional[str]:
+def _resolve_executable(name: str) -> str | None:
     """Resolve an executable name/path to an absolute path, if possible."""
     name = name.strip().strip('"')
     if not name:
@@ -100,10 +100,10 @@ class ExecRequest:
     """A command execution request (raw string or structured exe+args)."""
     command: str = ""
     executable: str = ""
-    args: List[str] = field(default_factory=list)
+    args: list[str] = field(default_factory=list)
     shell: str = ""  # "powershell" | "cmd" | "" (auto)
-    cwd: Optional[str] = None
-    env: Optional[Dict[str, str]] = None
+    cwd: str | None = None
+    env: dict[str, str] | None = None
     timeout: int = DEFAULT_TIMEOUT
     max_output_bytes: int = MAX_OUTPUT_BYTES
 
@@ -149,12 +149,12 @@ class CommandPolicy:
 
     def __init__(
         self,
-        blocked_executables: Optional[tuple] = None,
-        dangerous_patterns: Optional[tuple] = None,
-        shell_operators: Optional[tuple] = None,
+        blocked_executables: tuple | None = None,
+        dangerous_patterns: tuple | None = None,
+        shell_operators: tuple | None = None,
         default_shell: str = "powershell",
-        allowed_cwds: Optional[List[str]] = None,
-        blocked_cwds: Optional[List[str]] = None,
+        allowed_cwds: list[str] | None = None,
+        blocked_cwds: list[str] | None = None,
     ) -> None:
         self._blocked_executables = tuple(blocked_executables or _BLOCKED_EXECUTABLES)
         self._dangerous_patterns = tuple(dangerous_patterns or _DANGEROUS_PATTERNS)
@@ -191,7 +191,7 @@ class CommandPolicy:
 
         return self._classify_shell_script(command, req.shell)
 
-    def _classify_structured(self, executable: str, args: List[str]) -> ExecMode:
+    def _classify_structured(self, executable: str, args: list[str]) -> ExecMode:
         exe_base = os.path.basename(executable).lower()
         for blocked in self._blocked_executables:
             if blocked.lower() == exe_base:
@@ -295,9 +295,9 @@ def _shell_host(shell: ExecMode) -> str:
 class SecureExecutor:
     """Runs approved commands with shell=False and hard resource bounds."""
 
-    def __init__(self, policy: Optional[CommandPolicy] = None) -> None:
+    def __init__(self, policy: CommandPolicy | None = None) -> None:
         self.policy = policy or CommandPolicy()
-        self._active: Dict[int, subprocess.Popen] = {}
+        self._active: dict[int, subprocess.Popen] = {}
         self._lock = threading.Lock()
 
     def execute(self, req: ExecRequest) -> ExecResult:
@@ -324,7 +324,7 @@ class SecureExecutor:
             argv = [host, "/d", "/c", req.command]
         return self._run(argv, req, mode)
 
-    def _run(self, argv: List[str], req: ExecRequest, mode: ExecMode) -> ExecResult:
+    def _run(self, argv: list[str], req: ExecRequest, mode: ExecMode) -> ExecResult:
         start = time.time()
         cwd = self.policy.effective_cwd(req)
         if not os.path.isdir(cwd):
@@ -360,8 +360,8 @@ class SecureExecutor:
             self._active[proc.pid] = proc
 
         cap = req.max_output_bytes
-        out_sink: List[bytes] = []
-        err_sink: List[bytes] = []
+        out_sink: list[bytes] = []
+        err_sink: list[bytes] = []
         sink_lock = threading.Lock()
         out_thread = threading.Thread(target=self._drain,
                                       args=(proc.stdout, out_sink, cap, sink_lock),
@@ -399,9 +399,9 @@ class SecureExecutor:
         )
 
     @staticmethod
-    def _drain(stream, sink: List[bytes], cap: int, lock: threading.Lock) -> None:
+    def _drain(stream, sink: list[bytes], cap: int, lock: threading.Lock) -> None:
         """Read a stream into a bounded sink, discarding anything past cap."""
-        chunks: List[bytes] = []
+        chunks: list[bytes] = []
         total = 0
         try:
             while True:
@@ -455,7 +455,7 @@ class SecureExecutor:
             killed += 1
         return killed
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "active_processes": len(self._active),
@@ -464,7 +464,7 @@ class SecureExecutor:
             }
 
 
-_executor: Optional[SecureExecutor] = None
+_executor: SecureExecutor | None = None
 _executor_lock = threading.Lock()
 
 

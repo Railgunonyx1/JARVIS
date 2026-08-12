@@ -1,8 +1,7 @@
 """Self-diagnostics — provider health, model metrics, system resources."""
 
 import time
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 
 @dataclass
@@ -15,7 +14,7 @@ class ModelMetrics:
     total_tokens_in: int = 0
     total_tokens_out: int = 0
     avg_latency_ms: float = 0.0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     last_used: float = 0.0
 
     @property
@@ -33,7 +32,7 @@ class DiagnosticsEngine:
         self._start_time = time.time()
 
     def record_request(self, provider: str, model: str, success: bool, latency_ms: float,
-                       tokens_in: int = 0, tokens_out: int = 0, error: Optional[str] = None):
+                       tokens_in: int = 0, tokens_out: int = 0, error: str | None = None):
         key = f"{provider}/{model}"
         if key not in self._metrics:
             self._metrics[key] = ModelMetrics(provider=provider, model=model)

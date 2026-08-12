@@ -4,11 +4,12 @@ Instead of slowing everything, selectively degrade non-critical subsystems
 to preserve latency for voice and interaction.
 """
 import logging
-import time
 import threading
-from typing import Optional, Dict, Any, List, Callable
-from dataclasses import dataclass, field
-from enum import Enum, auto
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("systems.adaptive_degradation")
 
@@ -103,10 +104,10 @@ class AdaptiveDegradation:
 
     def __init__(self):
         self._level = DegradationLevel.FULL
-        self._configs: Dict[Subsystem, SubsystemConfig] = {}
-        self._callbacks: List[Callable] = []
+        self._configs: dict[Subsystem, SubsystemConfig] = {}
+        self._callbacks: list[Callable] = []
         self._lock = threading.Lock()
-        self._level_history: List[Dict[str, Any]] = []
+        self._level_history: list[dict[str, Any]] = []
         self._apply_profile(DegradationLevel.FULL)
 
     def _apply_profile(self, level: DegradationLevel) -> None:
@@ -175,7 +176,7 @@ class AdaptiveDegradation:
     def on_level_change(self, callback: Callable) -> None:
         self._callbacks.append(callback)
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         with self._lock:
             return {
                 "level": self._level.name,
@@ -191,7 +192,7 @@ class AdaptiveDegradation:
             }
 
 
-_degradation_instance: Optional[AdaptiveDegradation] = None
+_degradation_instance: AdaptiveDegradation | None = None
 
 
 def get_adaptive_degradation() -> AdaptiveDegradation:

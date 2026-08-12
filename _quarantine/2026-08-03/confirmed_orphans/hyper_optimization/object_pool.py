@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.hyper_opt.object_pool")
 
@@ -15,8 +15,8 @@ class HyperObjectPool:
 
     def __init__(
         self,
-        factory: Optional[Callable[[], Any]] = None,
-        reset_fn: Optional[Callable[[Any], None]] = None,
+        factory: Callable[[], Any] | None = None,
+        reset_fn: Callable[[Any], None] | None = None,
         max_size: int = 50,
         min_size: int = 5,
         preallocate: bool = True,
@@ -26,12 +26,12 @@ class HyperObjectPool:
         self._reset_fn = reset_fn
         self._max_size = max_size
         self._min_size = min_size
-        self._pool: List[Any] = []
+        self._pool: list[Any] = []
         self._in_use: set = set()
         self._lock = threading.RLock()
         self._name = name
         self._current_obj: Any = None
-        self._stats: Dict[str, int] = {
+        self._stats: dict[str, int] = {
             "created": 0,
             "reused": 0,
             "pool_hits": 0,
@@ -112,7 +112,7 @@ class HyperObjectPool:
                     self._max_size,
                 )
 
-    def batch_acquire(self, count: int) -> List[Any]:
+    def batch_acquire(self, count: int) -> list[Any]:
         """Acquire multiple objects at once."""
         with self._lock:
             objects = []
@@ -133,7 +133,7 @@ class HyperObjectPool:
             )
             return objects
 
-    def batch_release(self, objects: List[Any]) -> None:
+    def batch_release(self, objects: list[Any]) -> None:
         """Release multiple objects at once."""
         with self._lock:
             for obj in objects:
@@ -167,7 +167,7 @@ class HyperObjectPool:
                 "pool_misses": self._stats["pool_misses"],
             }
 
-    def shrink(self, target: Optional[int] = None) -> int:
+    def shrink(self, target: int | None = None) -> int:
         """Reduce pool size to target (default: min_size). Returns objects removed."""
         if target is None:
             target = self._min_size
@@ -202,13 +202,13 @@ class HyperObjectPool:
             self._current_obj = None
 
 
-_named_pools: Dict[str, HyperObjectPool] = {}
+_named_pools: dict[str, HyperObjectPool] = {}
 _pools_lock = threading.RLock()
 
 
 def create_pool(
     name: str,
-    factory: Optional[Callable[[], Any]] = None,
+    factory: Callable[[], Any] | None = None,
     max_size: int = 50,
     min_size: int = 5,
 ) -> HyperObjectPool:
@@ -225,13 +225,13 @@ def create_pool(
         return pool
 
 
-def get_pool(name: str) -> Optional[HyperObjectPool]:
+def get_pool(name: str) -> HyperObjectPool | None:
     """Retrieve a named pool by name."""
     with _pools_lock:
         return _named_pools.get(name)
 
 
-def get_all_pools() -> Dict[str, HyperObjectPool]:
+def get_all_pools() -> dict[str, HyperObjectPool]:
     """Return a snapshot of all named pools."""
     with _pools_lock:
         return dict(_named_pools)

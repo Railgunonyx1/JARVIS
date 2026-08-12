@@ -1,10 +1,12 @@
 """Async Optimizer — thread-pool-based concurrent execution for blocking callables."""
 
-import time
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from typing import Any, Callable, Dict, List, Optional
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
+from typing import Any
 
 logger = logging.getLogger("jarvis.performance_engine.async_optimizer")
 
@@ -16,7 +18,7 @@ class AsyncOptimizer:
 
     def __init__(self, max_workers: int = _MAX_WORKERS) -> None:
         self._max_workers = max_workers
-        self._executor: Optional[ThreadPoolExecutor] = None
+        self._executor: ThreadPoolExecutor | None = None
         self._lock = threading.Lock()
         self._tasks_completed: int = 0
         self._total_time: float = 0.0
@@ -44,7 +46,7 @@ class AsyncOptimizer:
     # Public API
     # ------------------------------------------------------------------
 
-    def run_concurrent(self, tasks: List[Callable]) -> List[Any]:
+    def run_concurrent(self, tasks: list[Callable]) -> list[Any]:
         """Run a list of blocking callables concurrently and return their results.
 
         Order of results matches the order of *tasks*.
@@ -53,7 +55,7 @@ class AsyncOptimizer:
             return []
         executor = self._get_executor()
         futures = [executor.submit(self._safe_call, fn) for fn in tasks]
-        results: List[Any] = []
+        results: list[Any] = []
         for i, future in enumerate(futures):
             try:
                 result = future.result()
@@ -65,7 +67,7 @@ class AsyncOptimizer:
                     self._failures += 1
         return results
 
-    def run_with_timeout(self, fn: Callable, timeout: float = 5.0) -> Optional[Any]:
+    def run_with_timeout(self, fn: Callable, timeout: float = 5.0) -> Any | None:
         """Run *fn* with a timeout. Returns None if it exceeds *timeout* seconds."""
         executor = self._get_executor()
         future = executor.submit(self._safe_call, fn)
@@ -82,14 +84,14 @@ class AsyncOptimizer:
                 self._failures += 1
             return None
 
-    def batch_execute(self, fns: List[Callable], batch_size: int = 5) -> List[Any]:
+    def batch_execute(self, fns: list[Callable], batch_size: int = 5) -> list[Any]:
         """Execute callables in controlled batches of *batch_size*.
 
         Waits for each batch to complete before starting the next.
         """
         if not fns:
             return []
-        all_results: List[Any] = []
+        all_results: list[Any] = []
         for start in range(0, len(fns), batch_size):
             batch = fns[start : start + batch_size]
             batch_results = self.run_concurrent(batch)
@@ -122,7 +124,7 @@ class AsyncOptimizer:
     # Stats
     # ------------------------------------------------------------------
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return execution statistics."""
         with self._lock:
             count = self._tasks_completed
@@ -146,7 +148,7 @@ class AsyncOptimizer:
 # Singleton
 # ----------------------------------------------------------------------
 
-_async_optimizer: Optional[AsyncOptimizer] = None
+_async_optimizer: AsyncOptimizer | None = None
 _async_lock = threading.Lock()
 
 

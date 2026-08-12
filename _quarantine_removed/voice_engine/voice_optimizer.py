@@ -1,11 +1,10 @@
 """Voice Optimizer — audio chunking, caching, and streaming heuristics for TTS output."""
 
-import time
-import logging
-import struct
-import threading
 import hashlib
-from typing import Dict, Generator, Optional
+import logging
+import threading
+from collections.abc import Generator
+from typing import Optional
 
 logger = logging.getLogger("jarvis.voice_engine.voice_optimizer")
 
@@ -26,7 +25,7 @@ class VoiceOptimizer:
     """Optimizes TTS audio output: chunking, caching, and streaming decisions."""
 
     def __init__(self, max_cache_size: int = 64):
-        self._cache: Dict[str, bytes] = {}
+        self._cache: dict[str, bytes] = {}
         self._max_cache_size = max_cache_size
         self._cache_order: list[str] = []
         self._stats = {
@@ -131,7 +130,7 @@ class VoiceOptimizer:
             self._cache[key] = audio
             self._cache_order.append(key)
 
-    def get_cached(self, text: str) -> Optional[bytes]:
+    def get_cached(self, text: str) -> bytes | None:
         """Retrieve cached audio for the given text, or None."""
         key = self._cache_key(text)
         with self._lock:

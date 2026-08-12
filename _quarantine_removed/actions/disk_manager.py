@@ -1,9 +1,8 @@
 """Disk Manager — disk info, cleanup, temp files for JARVIS MK-X."""
 
-import os
+import logging
 import shutil
 import subprocess
-import logging
 from pathlib import Path
 
 logger = logging.getLogger("jarvis.actions.disk_manager")

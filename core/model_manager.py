@@ -4,13 +4,12 @@ Absorbs ProviderRouter (fallback), ModelRouter (heuristic classify),
 and DynamicModelRouter (task-to-tier) into one service-oriented component.
 """
 
+import logging
 import re
 import time
-import logging
-import random
-from enum import Enum
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Callable, Dict, List, Optional, Tuple
+from enum import Enum
 
 logger = logging.getLogger("jarvis.core.model_manager")
 
@@ -45,7 +44,7 @@ class ModelEndpoint:
     provider: str
     model: str
     tier: ModelTier
-    capabilities: List[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
     cost_per_1k_tokens: float = 0.0
     avg_latency_ms: float = 0.0
     status: str = "active"
@@ -55,20 +54,20 @@ class ModelEndpoint:
     total_requests: int = 0
     total_tokens: int = 0
     total_cost: float = 0.0
-    last_error: Optional[str] = None
+    last_error: str | None = None
 
 
 @dataclass
 class ModelRequest:
     text: str
-    system_prompt: Optional[str] = None
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
-    category: Optional[TaskCategory] = None
-    preferred_provider: Optional[str] = None
-    max_latency_ms: Optional[float] = None
-    max_cost: Optional[float] = None
-    required_capabilities: Optional[List[str]] = None
+    system_prompt: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    category: TaskCategory | None = None
+    preferred_provider: str | None = None
+    max_latency_ms: float | None = None
+    max_cost: float | None = None
+    required_capabilities: list[str] | None = None
 
 
 @dataclass
@@ -77,7 +76,7 @@ class ModelDecision:
     category: TaskCategory
     confidence: float
     reasoning: str
-    alternatives: List[str] = field(default_factory=list)
+    alternatives: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -125,7 +124,7 @@ _SIMPLE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-_CATEGORY_KEYWORDS: Dict[TaskCategory, List[str]] = {
+_CATEGORY_KEYWORDS: dict[TaskCategory, list[str]] = {
     TaskCategory.GREETING: ["hello", "hi", "hey", "good morning", "good evening", "how are you", "thanks", "thank you"],
     TaskCategory.CODING: ["code", "function", "class", "debug", "error", "bug", "implement", "write a", "program", "script", "api", "python", "javascript"],
     TaskCategory.REASONING: ["why", "explain", "how does", "analyze", "compare", "evaluate", "reason", "think", "strategy"],
@@ -137,7 +136,7 @@ _CATEGORY_KEYWORDS: Dict[TaskCategory, List[str]] = {
     TaskCategory.SIMPLE_QA: ["what is", "who is", "where is", "when", "define", "meaning"],
 }
 
-_CATEGORY_TIER_MAP: Dict[TaskCategory, ModelTier] = {
+_CATEGORY_TIER_MAP: dict[TaskCategory, ModelTier] = {
     TaskCategory.GREETING: ModelTier.TINY,
     TaskCategory.SIMPLE_QA: ModelTier.SMALL,
     TaskCategory.CODING: ModelTier.MEDIUM,
@@ -158,16 +157,16 @@ _CATEGORY_TIER_MAP: Dict[TaskCategory, ModelTier] = {
 
 class ModelManager:
     def __init__(self):
-        self._endpoints: Dict[str, ModelEndpoint] = {}
-        self._providers: Dict[str, object] = {}
+        self._endpoints: dict[str, ModelEndpoint] = {}
+        self._providers: dict[str, object] = {}
         self._preference: str = "balanced"
-        self._stats_history: Dict[str, List[dict]] = {}
-        self._health_callback: Optional[Callable] = None
+        self._stats_history: dict[str, list[dict]] = {}
+        self._health_callback: Callable | None = None
 
     # ── Registration ──────────────────────────
 
     def register_endpoint(self, provider: str, model: str, tier: ModelTier,
-                          capabilities: Optional[List[str]] = None,
+                          capabilities: list[str] | None = None,
                           cost_per_1k_tokens: float = 0.0,
                           avg_latency_ms: float = 0.0) -> str:
         key = f"{provider}/{model}"
@@ -191,7 +190,7 @@ class ModelManager:
 
     # ── Classification ────────────────────────
 
-    def classify(self, query: str, context: Optional[dict] = None) -> Tuple[TaskCategory, float]:
+    def classify(self, query: str, context: dict | None = None) -> tuple[TaskCategory, float]:
         words = query.split()
         word_count = len(words)
         text_lower = query.lower().strip()
@@ -221,7 +220,7 @@ class ModelManager:
 
         return TaskCategory.UNKNOWN, 0.3
 
-    def _keyword_classify(self, text_lower: str) -> Tuple[TaskCategory, float]:
+    def _keyword_classify(self, text_lower: str) -> tuple[TaskCategory, float]:
         best_cat = TaskCategory.UNKNOWN
         best_score = 0
         for category, keywords in _CATEGORY_KEYWORDS.items():
@@ -239,9 +238,9 @@ class ModelManager:
 
     # ── Selection ─────────────────────────────
 
-    def _rank_endpoints(self, tier: ModelTier, required_caps: Optional[List[str]] = None,
-                        max_cost: Optional[float] = None,
-                        max_latency: Optional[float] = None) -> List[ModelEndpoint]:
+    def _rank_endpoints(self, tier: ModelTier, required_caps: list[str] | None = None,
+                        max_cost: float | None = None,
+                        max_latency: float | None = None) -> list[ModelEndpoint]:
         for attempt in range(tier.value, 0, -1):
             candidates = []
             for ep in self._endpoints.values():
@@ -484,7 +483,7 @@ class ModelManager:
         self._preference = preference
         logger.info("Model preference set to %s", preference)
 
-    def get_endpoint(self, key: str) -> Optional[ModelEndpoint]:
+    def get_endpoint(self, key: str) -> ModelEndpoint | None:
         return self._endpoints.get(key)
 
     def warmup(self, key: str) -> bool:

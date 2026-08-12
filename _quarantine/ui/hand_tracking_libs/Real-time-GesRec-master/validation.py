@@ -1,13 +1,12 @@
+import time
+
 import torch
 from torch.autograd import Variable
-import time
-import sys
-
 from utils import *
 
 
 def val_epoch(epoch, data_loader, model, criterion, opt, logger):
-    print('validation at epoch {}'.format(epoch))
+    print(f'validation at epoch {epoch}')
 
     model.eval()
 
@@ -38,20 +37,12 @@ def val_epoch(epoch, data_loader, model, criterion, opt, logger):
         end_time = time.time()
 
         if i % 10 ==0:
-          print('Epoch: [{0}][{1}/{2}]\t'
-              'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
-              'Data {data_time.val:.5f} ({data_time.avg:.5f})\t'
-              'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-              'Prec@1 {top1.val:.5f} ({top1.avg:.5f})\t'
-              'Prec@5 {top5.val:.5f} ({top5.avg:.5f})'.format(
-                  epoch,
-                  i + 1,
-                  len(data_loader),
-                  batch_time=batch_time,
-                  data_time=data_time,
-                  loss=losses,
-                  top1=top1,
-                  top5=top5))
+          print(f'Epoch: [{epoch}][{i + 1}/{len(data_loader)}]\t'
+              f'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
+              f'Data {data_time.val:.5f} ({data_time.avg:.5f})\t'
+              f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
+              f'Prec@1 {top1.val:.5f} ({top1.avg:.5f})\t'
+              f'Prec@5 {top5.val:.5f} ({top5.avg:.5f})')
 
     logger.log({'epoch': epoch,
                 'loss': losses.avg.item(),

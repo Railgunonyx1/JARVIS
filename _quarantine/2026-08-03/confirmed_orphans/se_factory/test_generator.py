@@ -5,8 +5,8 @@ Analyzes functions/classes and generates appropriate unit tests.
 import logging
 import re
 import time
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("se_factory.test_generator")
 
@@ -25,7 +25,7 @@ class TestGenerator:
     """Generate unit tests from Python source code."""
 
     def __init__(self):
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
     def generate_tests(self, source_code: str, source_file: str = "") -> TestSuite:
         """Generate test cases for the given source code."""
@@ -59,7 +59,7 @@ class TestGenerator:
         self._history.append({"file": source_file, "tests": test_count, "ms": elapsed_ms})
         return suite
 
-    def _extract_functions(self, code: str) -> List[tuple]:
+    def _extract_functions(self, code: str) -> list[tuple]:
         results = []
         for match in re.finditer(r'def\s+(\w+)\s*\(([^)]*)\):', code):
             name = match.group(1)
@@ -67,10 +67,10 @@ class TestGenerator:
             results.append((name, params))
         return results
 
-    def _extract_classes(self, code: str) -> List[str]:
+    def _extract_classes(self, code: str) -> list[str]:
         return re.findall(r'class\s+(\w+)', code)
 
-    def _generate_function_tests(self, func_name: str, params: List[str]) -> List[str]:
+    def _generate_function_tests(self, func_name: str, params: list[str]) -> list[str]:
         tests = []
         test_name = f"test_{func_name}"
 
@@ -93,15 +93,15 @@ class TestGenerator:
 
         return tests
 
-    def _generate_class_tests(self, class_name: str) -> List[str]:
+    def _generate_class_tests(self, class_name: str) -> list[str]:
         tests = []
         tests.append(f"\ndef test_{class_name.lower()}_instantiation():")
         tests.append(f'    """Test {class_name} can be instantiated."""')
         tests.append(f"    instance = {class_name}()")
-        tests.append(f"    assert instance is not None")
+        tests.append("    assert instance is not None")
         return tests
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         total = len(self._history)
         total_tests = sum(h["tests"] for h in self._history)
         return {
@@ -111,7 +111,7 @@ class TestGenerator:
         }
 
 
-_test_gen_instance: Optional[TestGenerator] = None
+_test_gen_instance: TestGenerator | None = None
 
 
 def get_test_generator() -> TestGenerator:

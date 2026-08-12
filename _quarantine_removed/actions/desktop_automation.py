@@ -1,12 +1,12 @@
 """Desktop GUI Automation & Control module for JARVIS MK-X."""
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.actions.desktop_automation")
 
 
-def execute_desktop_action(action: str, parameters: Optional[Dict[str, Any]] = None) -> str:
+def execute_desktop_action(action: str, parameters: dict[str, Any] | None = None) -> str:
     """Execute desktop control action (volume, media keys, key shortcuts, windows)."""
     parameters = parameters or {}
     action_lower = action.lower().strip()

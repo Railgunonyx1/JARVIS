@@ -1,7 +1,6 @@
-from __future__ import print_function, division
 import os
 import sys
-import subprocess
+
 
 def class_process(dir_path):
     if not os.path.isdir(dir_path):

@@ -2,7 +2,7 @@
 
 import importlib
 import logging
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("jarvis.lazy")
 
@@ -10,7 +10,7 @@ logger = logging.getLogger("jarvis.lazy")
 class LazyModule:
     """Wrapper that loads the real module on first attribute access."""
 
-    def __init__(self, name: str, package: Optional[str] = None):
+    def __init__(self, name: str, package: str | None = None):
         self._name = name
         self._package = package
         self._module: Any = None

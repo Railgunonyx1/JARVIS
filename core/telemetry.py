@@ -1,15 +1,15 @@
 """Telemetry — Latency Tracker + OpenTelemetry-style Tracer + LLM Observability."""
 
+import json
+import logging
+import threading
 import time
 import uuid
-import threading
-import logging
-from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any, Iterator
 from collections import defaultdict
-import json
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("jarvis.telemetry")
 
@@ -54,11 +54,11 @@ class LatencyTracker:
     """Tracks latency across all pipeline stages."""
 
     def __init__(self, max_history: int = 1000):
-        self._stages: Dict[str, StageMetrics] = {}
-        self._history: List[Dict[str, Any]] = []
+        self._stages: dict[str, StageMetrics] = {}
+        self._history: list[dict[str, Any]] = []
         self._max_history = max_history
         self._lock = threading.Lock()
-        self._current_request: Dict[str, float] = {}
+        self._current_request: dict[str, float] = {}
         self._request_start: float = 0.0
 
     def start_request(self) -> None:
@@ -89,7 +89,7 @@ class LatencyTracker:
                 self._stages[stage_name] = StageMetrics(stage_name)
             self._stages[stage_name].record(0, error=True)
 
-    def end_request(self) -> Dict[str, float]:
+    def end_request(self) -> dict[str, float]:
         """End the current request and return stage timings."""
         now = time.perf_counter()
         with self._lock:
@@ -129,7 +129,7 @@ class LatencyTracker:
                 self._stages[stage] = StageMetrics(stage)
             self._stages[stage].record(ms, error=error)
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of all tracked stages."""
         with self._lock:
             return {
@@ -154,7 +154,7 @@ class LatencyTracker:
             json.dump(self._history, f, indent=2)
 
 
-_telemetry: Optional[LatencyTracker] = None
+_telemetry: LatencyTracker | None = None
 
 
 def get_tracker() -> LatencyTracker:
@@ -199,11 +199,11 @@ class Span:
     name: str
     trace_id: str
     span_id: str
-    parent_span_id: Optional[str] = None
+    parent_span_id: str | None = None
     start_time: float = field(default_factory=time.perf_counter)
-    end_time: Optional[float] = None
-    attributes: Dict[str, Any] = field(default_factory=dict)
-    events: List[Dict[str, Any]] = field(default_factory=list)
+    end_time: float | None = None
+    attributes: dict[str, Any] = field(default_factory=dict)
+    events: list[dict[str, Any]] = field(default_factory=list)
     status: str = "OK"  # OK | ERROR
 
     def finish(self):
@@ -215,7 +215,7 @@ class Span:
             return 0.0
         return (self.end_time - self.start_time) * 1000
 
-    def add_event(self, name: str, attributes: Optional[dict] = None):
+    def add_event(self, name: str, attributes: dict | None = None):
         self.events.append({
             "name": name,
             "timestamp": time.perf_counter(),
@@ -247,10 +247,10 @@ class TraceProvider:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._traces: Dict[str, List[Span]] = defaultdict(list)
-        self._active_spans: Dict[str, Span] = {}  # span_id -> Span (per thread)
+        self._traces: dict[str, list[Span]] = defaultdict(list)
+        self._active_spans: dict[str, Span] = {}  # span_id -> Span (per thread)
 
-    def start_trace(self, name: str, attributes: Optional[dict] = None) -> Span:
+    def start_trace(self, name: str, attributes: dict | None = None) -> Span:
         """Begin a new trace with a root span."""
         trace_id = str(uuid.uuid4())[:16]
         span_id = str(uuid.uuid4())[:16]
@@ -265,8 +265,8 @@ class TraceProvider:
             self._active_spans[span_id] = span
         return span
 
-    def start_span(self, name: str, parent: Optional[Span] = None,
-                   attributes: Optional[dict] = None) -> Span:
+    def start_span(self, name: str, parent: Span | None = None,
+                   attributes: dict | None = None) -> Span:
         """Create a child span. If no parent, starts a new trace."""
         span_id = str(uuid.uuid4())[:16]
         if parent is not None:
@@ -294,8 +294,8 @@ class TraceProvider:
             self._active_spans.pop(span.span_id, None)
 
     @contextmanager
-    def span(self, name: str, parent: Optional[Span] = None,
-             attributes: Optional[dict] = None):
+    def span(self, name: str, parent: Span | None = None,
+             attributes: dict | None = None):
         """Context manager: creates, yields, and auto-finishes a span."""
         s = self.start_span(name, parent=parent, attributes=attributes)
         try:
@@ -307,15 +307,15 @@ class TraceProvider:
         else:
             self.end_span(s)
 
-    def get_trace(self, trace_id: str) -> List[Span]:
+    def get_trace(self, trace_id: str) -> list[Span]:
         with self._lock:
             return list(self._traces.get(trace_id, []))
 
-    def get_all_traces(self) -> Dict[str, List[Span]]:
+    def get_all_traces(self) -> dict[str, list[Span]]:
         with self._lock:
             return {tid: list(spans) for tid, spans in self._traces.items()}
 
-    def export_json(self) -> List[dict]:
+    def export_json(self) -> list[dict]:
         with self._lock:
             result = []
             for tid, spans in self._traces.items():
@@ -378,7 +378,7 @@ class LLMObservability:
     """Langfuse-style tracking of LLM calls."""
 
     def __init__(self, max_records: int = 5000):
-        self._records: List[LLMCallRecord] = []
+        self._records: list[LLMCallRecord] = []
         self._max_records = max_records
         self._lock = threading.Lock()
         self._session_start = time.time()
@@ -430,19 +430,19 @@ class LLMObservability:
                 "model_breakdown": dict(model_breakdown),
             }
 
-    def recent_calls(self, n: int = 10) -> List[dict]:
+    def recent_calls(self, n: int = 10) -> list[dict]:
         with self._lock:
             return [r.to_dict() for r in self._records[-n:]]
 
-    def export_json(self) -> List[dict]:
+    def export_json(self) -> list[dict]:
         with self._lock:
             return [r.to_dict() for r in self._records]
 
 
 # ── Global instances ─────────────────────────────────────────
 
-_trace_provider: Optional[TraceProvider] = None
-_llm_observability: Optional[LLMObservability] = None
+_trace_provider: TraceProvider | None = None
+_llm_observability: LLMObservability | None = None
 
 
 def get_trace_provider() -> TraceProvider:

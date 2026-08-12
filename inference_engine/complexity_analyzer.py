@@ -1,11 +1,10 @@
 """Complexity Analyzer — scores text complexity and caches results for repeated queries."""
 
-import re
-import time
 import hashlib
-import threading
 import logging
-from typing import Dict, Optional, List
+import re
+import threading
+import time
 
 logger = logging.getLogger("jarvis.inference_engine.complexity_analyzer")
 
@@ -37,10 +36,10 @@ class ComplexityAnalyzer:
     """Scores input text on a 0–1 complexity scale with factor breakdown and result caching."""
 
     def __init__(self) -> None:
-        self._cache: Dict[str, tuple] = {}
+        self._cache: dict[str, tuple] = {}
         self._lock = threading.Lock()
         self._analyzed_count: int = 0
-        self._category_counts: Dict[str, int] = {
+        self._category_counts: dict[str, int] = {
             "trivial": 0,
             "simple": 0,
             "moderate": 0,
@@ -60,7 +59,7 @@ class ComplexityAnalyzer:
                 if now < expiry:
                     return result
 
-        factors: List[dict] = []
+        factors: list[dict] = []
         score = 0.0
 
         words = text.split()
@@ -133,7 +132,7 @@ class ComplexityAnalyzer:
 
         return result
 
-    def is_cached(self, text: str) -> Optional[dict]:
+    def is_cached(self, text: str) -> dict | None:
         """Return cached analysis result if available and not expired, else None."""
         text_hash = self._hash(text)
         now = time.perf_counter()
@@ -172,7 +171,7 @@ class ComplexityAnalyzer:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
 
 
-_complexity_analyzer: Optional[ComplexityAnalyzer] = None
+_complexity_analyzer: ComplexityAnalyzer | None = None
 _complexity_analyzer_lock = threading.Lock()
 
 

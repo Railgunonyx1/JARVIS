@@ -190,7 +190,7 @@ def parse_opts_online():
     parser.add_argument('--width_mult', default=1.0, type=float, help='The applied width multiplier to scale number of filters')
     parser.add_argument('--width_mult_det', default=1.0, type=float, help='The applied width multiplier to scale number of filters')
     parser.add_argument('--width_mult_clf', default=1.0, type=float, help='The applied width multiplier to scale number of filters')
-    
+
     parser.add_argument('--manual_seed', default=1, type=int, help='Manually set random seed')
     parser.add_argument('--det_strategy', default='raw', type=str, help='Detector filter (raw | median | ma | ewma)')
     parser.add_argument('--det_queue_size', default=1, type=int, help='Detector queue size')
@@ -204,7 +204,7 @@ def parse_opts_online():
     parser.add_argument('--ft_portion', default='complete', type=str, help='The portion of the model to apply fine tuning, either complete or last_layer')
     parser.add_argument('--groups', default=3, type=int, help='The number of groups at group convolutions at conv layers')
     parser.add_argument('--downsample', default=1, type=int, help='Downsampling. Selecting 1 frame out of N')
-    
+
     args = parser.parse_args()
 
     return args

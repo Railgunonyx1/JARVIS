@@ -1,12 +1,12 @@
 import csv
-import torch
-from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report, confusion_matrix
 import shutil
+
 import numpy as np
+import torch
+from sklearn.metrics import precision_score, recall_score
 
 
-
-class AverageMeter(object):
+class AverageMeter:
     """Computes and stores the average and current value"""
 
     def __init__(self):
@@ -25,7 +25,7 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-class Logger(object):
+class Logger:
 
     def __init__(self, path, header):
         self.log_file = open(path, 'w')
@@ -126,7 +126,7 @@ def LevenshteinDistance(a, b):
 
 
 def load_value_file(file_path):
-    with open(file_path, 'r') as input_file:
+    with open(file_path) as input_file:
         value = float(input_file.read().rstrip('\n\r'))
 
     return value

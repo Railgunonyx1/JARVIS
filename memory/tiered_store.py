@@ -1,13 +1,13 @@
 """Tiered Memory Store — hot/warm/cold tiered storage with LRU eviction and automatic promotion."""
 
 import json
-import time
-import sqlite3
 import logging
+import sqlite3
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger("jarvis.memory_engine.tiered_store")
 
@@ -20,7 +20,7 @@ class TieredMemoryStore:
 
     def __init__(
         self,
-        data_dir: Optional[Path] = None,
+        data_dir: Path | None = None,
         hot_max: int = 100,
         warm_max: int = 1000,
     ):
@@ -32,7 +32,7 @@ class TieredMemoryStore:
         self._warm_max = warm_max
 
         self._hot: OrderedDict[str, Any] = OrderedDict()
-        self._hot_ts: Dict[str, float] = {}
+        self._hot_ts: dict[str, float] = {}
         self._lock = threading.Lock()
 
         self._stats = {
@@ -42,7 +42,7 @@ class TieredMemoryStore:
             "misses": 0,
         }
 
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._init_db()
 
     def _init_db(self) -> None:
@@ -90,7 +90,7 @@ class TieredMemoryStore:
 
         logger.debug("Stored key='%s' tier='%s'", key, tier)
 
-    def retrieve(self, key: str) -> Optional[Any]:
+    def retrieve(self, key: str) -> Any | None:
         """Search hot -> warm -> cold tiers. Promotes on access."""
         with self._lock:
             if key in self._hot:
@@ -253,7 +253,7 @@ class TieredMemoryStore:
         except Exception as e:
             logger.error("SQLite put failed for key='%s': %s", key, e)
 
-    def _get_sql(self, key: str) -> Optional[dict]:
+    def _get_sql(self, key: str) -> dict | None:
         try:
             row = self._conn.execute(
                 "SELECT * FROM memory_tier WHERE key=?", (key,)

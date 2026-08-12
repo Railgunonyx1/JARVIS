@@ -25,9 +25,10 @@ pytest.importorskip("websockets")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from websockets.asyncio.client import connect  # noqa: E402
+
 from daemon.client import DaemonClient  # noqa: E402
 from daemon.server import DaemonServer  # noqa: E402
-from websockets.asyncio.client import connect  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 

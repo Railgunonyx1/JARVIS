@@ -4,12 +4,11 @@ Provides moving average prediction, linear regression trend-based prediction,
 z-score anomaly detection, and configurable alert thresholds.
 """
 
-import math
-import time
 import logging
+import math
 import threading
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("jarvis.digital_twin.predictor")
 
@@ -30,7 +29,7 @@ class ResourceType(str, Enum):
     PROCESS_COUNT = "process_count"
 
 
-_DEFAULT_THRESHOLDS: Dict[str, Dict[str, float]] = {
+_DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
     ResourceType.CPU.value: {"warning": 70.0, "critical": 90.0},
     ResourceType.RAM.value: {"warning": 75.0, "critical": 90.0},
     ResourceType.PROCESS_COUNT.value: {"warning": 400.0, "critical": 600.0},
@@ -38,16 +37,16 @@ _DEFAULT_THRESHOLDS: Dict[str, Dict[str, float]] = {
 
 
 class ResourcePredictor:
-    def __init__(self, thresholds: Optional[Dict[str, Dict[str, float]]] = None):
+    def __init__(self, thresholds: dict[str, dict[str, float]] | None = None):
         self._thresholds = thresholds or dict(_DEFAULT_THRESHOLDS)
         self._lock = threading.Lock()
-        self._history_cache: Dict[str, List[float]] = {}
-        self._cache_timestamps: Dict[str, List[float]] = {}
+        self._history_cache: dict[str, list[float]] = {}
+        self._cache_timestamps: dict[str, list[float]] = {}
         self._cache_max_age: float = 5.0
         self._cache_set_at: float = 0.0
 
     def simple_moving_average(
-        self, values: List[float], window: int = 10
+        self, values: list[float], window: int = 10
     ) -> float:
         if not values:
             return 0.0
@@ -55,7 +54,7 @@ class ResourcePredictor:
         return sum(values[:w]) / w
 
     def weighted_moving_average(
-        self, values: List[float], window: int = 10
+        self, values: list[float], window: int = 10
     ) -> float:
         if not values:
             return 0.0
@@ -67,8 +66,8 @@ class ResourcePredictor:
         return weighted_sum / total_weight
 
     def linear_regression_prediction(
-        self, timestamps: List[float], values: List[float], seconds_ahead: float = 0
-    ) -> Dict[str, Any]:
+        self, timestamps: list[float], values: list[float], seconds_ahead: float = 0
+    ) -> dict[str, Any]:
         n = len(values)
         if n < 2:
             return {
@@ -116,8 +115,8 @@ class ResourcePredictor:
         }
 
     def detect_anomalies_zscore(
-        self, current: float, history: List[float], threshold: float = 2.5
-    ) -> Dict[str, Any]:
+        self, current: float, history: list[float], threshold: float = 2.5
+    ) -> dict[str, Any]:
         n = len(history)
         if n < 5:
             return {
@@ -159,8 +158,8 @@ class ResourcePredictor:
         }
 
     def detect_anomalies_iqr(
-        self, current: float, history: List[float], multiplier: float = 1.5
-    ) -> Dict[str, Any]:
+        self, current: float, history: list[float], multiplier: float = 1.5
+    ) -> dict[str, Any]:
         n = len(history)
         if n < 10:
             return {
@@ -196,7 +195,7 @@ class ResourcePredictor:
             "reason": reason,
         }
 
-    def check_thresholds(self, metric: str, value: float) -> Optional[Dict[str, Any]]:
+    def check_thresholds(self, metric: str, value: float) -> dict[str, Any] | None:
         thresholds = self._thresholds.get(metric)
         if not thresholds:
             return None
@@ -232,17 +231,17 @@ class ResourcePredictor:
         with self._lock:
             self._thresholds[metric] = {"warning": warning, "critical": critical}
 
-    def get_thresholds(self) -> Dict[str, Dict[str, float]]:
+    def get_thresholds(self) -> dict[str, dict[str, float]]:
         with self._lock:
             return dict(self._thresholds)
 
     def multi_step_forecast(
         self,
-        timestamps: List[float],
-        values: List[float],
+        timestamps: list[float],
+        values: list[float],
         steps: int = 6,
         step_seconds: float = 300.0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if len(timestamps) < 2 or len(values) < 2:
             return []
 
@@ -264,8 +263,8 @@ class ResourcePredictor:
         return forecast
 
     def compute_ema(
-        self, values: List[float], span: int = 10
-    ) -> List[float]:
+        self, values: list[float], span: int = 10
+    ) -> list[float]:
         if not values:
             return []
         alpha = 2.0 / (span + 1)
@@ -276,8 +275,8 @@ class ResourcePredictor:
         return ema
 
     def rate_of_change(
-        self, values: List[float], timestamps: Optional[List[float]] = None
-    ) -> Dict[str, Any]:
+        self, values: list[float], timestamps: list[float] | None = None
+    ) -> dict[str, Any]:
         n = len(values)
         if n < 2:
             return {"current_rate": 0.0, "average_rate": 0.0}
@@ -303,7 +302,7 @@ class ResourcePredictor:
             "is_accelerating": abs(current_rate) > abs(avg_rate) * 1.5,
         }
 
-    def get_prediction_summary(self, snapshots: List[Any]) -> Dict[str, Any]:
+    def get_prediction_summary(self, snapshots: list[Any]) -> dict[str, Any]:
         if not snapshots:
             return {"status": "no_data", "predictions": {}}
 
