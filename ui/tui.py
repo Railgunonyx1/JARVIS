@@ -571,6 +571,8 @@ class JarvisApp(App):
                 await self._refresh_live()
             else:
                 logs.write(f"daemon still offline: {self._data.last_error}")
+            self.query_one(TopBar).set_daemon_state(self._data.connected)
+            self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
             return
 
         if not self._data.connected:
@@ -613,6 +615,7 @@ class JarvisApp(App):
                 logs.write(f"mode set to {result.get('mode')}")
             else:
                 logs.write(f"mode change failed: {result.get('error')}")
+            self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
             return
 
         if cmd == "/memory":

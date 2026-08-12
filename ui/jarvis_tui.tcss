@@ -102,6 +102,27 @@ Screen {
 #panel-todo      { column-span: 1; row-span: 1; }
 #panel-context   { column-span: 1; row-span: 2; }
 #panel-mem       { column-span: 1; row-span: 1; }
+#panel-plan      { column-span: 1; row-span: 1; }
+#panel-mcp       { column-span: 1; row-span: 1; }
+
+/* ---- Mode selector ---- */
+#mode-select {
+    width: auto;
+    height: 1;
+    background: white;
+    color: black;
+    border: solid black;
+    padding: 0 1;
+    margin: 1 1 0 1;
+}
+#mode-select > .select--option {
+    background: white;
+    color: black;
+}
+#mode-select:disabled {
+    background: #f0f0f0;
+    color: #666666;
+}
 
 /* ---- Token usage display ---- */
 .token-count {
