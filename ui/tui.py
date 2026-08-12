@@ -33,6 +33,7 @@ from textual.widgets import (
     ListView,
     Log,
     ProgressBar,
+    Select,
     Sparkline,
     Static,
 )
@@ -57,9 +58,14 @@ SIDEBAR_ITEMS = [
 # ------------------------------------------------------------------- widgets
 
 class TopBar(Horizontal):
+    MODES = [("PLAN", "plan"), ("CONTROLLED", "controlled"),
+             ("SMART", "smart"), ("AGENT", "agent")]
+
     def compose(self) -> ComposeResult:
         yield Static("JARVIS TERMINAL", id="topbar-title")
         yield Static("SYSTEM DASHBOARD", id="topbar-center")
+        yield Select(self.MODES, value="smart", allow_blank=False,
+                     prompt="MODE", compact=True, id="mode-select")
         yield Static(self._now(), id="topbar-clock")
 
     def _now(self) -> str:
@@ -70,6 +76,32 @@ class TopBar(Horizontal):
 
     def _tick(self) -> None:
         self.query_one("#topbar-clock", Static).update(self._now())
+
+    def sync_mode(self, mode: str) -> None:
+        """Sync the selector with the daemon's current mode (no-op if blank)."""
+        if not mode:
+            return
+        self.query_one("#mode-select", Select).value = mode
+
+    def set_daemon_state(self, connected: bool) -> None:
+        self.query_one("#mode-select", Select).disabled = not connected
+
+    async def on_select_changed(self, event: Select.Changed) -> None:
+        mode = str(event.value)
+        # Skip offline and programmatic-sync echoes (mount/refresh set the
+        # value too, which also fires Changed).
+        if not self.app.data_source.connected:
+            return
+        if self.app.data_source.status.get("mode") == mode:
+            return
+        logs = self.app.query_one(LogsPanel)
+        result = await self.app.data_source.set_mode(mode)
+        if result.get("success"):
+            logs.write(f"mode set to {result.get('mode')}")
+        else:
+            logs.write(f"mode change failed: {result.get('error')}")
+            current = self.app.data_source.status.get("mode", "smart")
+            self.query_one("#mode-select", Select).value = current
 
 
 class Sidebar(Vertical):
@@ -211,7 +243,67 @@ class TasksPanel(Panel):
             table.add_row(task_id, name, status_markup, progress_cell, time_left)
 
 
+class AgentPlanPanel(Panel):
+    """Agent plan steps with completion states (mock until the daemon
+    exposes a plan endpoint)."""
+
+    def __init__(self):
+        super().__init__("AGENT PLAN", "panel-plan")
+
+    def compose(self) -> ComposeResult:
+        yield from super().compose()
+        yield DataTable(id="plan-table")
+
+    def on_mount(self):
+        table = self.query_one("#plan-table", DataTable)
+        table.add_columns("#", "STEP", "STATUS")
+        table.cursor_type = "row"
+
+    def update_data(self, rows):
+        table = self.query_one("#plan-table", DataTable)
+        table.clear()
+        done = sum(1 for _, _, state in rows if state == "DONE")
+        for num, step, state in rows:
+            state_markup = f"[#1DB954]DONE[/#1DB954]" \
+                if state == "DONE" else f"[dim]PENDING[/dim]"
+            table.add_row(num, step, state_markup)
+        self.query_one(".panel-title", Static).update(f"AGENT PLAN ({done}/{len(rows)})")
+
+
+class McpPanel(Panel):
+    """MCP server registry status (mock until the daemon exposes it)."""
+
+    def __init__(self):
+        super().__init__("MCP SERVERS", "panel-mcp")
+
+    def compose(self) -> ComposeResult:
+        yield from super().compose()
+        yield DataTable(id="mcp-table")
+
+    def on_mount(self):
+        table = self.query_one("#mcp-table", DataTable)
+        table.add_columns("SERVER", "VERSION", "STATUS")
+        table.cursor_type = "row"
+
+    def update_data(self, rows):
+        table = self.query_one("#mcp-table", DataTable)
+        table.clear()
+        for server, version, status in rows:
+            status_markup = f"[#1DB954]{status}[/#1DB954]" \
+                if status == "ONLINE" else f"[#B00020]{status}[/#B00020]"
+            table.add_row(server, version, status_markup)
+
+
 class LogsPanel(Panel):
+    _TAG_STYLES = {
+        "tool": "[#1DB954][TOOL][/#1DB954]",
+        "ok": "[#1DB954][OK][/#1DB954]",
+        "memory": "[b][MEMORY][/b]",
+        "gate": "[dim][GATE][/dim]",
+        "task": "[b][TASK][/b]",
+        "info": "[INFO]",
+    }
+
     def __init__(self):
         super().__init__("SYSTEM LOGS", "panel-logs")
 
@@ -222,6 +314,23 @@ class LogsPanel(Panel):
     def write(self, message: str):
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         self.query_one("#logs-view", Log).write_line(f"[{ts}] | {message}")
+
+    def write_event(self, event_name: str):
+        """Write a daemon observer event as a tagged activity-stream line."""
+        name = event_name.lower()
+        if "memory" in name:
+            tag = "memory"
+        elif "tool" in name or "step" in name:
+            tag = "tool"
+        elif "permission" in name:
+            tag = "gate"
+        elif "task" in name:
+            tag = "task"
+        elif "completed" in name or name.endswith("ok") or "passed" in name:
+            tag = "ok"
+        else:
+            tag = "info"
+        self.write(f"{self._TAG_STYLES[tag]} {event_name}")
 
     def clear(self):
         self.query_one("#logs-view", Log).clear()
@@ -310,6 +419,8 @@ class JarvisApp(App):
                 yield TodoPanel()
                 yield ContextPanel()
                 yield SparklinePanel("MEMORY USAGE", "panel-mem", "mem-spark")
+                yield AgentPlanPanel()
+                yield McpPanel()
         yield CommandBar(id="command-bar")
 
     def toggle_todo(self) -> None:
@@ -342,6 +453,13 @@ class JarvisApp(App):
         self.query_one(TasksPanel).update_data(self._data.task_rows)
         if self._data.using_mock_tasks:
             logs.write("tasks: mock data (no task endpoint on the daemon yet)")
+        self.query_one(AgentPlanPanel).update_data(self._data.plan_rows)
+        if self._data.using_mock_plan:
+            logs.write("agent plan: mock data (no plan endpoint on the daemon yet)")
+        self.query_one(McpPanel).update_data(self._data.mcp_rows)
+        if self._data.using_mock_mcp:
+            logs.write("mcp servers: mock data (no MCP registry endpoint on the daemon yet)")
+        self.query_one(TopBar).set_daemon_state(self._data.connected)
         self.set_interval(20.0, self._refresh)
         self.set_interval(5.0, self._reconnect)
         self.set_interval(30.0, self._refresh_live)
@@ -357,6 +475,8 @@ class JarvisApp(App):
         else:
             logs.write(f"daemon offline: {self._data.last_error} — showing mock data")
             logs.write("start it in another terminal with `jarvis daemon start`")
+        self.query_one(TopBar).set_daemon_state(self._data.connected)
+        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
 
     async def _reconnect(self) -> None:
         if self._data.connected:
@@ -366,6 +486,8 @@ class JarvisApp(App):
         if self._data.connected:
             logs.write("daemon connected")
             await self._refresh_live()
+        self.query_one(TopBar).set_daemon_state(self._data.connected)
+        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
 
     async def _refresh_live(self) -> None:
         await self._data.refresh()
@@ -373,6 +495,7 @@ class JarvisApp(App):
         if self._data.using_mock_providers:
             logs = self.query_one(LogsPanel)
             logs.write("providers: mock data (no keys configured on the daemon)")
+        self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
 
     def _refresh(self) -> None:
         snap = self._data.snapshot()

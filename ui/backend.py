@@ -18,7 +18,13 @@ from typing import Any
 
 import psutil
 
-from ui.providers import MOCK_PROVIDERS, MOCK_TASKS, provider_rows
+from ui.providers import (
+    MOCK_MCP,
+    MOCK_PLAN,
+    MOCK_PROVIDERS,
+    MOCK_TASKS,
+    provider_rows,
+)
 
 __all__ = ["TuiDataSource"]
 
@@ -236,6 +242,22 @@ class TuiDataSource:
     @property
     def using_mock_tasks(self) -> bool:
         return self._mock_tasks
+
+    @property
+    def plan_rows(self) -> list[tuple[str, str, str]]:
+        return list(MOCK_PLAN)  # mock — daemon has no plan endpoint yet
+
+    @property
+    def using_mock_plan(self) -> bool:
+        return True
+
+    @property
+    def mcp_rows(self) -> list[tuple[str, str, str]]:
+        return list(MOCK_MCP)  # mock — daemon has no MCP registry endpoint yet
+
+    @property
+    def using_mock_mcp(self) -> bool:
+        return True
 
     @property
     def cpu_history(self) -> list[float]:
