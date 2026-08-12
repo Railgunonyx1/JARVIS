@@ -274,7 +274,13 @@ class CommandBar(Horizontal):
 class JarvisApp(App):
     CSS_PATH = "jarvis_tui.tcss"
     TITLE = "JARVIS Terminal"
-    BINDINGS = [("q", "quit", "Quit"), ("t", "toggle_todo", "Toggle todo"), ("c", "toggle_context", "Toggle context")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("t", "toggle_todo", "Toggle todo"),
+        ("ctrl+t", "toggle_todo", "Toggle todo"),
+        ("c", "toggle_context", "Toggle context"),
+        ("ctrl+c", "toggle_context", "Toggle context"),
+    ]
 
     def __init__(self, data_source: TuiDataSource | None = None,
                  mock: bool = False, url: str | None = None):
