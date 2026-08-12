@@ -379,13 +379,11 @@ class JarvisApp(App):
         self.query_one(SystemOverviewPanel).update_snapshot(snap)
         self.query_one("#cpu-spark", Sparkline).data = self._data.cpu_history
         self.query_one("#mem-spark", Sparkline).data = self._data.ram_history
-        self.query_one("#token-spark", Sparkline).data = self._data.token_history()
-        # Update token usage display
-        token_data = self._data.token_usage() if hasattr(self._data, 'token_usage') else (0, 0)
-        self.query_one(SparklinePanel, "#panel-tokens").update_data(
-            self._data.token_history(),
-            token_count=token_data[0] if len(token_data) > 0 else 0,
-            token_total=token_data[1] if len(token_data) > 1 else 0
+        token_data = self._data.token_history()
+        token_used, token_total = self._data.token_usage()
+        self.query_one("#token-spark", Sparkline).data = token_data
+        self.query_one("#panel-tokens", SparklinePanel).update_data(
+            token_data, token_count=token_used, token_total=token_total,
         )
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -398,6 +396,9 @@ class JarvisApp(App):
 
     async def _run_command(self, command: str) -> None:
         logs = self.query_one(LogsPanel)
+        if command.startswith("/"):
+            await self._run_slash(command)
+            return
         if not self._data.connected:
             logs.write("not sent — daemon offline (start with `jarvis daemon start`)")
             return
@@ -411,6 +412,99 @@ class JarvisApp(App):
             logs.write(f"  done \u2713 {('(' + trace + ')') if trace else ''}")
         else:
             logs.write(f"  failed: {result.get('error', 'unknown error')}")
+
+    async def _run_slash(self, command: str) -> None:
+        logs = self.query_one(LogsPanel)
+        parts = command.split(maxsplit=1)
+        cmd, arg = parts[0].lower(), parts[1].strip() if len(parts) > 1 else ""
+
+        if cmd == "/help":
+            for line in (
+                "commands:",
+                "  /help            show this help",
+                "  /mode [name]     show or set mode (plan/controlled/smart/agent)",
+                "  /status          show daemon status",
+                "  /models          show provider model status",
+                "  /memory <query>  search daemon memory",
+                "  /reconnect       reconnect to the daemon",
+                "  /clear           clear the log",
+                "  /exit            quit the dashboard",
+            ):
+                logs.write(line)
+            return
+
+        if cmd == "/clear":
+            logs.clear()
+            return
+
+        if cmd == "/exit":
+            self.exit()
+            return
+
+        if cmd == "/reconnect":
+            await self._data.try_reconnect()
+            if self._data.connected:
+                logs.write("daemon reconnected")
+                await self._refresh_live()
+            else:
+                logs.write(f"daemon still offline: {self._data.last_error}")
+            return
+
+        if not self._data.connected:
+            logs.write("not sent — daemon offline (start with `jarvis daemon start`)")
+            return
+
+        if cmd == "/status":
+            status = self._data.status
+            logs.write(
+                f"pid={status.get('pid', '-')} mode={status.get('mode', '-')} "
+                f"port={status.get('port', '-')} provider={status.get('provider', '-')}"
+            )
+            logs.write(
+                f"model={status.get('model', '-')} tools={status.get('tools', '-')} "
+                f"busy={status.get('busy', '-')} last_goal={status.get('last_goal', '-')!r}"
+            )
+            return
+
+        if cmd == "/models":
+            models = self._data.models
+            if not models:
+                logs.write("no models configured")
+                return
+            for name in sorted(models):
+                info = models[name] or {}
+                online = bool(info.get("available")) and bool(info.get("package_ok", True))
+                color = "#1DB954" if online else "#B00020"
+                logs.write(
+                    f"[{color}]{'ONLINE' if online else 'OFFLINE'}[/{color}] "
+                    f"{name.upper()} -> {info.get('model', 'unknown')}"
+                )
+            return
+
+        if cmd == "/mode":
+            if not arg:
+                logs.write(f"current mode: {self._data.status.get('mode', '-')}")
+                return
+            result = await self._data.set_mode(arg)
+            if result.get("success"):
+                logs.write(f"mode set to {result.get('mode')}")
+            else:
+                logs.write(f"mode change failed: {result.get('error')}")
+            return
+
+        if cmd == "/memory":
+            if not arg:
+                logs.write("usage: /memory <query>")
+                return
+            hits = await self._data.memory_search(arg)
+            if not hits:
+                logs.write(f"no memory hits for {arg!r}")
+                return
+            for hit in hits:
+                logs.write(f"  {hit}")
+            return
+
+        logs.write(f"unknown command: {cmd} (try /help)")
 
 
 if __name__ == "__main__":

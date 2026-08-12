@@ -154,6 +154,27 @@ class TuiDataSource:
             self._last_error = str(exc)
             return {"success": False, "error": str(exc)}
 
+    async def set_mode(self, mode: str) -> dict:
+        """Switch the daemon's permission mode; returns ``{"success": ...}``."""
+        if not self._connected or self._client is None:
+            return {"success": False,
+                    "error": self._last_error or "daemon not connected"}
+        try:
+            result = await self._client.set_mode(mode)
+            self._status["mode"] = result.get("mode", mode)
+            return {"success": True, "mode": result.get("mode", mode)}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def memory_search(self, query: str) -> list[dict]:
+        """Search daemon memory; returns a list of hits (possibly empty)."""
+        if not self._connected or self._client is None:
+            return []
+        try:
+            return await self._client.memory_search(query)
+        except Exception:
+            return []
+
     # ── live samples (local psutil, no daemon needed) ───────────────────
 
     def snapshot(self) -> dict[str, Any]:
@@ -179,6 +200,12 @@ class TuiDataSource:
             max(0, self._token_history[-1] + 1.5)
         ]
         return self._token_history
+
+    def token_usage(self) -> tuple[int, int]:
+        """Mock ``(current, total)`` token figures for the usage readout."""
+        total = 128_000
+        current = int(self._token_history[-1] * 1000) if self._token_history else 0
+        return min(current, total), total
 
     # ── state for the UI ────────────────────────────────────────────────
 

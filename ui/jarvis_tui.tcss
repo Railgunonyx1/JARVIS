@@ -81,21 +81,27 @@ Screen {
     background: white;
 }
 
-/* ---- Grid ---- */
+/* ---- Grid ----
+   Spec layout (row-major auto-placement, matching compose() order):
+     row 1: System Overview | CPU Sparkline | Provider Status
+     row 2: Token Usage     | Active Tasks   | System Logs
+     row 3: Todo (Ctrl+T)   | Context (Ctrl+C, 2 rows tall) | Memory Sparkline
+   The context panel is the only one that spans 2 grid rows — the
+   deliberately "bigger" window. */
 #dashboard-grid {
-    grid-size: 3 3;
+    grid-size: 3 4;
     grid-gutter: 1;
     padding: 1;
 }
 #panel-overview { column-span: 1; row-span: 1; }
 #panel-cpu      { column-span: 1; row-span: 1; }
-#panel-mem      { column-span: 1; row-span: 1; }
 #panel-providers { column-span: 1; row-span: 1; }
-#panel-tasks     { column-span: 2; row-span: 1; }
+#panel-tokens    { column-span: 1; row-span: 1; }
+#panel-tasks     { column-span: 1; row-span: 1; }
 #panel-logs      { column-span: 1; row-span: 1; }
-#panel-tokens    { column-span: 2; row-span: 1; }
 #panel-todo      { column-span: 1; row-span: 1; }
 #panel-context   { column-span: 1; row-span: 2; }
+#panel-mem       { column-span: 1; row-span: 1; }
 
 /* ---- Token usage display ---- */
 .token-count {
