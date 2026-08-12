@@ -264,8 +264,8 @@ class AgentPlanPanel(Panel):
         table.clear()
         done = sum(1 for _, _, state in rows if state == "DONE")
         for num, step, state in rows:
-            state_markup = f"[#1DB954]DONE[/#1DB954]" \
-                if state == "DONE" else f"[dim]PENDING[/dim]"
+            state_markup = "[#1DB954]DONE[/#1DB954]" \
+                if state == "DONE" else "[dim]PENDING[/dim]"
             table.add_row(num, step, state_markup)
         self.query_one(".panel-title", Static).update(f"AGENT PLAN ({done}/{len(rows)})")
 

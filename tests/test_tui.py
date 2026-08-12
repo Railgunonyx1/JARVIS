@@ -69,3 +69,63 @@ async def test_dashboard_boots_in_mock_mode():
         assert app.query_one(LogsPanel) is not None
         assert app.query_one("#providers-table") is not None
         assert app.query_one("#tasks-table") is not None
+
+
+# ── new feature panels (mock mode) ───────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_plan_and_mcp_panels_render():
+    pytest.importorskip("textual")
+
+    from ui.backend import TuiDataSource
+    from ui.tui import AgentPlanPanel, JarvisApp, McpPanel
+
+    source = TuiDataSource(mock=True)
+    app = JarvisApp(data_source=source)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        plan = app.query_one(AgentPlanPanel)
+        plan_table = app.query_one("#plan-table")
+        assert plan_table.row_count == len(source.plan_rows)
+        assert "4/6" in plan.title
+
+        mcp = app.query_one(McpPanel)
+        mcp_table = app.query_one("#mcp-table")
+        assert mcp_table.row_count == len(source.mcp_rows)
+        assert all(row[2] == "ONLINE" for row in source.mcp_rows)
+
+
+@pytest.mark.asyncio
+async def test_mode_select_present_and_disabled_offline():
+    pytest.importorskip("textual")
+
+    from ui.backend import TuiDataSource
+    from ui.tui import JarvisApp
+
+    app = JarvisApp(data_source=TuiDataSource(mock=True))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        select = app.query_one("#mode-select")
+        assert select.value == "smart"
+        assert select.disabled  # daemon offline at boot
+
+
+@pytest.mark.asyncio
+async def test_write_event_tags():
+    pytest.importorskip("textual")
+
+    from ui.tui import JarvisApp, LogsPanel
+
+    app = JarvisApp(data_source=TuiDataSource(mock=True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        logs = app.query_one(LogsPanel)
+        logs.clear()
+        logs.write_event("tool_execution.started")
+        logs.write_event("task.completed")
+        text = logs.query_one("#logs-view").text_content
+        assert "[TOOL]" in text
+        assert "[OK]" in text
