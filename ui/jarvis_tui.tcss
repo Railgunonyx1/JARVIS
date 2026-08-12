@@ -1,196 +1,201 @@
 /* jarvis_tui.tcss
-   White/black engineering-console theme, green reserved for
-   active/healthy status only — matches the mockup exactly:
-   thin borders, monospace, dense panels, no decoration for
-   decoration's sake. */
+   JARVIS MK-X console theme — warm dark panels, amber accent,
+   matching the dockview console prototype (extracted_ui/). */
 
 Screen {
-    background: white;
-    color: black;
+    background: #171614;
+    color: #cfc9bf;
 }
 
 /* ---- Top bar ---- */
 #topbar {
     height: 3;
-    background: white;
-    color: black;
-    border-bottom: solid black;
+    background: #1b1a18;
+    color: #cfc9bf;
+    border-bottom: solid #37342f;
     padding: 0 2;
 }
 #topbar-title {
     width: auto;
     content-align: left middle;
     text-style: bold;
+    color: #c98a3d;
 }
-#topbar-center {
+#topbar-model {
+    width: auto;
+    content-align: left middle;
+    color: #9b968b;
+    margin-left: 2;
+}
+#topbar-daemon {
     width: 1fr;
-    content-align: center middle;
-    text-style: bold;
+    content-align: right middle;
+    padding-right: 2;
 }
 #topbar-clock {
     width: auto;
     content-align: right middle;
-}
-
-/* ---- Sidebar ---- */
-#sidebar {
-    width: 22;
-    background: white;
-    border-right: solid black;
-    padding: 1 1;
-}
-#sidebar ListItem {
-    padding: 0 1;
-    color: black;
-}
-#sidebar ListItem.-highlight, #sidebar ListItem:hover {
-    background: black 10%;
-}
-#sidebar ListView:focus > ListItem.--highlight {
-    background: #1DB954 25%;
-}
-#daemon-box {
-    border: solid black;
-    height: auto;
-    margin-top: 1;
-    padding: 1 1;
-}
-#daemon-box .status-dot {
-    color: #1DB954;
-    text-style: bold;
+    color: #9b968b;
 }
 
 /* ---- Panels ---- */
 .panel {
-    border: solid black;
-    padding: 1 2;
-    background: white;
+    border: round #37342f;
+    padding: 0 1;
+    background: #1b1a18;
 }
 .panel-title {
     text-style: bold;
-    color: black;
+    color: #c98a3d;
+    padding: 0 0 0 1;
+    height: 2;
+    content-align: left middle;
 }
 
-/* ---- Toggleable border classes ---- */
-.panel-collapsed {
-    border: solid #666666;
-    background: #f0f0f0;
-}
-.panel-expanded {
-    border: solid black;
-    background: white;
-}
-
-/* ---- Grid ----
-   Spec layout (row-major auto-placement, matching compose() order):
-     row 1: System Overview | CPU Sparkline | Provider Status
-     row 2: Token Usage     | Active Tasks   | System Logs
-     row 3: Todo (Ctrl+T)   | Context (Ctrl+C, 2 rows tall) | Memory Sparkline
-   The context panel is the only one that spans 2 grid rows — the
-   deliberately "bigger" window. */
-#dashboard-grid {
-    grid-size: 3 4;
+/* ---- Main console grid ----
+   row 1: chat (2 rows) | timeline (2 rows) | telemetry | memory
+   row 2: (chat)        | (timeline)        | logs      | tasks   */
+#mkx-grid {
+    grid-size: 4 2;
     grid-gutter: 1;
+    grid-columns: 2fr 2fr 2fr 2fr;
+    grid-rows: 1fr 1fr;
     padding: 1;
 }
-#panel-overview { column-span: 1; row-span: 1; }
-#panel-cpu      { column-span: 1; row-span: 1; }
-#panel-providers { column-span: 1; row-span: 1; }
-#panel-tokens    { column-span: 1; row-span: 1; }
-#panel-tasks     { column-span: 1; row-span: 1; }
+#panel-chat      { column-span: 1; row-span: 2; }
+#panel-timeline  { column-span: 1; row-span: 2; }
+#panel-telemetry { column-span: 1; row-span: 1; }
 #panel-logs      { column-span: 1; row-span: 1; }
-#panel-todo      { column-span: 1; row-span: 1; }
-#panel-context   { column-span: 1; row-span: 2; }
-#panel-mem       { column-span: 1; row-span: 1; }
-#panel-plan      { column-span: 1; row-span: 1; }
-#panel-skills    { column-span: 1; row-span: 1; }
+#panel-memory    { column-span: 1; row-span: 1; }
+#panel-tasks     { column-span: 1; row-span: 1; }
+
+/* ---- Bottom rail: skills | providers | plan ---- */
+#bottom-rail {
+    height: 10;
+    padding: 0 1 1 1;
+    background: #171614;
+}
+#bottom-rail > .panel {
+    width: 1fr;
+    margin-right: 1;
+}
+#bottom-rail > .panel:last-child {
+    margin-right: 0;
+}
+
+/* ---- Chat ---- */
+#chat-view {
+    height: 1fr;
+    background: #1b1a18;
+    color: #cfc9bf;
+    border: none;
+    scrollbar-color: #4a453d;
+}
+#chat-status {
+    height: 1;
+    color: #c98a3d;
+    text-style: bold;
+    padding: 0 1;
+}
+#chat-input {
+    height: 3;
+    margin: 0 0 1 0;
+    border: round #37342f;
+    background: #201e1b;
+    color: #cfc9bf;
+    padding: 0 1;
+}
+#chat-input:focus {
+    border: round #7a5427;
+}
+
+/* ---- Timeline ---- */
+#timeline-view {
+    height: 1fr;
+    background: #1b1a18;
+    color: #cfc9bf;
+    border: none;
+    scrollbar-color: #4a453d;
+}
+
+/* ---- Logs ---- */
+#logs-view {
+    height: 1fr;
+    background: #1b1a18;
+    color: #cfc9bf;
+    border: none;
+    scrollbar-color: #4a453d;
+}
+
+/* ---- Memory / files / telemetry text ---- */
+#memory-view, #files-view, #telemetry-view {
+    height: 1fr;
+    background: #1b1a18;
+    color: #cfc9bf;
+    border: none;
+}
 
 /* ---- Mode selector ---- */
 #mode-select {
     width: auto;
     height: 1;
-    background: white;
-    color: black;
-    border: solid black;
+    background: #201e1b;
+    color: #cfc9bf;
+    border: round #37342f;
     padding: 0 1;
     margin: 1 1 0 1;
 }
 #mode-select > .select--option {
-    background: white;
-    color: black;
+    background: #201e1b;
+    color: #cfc9bf;
 }
 #mode-select:disabled {
-    background: #f0f0f0;
-    color: #666666;
+    background: #23211e;
+    color: #7d776e;
 }
 
-/* ---- Token usage display ---- */
-.token-count {
-    text-align: right;
-    margin-top: 1;
-
-    color: #1DB954;
-}
-
-/* ---- System stats numbers ---- */
-#ov-details {
-
-}
-
-/* ---- Status colors: green means active/healthy, nothing else ---- */
-.status-online { color: #1DB954; text-style: bold; }
-.status-offline { color: #B00020; text-style: bold; }
-.status-idle { color: #666666; }
+/* ---- Status colors ---- */
+.status-online { color: #6ee7a8; text-style: bold; }
+.status-offline { color: #e0695c; text-style: bold; }
+.status-idle { color: #7d776e; }
 
 Sparkline {
-    color: #1DB954;
-    background: white;
+    color: #c98a3d;
+    background: #1b1a18;
 }
 Sparkline > .sparkline--min-color {
-    color: #1DB954 40%;
+    color: #c98a3d 40%;
 }
 Sparkline > .sparkline--max-color {
-    color: #1DB954;
+    color: #c98a3d;
 }
 
 ProgressBar > .bar--bar {
-    color: #1DB954;
+    color: #c98a3d;
 }
 ProgressBar > .bar--complete {
-    color: #1DB954;
+    color: #c98a3d;
 }
 
 DataTable {
-    background: white;
-    color: black;
+    background: #1b1a18;
+    color: #cfc9bf;
 }
 DataTable > .datatable--header {
     text-style: bold;
-    background: white;
-    color: black;
+    background: #201e1b;
+    color: #9b968b;
+}
+DataTable > .datatable--cursor {
+    background: #2c2a25;
+    color: #cfc9bf;
+}
+DataTable > .datatable--odd-row {
+    background: #1b1a18;
 }
 
 Log {
-    background: white;
-    color: black;
-    scrollbar-color: black;
-}
-
-/* ---- Command bar ---- */
-#command-bar {
-    height: 3;
-    border-top: solid black;
-    padding: 0 1;
-}
-#command-input {
-    background: white;
-    color: black;
-    border: none;
-}
-#command-prompt {
-    color: #1DB954;
-    text-style: bold;
-    width: auto;
-    content-align: left middle;
-    padding-right: 1;
+    background: #1b1a18;
+    color: #cfc9bf;
+    scrollbar-color: #4a453d;
 }

@@ -291,6 +291,22 @@ def test_skills_registry_endpoint(server):
         assert c.ping()["pid"] > 0  # connection still healthy after skills calls
 
 
+def test_history_endpoint_traces_and_events(server):
+    """The audit log serves recent sessions and per-task event streams."""
+    srv = server()
+    with _client(srv) as c:
+        c.connect()
+        c.ping()
+
+        traces = c.history(limit=5)
+        assert "traces" in traces
+        assert isinstance(traces["traces"], list)
+
+        events = c.history(task_id="does-not-exist", limit=10)
+        assert "events" in events
+        assert isinstance(events["events"], list)
+
+
 def test_fastclient_streams_many_events(server):
     """A burst of events in one TCP segment must not lose frames (regression
     for the old _readline that discarded surplus buffered lines)."""

@@ -123,12 +123,53 @@ def test_skill_rows_ready_status_tracks_mode():
 
     rows = {name: st for name, _, st in source.skill_rows}
     assert rows["Agent Dispatch"] == "READY"
-    assert rows["Memory Manager"] == "LOCKED"
+    assert rows["Bash Command"] == "LOCKED"
 
-    source._status["mode"] = "expert"
+    source._status["mode"] = "agent"
     source.recompute_skill_rows()
     rows = {name: st for name, _, st in source.skill_rows}
-    assert rows["Memory Manager"] == "READY"
+    assert rows["Bash Command"] == "READY"
+
+
+@pytest.mark.asyncio
+async def test_skill_detail_command_offline():
+    """/skill prints a full detail block even when the daemon is offline."""
+    pytest.importorskip("textual")
+
+    from ui.backend import TuiDataSource
+    from ui.tui import JarvisApp, LogsPanel
+
+    app = JarvisApp(data_source=TuiDataSource(mock=True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        logs = app.query_one(LogsPanel)
+        logs.clear()
+        await app._run_command("/skill memory manager")
+        text = " ".join(logs.query_one("#logs-view").lines)
+        assert "Memory Manager" in text
+        assert "capabilities: memory.recall" in text
+        assert "modes: controlled" in text
+        assert "entry: memory.memory_manager" in text
+
+
+@pytest.mark.asyncio
+async def test_skills_search_filters_offline():
+    """/skills search works against the mock catalog when offline."""
+    pytest.importorskip("textual")
+
+    from ui.backend import TuiDataSource
+    from ui.tui import JarvisApp, LogsPanel
+
+    app = JarvisApp(data_source=TuiDataSource(mock=True))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        logs = app.query_one(LogsPanel)
+        logs.clear()
+        await app._run_command("/skills memory")
+        text = " ".join(logs.query_one("#logs-view").lines)
+        assert "1 of 6" in text
+        assert "Memory Manager" in text
+        assert "Web Search" not in text
 
 
 @pytest.mark.asyncio
@@ -145,6 +186,21 @@ async def test_write_event_tags():
         logs.clear()
         logs.write_event("tool_execution.started")
         logs.write_event("goal.completed")
+        logs.write_event("memory_consolidation.done")
+        logs.write_event("tool_execution.failed")
+        logs.write_event("user.utterance.received")
         text = " ".join(logs.query_one("#logs-view").lines)
         assert "[TOOL]" in text
         assert "[OK]" in text
+        assert "[MEMORY]" in text
+        assert "[ERR]" in text
+        assert "[USER]" in text
+
+
+@pytest.mark.asyncio
+async def test_history_falls_back_offline():
+    """history() returns an empty traces shape when the daemon is offline."""
+    from ui.backend import TuiDataSource
+
+    source = TuiDataSource(mock=True)
+    assert await source.history(limit=5) == {"traces": []}

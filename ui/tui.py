@@ -298,14 +298,16 @@ class LogsPanel(Panel):
     _TAG_STYLES = {
         "tool": "[#1DB954][TOOL][/#1DB954]",
         "ok": "[#1DB954][OK][/#1DB954]",
-        "memory": "[b][MEMORY][/b]",
+        "memory": "[#BA68C8][MEMORY][/#BA68C8]",
         "gate": "[dim][GATE][/dim]",
-        "task": "[b][TASK][/b]",
-        "info": "[INFO]",
+        "task": "[#FFD54F][TASK][/#FFD54F]",
+        "user": "[#00E5FF][USER][/#00E5FF]",
+        "err": "[#FF5252][ERR][/#FF5252]",
+        "info": "[#90CAF9][INFO][/#90CAF9]",
     }
 
     def __init__(self):
-        super().__init__("SYSTEM LOGS", "panel-logs")
+        super().__init__("ACTIVITY STREAM", "panel-logs")
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
@@ -320,8 +322,12 @@ class LogsPanel(Panel):
         name = event_name.lower()
         if "memory" in name:
             tag = "memory"
-        elif "tool" in name or "step" in name:
+        elif "error" in name or "failed" in name or "rejected" in name:
+            tag = "err"
+        elif "tool" in name or "step" in name or "command" in name:
             tag = "tool"
+        elif "user" in name or "input" in name or "utterance" in name:
+            tag = "user"
         elif "permission" in name:
             tag = "gate"
         elif "task" in name:
@@ -554,6 +560,8 @@ class JarvisApp(App):
                 "  /models          show provider model status",
                 "  /memory <query>  search daemon memory",
                 "  /skills [q]      discover skills in the registry",
+                "  /skill <name>    show a skill's full detail",
+                "  /history [n|id]  recent sessions, or one task's event log",
                 "  /reconnect       reconnect to the daemon",
                 "  /clear           clear the log",
                 "  /exit            quit the dashboard",
@@ -578,10 +586,6 @@ class JarvisApp(App):
                 logs.write(f"daemon still offline: {self._data.last_error}")
             self.query_one(TopBar).set_daemon_state(self._data.connected)
             self.query_one(TopBar).sync_mode(self._data.status.get("mode", ""))
-            return
-
-        if not self._data.connected:
-            logs.write("not sent — daemon offline (start with `jarvis daemon start`)")
             return
 
         if cmd == "/status":
@@ -636,9 +640,70 @@ class JarvisApp(App):
                 logs.write(f"  {hit}")
             return
 
-        if cmd == "/skills":
+        if cmd == "/history":
+            task_id = "" if arg.isdigit() or not arg else arg
+            limit = int(arg) if arg.isdigit() else 50
+            result = await self._data.history(limit=limit, task_id=task_id)
+            if task_id:
+                events = result.get("events") or []
+                if not events:
+                    logs.write(f"no events for task {task_id!r}")
+                    return
+                logs.write(f"history: {len(events)} events for task {task_id}")
+                for event in events:
+                    ts = float(event.get("timestamp") or 0.0)
+                    stamp = (datetime.datetime.fromtimestamp(ts)
+                             .strftime("%H:%M:%S")) if ts else "-"
+                    logs.write(f"  {stamp}  {event.get('name', '?')}")
+                return
+            traces = result.get("traces") or []
+            if not traces:
+                logs.write("history: no sessions recorded yet")
+                return
+            logs.write(f"history: {len(traces)} recent sessions")
+            for trace in traces:
+                ts = float(trace.get("timestamp") or 0.0)
+                stamp = (datetime.datetime.fromtimestamp(ts)
+                         .strftime("%Y-%m-%d %H:%M:%S")) if ts else "-"
+                logs.write(f"  {stamp}  {trace.get('trace_id', '-')}")
+            return
+
+        if cmd in ("/skills", "/skill"):
             result = await self._data.search_skills(arg)
-            if not result.get("skills"):
+            skills = result.get("skills") or []
+            if cmd == "/skill":
+                if not arg:
+                    logs.write("usage: /skill <name>")
+                    return
+                detail = next(
+                    (s for s in skills if s.get("name", "").lower() == arg.lower()),
+                    None,
+                )
+                if detail is None:
+                    logs.write(f"no skill named {arg!r}")
+                    return
+                mode = self._data.status.get("mode", "")
+                ready = (not mode) or mode in (detail.get("supported_modes") or [])
+                logs.write(
+                    f"{detail.get('name')} v{detail.get('version')} "
+                    f"[risk {detail.get('max_risk')}] "
+                    f"{'READY' if ready else 'LOCKED'}"
+                )
+                if detail.get("description"):
+                    logs.write(f"  {detail.get('description')}")
+                caps = detail.get("capabilities") or []
+                if caps:
+                    logs.write(f"  capabilities: {', '.join(caps)}")
+                perms = detail.get("permissions") or []
+                if perms:
+                    logs.write(f"  permissions: {', '.join(perms)}")
+                modes = detail.get("supported_modes") or []
+                if modes:
+                    logs.write(f"  modes: {', '.join(modes)}")
+                if detail.get("entry_point"):
+                    logs.write(f"  entry: {detail.get('entry_point')}")
+                return
+            if not skills:
                 if arg:
                     logs.write(f"no skill hits for {arg!r}")
                 else:
@@ -646,11 +711,15 @@ class JarvisApp(App):
                 return
             logs.write(f"skills: {result.get('total')} of {result.get('catalog')} "
                        f"matched ({arg!r})")
-            for skill in result.get("skills", []):
+            for skill in skills:
                 logs.write(
                     f"  {skill.get('name')} v{skill.get('version')} "
-                    f"[risk {skill.get('max_risk')}]"
+                    f"[risk {skill.get('max_risk')}] — {skill.get('description', '')}"
                 )
+            return
+
+        if not self._data.connected:
+            logs.write("not sent — daemon offline (start with `jarvis daemon start`)")
             return
 
         logs.write(f"unknown command: {cmd} (try /help)")

@@ -42,16 +42,78 @@ MOCK_MCP: list[tuple[str, str, str]] = [
     ("database", "v1.0.8", "ONLINE"),
 ]  # MOCK — real status comes from the daemon MCP registry
 
-# Offline fallback for the skill-registry panel; mirrors real manifests.
-# (name, version, supported_modes) — READY/LOCKED is derived from the active
-# daemon mode so mock rows behave like live registry records.
-MOCK_SKILLS: list[tuple[str, str, list[str]]] = [
-    ("Agent Dispatch", "1.0.0", ["auto", "smart", "expert"]),
-    ("Bash Command", "1.0.0", ["smart", "expert"]),
-    ("File System", "1.0.0", ["smart", "expert"]),
-    ("Web Search", "1.0.0", ["auto", "smart", "expert"]),
-    ("Memory Manager", "1.0.0", ["expert"]),
-    ("Window Manager", "1.0.0", ["expert"]),
+# Offline fallback for the skill-registry panel; mirrors real manifests so
+# mock rows behave like live registry records. Fields match the daemon's
+# SkillRecord.to_dict() shape: name/version/description/capabilities/
+# permissions/supported_modes/entry_point/max_risk/unknown_capabilities.
+MOCK_SKILL_RECORDS: list[dict[str, object]] = [
+    {
+        "name": "Agent Dispatch",
+        "version": "1.0.0",
+        "description": "Routes requests to the appropriate sub-agent via a shared scratchpad",
+        "capabilities": ["ai.llm.query"],
+        "permissions": [],
+        "supported_modes": ["smart", "agent"],
+        "entry_point": "actions.agent_dispatch:agent_dispatch",
+        "max_risk": "safe",
+        "unknown_capabilities": [],
+    },
+    {
+        "name": "Bash Command",
+        "version": "1.0.0",
+        "description": "Run bash commands safely",
+        "capabilities": ["shell.execute"],
+        "permissions": [],
+        "supported_modes": ["agent"],
+        "entry_point": "actions.bash_command:bash_command",
+        "max_risk": "critical",
+        "unknown_capabilities": [],
+    },
+    {
+        "name": "File System",
+        "version": "1.0.0",
+        "description": "Read, write, and manage files and directories",
+        "capabilities": ["filesystem.read", "filesystem.list", "filesystem.write",
+                         "filesystem.delete", "filesystem.move"],
+        "permissions": [],
+        "supported_modes": ["smart", "agent"],
+        "entry_point": "actions.file_manager:file_manager",
+        "max_risk": "critical",
+        "unknown_capabilities": [],
+    },
+    {
+        "name": "Memory Manager",
+        "version": "1.0.0",
+        "description": "Store and recall facts from long-term memory",
+        "capabilities": ["memory.recall", "memory.store", "memory.clear"],
+        "permissions": [],
+        "supported_modes": ["controlled", "smart", "agent"],
+        "entry_point": "memory.memory_manager:MemoryManager",
+        "max_risk": "low",
+        "unknown_capabilities": [],
+    },
+    {
+        "name": "Web Search",
+        "version": "1.0.0",
+        "description": "Search the web and summarize the top results",
+        "capabilities": ["web.search"],
+        "permissions": [],
+        "supported_modes": ["smart", "agent"],
+        "entry_point": "actions.web_search:web_search",
+        "max_risk": "safe",
+        "unknown_capabilities": [],
+    },
+    {
+        "name": "Window Manager",
+        "version": "1.0.0",
+        "description": "Manage window positions and states",
+        "capabilities": ["window.list", "window.focus", "window.move"],
+        "permissions": [],
+        "supported_modes": ["controlled", "smart", "agent"],
+        "entry_point": "actions.window_manager:window_manager",
+        "max_risk": "low",
+        "unknown_capabilities": [],
+    },
 ]  # MOCK — real rows come from the daemon skill registry
 
 

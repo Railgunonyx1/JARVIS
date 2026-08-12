@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,9 @@ logger = logging.getLogger("jarvis.skills.registry")
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 _RISK_ORDER = [r.value for r in CapabilityRisk]  # safe, low, medium, high, critical
+# Minimum gap between on-disk fingerprint checks so rapid discovery calls don't
+# re-stat every manifest file.
+_REFRESH_THROTTLE_NS = 2_000_000_000  # 2 seconds
 
 
 @dataclass
@@ -54,6 +58,8 @@ class SkillRegistry:
         self._loader = loader if loader is not None else get_skill_loader()
         self._records: dict[str, SkillRecord] = {}
         self._index: dict[str, list[str]] = {}
+        self._fingerprints: dict[str, tuple[int, int]] = {}
+        self._last_check_ns = 0
         self.rebuild()
 
     # ── build ──────────────────────────────────────────────────────────
@@ -61,12 +67,49 @@ class SkillRegistry:
     def rebuild(self) -> None:
         self._records = {}
         self._index = {}
+        self._fingerprints = self._fingerprint()
         for name, manifest in self._loader.get_all_skills().items():
             record = self._build_record(manifest)
             self._records[name] = record
             for token in self._tokens(record):
                 self._index.setdefault(token, []).append(name)
         logger.info("indexed %d skills", len(self._records))
+
+    # ── hot reload ─────────────────────────────────────────────────────
+
+    def _fingerprint(self) -> dict[str, tuple[int, int]]:
+        """``{manifest_path: (mtime_ns, size)}`` — cheap change detector."""
+        out: dict[str, tuple[int, int]] = {}
+        for path in sorted(self._loader.manifests_dir.glob("*.json")):
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            out[str(path)] = (stat.st_mtime_ns, stat.st_size)
+        return out
+
+    def _refresh_if_changed(self) -> None:
+        """Rebuild lazily when any manifest file changed on disk.
+
+        Throttled so a burst of discovery calls stats the manifests directory
+        at most once per window. When a changed fingerprint is seen the
+        underlying loader is recreated (reloading the singleton when this
+        registry uses it) so edits/additions/deletions all propagate.
+        """
+        now = time.monotonic_ns()
+        if now - self._last_check_ns < _REFRESH_THROTTLE_NS:
+            return
+        self._last_check_ns = now
+        current = self._fingerprint()
+        if current == self._fingerprints:
+            return
+        from core.skill_loader import SkillLoader, get_skill_loader, reload_skills
+
+        if self._loader is get_skill_loader():
+            self._loader = reload_skills()
+        else:
+            self._loader = SkillLoader(self._loader.manifests_dir)
+        self.rebuild()
 
     @staticmethod
     def _build_record(manifest) -> SkillRecord:
@@ -111,6 +154,7 @@ class SkillRegistry:
         the catalog sorted by name; with a query returns token-overlap hits
         ranked best-first.
         """
+        self._refresh_if_changed()
         results = list(self._records.values())
 
         if mode:
@@ -138,12 +182,15 @@ class SkillRegistry:
         return [r for _, r in scored]
 
     def get(self, name: str) -> SkillRecord | None:
+        self._refresh_if_changed()
         return self._records.get(name)
 
     def count(self) -> int:
+        self._refresh_if_changed()
         return len(self._records)
 
     def summary(self) -> dict[str, Any]:
+        self._refresh_if_changed()
         by_risk = Counter(r.max_risk for r in self._records.values())
         return {"total": len(self._records), "by_risk": dict(by_risk)}
 

@@ -22,7 +22,7 @@ from ui.providers import (
     MOCK_MCP,
     MOCK_PLAN,
     MOCK_PROVIDERS,
-    MOCK_SKILLS,
+    MOCK_SKILL_RECORDS,
     MOCK_TASKS,
     provider_rows,
 )
@@ -131,7 +131,7 @@ class TuiDataSource:
         self._provider_rows = list(MOCK_PROVIDERS)
         self._mock_providers = True
         self._skills = []
-        self._skill_rows = list(MOCK_SKILLS)
+        self._skill_rows = self._build_skill_rows(MOCK_SKILL_RECORDS)
         self._mock_skills = True
 
     async def refresh(self) -> None:
@@ -156,18 +156,16 @@ class TuiDataSource:
         A skill is READY when the daemon's current mode is among its
         ``supported_modes``; otherwise it is shown LOCKED (dim) so the panel
         surfaces what this mode can actually call. With no registry records
-        (offline/mock) the same heuristic runs over :data:`MOCK_SKILLS`, whose
-        entries carry ``supported_modes`` so mock rows stay mode-aware.
+        (offline/mock) the same heuristic runs over :data:`MOCK_SKILL_RECORDS`,
+        whose entries carry ``supported_modes`` so mock rows stay mode-aware.
         """
         mode = self._status.get("mode", "")
         rows = []
-        if records:
-            entries = [(r.get("name", "?"), r.get("version", "-"),
-                        r.get("supported_modes") or [])
-                       for r in records]
-        else:
-            entries = [(name, version, modes) for name, version, modes in MOCK_SKILLS]
-        for name, version, modes in sorted(entries, key=lambda e: e[0].lower()):
+        for record in sorted(records or MOCK_SKILL_RECORDS,
+                             key=lambda r: r.get("name", "").lower()):
+            name = record.get("name", "?")
+            version = record.get("version", "-")
+            modes = record.get("supported_modes") or []
             ready = (not mode) or mode in modes
             rows.append((name, version, "READY" if ready else "LOCKED"))
         return rows
@@ -225,16 +223,39 @@ class TuiDataSource:
         """Discovery query against the daemon's skill registry.
 
         Returns the raw response ``{total, catalog, skills, ...}`` or a
-        ``{"skills": []}``-shaped fallback when the daemon is offline.
+        ``{"skills": [...]}`` fallback over :data:`MOCK_SKILL_RECORDS` when the
+        daemon is offline, so discovery/detail stays usable without it.
         """
         if not self._connected or self._client is None:
-            return {"total": 0, "catalog": len(MOCK_SKILLS),
-                    "query": query, "skills": []}
+            q = query.strip().lower()
+            skills = MOCK_SKILL_RECORDS
+            if q:
+                skills = [
+                    r for r in skills
+                    if q in r.get("name", "").lower()
+                    or q in r.get("description", "").lower()
+                ]
+            return {"total": len(skills), "catalog": len(MOCK_SKILL_RECORDS),
+                    "query": query, "skills": skills}
         try:
             return await self._client.skills(query=query,
                                               mode=self._status.get("mode", ""))
         except Exception:
             return {"total": 0, "catalog": 0, "query": query, "skills": []}
+
+    async def history(self, limit: int = 10, task_id: str = "") -> dict:
+        """Fetch the audit log from the daemon event store.
+
+        With no ``task_id`` returns ``{"traces": [...]}`` (recent sessions,
+        newest first); with one returns ``{"events": [...]}`` for that task.
+        Falls back to an empty ``{"traces": []}`` when offline.
+        """
+        if not self._connected or self._client is None:
+            return {"traces": []}
+        try:
+            return await self._client.history(task_id=task_id, limit=limit)
+        except Exception:
+            return {"traces": []}
 
     # ── live samples (local psutil, no daemon needed) ───────────────────
 

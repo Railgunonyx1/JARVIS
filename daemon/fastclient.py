@@ -162,6 +162,13 @@ class FastClient:
             payload["max_risk"] = max_risk
         return self.request("skills", payload)
 
+    def history(self, task_id: str = "", limit: int = 10) -> dict:
+        """Fetch the audit log; returns ``{"traces": [...]}`` or ``{"events": [...]}``."""
+        payload: dict = {"limit": limit}
+        if task_id:
+            payload["task_id"] = task_id
+        return self.request("history", payload)
+
     def run(self, goal: str, mode: str | None = None,
             on_event: EventCallback | None = None) -> dict:
         """Run a goal; stream observer events via ``on_event``; return result dict."""
