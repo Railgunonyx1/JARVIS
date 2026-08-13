@@ -372,7 +372,10 @@ class ResourceManager:
 
     @property
     def available_threads(self) -> int:
-        return self.quota.max_threads - len(self._thread_pool._threads) if hasattr(self._thread_pool, '_threads') else self.quota.max_threads
+        # Use threading.active_count() instead of private _threads attribute
+        # to avoid breaking when ThreadPoolExecutor internal changes
+        active = threading.active_count() if self._thread_pool else 0
+        return max(0, self.quota.max_threads - active)
 
     @property
     def process_ram_mb(self) -> float:

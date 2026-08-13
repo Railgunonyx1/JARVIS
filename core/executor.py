@@ -92,19 +92,33 @@ def _generated_code_enabled() -> bool:
     )
 
 
-_FORBIDDEN_CODE_PATTERNS = (
-    "os.system", "os.popen", "subprocess", "eval(", "exec(",
-    "__import__", "importlib", "socket.", "requests", "urllib", "http.",
-)
+import re
+
+_FORBIDDEN_CODE_PATTERNS = [
+    re.compile(r"\bos\.system\b", re.IGNORECASE),
+    re.compile(r"\bos\.popen\b", re.IGNORECASE),
+    re.compile(r"\bsubprocess\.Popen\b", re.IGNORECASE),
+    re.compile(r"\bsubprocess\.run\b", re.IGNORECASE),
+    re.compile(r"\beval\b", re.IGNORECASE),
+    re.compile(r"\bexec\b", re.IGNORECASE),
+    re.compile(r"__import__", re.IGNORECASE),
+    re.compile(r"\bimportlib\b", re.IGNORECASE),
+    re.compile(r"\bsocket\.", re.IGNORECASE),
+    re.compile(r"\brequests\b", re.IGNORECASE),
+    re.compile(r"\burllib\b", re.IGNORECASE),
+    re.compile(r"\bhttp\.", re.IGNORECASE),
+]
 
 
 def _check_generated_code(code: str) -> None:
     """Reject obviously dangerous constructs even when the tool is enabled."""
     lowered = code.lower()
     for pattern in _FORBIDDEN_CODE_PATTERNS:
-        if pattern in lowered:
+        if pattern.search(lowered):
+            # Find which pattern matched
+            matched = next(p.pattern for p in _FORBIDDEN_CODE_PATTERNS if p.search(lowered))
             raise RuntimeError(
-                f"Generated code rejected: forbidden pattern '{pattern}'."
+                f"Generated code rejected: forbidden pattern '{matched}'."
             )
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:

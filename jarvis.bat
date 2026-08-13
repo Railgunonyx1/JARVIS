@@ -1,32 +1,58 @@
 @echo off
-rem ============================================================================
-rem JARVIS MK-X Launcher
-rem Launches the new Textual terminal UI
-rem ============================================================================
+title JARVIS MK-X - Autonomous Engineering Agent
+color 0a
 
-rem Change to JARVIS directory
-cd /d "%~dp0"
+:: ============================================================================
+:: JARVIS MK-X - Autonomous Engineering Agent
+:: Launches the React frontend (Vite) and opens the application in browser
+:: The JARVIS daemon should be running separately for full functionality
+:: ============================================================================
 
-rem Check if Python is available
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
+echo.
+echo ============================================================================
+echo  JARVIS MK-X - Autonomous Engineering Agent
+echo ============================================================================
+
+:: Change to the web directory
+pushd web
+
+:: Check if we're in the right directory
+if not exist package.json (
     echo.
-    echo Error: Python is not installed or not in PATH.
-    echo.
+    ERROR: Could not find package.json. Are you in the correct directory?
     pause
     exit /b 1
 )
 
-rem Launch the new Textual TUI
 echo.
-echo launching JARVIS Terminal UI...
+echo Starting JARVIS MK-X Frontend...
 echo.
-echo The UI will feature:
-echo   - System stats (CPU/RAM/Disk) with 20-second refresh
-echo   - Token usage display: X / Y tokens (Z%)
-echo   - Todo list (Ctrl+T to toggle)
-echo   - Context panel (Ctrl+C to toggle, larger window)
-echo   - Command input at jarvis> prompt
+
+:: Start Vite development server in background
+:: The server will output its URL (typically http://localhost:5173)
+start /b cmd /c "npm run dev"
+
+:: Wait a moment for the server to start
+timeout /t 3 /nobreak >nul
+
+:: Get the local IP address for the URL
+for /f "tokens=2 skipws" in ('ipconfig ^| findstr "IPv4 Address"') do set LOCAL_IP=%%a
+
 echo.
-python -m ui.tui
-exit /b 0
+echo JARVIS MK-X is starting up...
+echo.
+echo  Frontend: http://localhost:5173
+echo.
+echo  Please ensure the JARVIS daemon is running for full functionality.
+echo  To start the daemon, see the roadmap or documentation.
+echo.
+echo  Press Ctrl+C to stop this launcher or close this window
+echo.
+
+:: Open the default browser to the JARVIS interface
+start "" "http://localhost:5173"
+
+:: Keep the batch window open
+:waitloop
+timeout /t 30 /nobreak >nul
+goto waitloop

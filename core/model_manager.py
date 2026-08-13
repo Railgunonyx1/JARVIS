@@ -119,10 +119,8 @@ _CODE_PATTERNS = re.compile(
 )
 
 _SIMPLE_PATTERNS = re.compile(
-    r"^(what|who|when|where|how much|how many|is|are|can you|define|"
-    r"translate|convert|calculate|sum of|date|time|weather|time)\b",
-    re.IGNORECASE,
-)
+    r"(?:^|\s)(what|who|when|where|how much|how many|is|are|was|were|explain|tell|show|describe|calculate|sum)",
+    re.IGNORECASE)
 
 _CATEGORY_KEYWORDS: dict[TaskCategory, list[str]] = {
     TaskCategory.GREETING: ["hello", "hi", "hey", "good morning", "good evening", "how are you", "thanks", "thank you"],
@@ -209,8 +207,15 @@ class ModelManager:
         if keyword_score > 0:
             return keyword_category, keyword_score
 
-        if word_count <= 6 and _SIMPLE_PATTERNS.match(query):
-            return TaskCategory.SIMPLE_QA, 0.9
+        # Enhanced simple QA detection - match patterns anywhere in query,
+# not just at the start, and consider query complexity
+        if _SIMPLE_PATTERNS.search(query):
+            if word_count <= 6:
+                return TaskCategory.SIMPLE_QA, 0.9
+            elif word_count <= 15:
+                return TaskCategory.SIMPLE_QA, 0.7
+            else:
+                return TaskCategory.SIMPLE_QA, 0.5
 
         if word_count > 15 or tech_hits >= 1:
             return TaskCategory.REASONING, 0.7
@@ -230,10 +235,21 @@ class ModelManager:
                 best_cat = category
         if best_score > 0:
             words = text_lower.split()
-            confidence = min(0.5 + best_score * 0.15, 1.0)
-            if len(words) < 10:
-                confidence = min(confidence + 0.1, 1.0)
-            return best_cat, confidence
+            base_confidence = min(0.5 + best_score * 0.2, 1.0)
+            # Adjust confidence based on query characteristics
+            if len(words) <= 5:
+                base_confidence = min(base_confidence + 0.1, 1.0)
+            elif len(words) <= 10:
+                base_confidence = min(base_confidence, 0.95)
+            # Longer queries - confidence decreases slightly
+            # but pattern strength is the main factor
+            
+            # Boost confidence if query contains question words
+            question_words = {'what', 'who', 'where', 'when', 'why', 'how'}
+            if any(w in text_lower.split() for w in question_words):
+                base_confidence = min(base_confidence + 0.05, 1.0)
+            
+            return best_cat, base_confidence
         return best_cat, 0.0
 
     # ── Selection ─────────────────────────────

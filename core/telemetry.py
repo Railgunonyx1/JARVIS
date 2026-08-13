@@ -85,9 +85,15 @@ class LatencyTracker:
         """Record an error for a stage."""
         with self._lock:
             stage_name = stage.replace("start_", "").replace("end_", "")
-            if stage_name not in self._stages:
+            # Record elapsed time if stage was tracking, otherwise use minimal value
+            if stage_name in self._stages:
+                # Use existing stage metrics, record error on current interval
+                elapsed = time.perf_counter() * 1000  # rough estimate
+                self._stages[stage_name].record(elapsed, error=True)
+            else:
+                # Stage wasn't being tracked; record minimal time with error flag
                 self._stages[stage_name] = StageMetrics(stage_name)
-            self._stages[stage_name].record(0, error=True)
+                self._stages[stage_name].record(1.0, error=True)  # 1ms minimum
 
     def end_request(self) -> dict[str, float]:
         """End the current request and return stage timings."""
