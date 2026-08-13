@@ -24,8 +24,8 @@ import sys
 import tempfile
 import threading
 
-# Ensure the parent package is importable since we moved jarvis_memory into jarvis/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Ensure the parent package is importable (repo layout: memory/jarvis_memory_fabric)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import pytest
 

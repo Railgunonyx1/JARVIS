@@ -29,6 +29,8 @@ class ProviderRouter:
         self._last_provider: str | None = None
         self._last_model: str | None = None
         self._warmed = False
+        self._available_chain: list[str] | None = None
+        self._chain_checked_at: float = 0.0
         self._init_providers(self._config, api_keys or {})
 
     def _init_providers(self, config: dict, api_keys: dict):
@@ -88,8 +90,23 @@ class ProviderRouter:
         threading.Thread(target=_run, daemon=True, name="jarvis-provider-warmup").start()
 
     def _get_available_chain(self) -> list[str]:
-        """Return providers in order, filtering to available ones."""
-        return [name for name in self._chain if name in self._providers and self._providers[name].is_available]
+        """Return providers in order, filtering to available ones.
+
+        Results are cached for 1 second to avoid recomputing the chain on
+        every request; provider availability rarely changes faster than that.
+        """
+        now = time.time()
+        if self._available_chain is not None and now - self._chain_checked_at < 1.0:
+            return self._available_chain
+        chain = [name for name in self._chain if name in self._providers and self._providers[name].is_available]
+        self._available_chain = chain
+        self._chain_checked_at = now
+        return chain
+
+    def _invalidate_chain(self) -> None:
+        """Force the next _get_available_chain call to recompute."""
+        self._available_chain = None
+        self._chain_checked_at = 0.0
 
     @property
     def status(self) -> dict:
@@ -168,6 +185,7 @@ class ProviderRouter:
                 except Exception as e:
                     last_error = e
                     metrics.counter(f"provider.fail.{provider_name}", 1)
+                    self._invalidate_chain()
                     if span is not None:
                         span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
                     logger.warning("Provider %s failed: %s", provider_name, e)
@@ -240,6 +258,7 @@ class ProviderRouter:
                         tracer.add_metric("llm.tokens_generated", tokens)
                     self._last_provider = provider_name
                     self._last_model = provider.model
+                    self._invalidate_chain()
                     metrics.counter(f"provider.ok.{provider_name}", 1)
                     if span is not None:
                         span.set_attribute("provider", provider_name)
@@ -248,6 +267,7 @@ class ProviderRouter:
                 except Exception as e:
                     last_error = e
                     metrics.counter(f"provider.fail.{provider_name}", 1)
+                    self._invalidate_chain()
                     if span is not None:
                         span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
                     logger.warning("Provider %s stream failed: %s", provider_name, e)

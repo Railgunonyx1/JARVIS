@@ -81,7 +81,7 @@ class VectorSearch:
         conn.execute(
             "INSERT OR REPLACE INTO embeddings (id, embedding, metadata) "
             "VALUES (?, ?, ?)",
-            (id, json_lib.dumps(embedding), str(metadata) if metadata else None)
+            (id, json.dumps(embedding), str(metadata) if metadata else None)
         )
         conn.close()
         
@@ -99,14 +99,14 @@ class VectorSearch:
         results = []
         for row in cursor:
             try:
-                stored_arr = numpy.array(json_lib.loads(row[1]), dtype=numpy.float64)
+                stored_arr = numpy.array(json.loads(row[1]), dtype=numpy.float64)
                 if stored_arr.size > 0 and query_norm > 0:
                     dot = numpy.dot(query_arr, stored_arr)
                     stored_norm = numpy.linalg.norm(stored_arr)
                     cosine = dot / (query_norm * stored_norm) if stored_norm > 0 else 0
                     distance = 1 - cosine  # distance = 1 - similarity
                     results.append({"id": row[0], "distance": float(distance)})
-            except (json_lib.JSONDecodeError, ValueError):
+            except (json.JSONDecodeError, ValueError):
                 continue
         conn.close()
         
@@ -114,28 +114,109 @@ class VectorSearch:
         results.sort(key=lambda x: x["distance"])
         return results[:k]
 
-# --- OpenTelemetry Tracing ---
+# --- Memory Manager (MemoryFabric with VectorSearch fallback) ---
 
-_tracer = None
+class MemoryManager:
+    """High-level memory facade for the daemon.
 
-def get_tracer():
-    """Get or initialize the OpenTelemetry tracer."""
-    global _tracer
-    if _tracer is None:
-        from opentelemetry import trace as otel_trace
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    Uses the JARVIS Memory Fabric (sqlite + FTS5 + optional vector search)
+    when importable; otherwise degrades to the in-file VectorSearch so the
+    daemon never fails to start. Mirrors the Mem0 pattern: typed memories
+    (fact / episode / procedure), hybrid search, consolidation, stats.
+    """
 
-        otel_trace.set_tracer_provider(TracerProvider())
-        _tracer = otel_trace.get_tracer("jarvis_daemon")
+    def __init__(self, db_path: str = "jarvis_memory/vector_store.db"):
+        self.db_path = db_path
+        self._fabric = None
+        self._vector = VectorSearch(db_path)
         try:
-            otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
-            span_processor = BatchSpanProcessor(otlp_exporter)
-            _tracer.get_tracer_provider().add_span_processor(span_processor)
-        except Exception:
-            logger.warning("OpenTelemetry OTLP exporter not available — running without export")
-    return _tracer
+            from memory.jarvis_memory_fabric import create_memory_fabric
+            self._fabric = create_memory_fabric(db_path.replace("vector_store.db", "memory.db"))
+            logger.info("Memory fabric initialized at %s", db_path.replace("vector_store.db", "memory.db"))
+        except Exception as exc:
+            logger.warning("Memory fabric unavailable (%s) — using vector fallback", exc)
+
+    @property
+    def available(self) -> bool:
+        return self._fabric is not None
+
+    def remember(
+        self,
+        *,
+        type: str = "fact",
+        content: str,
+        subject: str = None,
+        predicate: str = None,
+        obj: str = None,
+        importance: float = 0.5,
+        session_id: str = None,
+        task_id: str = None,
+        source: str = None,
+        **kwargs,
+    ) -> Optional[str]:
+        if self._fabric is not None:
+            return self._fabric.remember(
+                type=type,
+                content=content,
+                subject=subject,
+                predicate=predicate,
+                obj=obj,
+                importance=importance,
+                session_id=session_id,
+                task_id=task_id,
+                source=source,
+                **kwargs,
+            )
+        # Fallback: store content as a pseudo-embedding of character codes
+        embedding = [ord(c) % 100 / 100.0 for c in content[:64]] + [0.0] * (768 - 64)
+        mid = f"mem_{abs(hash(content)):x}"
+        self._vector.add_embedding(mid, embedding, {"content": content, "subject": subject})
+        return mid
+
+    def search(self, query: str = None, *, limit: int = 15, **filters) -> List[Dict]:
+        if self._fabric is not None:
+            return self._fabric.search(query=query, limit=limit, **filters)
+        if query:
+            embedding = [ord(c) % 100 / 100.0 for c in query[:64]] + [0.0] * (768 - 64)
+            hits = self._vector.semantic_search(embedding, k=limit)
+            out = []
+            for h in hits:
+                conn = sqlite3.connect(self.db_path)
+                row = conn.execute(
+                    "SELECT metadata FROM embeddings WHERE id = ?", (h["id"],)
+                ).fetchone()
+                conn.close()
+                if row:
+                    try:
+                        meta = json.loads(row[0].replace("'", '"')) if row[0] else {}
+                    except (ValueError, AttributeError):
+                        meta = {"content": row[0]}
+                    out.append({"id": h["id"], "distance": h["distance"], **meta})
+            return out
+        return []
+
+    def recall(self, memory_item_id: str) -> Optional[Dict]:
+        if self._fabric is not None:
+            return self._fabric.recall(memory_item_id)
+        return None
+
+    def forget(self, memory_item_id: str) -> bool:
+        if self._fabric is not None:
+            return self._fabric.forget(memory_item_id)
+        return False
+
+    def stats(self) -> Dict:
+        if self._fabric is not None:
+            return self._fabric.stats()
+        conn = sqlite3.connect(self.db_path)
+        count = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+        conn.close()
+        return {"total_memories": count, "backend": "vector_fallback"}
+
+    def consolidate(self) -> Dict:
+        if self._fabric is not None:
+            return self._fabric.consolidate()
+        return {"status": "noop", "reason": "vector fallback has nothing to consolidate"}
 
 # --- Core Types ---
 
@@ -213,7 +294,7 @@ class WebSocketManager:
         except Exception:
             self.clients.discard(websocket)
             
-    async def get_messages(self) -> asyncio.Queue:
+    def get_messages(self) -> asyncio.Queue:
         """Get the messages queue."""
         return self.messages
 
@@ -279,7 +360,7 @@ class JarvisDaemon:
         self.port = port
         self.ws_manager = WebSocketManager(host, port)
         self.agent_manager = AgentStateManager()
-        self.vector_search = VectorSearch("jarvis_memory/vector_store.db")
+        self.memory = MemoryManager("jarvis_memory/vector_store.db")
         self.running = False
         
     async def start(self):
@@ -322,6 +403,20 @@ class JarvisDaemon:
                 await self._handle_execute_task(websocket, data)
             elif msg_type == "semantic_search":
                 await self._handle_semantic_search(websocket, data)
+            elif msg_type == "remember":
+                await self._handle_remember(websocket, data)
+            elif msg_type == "memory_search":
+                await self._handle_memory_search(websocket, data)
+            elif msg_type == "recall":
+                await self._handle_recall(websocket, data)
+            elif msg_type == "forget":
+                await self._handle_forget(websocket, data)
+            elif msg_type == "memory_stats":
+                await self._handle_memory_stats(websocket, data)
+            elif msg_type == "consolidate":
+                await self._handle_consolidate(websocket, data)
+            elif msg_type == "ping":
+                await self._handle_ping(websocket, data)
             else:
                 logger.warning(f"Unknown message type: {msg_type}")
                 
@@ -367,38 +462,128 @@ class JarvisDaemon:
         """Handle execute_task message."""
         task_id = data.get("task_id", "default")
         goal = data.get("goal", "")
-        
+
         self.agent_manager.set_task_status(task_id, STATUS_RUNNING)
-        
+
+        # Record the task goal as an episode memory (fire-and-forget)
+        try:
+            self.memory.remember(
+                type="episode",
+                content=f"Task executed: {goal}",
+                subject="JARVIS",
+                predicate="executed",
+                obj=goal,
+                importance=0.6,
+                task_id=task_id,
+                source="daemon.execute_task",
+            )
+        except Exception:
+            logger.exception("Failed to record task episode")
+
         # Simulate task execution
         await asyncio.sleep(2)  # Simulate work
-        
+
         self.agent_manager.set_task_status(task_id, STATUS_COMPLETED)
         self.agent_manager.set_task_result(task_id, {
             "output": f"Task completed: {goal}",
             "duration": 2.0,
         })
-        
+
         await self.ws_manager.send_to(websocket, json.dumps({
             "type": "task_completed",
             "task_id": task_id,
             "status": STATUS_COMPLETED,
             "result": {"output": f"Task completed: {goal}", "duration": 2.0},
         }))
-        
+
     async def _handle_semantic_search(self, websocket, data: dict):
-        """Handle semantic_search message."""
+        """Handle semantic_search message (text-based hybrid search)."""
         query = data.get("query", "")
         k = data.get("k", 10)
-        
-        # Perform vector search
-        results = self.vector_search.semantic_search([0.1] * 768, k=k)
-        
+
+        # Use the memory fabric (FTS5 + metadata) with the real query text
+        results = self.memory.search(query=query or None, limit=k)
+
         await self.ws_manager.send_to(websocket, json.dumps({
             "type": "semantic_search_response",
             "query": query,
             "results": results,
             "k": k,
+        }))
+
+    async def _handle_remember(self, websocket, data: dict):
+        """Handle remember message — store a memory."""
+        mid = self.memory.remember(
+            type=data.get("memory_type", "fact"),
+            content=data.get("content", ""),
+            subject=data.get("subject"),
+            predicate=data.get("predicate"),
+            obj=data.get("object"),
+            importance=data.get("importance", 0.5),
+            session_id=data.get("session_id"),
+            task_id=data.get("task_id"),
+            source=data.get("source", "daemon"),
+        )
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "remember_response",
+            "memory_id": mid,
+            "stored": mid is not None,
+        }))
+
+    async def _handle_memory_search(self, websocket, data: dict):
+        """Handle memory_search message — hybrid memory retrieval."""
+        results = self.memory.search(
+            query=data.get("query"),
+            subject=data.get("subject"),
+            type=data.get("type"),
+            limit=data.get("limit", 15),
+        )
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "memory_search_response",
+            "query": data.get("query"),
+            "results": results,
+            "count": len(results),
+        }))
+
+    async def _handle_recall(self, websocket, data: dict):
+        """Handle recall message — fetch a single memory by id."""
+        record = self.memory.recall(data.get("memory_id", ""))
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "recall_response",
+            "memory_id": data.get("memory_id"),
+            "record": record,
+        }))
+
+    async def _handle_forget(self, websocket, data: dict):
+        """Handle forget message — soft-delete a memory."""
+        ok = self.memory.forget(data.get("memory_id", ""))
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "forget_response",
+            "memory_id": data.get("memory_id"),
+            "forgotten": ok,
+        }))
+
+    async def _handle_memory_stats(self, websocket, data: dict):
+        """Handle memory_stats message — memory usage snapshot."""
+        stats = self.memory.stats()
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "memory_stats_response",
+            "stats": stats,
+        }))
+
+    async def _handle_consolidate(self, websocket, data: dict):
+        """Handle consolidate message — run dedup/conflict resolution."""
+        result = self.memory.consolidate()
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "consolidate_response",
+            "result": result,
+        }))
+
+    async def _handle_ping(self, websocket, data: dict):
+        """Handle ping message — liveness check."""
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "pong",
+            "memory_backend": "fabric" if self.memory.available else "vector_fallback",
         }))
         
     async def run(self):

@@ -2,6 +2,8 @@
 
 import json
 import os
+import threading
+import time
 from dataclasses import dataclass
 
 
@@ -177,8 +179,25 @@ def _run_check_with_timeout(check_fn, timeout=3):
     return result[0] or HealthCheck(check_fn.__name__, False, "No result")
 
 
+_cache_lock = threading.Lock()
+_cache_result: list[HealthCheck] | None = None
+_cache_time: float = 0.0
+_CACHE_TTL = 300.0  # 5 minutes
+
+
 def run_all_checks() -> list[HealthCheck]:
-    """Run all health checks in parallel with per-check timeouts."""
+    """Run all health checks in parallel with per-check timeouts.
+
+    Results are cached for 5 minutes since most checks (Python version,
+    Ollama availability, package presence) rarely change within that window.
+    """
+    global _cache_result, _cache_time
+
+    now = time.time()
+    with _cache_lock:
+        if _cache_result is not None and now - _cache_time < _CACHE_TTL:
+            return list(_cache_result)
+
     from concurrent.futures import ThreadPoolExecutor
 
     checks = [
@@ -201,7 +220,19 @@ def run_all_checks() -> list[HealthCheck]:
         for fn in checks:
             future = next(f for f, ffn in futures.items() if ffn is fn)
             results.append(future.result())
-        return results
+
+    with _cache_lock:
+        _cache_result = results
+        _cache_time = time.time()
+    return list(results)
+
+
+def force_health_refresh() -> None:
+    """Invalidate the health check cache so the next call re-runs all checks."""
+    global _cache_result, _cache_time
+    with _cache_lock:
+        _cache_result = None
+        _cache_time = 0.0
 
 
 def format_health_report(checks: list[HealthCheck]) -> str:
