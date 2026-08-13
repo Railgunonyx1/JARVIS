@@ -5,6 +5,7 @@ Provides a single Config instance used across the entire system.
 """
 
 import logging
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -15,6 +16,10 @@ logger = logging.getLogger("jarvis.config")
 SERVER_POLL_INTERVAL = 0.05
 CALLBACK_WAIT = 0.1
 LONG_CALLBACK_WAIT = 0.3
+
+# API keys are cached briefly (30s) to avoid re-reading env/config files on
+# every access, but the cache expires so new keys picked up without a restart.
+_API_KEYS_TTL = 30.0
 
 _CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 _instance: Optional["Config"] = None
@@ -103,23 +108,39 @@ class Config:
 
     @property
     def api_keys(self) -> dict[str, str]:
-        """Get API keys from .env / api_keys.json / environment (cached)."""
-        if not hasattr(self, "_api_keys_cache"):
-            from core.api_keys import get_all_api_keys
-            raw = get_all_api_keys()
-            self._api_keys_cache = {
-                "groq": raw.get("groq_api_key", ""),
-                "groq_extra": [raw.get("groq_api_key_2", "")],
-                "gemini": raw.get("gemini_api_key", ""),
-                "openrouter": raw.get("openrouter_api_key", ""),
-                "openrouter_extra": [
-                    raw.get("openrouter_api_key_2", ""),
-                    raw.get("openrouter_api_key_3", ""),
-                    raw.get("openrouter_api_key_4", ""),
-                ],
-                "opencode_zen": raw.get("opencode_zen_api_key", ""),
-            }
+        """Get API keys from .env / api_keys.json / environment (cached with TTL)."""
+        now = time.time()
+        cached_at = getattr(self, "_api_keys_cached_at", 0.0)
+        if (
+            hasattr(self, "_api_keys_cache")
+            and now - cached_at < _API_KEYS_TTL
+        ):
+            return self._api_keys_cache
+
+        from core.api_keys import get_all_api_keys
+        raw = get_all_api_keys()
+        self._api_keys_cache = {
+            "groq": raw.get("groq_api_key", ""),
+            "groq_extra": [raw.get("groq_api_key_2", "")],
+            "gemini": raw.get("gemini_api_key", ""),
+            "openrouter": raw.get("openrouter_api_key", ""),
+            "openrouter_extra": [
+                raw.get("openrouter_api_key_2", ""),
+                raw.get("openrouter_api_key_3", ""),
+                raw.get("openrouter_api_key_4", ""),
+            ],
+            "opencode_zen": raw.get("opencode_zen_api_key", ""),
+        }
+        self._api_keys_cached_at = now
         return self._api_keys_cache
+
+    def reload_api_keys(self) -> dict[str, str]:
+        """Force-refresh the API key cache on the next access."""
+        if hasattr(self, "_api_keys_cache"):
+            del self._api_keys_cache
+        if hasattr(self, "_api_keys_cached_at"):
+            del self._api_keys_cached_at
+        return self.api_keys
 
     def __repr__(self):
         sections = ", ".join(self._data.keys())

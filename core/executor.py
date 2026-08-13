@@ -18,6 +18,19 @@ from security.engine import get_security_engine
 BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
+# Model names for executor's inline Gemini usage (config-driven with defaults).
+_CODE_MODEL = "gemini-2.5-flash"
+_QUICK_MODEL = "gemini-2.5-flash-lite"
+
+
+def _executor_model(model_key: str, default: str) -> str:
+    """Read a model name from config/models.toml [executor] section."""
+    try:
+        from core.config import Config
+        return Config.instance().get("models", f"executor.{model_key}", default)
+    except Exception:
+        return default
+
 # Lazy imports for planner/error_handler (may not exist in current architecture)
 _create_plan = None
 _replan = None
@@ -92,9 +105,9 @@ def _generated_code_enabled() -> bool:
     )
 
 
-import re
-
 _FORBIDDEN_CODE_PATTERNS = [
+    # Word boundaries (\b) keep these from matching substrings like
+    # "postsystem", "evaluate", or "exclusive".
     re.compile(r"\bos\.system\b", re.IGNORECASE),
     re.compile(r"\bos\.popen\b", re.IGNORECASE),
     re.compile(r"\bsubprocess\.Popen\b", re.IGNORECASE),
@@ -104,6 +117,7 @@ _FORBIDDEN_CODE_PATTERNS = [
     re.compile(r"__import__", re.IGNORECASE),
     re.compile(r"\bimportlib\b", re.IGNORECASE),
     re.compile(r"\bsocket\.", re.IGNORECASE),
+    re.compile(r"\bsocket\b\s*\(", re.IGNORECASE),  # bare socket(...) calls too
     re.compile(r"\brequests\b", re.IGNORECASE),
     re.compile(r"\burllib\b", re.IGNORECASE),
     re.compile(r"\bhttp\.", re.IGNORECASE),
@@ -113,13 +127,11 @@ _FORBIDDEN_CODE_PATTERNS = [
 def _check_generated_code(code: str) -> None:
     """Reject obviously dangerous constructs even when the tool is enabled."""
     lowered = code.lower()
-    for pattern in _FORBIDDEN_CODE_PATTERNS:
-        if pattern.search(lowered):
-            # Find which pattern matched
-            matched = next(p.pattern for p in _FORBIDDEN_CODE_PATTERNS if p.search(lowered))
-            raise RuntimeError(
-                f"Generated code rejected: forbidden pattern '{matched}'."
-            )
+    matched = [p.pattern for p in _FORBIDDEN_CODE_PATTERNS if p.search(lowered)]
+    if matched:
+        raise RuntimeError(
+            f"Generated code rejected: forbidden patterns found: {matched}"
+        )
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
     if not _generated_code_enabled():
@@ -148,7 +160,7 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
 
     genai.configure(api_key=_get_api_key())
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name=_executor_model("code_model", _CODE_MODEL),
         system_instruction=(
             "You are an expert Python developer. "
             "Write clean, complete, working Python code. "
@@ -233,7 +245,7 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
 def _detect_language(text: str) -> str:
     import google.generativeai as genai
     genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    model = genai.GenerativeModel(_executor_model("quick_model", _QUICK_MODEL))
     try:
         response = model.generate_content(
             f"What language is this text written in? "
@@ -251,7 +263,7 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
     try:
         import google.generativeai as genai
         genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel(_executor_model("code_model", _CODE_MODEL))
 
         target_lang = _detect_language(goal)
         print(f"[Executor] INFO: Translating to: {target_lang}")
@@ -561,7 +573,7 @@ class AgentExecutor:
         try:
             import google.generativeai as genai
             genai.configure(api_key=_get_api_key())
-            model     = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
+            model     = genai.GenerativeModel(model_name=_executor_model("quick_model", _QUICK_MODEL))
             steps_str = "\n".join(f"- {s.get('description', '')}" for s in completed_steps)
             prompt    = (
                 f'User goal: "{goal}"\n'

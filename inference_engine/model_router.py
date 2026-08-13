@@ -48,11 +48,37 @@ class ModelRouter:
         self._stats: dict[str, dict] = {}
         self._preference: str = "balanced"
         self._lock = threading.Lock()
+        self._model_map: dict[str, tuple[str, str, str]] = self._load_model_map()
+
+    @staticmethod
+    def _load_model_map() -> dict[str, tuple[str, str, str]]:
+        """Load the category → (provider, model) map from config/models.toml.
+
+        Falls back to the built-in map when config is missing/unreadable.
+        """
+        cfg = None
+        try:
+            from core.config import Config
+            cfg = Config.instance().get("models", "inference_engine")
+        except Exception:
+            cfg = None
+        if not isinstance(cfg, dict):
+            return dict(ModelRouter._MODEL_MAP)
+
+        merged = {}
+        for category, (provider, model, reason) in ModelRouter._MODEL_MAP.items():
+            entry = cfg.get(category, {}) if isinstance(cfg.get(category), dict) else {}
+            merged[category] = (
+                entry.get("provider", provider),
+                entry.get("model", model),
+                reason,
+            )
+        return merged
 
     def select_model(self, query: str, context: dict = None) -> dict:
         """Return the recommended provider, model, and routing reason for *query*."""
         category = self._classify(query, context)
-        provider, model, default_reason = self._MODEL_MAP[category]
+        provider, model, default_reason = self._model_map[category]
 
         with self._lock:
             stats = self._stats.get(f"{provider}/{model}", {})
@@ -63,7 +89,7 @@ class ModelRouter:
                 boosted_reason += " (preference: speed → prefer fast provider)"
         elif self._preference == "quality":
             if category == "simple":
-                provider, model, default_reason = self._MODEL_MAP["medium"]
+                provider, model, default_reason = self._model_map["medium"]
                 boosted_reason = "Upgraded for quality preference"
 
         return {

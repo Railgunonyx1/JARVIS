@@ -14,6 +14,14 @@ def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
     from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
     from tools.shell import shell_execute
+    from tools.browser import (
+        browser_click,
+        browser_extract,
+        browser_open,
+        browser_screenshot,
+        browser_status,
+        browser_type,
+    )
     from tools.world_monitor import (
         world_monitor_get_alerts,
         world_monitor_get_event,
@@ -124,6 +132,109 @@ def build_default_registry() -> ToolRegistry:
             permission="world_monitor.read",
             handler=world_monitor_search,
             category="world",
+        ),
+        Tool(
+            name="browser.open",
+            description=(
+                "Open a URL and return the page title, visible text, and links. "
+                "Uses a full Playwright browser when available (handles JavaScript "
+                "heavy pages) and falls back to HTTP scraping otherwise. Use for "
+                "web research and reading pages."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Full URL (http(s)://) or bare domain."},
+                },
+                "required": ["url"],
+            },
+            permission="browser.open",
+            handler=browser_open,
+            category="browser",
+        ),
+        Tool(
+            name="browser.screenshot",
+            description=(
+                "Take a screenshot of the current browser page and save it to disk. "
+                "Returns the file path. Requires Playwright + chromium."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Optional output path (defaults to temp dir)."},
+                },
+                "required": [],
+            },
+            permission="browser.screenshot",
+            handler=browser_screenshot,
+            category="browser",
+        ),
+        Tool(
+            name="browser.click",
+            description=(
+                "Click the first element matching a CSS selector on the current page. "
+                "Requires Playwright. Useful after browser.open for interactive pages."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector."},
+                },
+                "required": ["selector"],
+            },
+            permission="browser.act",
+            handler=browser_click,
+            category="browser",
+        ),
+        Tool(
+            name="browser.type",
+            description=(
+                "Fill a text input matching a CSS selector on the current page. "
+                "Requires Playwright."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector of the input."},
+                    "text": {"type": "string", "description": "Text to type."},
+                },
+                "required": ["selector", "text"],
+            },
+            permission="browser.act",
+            handler=browser_type,
+            category="browser",
+        ),
+        Tool(
+            name="browser.extract",
+            description=(
+                "Extract visible text from the current page, or a specific element "
+                "by CSS selector. Requires Playwright."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "Optional CSS selector."},
+                },
+                "required": [],
+            },
+            permission="browser.read",
+            handler=browser_extract,
+            category="browser",
+        ),
+        Tool(
+            name="browser.status",
+            description=(
+                "Report whether the full Playwright browser backend is available "
+                "or JARVIS is falling back to HTTP scraping."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            permission="browser.read",
+            handler=browser_status,
+            category="browser",
         ),
         Tool(
             name="world_monitor.get_alerts",

@@ -239,6 +239,8 @@ class IntentRouter:
     def classify(self, text: str) -> Intent:
         """Classify user input into an intent."""
         text_lower = text.lower().strip()
+        words = text_lower.split()
+        word_count = len(words)
 
         for pattern, intent_name, extractors in self._patterns:
             match = pattern.search(text_lower)
@@ -250,10 +252,23 @@ class IntentRouter:
                     else:
                         entities[key] = val
 
-                logger.info("Pattern match: %s (%.1f%%)", intent_name, 100)
+                # Confidence from pattern specificity:
+                # - More alternatives in the pattern body → more ambiguous → lower confidence
+                # - Longer matched text → more specific match → higher confidence
+                pattern_src = getattr(pattern, "pattern", "")
+                alternations = pattern_src.count("|")
+                matched_len = match.end() - match.start()
+                base = 1.0 - min(alternations * 0.04, 0.25)
+                if matched_len > 0:
+                    base = min(base + min(matched_len / 100.0, 0.15), 1.0)
+                if word_count <= 2:
+                    base = min(base - 0.1, 0.95)  # ultra-short queries are ambiguous
+
+                confidence = round(max(0.5, base), 2)
+                logger.info("Pattern match: %s (%.0f%%)", intent_name, confidence * 100)
                 return Intent(
                     name=intent_name,
-                    confidence=1.0,
+                    confidence=confidence,
                     entities=entities,
                     source="pattern",
                 )

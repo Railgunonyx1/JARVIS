@@ -7,6 +7,18 @@ from core.utils import get_project_root as get_base_dir
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
+_ANALYZE_MODEL = "gemini-2.5-flash-lite"
+_FIX_MODEL = "gemini-2.0-flash"
+
+
+def _error_model(model_key: str, default: str) -> str:
+    """Read a model name from config/models.toml [executor] section."""
+    try:
+        from core.config import Config
+        return Config.instance().get("models", f"executor.{model_key}", default)
+    except Exception:
+        return default
+
 
 class ErrorDecision(Enum):
     RETRY       = "retry"
@@ -93,7 +105,7 @@ def analyze_error(
             raise ValueError("Gemini API key not found")
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-lite",
+            model_name=_error_model("analyze_model", _ANALYZE_MODEL),
             system_instruction=ERROR_ANALYST_PROMPT
         )
         prompt = f"""Failed step:
@@ -153,7 +165,7 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
         if not api_key:
             raise ValueError("Gemini API key not found")
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+        model = genai.GenerativeModel(model_name=_error_model("fix_model", _FIX_MODEL))
 
         prompt = f"""A task step failed. Generate a replacement step.
 

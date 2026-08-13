@@ -106,10 +106,11 @@ def check_faster_whisper() -> HealthCheck:
 
 
 def check_config() -> HealthCheck:
-    toml_path = os.path.join("config", "jarvis.toml")
-    if os.path.exists(toml_path):
+    from pathlib import Path
+    toml_path = Path(__file__).resolve().parent.parent / "config" / "jarvis.toml"
+    if toml_path.exists():
         return HealthCheck("Config", True, "jarvis.toml found")
-    return HealthCheck("Config", False, "jarvis.toml missing", toml_path)
+    return HealthCheck("Config", False, "jarvis.toml missing", str(toml_path))
 
 
 def check_api_keys() -> HealthCheck:

@@ -143,6 +143,16 @@ class SkillRegistry:
         )
         return set(_WORD_RE.findall(text.lower()))
 
+    def _field_tokens(self, record: SkillRecord) -> list[tuple[int, set[str]]]:
+        """Weighted token buckets for ranking: name > capability > permission > description."""
+        buckets = [
+            (4, set(_WORD_RE.findall(record.name.lower()))),
+            (3, set(_WORD_RE.findall(" ".join(record.capabilities).lower()))),
+            (2, set(_WORD_RE.findall(" ".join(record.permissions).lower()))),
+            (1, set(_WORD_RE.findall(record.description.lower()))),
+        ]
+        return [(w, s) for w, s in buckets if s]
+
     # ── query ──────────────────────────────────────────────────────────
 
     def search(self, query: str = "", mode: str | None = None,
@@ -174,12 +184,24 @@ class SkillRegistry:
         if not qtokens:
             return []
         scored = [
-            (len(qtokens & self._tokens(r)), r)
+            (self._score_tokens(qtokens, r), r)
             for r in results
         ]
         scored = [(s, r) for s, r in scored if s > 0]
         scored.sort(key=lambda x: (-x[0], x[1].name.lower()))
         return [r for _, r in scored]
+
+    def _score_tokens(self, qtokens: set[str], record: SkillRecord) -> float:
+        """Weighted score: name/capability tokens outweigh description tokens.
+
+        Returns 0 when nothing matches so non-hits are dropped entirely.
+        """
+        total = 0.0
+        for weight, tokens in self._field_tokens(record):
+            overlap = qtokens & tokens
+            if overlap:
+                total += weight * len(overlap)
+        return total
 
     def get(self, name: str) -> SkillRecord | None:
         self._refresh_if_changed()

@@ -50,6 +50,10 @@ from runtime.transport.protocol import (
     MSG_ERROR,
     MSG_EVENT,
     MSG_HISTORY,
+    MSG_MCP_CALL_TOOL,
+    MSG_MCP_DISCONNECT,
+    MSG_MCP_LIST_TOOLS,
+    MSG_MCP_STATUS,
     MSG_MEMORY_ADD,
     MSG_MEMORY_SEARCH,
     MSG_MODELS,
@@ -152,6 +156,12 @@ class DaemonServer:
         self._senders: set = set()
         self._run_ids: dict[str, asyncio.Task] = {}
         self._shutdown_task: asyncio.Task | None = None
+        self._mcp = None
+        try:
+            from mcp_jarvis.client import McpClientManager
+            self._mcp = McpClientManager()
+        except Exception as exc:
+            logger.warning("MCP client unavailable: %s", exc)
 
     # ── lifecycle ──────────────────────────────────────────────────────────
 
@@ -300,6 +310,11 @@ class DaemonServer:
             close_kernel(self.kernel)
         except Exception:
             pass
+        if self._mcp is not None:
+            try:
+                await self._mcp.disconnect_all()
+            except Exception:
+                logger.exception("Failed to disconnect MCP servers")
         remove_entry(self.project_id, base_dir=self.registry_dir)
         try:
             from runtime.observability.exporters import disable_perf
@@ -374,6 +389,10 @@ class DaemonServer:
             MSG_SET_MODE: self._handle_set_mode,
             MSG_MEMORY_SEARCH: self._handle_memory_search,
             MSG_MEMORY_ADD: self._handle_memory_add,
+            MSG_MCP_STATUS: self._handle_mcp_status,
+            MSG_MCP_LIST_TOOLS: self._handle_mcp_list_tools,
+            MSG_MCP_CALL_TOOL: self._handle_mcp_call_tool,
+            MSG_MCP_DISCONNECT: self._handle_mcp_disconnect,
             MSG_HISTORY: self._handle_history,
             MSG_SKILLS: self._handle_skills,
             MSG_RUN: self._handle_run,
@@ -519,6 +538,68 @@ class DaemonServer:
             return
         message = mem.remember(key, value, category=str(payload.get("category", "notes")))
         await _send(transport, MSG_OK, {"message": message}, rid)
+
+    async def _handle_mcp_status(self, payload, rid, transport) -> None:
+        if self._mcp is None:
+            await _send(transport, MSG_ERROR,
+                        {"message": "MCP client unavailable"}, rid)
+            return
+        status = await self._mcp.status()
+        await _send(transport, MSG_RESULT, {"status": status}, rid)
+
+    async def _handle_mcp_list_tools(self, payload, rid, transport) -> None:
+        if self._mcp is None:
+            await _send(transport, MSG_ERROR,
+                        {"message": "MCP client unavailable"}, rid)
+            return
+        server = str(payload.get("server", "")).strip()
+        if not server:
+            await _send(transport, MSG_ERROR, {"message": "missing server"}, rid)
+            return
+        try:
+            tools = await self._mcp.list_tools(
+                server, refresh=bool(payload.get("refresh", False))
+            )
+            await _send(transport, MSG_RESULT, {
+                "server": server,
+                "tools": tools,
+                "count": len(tools),
+            }, rid)
+        except Exception as exc:
+            await _send(transport, MSG_ERROR,
+                        {"message": f"{exc}"[:500]}, rid)
+
+    async def _handle_mcp_call_tool(self, payload, rid, transport) -> None:
+        if self._mcp is None:
+            await _send(transport, MSG_ERROR,
+                        {"message": "MCP client unavailable"}, rid)
+            return
+        server = str(payload.get("server", "")).strip()
+        tool = str(payload.get("tool", "")).strip()
+        if not server or not tool:
+            await _send(transport, MSG_ERROR,
+                        {"message": "server and tool are required"}, rid)
+            return
+        try:
+            result = await self._mcp.call_tool(
+                server, tool, arguments=payload.get("arguments") or {}
+            )
+            await _send(transport, MSG_RESULT, {"result": result}, rid)
+        except Exception as exc:
+            await _send(transport, MSG_ERROR,
+                        {"message": f"{exc}"[:500]}, rid)
+
+    async def _handle_mcp_disconnect(self, payload, rid, transport) -> None:
+        if self._mcp is None:
+            await _send(transport, MSG_ERROR,
+                        {"message": "MCP client unavailable"}, rid)
+            return
+        server = str(payload.get("server", "")).strip()
+        if not server:
+            await _send(transport, MSG_ERROR, {"message": "missing server"}, rid)
+            return
+        ok = await self._mcp.disconnect(server)
+        await _send(transport, MSG_OK, {"server": server, "disconnected": ok}, rid)
 
     async def _handle_skills(self, payload, rid, transport) -> None:
         """Serve the skill registry (optional query / mode / max_risk filters).

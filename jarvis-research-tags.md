@@ -75,6 +75,104 @@
 
 ---
 
+## Batch 2 — Verified Repos by Category (via GitHub API, 2026-08-13)
+
+### Agent Frameworks & Orchestration
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| run-llama/llama_index | "LlamaIndex is the leading document agent and OCR platform" | 51,605 | Python | MIT | MEDIUM — RAG/OCR/agent patterns, heavy dep, extract patterns only |
+| agno-agi/agno | "Build, run, and manage agent platforms" (was phidatahq/phidata) | 41,683 | Python | Apache-2.0 | MEDIUM — web-research agent + tool patterns |
+| langchain-ai/langgraph | "Build resilient agents" | 39,571 | Python | MIT | R&D — stateful graph orchestration ideas |
+| getzep/zep | "Zep — Examples, Integrations, & More" (agent memory + knowledge graphs) | 4,832 | Python | Apache-2.0 | R&D — long-term memory alternatives to Mem0 |
+
+### Vector Search & Memory (512 MB constraint: prefer embedded)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| qdrant/qdrant | "High-performance, massive-scale Vector Database and Vector Search Engine" | 33,946 | Rust | Apache-2.0 | R&D — too heavy for 512 MB; study HNSW/quantization patterns |
+| chroma-core/chroma | "Search infrastructure for AI" | 29,043 | Rust | Apache-2.0 | R&D — embedded mode; compare vs sqliteai/sqlite-vector |
+| lancedb/lancedb | "Developer-friendly OSS embedded retrieval library for multimodal AI" | 11,140 | Rust | Apache-2.0 | R&D — embedded, multimodal-ready; compare vs sqlite-vector |
+
+### Computer Use / Vision (P2 — computer-use tag)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| microsoft/OmniParser | "A simple screen parsing tool towards pure vision based GUI agent" | 25,249 | Jupyter | CC-BY-4.0 | MEDIUM — screen-parsing backbone for desktop automation |
+| TencentQQGYLab/AppAgent | "Multimodal Agents as Smartphone Users... operate smartphone apps" | 6,844 | Python | MIT | R&D — app-operation loop patterns (owner is TencentQQGYLab) |
+
+### MCP Ecosystem
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| modelcontextprotocol/servers | "Model Context Protocol Servers" (official reference servers) | 89,512 | TypeScript | Other | HIGH — reference implementations to learn/adapt for JARVIS tool servers |
+
+### Local Inference (P2 — no GPU required)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| mudler/LocalAI | "Open-source AI engine. Run any model — LLMs, vision, voice, image, video — on any hardware. No GPU required" | 48,418 | Go | MIT | MEDIUM — OpenAI-compatible local endpoint; MCP + distributed support |
+
+### Terminal / CLI / TUI (terminal-first constraint)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| cli/cli | "GitHub's official command line tool" | 45,841 | Go | MIT | MEDIUM — GitHub ops patterns for JARVIS GitHub tools |
+| Textualize/textual | "The lean application framework for Python... Run your apps in the terminal and a web browser" | 36,923 | Python | MIT | MEDIUM — JARVIS has Textual TUI history; TUI + web patterns |
+
+### Desktop Shell (tauri tag — final wrapper)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| tauri-apps/tauri | "Build smaller, faster, and more secure desktop and mobile applications with a web frontend" | 110,165 | Rust | Apache-2.0 | HIGH — planned JARVIS desktop shell; already in stack |
+
+---
+
+## Batch 3 — Verified Repos by Category (via GitHub API, 2026-08-13)
+
+### Tool Integration & Function Calling (P1/P2)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| ComposioHQ/composio | "Powers 1000+ toolkits, tool search, context management, authentication, and a sandboxed workbench" | 29,663 | TypeScript | MIT | MEDIUM — tool registry/auth patterns for JARVIS tool layer; heavy, extract ideas |
+
+### Security / Sandboxing (permission-aware constraint)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| e2b-dev/E2B | "Open-source, secure environment with real-world tools for enterprise-grade agents" | 13,371 | Python | Apache-2.0 | R&D — sandbox patterns for risky agent actions |
+
+### Browser Automation / Computer Use (P2)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| browser-use/browser-use | "Make websites accessible for AI agents. Automate tasks online with ease" | 108,998 | Python | MIT | MEDIUM — the standard AI browser-agent library; wraps Playwright |
+| Skyvern-AI/skyvern | "Automate browser based workflows with AI" | 22,741 | Python | AGPL-3.0 | R&D — vision+playwright workflow automation; **AGPL — caution for JARVIS licensing** |
+| unclecode/crawl4ai | "Open-source LLM Friendly Web Crawler & Scraper" | 77,963 | Python | Apache-2.0 | MEDIUM — LLM-friendly crawling for web-research features |
+
+### Agent Observability / Evals / Cost Tracking (telemetry tag)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| AgentOps-AI/agentops | "Python SDK for AI agent monitoring, LLM cost tracking, benchmarking, and more" | 5,769 | Python | MIT | MEDIUM — patterns for JARVIS telemetry/audit; complements existing OpenTelemetry |
+
+### Terminal Tools (terminal-first: upgrade agent UX)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| sharkdp/bat | "A cat(1) clone with wings" (syntax highlighting pager) | 60,220 | Rust | Apache-2.0 | MEDIUM — adopt as file-view tool for JARVIS output |
+| dandavison/delta | "A syntax-highlighting pager for git, diff, grep, rg --json, and blame output" | 31,729 | Rust | MIT | MEDIUM — readable diffs for agent git operations |
+
+### Data Quality (optional R&D)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| cleanlab/cleanlab | "Standard data-centric AI package for data quality and ML with messy, real-world data" | 11,624 | Python | Apache-2.0 | LOW — only if JARVIS processes training/labeled data |
+
+> Note: `microsoft/agent-evals` returned **404 (does not exist)** — skipped.
+
+---
+
 ## Research Principle
 
 > The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.

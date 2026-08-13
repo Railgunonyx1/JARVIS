@@ -7,6 +7,23 @@ from core.utils import get_project_root as get_base_dir
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
+# Model names are configurable via config/models.toml [planner] section.
+# Fall back to sensible defaults when config is absent.
+_PLANNER_MODEL = "gemini-2.5-flash-lite"
+_REPLAN_MODEL = "gemini-2.5-flash"
+
+
+def _get_planner_models() -> tuple[str, str]:
+    """Return (plan_model, replan_model) from config, with defaults."""
+    try:
+        from core.config import Config
+        cfg = Config.instance().get("models", "planner") or {}
+        plan = cfg.get("plan_model", _PLANNER_MODEL)
+        replan = cfg.get("replan_model", _REPLAN_MODEL)
+        return plan, replan
+    except Exception:
+        return _PLANNER_MODEL, _REPLAN_MODEL
+
 # The exact tool names AgentExecutor._call_tool() can dispatch. The planner
 # advertises ONLY these (filtered by mode), so the LLM can't invent tools and
 # every produced plan validates against the real executor.
@@ -169,8 +186,9 @@ def create_plan(goal: str, context: str = "", mode: ExecutionMode = None) -> dic
     dynamic_prompt = _build_planner_prompt(mode)
 
     genai.configure(api_key=_get_api_key())
+    plan_model, _ = _get_planner_models()
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
+        model_name=plan_model,
         system_instruction=dynamic_prompt
     )
 
@@ -231,8 +249,9 @@ def replan(goal: str, completed_steps: list, failed_step: dict, error: str) -> d
     import google.generativeai as genai
 
     genai.configure(api_key=_get_api_key())
+    _, replan_model = _get_planner_models()
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name=replan_model,
         system_instruction=PLANNER_PROMPT
     )
 

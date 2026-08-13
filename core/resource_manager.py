@@ -91,6 +91,27 @@ class ResourceQuota:
     max_threads: int = 4
     max_concurrent_llm: int = 2
     max_concurrent_tts: int = 1
+    # Pressure thresholds (percent). Configurable per deployment.
+    pressure_critical: float = 95.0
+    pressure_high: float = 90.0
+    pressure_mild_cpu: float = 70.0
+    pressure_mild_ram: float = 75.0
+
+    @classmethod
+    def from_config(cls, config: dict | None = None) -> "ResourceQuota":
+        """Build a quota from config section, falling back to defaults."""
+        cfg = config or {}
+        return cls(
+            max_cpu_percent=float(cfg.get("max_cpu_percent", 90.0)),
+            max_ram_percent=float(cfg.get("max_ram_percent", 85.0)),
+            max_threads=int(cfg.get("max_threads", 4)),
+            max_concurrent_llm=int(cfg.get("max_concurrent_llm", 2)),
+            max_concurrent_tts=int(cfg.get("max_concurrent_tts", 1)),
+            pressure_critical=float(cfg.get("pressure_critical", 95.0)),
+            pressure_high=float(cfg.get("pressure_high", 90.0)),
+            pressure_mild_cpu=float(cfg.get("pressure_mild_cpu", 70.0)),
+            pressure_mild_ram=float(cfg.get("pressure_mild_ram", 75.0)),
+        )
 
 
 @dataclass
@@ -106,7 +127,7 @@ class SystemSnapshot:
 
 
 class ResourceManager:
-    def __init__(self, check_interval: float = 5.0):
+    def __init__(self, check_interval: float = 5.0, config: dict | None = None):
         self._check_interval = check_interval
         self._snapshot: SystemSnapshot = SystemSnapshot()
         self._pressure: PressureLevel = PressureLevel.NONE
@@ -114,8 +135,8 @@ class ResourceManager:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
-        # Quotas
-        self.quota = ResourceQuota()
+        # Quotas (configurable via config/resource.toml [quota] section)
+        self.quota = ResourceQuota.from_config(config)
 
         # Thread pool
         self._thread_pool = ThreadPoolExecutor(
@@ -299,11 +320,11 @@ class ResourceManager:
         mem = snap.memory.percent
         gpu_mem = snap.gpu.memory_percent
 
-        if cpu >= 95 or mem >= 95 or gpu_mem >= 95:
+        if cpu >= self.quota.pressure_critical or mem >= self.quota.pressure_critical or gpu_mem >= self.quota.pressure_critical:
             new_level = PressureLevel.CRITICAL
-        elif cpu >= self.quota.max_cpu_percent or mem >= self.quota.max_ram_percent or gpu_mem >= 90:
+        elif cpu >= self.quota.max_cpu_percent or mem >= self.quota.max_ram_percent or gpu_mem >= self.quota.pressure_high:
             new_level = PressureLevel.HIGH
-        elif cpu >= 70 or mem >= 75:
+        elif cpu >= self.quota.pressure_mild_cpu or mem >= self.quota.pressure_mild_ram:
             new_level = PressureLevel.MILD
         else:
             new_level = PressureLevel.NONE

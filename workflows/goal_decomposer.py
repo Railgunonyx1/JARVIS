@@ -13,6 +13,17 @@ logger = logging.getLogger("jarvis.workflows.decomposer")
 
 API_CONFIG_PATH = Path.home() / ".jarvis" / "config" / "api_keys.json"
 
+_DECOMPOSE_MODEL = "gemini-2.5-flash"
+
+
+def _decompose_model() -> str:
+    """Read decompose model from config/models.toml [executor] section."""
+    try:
+        from core.config import Config
+        return Config.instance().get("models", "executor.decompose_model", _DECOMPOSE_MODEL)
+    except Exception:
+        return _DECOMPOSE_MODEL
+
 
 def _get_api_key() -> str:
     try:
@@ -214,7 +225,7 @@ class GoalDecomposer:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(
-                model_name="gemini-2.5-flash",
+                model_name=_decompose_model(),
                 system_instruction=(
                     "You decompose complex goals into sub-goals for an autonomous workflow engine.\n"
                     "Available actions: web_search, file_controller, generated_code, open_app, browser, "

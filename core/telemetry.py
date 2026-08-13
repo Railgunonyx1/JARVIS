@@ -85,15 +85,21 @@ class LatencyTracker:
         """Record an error for a stage."""
         with self._lock:
             stage_name = stage.replace("start_", "").replace("end_", "")
-            # Record elapsed time if stage was tracking, otherwise use minimal value
-            if stage_name in self._stages:
-                # Use existing stage metrics, record error on current interval
-                elapsed = time.perf_counter() * 1000  # rough estimate
-                self._stages[stage_name].record(elapsed, error=True)
-            else:
-                # Stage wasn't being tracked; record minimal time with error flag
-                self._stages[stage_name] = StageMetrics(stage_name)
-                self._stages[stage_name].record(1.0, error=True)  # 1ms minimum
+            metrics = self._stages.get(stage_name, StageMetrics(stage_name))
+            # Use the real elapsed time if the stage start is still being tracked
+            elapsed_ms = self._elapsed_ms_for(stage_name)
+            if elapsed_ms is None:
+                # Fall back to the stage's last known duration, or a 1ms floor
+                elapsed_ms = metrics.last_ms if metrics.last_ms > 0 else 1.0
+            metrics.record(max(1.0, elapsed_ms), error=True)
+            self._stages[stage_name] = metrics
+
+    def _elapsed_ms_for(self, stage_name: str) -> float | None:
+        """Return elapsed ms since the current `start_<stage>` marker, if any."""
+        start_key = f"start_{stage_name}"
+        if start_key in self._current_request:
+            return (time.perf_counter() - self._current_request[start_key]) * 1000
+        return None
 
     def end_request(self) -> dict[str, float]:
         """End the current request and return stage timings."""
@@ -118,16 +124,18 @@ class LatencyTracker:
 
     @contextmanager
     def track(self, stage: str):
-        """Context manager to track a stage."""
+        """Context manager to track a stage. On error the stage is recorded
+        exactly once, with the error flag set (never double-counted)."""
         start = time.perf_counter()
+        failed = False
         try:
             yield
         except Exception:
-            self.mark_error(stage)
+            failed = True
             raise
         finally:
             ms = (time.perf_counter() - start) * 1000
-            self._record_stage(stage, ms, error=False)
+            self._record_stage(stage, ms, error=failed)
 
     def _record_stage(self, stage: str, ms: float, error: bool = False) -> None:
         with self._lock:

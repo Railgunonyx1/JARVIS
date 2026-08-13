@@ -47,6 +47,10 @@ __all__ = [
     "MSG_BUSY",
     "MSG_CANCEL",
     "MSG_SKILLS",
+    "MSG_MCP_STATUS",
+    "MSG_MCP_LIST_TOOLS",
+    "MSG_MCP_CALL_TOOL",
+    "MSG_MCP_DISCONNECT",
     "MAX_FRAME_SIZE",
     "Envelope",
     "make_envelope",
@@ -72,6 +76,10 @@ MSG_SHUTDOWN = "shutdown"
 MSG_CANCEL = "cancel"
 MSG_SKILLS = "skills"
 MSG_BOOTSTRAP = "issue_bootstrap"  # request a short-lived dashboard credential
+MSG_MCP_STATUS = "mcp_status"       # snapshot of configured/connected MCP servers
+MSG_MCP_LIST_TOOLS = "mcp_list_tools"
+MSG_MCP_CALL_TOOL = "mcp_call_tool"
+MSG_MCP_DISCONNECT = "mcp_disconnect"
 
 # Response message types (daemon -> client)
 MSG_PONG = "pong"

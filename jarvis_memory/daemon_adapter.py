@@ -15,6 +15,11 @@ import numpy
 from concurrent import futures
 from typing import Any, Dict, List, Optional, Callable
 
+try:
+    from mcp_jarvis.client import McpClientManager
+except Exception:
+    McpClientManager = None  # type: ignore
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -361,6 +366,7 @@ class JarvisDaemon:
         self.ws_manager = WebSocketManager(host, port)
         self.agent_manager = AgentStateManager()
         self.memory = MemoryManager("jarvis_memory/vector_store.db")
+        self.mcp = McpClientManager() if McpClientManager is not None else None
         self.running = False
         
     async def start(self):
@@ -372,6 +378,11 @@ class JarvisDaemon:
     async def stop(self):
         """Stop the daemon."""
         self.running = False
+        if self.mcp is not None:
+            try:
+                await self.mcp.disconnect_all()
+            except Exception:
+                logger.exception("Failed to disconnect MCP servers")
         await self.ws_manager.stop()
         logger.info("JARVIS MK-X Daemon stopped")
         
@@ -417,6 +428,16 @@ class JarvisDaemon:
                 await self._handle_consolidate(websocket, data)
             elif msg_type == "ping":
                 await self._handle_ping(websocket, data)
+            elif msg_type == "mcp_list_servers":
+                await self._handle_mcp_list_servers(websocket, data)
+            elif msg_type == "mcp_status":
+                await self._handle_mcp_status(websocket, data)
+            elif msg_type == "mcp_list_tools":
+                await self._handle_mcp_list_tools(websocket, data)
+            elif msg_type == "mcp_call_tool":
+                await self._handle_mcp_call_tool(websocket, data)
+            elif msg_type == "mcp_disconnect":
+                await self._handle_mcp_disconnect(websocket, data)
             else:
                 logger.warning(f"Unknown message type: {msg_type}")
                 
@@ -584,6 +605,96 @@ class JarvisDaemon:
         await self.ws_manager.send_to(websocket, json.dumps({
             "type": "pong",
             "memory_backend": "fabric" if self.memory.available else "vector_fallback",
+        }))
+
+    async def _handle_mcp_list_servers(self, websocket, data: dict):
+        """Handle mcp_list_servers — configured server specs."""
+        if self.mcp is None:
+            return await self._mcp_unavailable(websocket)
+        servers = self.mcp.configured_servers()
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "mcp_list_servers_response",
+            "servers": [
+                {
+                    "name": s.get("name"),
+                    "command": s.get("command"),
+                    "url": s.get("url"),
+                    "args": s.get("args", []),
+                }
+                for s in servers
+            ],
+            "count": len(servers),
+        }))
+
+    async def _handle_mcp_status(self, websocket, data: dict):
+        """Handle mcp_status — connection snapshot."""
+        if self.mcp is None:
+            return await self._mcp_unavailable(websocket)
+        status = await self.mcp.status()
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "mcp_status_response",
+            "status": status,
+        }))
+
+    async def _handle_mcp_list_tools(self, websocket, data: dict):
+        """Handle mcp_list_tools — tools exposed by one server."""
+        if self.mcp is None:
+            return await self._mcp_unavailable(websocket)
+        server = data.get("server")
+        try:
+            tools = await self.mcp.list_tools(
+                server, refresh=bool(data.get("refresh", False))
+            )
+            await self.ws_manager.send_to(websocket, json.dumps({
+                "type": "mcp_list_tools_response",
+                "server": server,
+                "tools": tools,
+                "count": len(tools),
+            }))
+        except Exception as exc:
+            await self.ws_manager.send_to(websocket, json.dumps({
+                "type": "mcp_list_tools_response",
+                "server": server,
+                "error": str(exc),
+            }))
+
+    async def _handle_mcp_call_tool(self, websocket, data: dict):
+        """Handle mcp_call_tool — invoke a tool on an MCP server."""
+        if self.mcp is None:
+            return await self._mcp_unavailable(websocket)
+        server = data.get("server")
+        tool = data.get("tool")
+        try:
+            result = await self.mcp.call_tool(
+                server, tool, arguments=data.get("arguments") or {}
+            )
+            await self.ws_manager.send_to(websocket, json.dumps({
+                "type": "mcp_call_tool_response",
+                "result": result,
+            }))
+        except Exception as exc:
+            await self.ws_manager.send_to(websocket, json.dumps({
+                "type": "mcp_call_tool_response",
+                "error": str(exc),
+            }))
+
+    async def _handle_mcp_disconnect(self, websocket, data: dict):
+        """Handle mcp_disconnect — drop a server session."""
+        if self.mcp is None:
+            return await self._mcp_unavailable(websocket)
+        server = data.get("server")
+        ok = await self.mcp.disconnect(server) if server else False
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "mcp_disconnect_response",
+            "server": server,
+            "disconnected": ok,
+        }))
+
+    async def _mcp_unavailable(self, websocket):
+        """Respond when the MCP client module could not be imported."""
+        await self.ws_manager.send_to(websocket, json.dumps({
+            "type": "mcp_error",
+            "error": "MCP client unavailable (mcp package not installed)",
         }))
         
     async def run(self):
