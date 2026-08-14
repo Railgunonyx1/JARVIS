@@ -121,6 +121,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.max_tool_calls_per_step = max_tool_calls_per_step
         self._tool_counter = 0
 
     def _next_tool_id(self) -> str:
