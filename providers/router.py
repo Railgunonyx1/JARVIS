@@ -11,6 +11,7 @@ from providers.groq_provider import GroqProvider
 from providers.ollama_provider import OllamaProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
+from providers.types import restore_tool_names, sanitize_tools
 
 logger = logging.getLogger("jarvis.providers.router")
 
@@ -153,6 +154,10 @@ class ProviderRouter:
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
+        # Strict OpenAI-compatible upstreams reject dotted tool names; send
+        # sanitized schemas and restore real names on the way back.
+        tools_param, name_map = sanitize_tools(tools)
+
         last_error = None
         attempts = 0
         with tracer.span("router.complete") as span:
@@ -170,7 +175,9 @@ class ProviderRouter:
                     continue
                 try:
                     logger.info("Trying %s (%s)", provider_name, provider.model)
-                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools)
+                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param)
+                    if name_map:
+                        restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
                     self._last_model = provider.model
                     metrics.counter(f"provider.ok.{provider_name}", 1)

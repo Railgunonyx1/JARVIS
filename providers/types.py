@@ -8,8 +8,45 @@ SDK output into these shapes.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+_TOOL_NAME_SAFE = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def sanitize_tools(tools: list | None) -> tuple[list | None, dict[str, str]]:
+    """Replace illegal characters in tool names for strict upstreams.
+
+    OpenAI-compatible gateways (Nvidia via OpenRouter, opencode_zen/Console)
+    reject function names outside ``[a-zA-Z0-9_-]`` — JARVIS tools like
+    ``filesystem.write`` violate that. Returns ``(sanitized_tools, name_map)``
+    where ``name_map`` maps sanitized -> original; use :func:`restore_tool_names`
+    on the model's replies so the agent loop still resolves real tool names.
+    """
+    if not tools:
+        return tools, {}
+    name_map: dict[str, str] = {}
+    out: list[dict] = []
+    for entry in tools:
+        fn = entry.get("function", entry) if isinstance(entry, dict) else entry
+        name = str(fn.get("name", ""))
+        safe = _TOOL_NAME_SAFE.sub("_", name)
+        if safe != name:
+            name_map[safe] = name
+        if isinstance(entry, dict) and "function" in entry:
+            out.append({**entry, "function": {**fn, "name": safe}})
+        else:
+            out.append({**entry, "name": safe})
+    return out, name_map
+
+
+def restore_tool_names(tool_calls: list[ToolCall], name_map: dict[str, str]) -> list[ToolCall]:
+    """Map model-returned (sanitized) tool names back to real JARVIS names."""
+    for call in tool_calls:
+        if call.name in name_map:
+            call.name = name_map[call.name]
+    return tool_calls
 
 
 @dataclass

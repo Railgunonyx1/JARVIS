@@ -102,7 +102,7 @@ class GeminiProvider(LLMProvider):
                 client.models.generate_content,
                 model=self._model,
                 contents=contents,
-                generation_config={
+                config={
                     "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
                     "temperature": temperature or self.config.get("temperature", 0.7),
                 },
@@ -154,9 +154,10 @@ class GeminiProvider(LLMProvider):
         try:
             import asyncio
             response = await asyncio.to_thread(
-                client.generate_content,
-                contents,
-                generation_config={
+                client.models.generate_content,
+                model=self._model,
+                contents=contents,
+                config={
                     "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
                     "temperature": temperature or self.config.get("temperature", 0.7),
                 },

@@ -46,7 +46,7 @@ class AgentContextBuilder:
         if mem is not None:
             project_root = getattr(project, "root_path", None)
             mem_text = mem.format_for_prompt(
-                str(project_root) if project_root else "", max_tokens=4000,
+                str(project_root) if project_root else "", max_tokens=1500,
             )
             if mem_text:
                 lines.append(mem_text)
