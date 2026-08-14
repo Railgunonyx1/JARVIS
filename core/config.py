@@ -142,6 +142,94 @@ class Config:
             del self._api_keys_cached_at
         return self.api_keys
 
+    # ── Failure-analyzer recovery config ──────────────────────────────
+    # Default mapping keyed by event name. Admins can override per-event via
+    # config/failure_analyzer.toml (section [failure_analyzer]).
+    FAILURE_RECOVERY_CONFIG: dict[str, str] = {
+        "tool.executed": "retry",
+        "action.executed": "retry",
+        "llm.completed": "replan",
+        "permission.checked": "abort",
+        "llm.failed": "replan",
+    }
+
+    def get_failure_recovery(self, event_name: str, default: str = "replan") -> str:
+        """Get recovery action for a failure event, with config override.
+
+        Checks ``config/failure_analyzer.toml`` ``[failure_analyzer]`` section
+        first; falls back to the built-in ``FAILURE_RECOVERY_CONFIG`` dict;
+        finally returns *default*.
+        """
+        # Check for config override
+        cfg_val = self.get("failure_analyzer", event_name, default=None)
+        if cfg_val is not None and cfg_val != default:
+            return cfg_val
+        # Fall back to built-in mapping
+        return self.FAILURE_RECOVERY_CONFIG.get(event_name, default)
+
     def __repr__(self):
         sections = ", ".join(self._data.keys())
         return f"<Config sections=[{sections}]>"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ModelCatalog — centralized model name catalog (single source of truth).
+# ──────────────────────────────────────────────────────────────────────
+class ModelCatalog:
+    """Centralized model name catalog — single source of truth for all LLM model references.
+
+    Use ``Config.ModelCatalog`` or ``from core.config import ModelCatalog`` to access.
+    All model names live in one place so there's a single location to add/modify
+    models without touching 10+ files.
+
+    Example::
+
+        from core.config import Config, ModelCatalog
+        model = ModelCatalog.GEMINI_FLASH_LITE
+        # or: model = Config.ModelCatalog.GEMINI_FLASH_LITE
+    """
+
+    # ── Gemini models (primary providers) ──────────────────────────────
+    GEMINI_FLASH_LITE = "gemini-2.5-flash-lite"
+    GEMINI_FLASH = "gemini-2.5-flash"
+    GEMINI_FLASH_20 = "gemini-2.0-flash"
+    GEMINI_1_5_FLASH = "gemini-1.5-flash"
+
+    # ── Provider-specific models ───────────────────────────────────────
+    GROQ_LLAMA3_1 = "llama-3.1-8b-instant"
+    GROQ_MIXTRAL = "mixtral-8x7b-instant"
+
+    # ── OpenRouter models ──────────────────────────────────────────────
+    OPENROUTER_GEMINI = "google/gemini-2.5-flash"
+    OPENROUTER_CLAUDE = "anthropic/claude-3.5-sonnet"
+    OPENROUTER_MIXTRAL = "mistralai/mixtral-8x7b-instant"
+
+    # ── Default mappings by tier ───────────────────────────────────────
+    DEFAULT_BY_TIER = {
+        "tiny": GROQ_LLAMA3_1,
+        "small": GROQ_LLAMA3_1,
+        "medium": OPENROUTER_GEMINI,
+        "large": GEMINI_FLASH_LITE,
+    }
+
+    @classmethod
+    def get_model(cls, tier: str, provider: str | None = None) -> str:
+        """Get model name by tier and optional provider."""
+        if provider and provider in cls.__dict__:
+            val = getattr(cls, provider, None)
+            if val:
+                return val
+        return cls.DEFAULT_BY_TIER.get(tier, cls.GEMINI_FLASH_LITE)
+
+    @classmethod
+    def get_model_for_purpose(cls, purpose: str) -> str:
+        """Get model by intended use case."""
+        purposes = {
+            "planning": cls.GEMINI_FLASH_LITE,
+            "execution": cls.GEMINI_FLASH,
+            "streaming": cls.GEMINI_FLASH,
+            "coding": cls.OPENROUTER_MIXTRAL,
+            "analysis": cls.GEMINI_FLASH,
+            "creative": cls.OPENROUTER_CLAUDE,
+        }
+        return purposes.get(purpose, cls.GEMINI_FLASH_LITE)

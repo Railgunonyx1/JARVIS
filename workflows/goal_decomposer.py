@@ -13,7 +13,9 @@ logger = logging.getLogger("jarvis.workflows.decomposer")
 
 API_CONFIG_PATH = Path.home() / ".jarvis" / "config" / "api_keys.json"
 
-_DECOMPOSE_MODEL = "gemini-2.5-flash"
+from core.config import ModelCatalog
+
+_DECOMPOSE_MODEL = ModelCatalog.GEMINI_FLASH  # "gemini-2.5-flash"
 
 
 def _decompose_model() -> str:

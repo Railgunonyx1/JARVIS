@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.replay_engine import ReplayEngine
+from core.config import Config
 
 _FAILURE_RECOVERY = {
     "tool.executed": "retry",
@@ -27,8 +28,28 @@ _FAILURE_RECOVERY = {
 
 
 class FailureAnalyzer:
+    """Attribute a failed task to the responsible subsystem."""
+
     def __init__(self) -> None:
         self._replay = ReplayEngine()
+        self._config = Config.instance()
+
+    def _recovery_from_config(self, event_name: str, default: str = "replan") -> str:
+        """Read override from config/failure_analyzer.toml [failure_analyzer].
+
+        The TOML file is nested (section name repeated), so we use
+        ``get_section`` and walk the dict with the dotted event name.
+        """
+        section = self._config.get_section("failure_analyzer") or {}
+        # section looks like: {'tool': {'executed': 'retry'}, 'action': {...}, ...}
+        keys = event_name.split(".")
+        value = section
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+        return value if value else default
 
     def analyze(self, trace_id: str) -> dict[str, Any]:
         timeline = self._replay.replay(trace_id)
@@ -78,12 +99,13 @@ class FailureAnalyzer:
         for e in reversed(prefix):
             data = e["data"] or {}
             if e["name"] in ("tool.executed", "action.executed") and data.get("success") is False:
+                recovery = self._recovery_from_config(e["name"], "replan")
                 return {
                     "subsystem": e["name"],
                     "tool": data.get("tool") or data.get("intent") or "unknown",
                     "error": data.get("error", ""),
                     "latency_ms": data.get("duration_ms"),
-                    "recovery": _FAILURE_RECOVERY.get(e["name"], "replan"),
+                    "recovery": recovery,
                 }
         audit_failure = self._audit_failure(trace_id)
         if audit_failure:
@@ -114,11 +136,12 @@ class FailureAnalyzer:
             return None
         for r in reversed(rows):
             if not r.get("success") and r.get("tool"):
+                recovery = self._recovery_from_config("tool.executed", "retry")
                 return {
                     "subsystem": "tool.executed",
                     "tool": r["tool"],
                     "error": r.get("error") or "",
                     "latency_ms": r.get("duration_ms"),
-                    "recovery": "retry",
+                    "recovery": recovery,
                 }
         return None

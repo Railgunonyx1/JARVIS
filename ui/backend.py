@@ -126,16 +126,17 @@ class TuiDataSource:
         self._connected = False
         self._client = None
         self._last_error = reason
+        # Only clear connection-specific data; preserve mock/real state
+        # so transient network blips don't cause a full UI state reset.
         self._status = {}
-        self._models = {}
-        self._provider_rows = list(MOCK_PROVIDERS)
-        self._mock_providers = True
-        self._skills = []
-        self._skill_rows = self._build_skill_rows(MOCK_SKILL_RECORDS)
-        self._mock_skills = True
 
     async def refresh(self) -> None:
-        """Pull status + provider health + skill registry from the daemon."""
+        """Pull status + provider health + skill registry from the daemon.
+
+        Distinguishes actual connection loss from transient data errors:
+        - ``ConnectionError`` → go offline (user must reconnect)
+        - Any other error → log but stay connected with previous data.
+        """
         if not self._connected or self._client is None:
             return
         try:
@@ -147,8 +148,12 @@ class TuiDataSource:
             self._skills = (await self._client.skills()).get("skills", [])
             self._skill_rows = self._build_skill_rows(self._skills)
             self._mock_skills = not bool(self._skills)
+        except ConnectionError:
+            # Actual network / daemon-down scenario
+            self._mark_offline("daemon connection lost")
         except Exception as exc:
-            self._mark_offline(str(exc))
+            # Transient data error — keep previous state, stay connected
+            logger.warning("Refresh data error (staying connected): %s", exc)
 
     def _build_skill_rows(self, records: list[dict]) -> list[tuple[str, str, str]]:
         """Map registry records to ``(name, version, STATUS)`` rows.
@@ -177,17 +182,21 @@ class TuiDataSource:
 
     # ── commands ────────────────────────────────────────────────────────
 
-    async def run_goal(self, goal: str,
-                       on_event: EventCallback | None = None) -> dict:
+async def run_goal(self, goal: str,
+                   on_event: EventCallback | None = None) -> dict:
         """Submit a goal; stream observer events; return the result dict."""
-        if not self._connected or self._client is None:
+        if self._client is None:
             return {"success": False,
-                    "error": self._last_error or "daemon not connected"}
+                    "error": self._last_error or "daemon not initialized"}
         try:
             return await self._client.run(goal, on_event=on_event)
         except Exception as exc:
-            self._connected = False
-            self._last_error = str(exc)
+            # Transient error — don't kill connection state; log and return failure
+            # Only mark disconnected if the error message indicates a broken connection
+            error_str = str(exc).lower()
+            if "connection" in error_str or "disconnect" in error_str or "broken" in error_str:
+                self._connected = False
+                self._last_error = str(exc)
             return {"success": False, "error": str(exc)}
 
     async def set_mode(self, mode: str) -> dict:

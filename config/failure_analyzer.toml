@@ -1,0 +1,8 @@
+# Failure analyzer recovery config — per-event-type recovery strategies.
+# Override any of the defaults below via Config.get("failure_analyzer", <event>, <default>).
+[failure_analyzer]
+tool.executed = "retry"
+action.executed = "retry"
+llm.completed = "replan"
+permission.checked = "abort"
+llm.failed = "replan"

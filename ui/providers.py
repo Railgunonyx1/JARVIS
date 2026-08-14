@@ -9,9 +9,11 @@ that into the rows the dashboard tables render.
 from __future__ import annotations
 
 # Honest fallback rows: this repo's actual providers, clearly marked mock.
+from core.config import ModelCatalog
+
 MOCK_PROVIDERS: list[tuple[str, str, str, str, str]] = [
-    ("GROQ", "ONLINE", "-", "-", "llama-3.1-8b-instant"),
-    ("GEMINI", "ONLINE", "-", "-", "gemini-2.0-flash"),
+    ("GROQ", "ONLINE", "-", "-", ModelCatalog.GROQ_LLAMA3_1),
+    ("GEMINI", "ONLINE", "-", "-", ModelCatalog.GEMINI_FLASH_20),
     ("OPENROUTER", "OFFLINE", "-", "-", "-"),
     ("OPENCODE_ZEN", "OFFLINE", "-", "-", "-"),
     ("OLLAMA", "OFFLINE", "-", "-", "qwen2.5:1.5b"),

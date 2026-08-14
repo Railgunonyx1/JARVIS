@@ -173,6 +173,46 @@
 
 ---
 
+## Web UI Connectivity (how a browser frontend connects to the daemon)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| nousresearch/hermes-agent | "The agent that grows with you"... Open WebUI connects to its API server "just like it would connect to OpenAI" — handles terminal, file ops, web search, memory, skills, returns final response | 229,806 | Python | MIT | HIGH — self-hosted agent with built-in Open WebUI compatibility; React dashboard available via hermes-webui |
+| sanchomuzax/hermes-webui | "Process monitoring and configuration dashboard for Hermes Agent"... React SPA + FastAPI backend, WebSocket-based polling bridge, real-time updates for sessions, memory, skills, tools, cron, logs, gateway health | 6,844 | Python/JS | MIT | MEDIUM — ready-made dashboard; bound to Hermes Agent but patterns transfer |
+| microsoft/agent-framework (AG-UI) | AG-UI protocol standard for agent↔UI communication... supports WebSocket/SSE transports, human-in-the-loop, shared state, generative UI... integrations for React/TypeScript via CopilotKit | verified | Python/.NET | MIT/CC-BY-4.0 | R&D — protocol-level approach; can wire to JARVIS daemon's WebSocket endpoint |
+| webjsdev/webjs | "The web framework for AI agents"... zero-build, web components, SSR, backend-only app with WebSockets, rate limiting, database, chat/agent gallery | ? | JS/TS | MIT | R&D — experimental framework; no build step, embeddable in minimal setups |
+
+> Note: Open WebUI "just works" connecting to Hermes Agent API server like OpenAI. The hermes-webui dashboard provides a React+FastAPI reference implementation of a WebSocket-polling bridge for agent monitoring/control. AG-UI offers a protocol-standard alternative to custom WebSocket designs.
+
+---
+
+## Batch 4 — Verified Repos by Category (via GitHub API, 2026-08-13)
+
+### Agent Frameworks & Engineering Platforms
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| langchain-ai/langchain | "The agent engineering platform" | 144,166 | Python | MIT | HIGH — de facto standard; extract tool patterns, memory modules, agent types; heavy dep, adapt ideas not install |
+| microsoft/autogen | "A programming framework for agentic AI" | 60,402 | Python | CC-BY-4.0 | HIGH — multi-agent conversation patterns; protocol-agnostic; CC license requires attribution |
+| anomalyco/opencode | "The open source coding agent" (was sst/opencode) | 196,983 | TypeScript | MIT | MEDIUM — coding-agent patterns; heavy UI deps contradict JARVIS terminal constraint; extract editor/tool patterns |
+| jina-ai/serve | "Build multimodal AI applications with cloud-native stack" | 21,861 | Python | Apache-2.0 | R&D — cloud-native multimodal pipeline ideas; K8s, gRPC, Docker; too heavy for 512 MB |
+
+### LLM Serving & Performance (inference tag)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| vllm-project/vllm | "A high-throughput and memory-efficient inference and serving engine for LLMs" | 88,968 | Python | Apache-2.0 | MEDIUM — study serving throughput/quantization patterns; GPU-dependent, extract ideas not deps |
+
+### Search / Knowledge Base
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| elastic/elasticsearch | "Free and Open Source, Distributed, RESTful Search Engine" | 77,850 | Java | Other | LOW — Java-heavy, contradicts terminal-native / low-RAM constraint; study hybrid search patterns for future |
+
+> Note: `crewai/crewai` returned **404** (organization/repo may have moved); `ipipan/FAISS` → **404** (FAISS is under `facebookresearch/faiss`). AgentOps already covered in Batch 3.
+
+---
+
 ## Research Principle
 
 > The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.

@@ -3,26 +3,25 @@ import re
 
 from core.mode_manager import ExecutionMode, get_mode_manager
 from core.utils import get_project_root as get_base_dir
+from core.config import ModelCatalog
 
-BASE_DIR        = get_base_dir()
+BASE_DIR = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
-# Model names are configurable via config/models.toml [planner] section.
-# Fall back to sensible defaults when config is absent.
-_PLANNER_MODEL = "gemini-2.5-flash-lite"
-_REPLAN_MODEL = "gemini-2.5-flash"
+# Model names are now resolved through the centralized ModelCatalog.
+# Defaults fall back to ModelCatalog.get_model_for_purpose() when config is absent.
 
 
 def _get_planner_models() -> tuple[str, str]:
-    """Return (plan_model, replan_model) from config, with defaults."""
+    """Return (plan_model, replan_model) from config, with ModelCatalog defaults."""
     try:
         from core.config import Config
         cfg = Config.instance().get("models", "planner") or {}
-        plan = cfg.get("plan_model", _PLANNER_MODEL)
-        replan = cfg.get("replan_model", _REPLAN_MODEL)
+        plan = cfg.get("plan_model", ModelCatalog.GEMINI_FLASH_LITE)
+        replan = cfg.get("replan_model", ModelCatalog.GEMINI_FLASH)
         return plan, replan
     except Exception:
-        return _PLANNER_MODEL, _REPLAN_MODEL
+        return ModelCatalog.GEMINI_FLASH_LITE, ModelCatalog.GEMINI_FLASH
 
 # The exact tool names AgentExecutor._call_tool() can dispatch. The planner
 # advertises ONLY these (filtered by mode), so the LLM can't invent tools and

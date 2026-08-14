@@ -19,8 +19,10 @@ BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
 # Model names for executor's inline Gemini usage (config-driven with defaults).
-_CODE_MODEL = "gemini-2.5-flash"
-_QUICK_MODEL = "gemini-2.5-flash-lite"
+from core.config import ModelCatalog
+
+_CODE_MODEL = ModelCatalog.GEMINI_FLASH   # "gemini-2.5-flash"
+_QUICK_MODEL = ModelCatalog.GEMINI_FLASH_LITE  # "gemini-2.5-flash-lite"
 
 
 def _executor_model(model_key: str, default: str) -> str:

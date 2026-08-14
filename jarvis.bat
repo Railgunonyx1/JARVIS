@@ -4,55 +4,36 @@ color 0a
 
 :: ============================================================================
 :: JARVIS MK-X - Autonomous Engineering Agent
-:: Launches the React frontend (Vite) and opens the application in browser
-:: The JARVIS daemon should be running separately for full functionality
+:: Launches daemon and opens UI — backend messages from JARVIS
 :: ============================================================================
-
-echo.
-echo ============================================================================
-echo  JARVIS MK-X - Autonomous Engineering Agent
-echo ============================================================================
 
 :: Change to the web directory
 pushd web
 
 :: Check if we're in the right directory
 if not exist package.json (
-    echo.
-    ERROR: Could not find package.json. Are you in the correct directory?
-    pause
     exit /b 1
 )
 
-echo.
-echo Starting JARVIS MK-X Frontend...
-echo.
+:: Start the JARVIS Daemon (WebSocket server on ws://localhost:8787)
+:: launched in background — output goes to daemon log
+start "JARVIS Daemon" /min cmd /c "%~dp0venv\Scripts\python.exe daemon\jarvis_daemon_handler.py"
 
-:: Start Vite development server in background
-:: The server will output its URL (typically http://localhost:5173)
-start /b cmd /c "npm run dev"
-
-:: Wait a moment for the server to start
+:: Wait for daemon to initialize
 timeout /t 3 /nobreak >nul
 
-:: Get the local IP address for the URL
-for /f "tokens=2 skipws" in ('ipconfig ^| findstr "IPv4 Address"') do set LOCAL_IP=%%a
+:: Start the Vite development server (may be skipped if port in use)
+findstr /c:" listening on" "%~dp0..\..\..\web\logs\vite.log" 2>nul | find "5173" >nul
+if errorlevel 1 (
+    start /b cmd /c "npm run dev" >nul 2>&1
+)
+timeout /t 3 /nobreak >nul
 
-echo.
-echo JARVIS MK-X is starting up...
-echo.
-echo  Frontend: http://localhost:5173
-echo.
-echo  Please ensure the JARVIS daemon is running for full functionality.
-echo  To start the daemon, see the roadmap or documentation.
-echo.
-echo  Press Ctrl+C to stop this launcher or close this window
-echo.
+:: Open the JARVIS UI — this connects to the daemon via WebSocket
+:: and shows all backend messages (DAEMON ONLINE, task events, etc.)
+start "" "file:///C:/Users/aayan/Downloads/jarvis-mkx-command-center.html"
 
-:: Open the default browser to the JARVIS interface
-start "" "http://localhost:5173"
-
-:: Keep the batch window open
+:: Keep window open
 :waitloop
 timeout /t 30 /nobreak >nul
 goto waitloop

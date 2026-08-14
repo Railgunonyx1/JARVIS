@@ -1,9 +1,0 @@
-{
-  "timestamp": "2026-07-27T21:03:26.203386",
-  "python_version": "3.11.9",
-  "pid": 22220,
-  "rounds": 1,
-  "voice": {
-    "error": "TextToSpeech.__init__() missing 1 required positional argument: 'config'"
-  }
-}

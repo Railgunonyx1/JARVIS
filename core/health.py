@@ -6,6 +6,8 @@ import threading
 import time
 from dataclasses import dataclass
 
+from core.async_utils import safe_execute
+
 
 @dataclass
 class HealthCheck:
@@ -24,12 +26,15 @@ def check_python() -> HealthCheck:
 
 def check_ollama() -> HealthCheck:
     """Check Ollama via its HTTP API (fast, no subprocess)."""
-    from core.http_pool import get_client
 
-    url = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-    try:
+    def _check() -> HealthCheck:
+        from core.http_pool import get_client
+
+        url = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
         client = get_client()
         if client is not None:
+            import httpx
+
             resp = client.get(f"{url}/api/tags", timeout=1.5)
             status = resp.status_code
             text = resp.text
@@ -39,12 +44,12 @@ def check_ollama() -> HealthCheck:
                 status = resp.status
                 text = resp.read().decode()
         if status != 200:
-            return HealthCheck("Ollama", False, f"HTTP {status}")
+            raise ValueError(f"HTTP {status}")
         data = json.loads(text)
         models = data.get("models", [])
         return HealthCheck("Ollama", True, f"{len(models)} models available", url)
-    except Exception as e:
-        return HealthCheck("Ollama", False, f"Not running: {e}")
+
+    return safe_execute(_check, fallback=HealthCheck("Ollama", False, "Not running"))
 
 
 def check_piper() -> HealthCheck:
@@ -59,18 +64,20 @@ def check_piper() -> HealthCheck:
 
 
 def check_edge_tts() -> HealthCheck:
-    try:
+    """Check Edge TTS module availability."""
+    def _check() -> HealthCheck:
         import importlib.util
         spec = importlib.util.find_spec("edge_tts")
         if spec:
             return HealthCheck("Edge TTS", True, "Module available")
         return HealthCheck("Edge TTS", False, "Not installed")
-    except Exception:
-        return HealthCheck("Edge TTS", False, "Not installed")
+
+    return safe_execute(_check, fallback=HealthCheck("Edge TTS", False, "Not installed"))
 
 
 def check_sounddevice() -> HealthCheck:
-    try:
+    """Check audio I/O via sounddevice."""
+    def _check() -> HealthCheck:
         import sounddevice as sd
         devices = sd.query_devices()
         input_devs = [d for d in devices if d["max_input_channels"] > 0]
@@ -79,30 +86,32 @@ def check_sounddevice() -> HealthCheck:
             "Audio I/O", True,
             f"{len(input_devs)} input, {len(output_devs)} output devices"
         )
-    except Exception as e:
-        return HealthCheck("Audio I/O", False, str(e))
+
+    return safe_execute(_check, fallback=HealthCheck("Audio I/O", False, "Not available"))
 
 
 def check_openWakeWord() -> HealthCheck:
-    try:
+    """Check openWakeWord module availability."""
+    def _check() -> HealthCheck:
         import importlib.util
         spec = importlib.util.find_spec("openwakeword")
         if spec:
             return HealthCheck("openWakeWord", True, "Module available")
         return HealthCheck("openWakeWord", False, "Not installed")
-    except Exception:
-        return HealthCheck("openWakeWord", False, "Not installed")
+
+    return safe_execute(_check, fallback=HealthCheck("openWakeWord", False, "Not installed"))
 
 
 def check_faster_whisper() -> HealthCheck:
-    try:
+    """Check faster-whisper module availability."""
+    def _check() -> HealthCheck:
         import importlib.util
         spec = importlib.util.find_spec("faster_whisper")
         if spec:
             return HealthCheck("faster-whisper", True, "Module available")
         return HealthCheck("faster-whisper", False, "Not installed")
-    except Exception:
-        return HealthCheck("faster-whisper", False, "Not installed")
+
+    return safe_execute(_check, fallback=HealthCheck("faster-whisper", False, "Not installed"))
 
 
 def check_config() -> HealthCheck:

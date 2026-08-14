@@ -7,8 +7,10 @@ from core.utils import get_project_root as get_base_dir
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
-_ANALYZE_MODEL = "gemini-2.5-flash-lite"
-_FIX_MODEL = "gemini-2.0-flash"
+from core.config import ModelCatalog
+
+_ANALYZE_MODEL = ModelCatalog.GEMINI_FLASH_LITE  # "gemini-2.5-flash-lite"
+_FIX_MODEL = ModelCatalog.GEMINI_FLASH_20  # "gemini-2.0-flash"
 
 
 def _error_model(model_key: str, default: str) -> str:

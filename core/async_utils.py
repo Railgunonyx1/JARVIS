@@ -1,91 +1,80 @@
-"""Async utilities — non-blocking sleep, retry, backoff."""
+"""Safe execution utilities for consistent error handling across JARVIS MK-X.
 
-import asyncio
-import random
-from collections.abc import Callable
-from typing import TypeVar
+Provides :func:`safe_execute` — a reusable wrapper that handles exceptions
+with configurable fallback, logging, and optional re-raise. This eliminates
+the proliferation of bare ``except Exception`` blocks that mask critical errors.
 
-T = TypeVar("T")
+Also provides :func:`sync_retry` — a simple retry utility for operational
+loops (e.g., executor error decision loops).
+"""
 
+from __future__ import annotations
 
-async def async_sleep(seconds: float) -> None:
-    """Non-blocking sleep."""
-    await asyncio.sleep(seconds)
+import logging
+import time
+from typing import Any, Callable, Optional
 
-
-async def async_retry(
-    func: Callable[..., T],
-    *args,
-    max_attempts: int = 3,
-    base_delay: float = 0.5,
-    max_delay: float = 8.0,
-    jitter: bool = True,
-    exceptions: tuple = (Exception,),
-    **kwargs,
-) -> T:
-    """Execute async function with exponential backoff retry."""
-    last_error = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return await func(*args, **kwargs)
-        except exceptions as e:
-            last_error = e
-            if attempt == max_attempts:
-                break
-            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
-            if jitter:
-                delay *= random.uniform(0.5, 1.5)
-            await asyncio.sleep(delay)
-    raise last_error
+logger = logging.getLogger("jarvis.async_utils")
 
 
-def sync_retry(
-    func: Callable[..., T],
-    *args,
-    max_attempts: int = 3,
-    base_delay: float = 0.5,
-    max_delay: float = 8.0,
-    jitter: bool = True,
-    exceptions: tuple = (Exception,),
-    **kwargs,
-) -> T:
-    """Execute sync function with exponential backoff retry (blocking)."""
-    import random
-    import time
-    last_error = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return func(*args, **kwargs)
-        except exceptions as e:
-            last_error = e
-            if attempt == max_attempts:
-                break
-            delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
-            if jitter:
-                delay *= random.uniform(0.5, 1.5)
-            time.sleep(delay)
-    raise last_error
+def safe_execute(
+    fn: Callable[[], Any],
+    *,
+    fallback: Optional[Any] = None,
+    reraise: bool = False,
+    log_level: str = "warning",
+    reraise_msg: str = "Operation failed",
+) -> Any:
+    """Safely execute a function with consistent error handling.
 
+    Args:
+        fn: Callable with no arguments to execute.
+        fallback: Value to return if *fn* raises an exception (``None`` by default).
+        reraise: Whether to re-raise the exception after logging.
+        log_level: Logging level for the error message (``"warning"``, ``"error"``,
+            or ``"critical"``).
+        reraise_msg: Message to include when re-raising the exception.
 
-async def gather_with_concurrency(
-    max_concurrent: int,
-    *coros,
-) -> list:
-    """Run coroutines with limited concurrency."""
-    semaphore = asyncio.Semaphore(max_concurrent)
+    Returns:
+        The return value of *fn*, or *fallback* if an exception occurred and
+        ``reraise`` is ``False``.
 
-    async def bounded(coro):
-        async with semaphore:
-            return await coro
-
-    return await asyncio.gather(*[bounded(c) for c in coros])
-
-
-def run_async(coro):
-    """Run async coroutine in sync context (creates new event loop if needed)."""
+    Raises:
+        RuntimeError: If *reraise* is ``True``, the original exception is
+            re-raised wrapped in ``RuntimeError(reraise_msg)`` from the original.
+    """
     try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    else:
-        return loop.run_until_complete(coro)
+        return fn()
+    except Exception as e:
+        log_msg = f"{reraise_msg}: {e}"
+        log_fn = getattr(logger, log_level.lower(), logger.warning)
+        log_fn(log_msg)
+        if reraise:
+            raise RuntimeError(f"{reraise_msg}: {e}") from e
+        return fallback
+
+
+def sync_retry(fn, *, max_attempts: int = 3, base_delay: float = 1.0) -> Any:
+    """Retry *fn* up to *max_attempts* times with exponential backoff.
+
+    Args:
+        fn: Callable with no arguments.
+        max_attempts: Number of attempts (including the first).
+        base_delay: Initial delay in seconds (doubles each attempt).
+
+    Returns:
+        The return value of the first successful call to *fn*.
+
+    Raises:
+        The last exception if all attempts fail.
+    """
+    last_exception: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            last_exception = e
+            if attempt < max_attempts:
+                delay = base_delay * (2 ** (attempt - 1))
+                time.sleep(delay)
+    raise last_exception  # type: ignore[return-value]
