@@ -41,7 +41,10 @@ class GroqProvider(LLMProvider):
         import groq
         current_key = self._keys[self._key_index]
         if self._client is None or self._client_key_index != self._key_index:
-            self._client = groq.AsyncGroq(api_key=current_key)
+            # max_retries=0: surface 429/5xx immediately so _rotate_key() and
+            # the router fallback handle them fast — the SDK's default
+            # exponential backoff sleeps 35-50s per Retry-After.
+            self._client = groq.AsyncGroq(api_key=current_key, max_retries=0)
             self._client_key_index = self._key_index
             logger.info("Groq: using key index %d", self._key_index)
         return self._client

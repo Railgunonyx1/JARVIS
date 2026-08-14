@@ -28,6 +28,7 @@ class OpenCodeZenProvider(LLMProvider):
             self._client = openai.AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
+                max_retries=0,
             )
         return self._client
 
