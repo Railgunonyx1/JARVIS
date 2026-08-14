@@ -87,7 +87,7 @@ def compress(
     return kept
 
 
-def trim_tool_outputs(messages: list[dict[str, Any]], max_content_chars: int = 2000) -> list[dict[str, Any]]:
+def trim_tool_outputs(messages: list[dict[str, Any]], max_content_chars: int = 1600) -> list[dict[str, Any]]:
     """Truncate long tool-result contents in place (returns new list)."""
     out: list[dict[str, Any]] = []
     for message in messages:

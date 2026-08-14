@@ -200,6 +200,13 @@ class AgentLoop:
                     if not call.id:
                         call.id = self._next_tool_id()
 
+                if len(response.tool_calls) > self.max_tool_calls_per_step:
+                    self.logger.record(trace_id, events.TOOL_FAILED, {
+                        "tool": "batch",
+                        "error": f"{len(response.tool_calls)} tool calls truncated to {self.max_tool_calls_per_step}",
+                    })
+                    response.tool_calls = response.tool_calls[:self.max_tool_calls_per_step]
+
                 messages.append({
                     "role": "assistant",
                     "content": response.text or None,
