@@ -44,8 +44,10 @@ class LLMProvider(ABC):
         self._sdk_package: str | None = None
         # Set True by OpenAI-compatible providers whose complete_stream can
         # capture tool calls from streamed deltas (enables answer streaming
-        # without breaking multi-step tool loops).
-        self.captures_stream_tool_calls = False
+        # without breaking multi-step tool loops). Only assigned when the
+        # subclass doesn't declare it, so the class attribute wins.
+        if not getattr(self.__class__, "captures_stream_tool_calls", False):
+            self.captures_stream_tool_calls = False
         self._stream_tool_calls: dict[int, dict] = {}
 
     def _check_package(self) -> bool:
