@@ -32,6 +32,7 @@ class ProviderRouter:
         self._config = config or {}
         self._last_provider: str | None = None
         self._last_model: str | None = None
+        self._last_stream_tool_calls: list = []
         self.preferred_provider: str | None = None
         self.preferred_model: str | None = None
         self._warmed = False
@@ -302,6 +303,109 @@ class ProviderRouter:
                     if span is not None:
                         span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
                     logger.warning("Provider %s stream failed: %s", provider_name, e)
+                    continue
+            if span is not None:
+                span.set_attribute("last_error", str(last_error)[:200])
+
+        raise RuntimeError(f"All providers failed. Last error: {last_error}")
+
+    async def complete_stream_typed(
+        self,
+        messages: list[dict],
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        tools: list | None = None,
+        preferred_provider: str | None = None,
+    ) -> AsyncIterator[tuple[str | None, list | None]]:
+        """Like :meth:`complete_stream` but also surfaces streamed tool calls.
+
+        Yields ``(text_chunk, tool_calls_so_far)`` tuples. ``tool_calls`` is
+        ``None`` while streaming content; the final marker carries the completed
+        :class:`ToolCall` list so the agent loop can stream the answer while
+        still executing multi-step tool loops. Providers that cannot capture
+        streamed tool calls (gemini, ollama) fall back to a single non-streaming
+        chunk, so tool use is never broken on those upstreams.
+        """
+        from runtime.observability.metrics import get_metrics
+        from runtime.observability.tracer import get_tracer
+
+        tracer = get_tracer()
+        metrics = get_metrics()
+        chain = self._get_available_chain()
+        if not chain:
+            raise RuntimeError("No LLM providers available.")
+
+        if preferred_provider and preferred_provider in self._providers:
+            chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
+
+        tools_param, name_map = sanitize_tools(tools)
+        last_error = None
+        with tracer.span("router.stream_typed") as span:
+            for provider_name in chain:
+                provider = self._providers[provider_name]
+                try:
+                    if not getattr(provider, "captures_stream_tool_calls", False):
+                        response = await provider.complete(
+                            messages, system_prompt, max_tokens, temperature, tools_param,
+                        )
+                        if name_map:
+                            restore_tool_names(response.tool_calls, name_map)
+                        self._last_provider = provider_name
+                        self._last_model = provider.model
+                        self._last_stream_tool_calls = response.tool_calls
+                        yield response.text, response.tool_calls
+                        if span is not None:
+                            span.set_attribute("provider", provider_name)
+                            span.set_attribute("model", provider.model)
+                        return
+
+                    with tracer.span("llm.request", {"provider": provider_name, "model": provider.model}) as req:
+                        start = time.perf_counter()
+                        chars = 0
+                        first_chunk = True
+                        provider._init_stream_tool_calls()
+                        async for chunk in provider.complete_stream(
+                            messages, system_prompt, max_tokens, temperature, tools_param,
+                        ):
+                            if first_chunk:
+                                first_chunk = False
+                                ttft_ms = (time.perf_counter() - start) * 1000
+                                if req is not None:
+                                    req.set_attribute("ttft_ms", round(ttft_ms, 1))
+                                    req.record_event("first_token", {"ttft_ms": round(ttft_ms, 1)})
+                                tracer.add_metric("llm.ttft_ms", ttft_ms)
+                                metrics.observe("llm.ttft_ms", ttft_ms)
+                            if chunk:
+                                chars += len(chunk)
+                                yield chunk, None
+                        calls = provider._stream_tool_call_results()
+                        if name_map:
+                            restore_tool_names(calls, name_map)
+                        self._last_provider = provider_name
+                        self._last_model = provider.model
+                        self._last_stream_tool_calls = calls
+                        yield None, calls
+                        elapsed_ms = (time.perf_counter() - start) * 1000
+                        tokens = max(1, chars // 4)
+                        if req is not None:
+                            req.set_attribute("chars", chars)
+                            req.set_attribute("tokens_estimated", tokens)
+                            req.set_attribute("generation_ms", round(elapsed_ms, 1))
+                        tracer.add_metric("llm.tokens_generated", tokens)
+                    self._invalidate_chain()
+                    metrics.counter(f"provider.ok.{provider_name}", 1)
+                    if span is not None:
+                        span.set_attribute("provider", provider_name)
+                        span.set_attribute("model", provider.model)
+                    return
+                except Exception as e:
+                    last_error = e
+                    metrics.counter(f"provider.fail.{provider_name}", 1)
+                    self._invalidate_chain()
+                    if span is not None:
+                        span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
+                    logger.warning("Provider %s stream_typed failed: %s", provider_name, e)
                     continue
             if span is not None:
                 span.set_attribute("last_error", str(last_error)[:200])

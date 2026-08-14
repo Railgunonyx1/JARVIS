@@ -14,6 +14,8 @@ logger = logging.getLogger("jarvis.providers.openrouter")
 
 
 class OpenRouterProvider(LLMProvider):
+    captures_stream_tool_calls = True
+
     def __init__(self, config: dict, api_key: str, extra_keys: list[str] | None = None):
         super().__init__("openrouter", config)
         self._all_keys = [api_key] + (extra_keys or [])

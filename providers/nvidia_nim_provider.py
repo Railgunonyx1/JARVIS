@@ -15,6 +15,8 @@ logger = logging.getLogger("jarvis.providers.nvidia_nim")
 
 
 class NVIDIAProvider(LLMProvider):
+    captures_stream_tool_calls = True
+
     def __init__(self, config: dict, api_key: str):
         super().__init__("nvidia_nim", config)
         self.api_key = api_key
@@ -112,9 +114,13 @@ class NVIDIAProvider(LLMProvider):
                 stream=True,
                 **kwargs,
             )
+            self._init_stream_tool_calls()
             async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+                    self._merge_tool_call_delta(delta.tool_calls)
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as e:

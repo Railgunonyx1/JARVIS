@@ -16,6 +16,8 @@ logger = logging.getLogger("jarvis.providers.omni_route")
 
 
 class OmniRouteProvider(LLMProvider):
+    captures_stream_tool_calls = True
+
     def __init__(self, config: dict, api_key: str = "omni-route"):
         super().__init__("omni_route", config)
         self.api_key = api_key or "omni-route"
@@ -109,9 +111,13 @@ class OmniRouteProvider(LLMProvider):
                 stream=True,
                 **kwargs,
             )
+            self._init_stream_tool_calls()
             async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+                    self._merge_tool_call_delta(delta.tool_calls)
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as e:

@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,7 @@ from core.context.manager import ContextManager
 from core.decision_logger import DecisionLogger, get_decision_logger
 from core.project import ProjectContext
 from providers.router import ProviderRouter
+from providers.types import LLMResponse
 from runtime.observability.tracer import get_tracer
 from tools.registry import ToolRegistry
 
@@ -124,7 +126,12 @@ class AgentLoop:
         self._tool_counter += 1
         return generate_tool_call_id(self._tool_counter)
 
-    async def run(self, goal: str, session_id: str = "") -> AgentResult:
+    async def run(
+        self,
+        goal: str,
+        session_id: str = "",
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> AgentResult:
         tracer = get_tracer()
         root = tracer.begin(f"run: {goal[:80]}", {"goal": goal[:200]})
         try:
@@ -144,14 +151,7 @@ class AgentLoop:
                     )
                 state.context_usage = report.to_dict()
                 with tracer.span("provider.complete") as span:
-                    response = await self.router.complete(
-                        messages,
-                        system_prompt,
-                        max_tokens=self.max_tokens,
-                        temperature=self.temperature,
-                        tools=tools,
-                        preferred_provider=getattr(self.router, "preferred_provider", None),
-                    )
+                    response = await self._complete(messages, system_prompt, tools, on_chunk)
                     if span is not None:
                         span.set_attribute("provider", response.provider)
                         span.set_attribute("model", response.model)
@@ -240,6 +240,58 @@ class AgentLoop:
             error=f"Max iterations ({self.max_iterations}) reached without a final answer",
             observation=self._result_observation(state),
             perf=self._end_perf(tracer, root),
+        )
+
+    async def _complete(
+        self,
+        messages: list[dict],
+        system_prompt: str,
+        tools: list,
+        on_chunk: Callable[[str], Awaitable[None]] | None,
+    ) -> LLMResponse:
+        """Send a completion, streaming the answer back chunk-by-chunk.
+
+        When ``on_chunk`` is set the call goes through
+        :meth:`router.complete_stream_typed`: content is forwarded live (so
+        callers can render the first tokens of the final answer as they arrive)
+        while streamed tool calls are still captured, so multi-step tool loops
+        keep working. Without a callback it behaves exactly like the plain
+        :meth:`router.complete` call.
+        """
+        kwargs = dict(
+            system_prompt=system_prompt,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            tools=tools,
+            preferred_provider=getattr(self.router, "preferred_provider", None),
+        )
+        if on_chunk is None:
+            return await self.router.complete(messages, **kwargs)
+
+        start = time.perf_counter()
+        text_parts: list[str] = []
+        tool_calls: list = []
+        async for chunk, calls in self.router.complete_stream_typed(messages, **kwargs):
+            if chunk:
+                text_parts.append(chunk)
+                try:
+                    await on_chunk(chunk)
+                except Exception:
+                    pass
+            if calls is not None:
+                tool_calls = calls
+        text = "".join(text_parts)
+        tokens_completion = max(1, len(text) // 4)
+        return LLMResponse(
+            text=text,
+            model=self.router._last_model or "",
+            provider=self.router._last_provider or "",
+            tokens_used=tokens_completion,
+            tokens_prompt=estimate_tokens(json.dumps(messages, default=str)) + estimate_tokens(system_prompt or ""),
+            tokens_completion=tokens_completion,
+            latency_ms=round((time.perf_counter() - start) * 1000, 1),
+            finish_reason="stop",
+            tool_calls=tool_calls,
         )
 
     @staticmethod

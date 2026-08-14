@@ -216,7 +216,17 @@ class UiBridge:
 
         # The run lives in its own task so cancelling it (chat.cancel /
         # task.cancel) never kills the connection handler that awaits it.
-        run_task = asyncio.create_task(kernel.run(goal, session_id))
+        async def _on_chunk(delta: str) -> None:
+            try:
+                await self._broadcast(self._frame("chat.delta", {
+                    "messageId": message_id,
+                    "sessionId": session_id,
+                    "delta": delta,
+                }))
+            except Exception:
+                pass
+
+        run_task = asyncio.create_task(kernel.run(goal, session_id, on_chunk=_on_chunk))
         self._current["task"] = run_task
         try:
             result = await asyncio.shield(run_task)

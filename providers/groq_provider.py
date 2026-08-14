@@ -15,6 +15,8 @@ logger = logging.getLogger("jarvis.providers.groq")
 
 
 class GroqProvider(LLMProvider):
+    captures_stream_tool_calls = True
+
     def __init__(self, config: dict, api_key: str, extra_keys: list[str] | None = None):
         super().__init__("groq", config)
         self._keys = [k for k in [api_key] + (extra_keys or []) if k]
