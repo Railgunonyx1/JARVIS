@@ -47,6 +47,8 @@ class ProviderRouter:
             "openrouter": CircuitBreaker(),
             "ollama": CircuitBreaker(),
         }
+        for _name, _breaker in self._circuit_breakers.items():
+            _breaker.register(_name)
 
         if "groq" in config and api_keys.get("groq"):
             extra_groq = [k for k in api_keys.get("groq_extra", []) if k]
