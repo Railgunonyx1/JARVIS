@@ -129,7 +129,7 @@ class UiBridge:
             self._clients.add(ws)
             await self._safe_send(ws, self._frame("hello", self._hello_payload()))
             await self._safe_send(ws, self._frame("provider.status", {"providers": self._providers()}))
-            tree = self._build_tree(payload := {"path": "."})
+            tree = self._build_tree({"path": "."})
             if tree is not None:
                 await self._safe_send(ws, self._frame("fs.tree", {"root": tree}))
             while True:
@@ -391,9 +391,9 @@ class UiBridge:
             return None
         if not target.exists():
             return None
-        return self._node(target, base)
+        return self._node(target, base, depth=2)
 
-    def _node(self, path: Path, base: Path) -> dict[str, Any]:
+    def _node(self, path: Path, base: Path, depth: int) -> dict[str, Any]:
         rel = str(path.relative_to(base)).replace("\\", "/") or "."
         name = path.name or str(path)
         if path.is_file():
@@ -405,13 +405,14 @@ class UiBridge:
                 "ext": path.suffix.lstrip(".") or None,
             }
         children = []
-        try:
-            for child in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-                if child.name.startswith((".", "__pycache__", "node_modules", "dist", ".venv", ".git")):
-                    continue
-                children.append(self._node(child, base))
-        except OSError:
-            pass
+        if depth > 0:
+            try:
+                for child in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+                    if child.name.startswith((".", "__pycache__", "node_modules", "dist", ".venv", ".git")):
+                        continue
+                    children.append(self._node(child, base, depth - 1))
+            except OSError:
+                pass
         return {"name": name, "path": rel, "type": "dir", "children": children}
 
     # ── state helpers ──────────────────────────────────────────────────────
