@@ -1,6 +1,7 @@
 """Abstract base class for LLM providers in JARVIS MK-X."""
 
 import importlib
+import json
 import logging
 import random
 import time
@@ -8,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from providers.types import LLMResponse
+from providers.types import LLMResponse, ToolCall
 
 logger = logging.getLogger("jarvis.providers")
 
@@ -41,6 +42,11 @@ class LLMProvider(ABC):
         self._package_ok = True
         self._package_error = ""
         self._sdk_package: str | None = None
+        # Set True by OpenAI-compatible providers whose complete_stream can
+        # capture tool calls from streamed deltas (enables answer streaming
+        # without breaking multi-step tool loops).
+        self.captures_stream_tool_calls = False
+        self._stream_tool_calls: dict[int, dict] = {}
 
     def _check_package(self) -> bool:
         """Override in subclasses to verify the backend package is importable."""
@@ -56,6 +62,45 @@ class LLMProvider(ABC):
                 importlib.import_module(self._sdk_package)
             except Exception:
                 pass
+
+    # ── streamed tool-call capture (OpenAI-compatible deltas) ─────────────
+
+    def _init_stream_tool_calls(self) -> None:
+        self._stream_tool_calls = {}
+
+    def _merge_tool_call_delta(self, deltas) -> None:
+        """Merge a streamed ``delta.tool_calls`` list into the accumulator."""
+        for tc in deltas or []:
+            try:
+                idx = int(getattr(tc, "index", 0))
+            except (TypeError, ValueError):
+                idx = 0
+            slot = self._stream_tool_calls.setdefault(idx, {"id": "", "name": "", "args": []})
+            tc_id = getattr(tc, "id", "") or ""
+            if tc_id:
+                slot["id"] = tc_id
+            fn = getattr(tc, "function", None)
+            if fn is not None:
+                name = getattr(fn, "name", "") or ""
+                args = getattr(fn, "arguments", "") or ""
+                if name:
+                    slot["name"] = name
+                if args:
+                    slot["args"].append(args)
+
+    def _stream_tool_call_results(self) -> list[ToolCall]:
+        calls: list[ToolCall] = []
+        for idx in sorted(self._stream_tool_calls):
+            slot = self._stream_tool_calls[idx]
+            raw = "".join(slot.get("args", []))
+            try:
+                arguments = json.loads(raw) if raw.strip() else {}
+                if not isinstance(arguments, dict):
+                    arguments = {"value": arguments}
+            except (TypeError, ValueError):
+                arguments = {}
+            calls.append(ToolCall(name=slot.get("name", ""), arguments=arguments, id=slot.get("id", "")))
+        return calls
 
     @property
     def model(self) -> str:

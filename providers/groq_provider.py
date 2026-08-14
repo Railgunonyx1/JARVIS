@@ -149,9 +149,13 @@ class GroqProvider(LLMProvider):
                     stream=True,
                     **kwargs,
                 )
+                self._init_stream_tool_calls()
                 async for chunk in stream:
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        yield chunk.choices[0].delta.content
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            yield delta.content
+                        self._merge_tool_call_delta(delta.tool_calls)
                 latency = (time.time() - start) * 1000
                 self.record_success(latency)
                 return
