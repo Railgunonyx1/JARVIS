@@ -139,9 +139,29 @@ def to_gemini_tools(tools: list | None) -> list | None:
         declarations.append({
             "name": fn.get("name", ""),
             "description": fn.get("description", ""),
-            "parameters": fn.get("parameters") or {"type": "object", "properties": {}},
+            "parameters": _gemini_safe_schema(
+                fn.get("parameters") or {"type": "object", "properties": {}}
+            ),
         })
     return [{"function_declarations": declarations}]
+
+
+# Keys google-genai's GenerateContentConfig pydantic schema rejects.
+_GEMINI_FORBIDDEN_KEYS = frozenset({"oneOf", "anyOf", "allOf", "not", "const"})
+
+
+def _gemini_safe_schema(node):
+    """Recursively strip union/composition keywords Gemini can't validate."""
+    if isinstance(node, dict):
+        cleaned = {}
+        for key, value in node.items():
+            if key in _GEMINI_FORBIDDEN_KEYS:
+                continue
+            cleaned[key] = _gemini_safe_schema(value)
+        return cleaned
+    if isinstance(node, list):
+        return [_gemini_safe_schema(item) for item in node]
+    return node
 
 
 def parse_gemini_function_calls(response) -> list[ToolCall]:

@@ -25,12 +25,19 @@ class GeminiProvider(LLMProvider):
             self._model = self.config.get("model", "gemini-2.0-flash")
         return self._client
 
-    def _convert_messages(self, messages: list[dict], system_prompt: str | None):
-        """Convert OpenAI-format messages (incl. tool_calls) to Gemini format."""
+    def _convert_messages(self, messages: list[dict], system_prompt: str | None = None):
+        """Convert OpenAI-format messages (incl. tool_calls) to Gemini Content.
+
+        google-genai 2.x validates contents strictly via pydantic, so we build
+        its own Content/Part/FunctionCall/FunctionResponse objects instead of
+        hand-rolled dicts.
+        """
+        from google.genai import types as gtypes
+
         contents = []
         if system_prompt:
-            contents.append({"role": "user", "parts": [system_prompt]})
-            contents.append({"role": "model", "parts": ["Understood. I will follow these instructions."]})
+            contents.append(gtypes.Content(role="user", parts=[gtypes.Part(text=system_prompt)]))
+            contents.append(gtypes.Content(role="model", parts=[gtypes.Part(text="Understood.")]))
 
         id_to_name: dict[str, str] = {}
         for msg in messages:
@@ -38,45 +45,45 @@ class GeminiProvider(LLMProvider):
             if role == "assistant" and msg.get("tool_calls"):
                 parts = []
                 if msg.get("content"):
-                    parts.append(msg["content"])
+                    parts.append(gtypes.Part(text=msg["content"]))
                 for tc in msg["tool_calls"]:
                     fn = tc.get("function", {})
                     name = fn.get("name", "")
                     if tc.get("id"):
                         id_to_name[tc["id"]] = name
-                    parts.append({
-                        "function_call": {
-                            "name": name,
-                            "args": json_args(fn.get("arguments", "{}")),
-                        }
-                    })
-                contents.append({"role": "model", "parts": parts})
+                    parts.append(gtypes.Part(function_call=gtypes.FunctionCall(
+                        name=name, args=json_args(fn.get("arguments", "{}")),
+                    )))
+                contents.append(gtypes.Content(role="model", parts=parts))
             elif role == "tool":
                 fn_name = id_to_name.get(msg.get("tool_call_id", ""), msg.get("name", ""))
-                contents.append({
-                    "role": "user",
-                    "parts": [{
-                        "function_response": {
-                            "name": fn_name,
-                            "response": {"result": msg.get("content", "")},
-                        }
-                    }],
-                })
+                contents.append(gtypes.Content(role="user", parts=[gtypes.Part(
+                    function_response=gtypes.FunctionResponse(
+                        name=fn_name, response={"result": msg.get("content", "")},
+                    )
+                )]))
             else:
                 g_role = "model" if role == "assistant" else "user"
-                contents.append({"role": g_role, "parts": [msg.get("content", "")]})
+                contents.append(gtypes.Content(role=g_role, parts=[gtypes.Part(text=msg.get("content", ""))]))
 
         return self._merge_adjacent_user_turns(contents)
 
     @staticmethod
-    def _merge_adjacent_user_turns(contents: list[dict]) -> list[dict]:
+    def _merge_adjacent_user_turns(contents: list) -> list:
         """Gemini forbids consecutive same-role turns; merge adjacent user parts."""
         merged = []
         for entry in contents:
-            if entry["role"] == "user" and merged and merged[-1]["role"] == "user":
-                merged[-1]["parts"].extend(entry["parts"])
-            else:
-                merged.append(dict(entry))
+            role = entry.role if hasattr(entry, "role") else entry.get("role")
+            if role == "user" and merged:
+                last = merged[-1]
+                last_role = last.role if hasattr(last, "role") else last.get("role")
+                if last_role == "user":
+                    if hasattr(last, "parts"):
+                        last.parts.extend(entry.parts)
+                    else:
+                        last["parts"].extend(entry["parts"])
+                    continue
+            merged.append(entry)
         return merged
 
     async def complete(
@@ -90,10 +97,13 @@ class GeminiProvider(LLMProvider):
         client = self._get_client()
         contents = self._convert_messages(messages, system_prompt)
 
-        kwargs = {}
+        config: dict[str, Any] = {
+            "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
+            "temperature": temperature or self.config.get("temperature", 0.7),
+        }
         gemini_tools = to_gemini_tools(tools)
         if gemini_tools:
-            kwargs["tools"] = gemini_tools
+            config["tools"] = gemini_tools
 
         start = time.time()
         try:
@@ -102,11 +112,7 @@ class GeminiProvider(LLMProvider):
                 client.models.generate_content,
                 model=self._model,
                 contents=contents,
-                config={
-                    "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
-                    "temperature": temperature or self.config.get("temperature", 0.7),
-                },
-                **kwargs,
+                config=config,
             )
             latency = (time.time() - start) * 1000
             try:
@@ -145,10 +151,13 @@ class GeminiProvider(LLMProvider):
         client = self._get_client()
         contents = self._convert_messages(messages, system_prompt)
 
-        kwargs = {}
+        config: dict[str, Any] = {
+            "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
+            "temperature": temperature or self.config.get("temperature", 0.7),
+        }
         gemini_tools = to_gemini_tools(tools)
         if gemini_tools:
-            kwargs["tools"] = gemini_tools
+            config["tools"] = gemini_tools
 
         start = time.time()
         try:
@@ -157,11 +166,7 @@ class GeminiProvider(LLMProvider):
                 client.models.generate_content,
                 model=self._model,
                 contents=contents,
-                config={
-                    "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
-                    "temperature": temperature or self.config.get("temperature", 0.7),
-                },
-                **kwargs,
+                config=config,
                 stream=True,
             )
             for chunk in response:

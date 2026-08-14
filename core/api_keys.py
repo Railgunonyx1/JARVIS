@@ -33,6 +33,7 @@ ENV_TO_KEY = {
     "GROQ_API_KEY": "groq_api_key",
     "GROQ_API_KEY_2": "groq_api_key_2",
     "OPENCODE_ZEN_API_KEY": "opencode_zen_api_key",
+    "OMNIROUTE_API_KEY": "omni_route_api_key",
     "WORLDMONITOR_API_KEY": "worldmonitor_api_key",
 }
 

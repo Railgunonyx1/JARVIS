@@ -1,12 +1,12 @@
 [router]
 default_provider = "groq"
-fallback_chain = ["groq", "gemini", "openrouter", "opencode_zen", "ollama"]
+fallback_chain = ["groq", "gemini", "openrouter", "opencode_zen", "omni_route", "ollama"]
 max_retries = 2
 timeout_seconds = 30
 
 [groq]
 model = "llama-3.1-8b-instant"
-max_tokens = 4096
+max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 30
 requests_per_day = 14400
@@ -14,7 +14,7 @@ priority = 1
 
 [groq.fallback]
 model = "llama-3.3-70b-versatile"
-max_tokens = 4096
+max_tokens = 2048
 temperature = 0.7
 
 [gemini]
@@ -69,6 +69,20 @@ priority = 4
 [ollama.fallback]
 model = "gemma3:1b"
 max_tokens = 2048
+temperature = 0.7
+
+[omni_route]
+model = "auto"
+max_tokens = 4096
+temperature = 0.7
+base_url = "http://localhost:20128/v1"
+requests_per_minute = 60
+requests_per_day = 1000
+priority = 4
+
+[omni_route.fallback]
+model = "auto"
+max_tokens = 4096
 temperature = 0.7
 
 # ─────────────────────────────────────────────────────────────────────

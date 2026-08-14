@@ -9,6 +9,7 @@ from providers.base import LLMProvider, LLMResponse
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
 from providers.ollama_provider import OllamaProvider
+from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
 from providers.types import restore_tool_names, sanitize_tools
@@ -46,6 +47,8 @@ class ProviderRouter:
             "groq": CircuitBreaker(),
             "gemini": CircuitBreaker(),
             "openrouter": CircuitBreaker(),
+            "opencode_zen": CircuitBreaker(),
+            "omni_route": CircuitBreaker(),
             "ollama": CircuitBreaker(),
         }
         for _name, _breaker in self._circuit_breakers.items():
@@ -64,6 +67,10 @@ class ProviderRouter:
         if "opencode_zen" in config and api_keys.get("opencode_zen"):
             self._providers["opencode_zen"] = OpenCodeZenProvider(
                 config["opencode_zen"], api_keys["opencode_zen"],
+            )
+        if "omni_route" in config:
+            self._providers["omni_route"] = OmniRouteProvider(
+                config["omni_route"], api_keys.get("omni_route", "omni-route"),
             )
         if "ollama" in config:
             self._providers["ollama"] = OllamaProvider(config["ollama"])

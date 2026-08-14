@@ -8,6 +8,7 @@ permission engine + executor, and closes the task with a final answer.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -53,6 +54,41 @@ class AgentResult:
 
 class AgentLoop:
     """Executes a goal end-to-end using the tool-calling provider chain."""
+
+    # Matches <tool.name>{json}</function> (closing tag optional/mismatched,
+    # as weak models emit) — full-match only so prose is never misread.
+    _TEXT_TOOL_CALL_RE = re.compile(
+        r"\s*<\s*([a-zA-Z0-9_.-]+)\s*>\s*(\{.*?\})\s*<\s*/\s*[a-zA-Z0-9_.-]*\s*>\s*",
+        re.DOTALL,
+    )
+
+    @classmethod
+    def _parse_text_tool_call(cls, text: str, registry: ToolRegistry):
+        """Recover a tool call from plain text when the provider refused
+        structured calls. Returns a ToolCall or None."""
+        if not text:
+            return None
+        match = cls._TEXT_TOOL_CALL_RE.fullmatch(text)
+        if not match:
+            return None
+        raw_name, raw_args = match.group(1), match.group(2)
+        name = raw_name
+        if registry.get(name) is None and "_" in name:
+            dotted = name.replace("_", ".")
+            if registry.get(dotted) is not None:
+                name = dotted
+        if registry.get(name) is None:
+            return None
+        try:
+            # LLMs often emit Unicode curly quotes; JSON needs ASCII ones.
+            normalized = raw_args.replace("\u201c", '"').replace("\u201d", '"')
+            args = json.loads(normalized)
+        except Exception:
+            return None
+        if not isinstance(args, dict):
+            return None
+        from providers.types import ToolCall
+        return ToolCall(name=name, arguments=args, id="")
 
     def __init__(
         self,
@@ -126,33 +162,37 @@ class AgentLoop:
                 state.model = response.model
 
                 if not response.has_tool_calls:
-                    final = response.text.strip()
-                    if not final:
-                        error = "provider returned an empty response"
-                        if response.finish_reason and response.finish_reason != "stop":
-                            error += f" (finish_reason={response.finish_reason})"
-                        state.errors.append(error)
-                        self.logger.record(trace_id, events.TASK_FAILED, {
-                            "goal": goal[:200], "error": error,
+                    fallback_call = self._parse_text_tool_call(response.text, self.registry)
+                    if fallback_call is not None:
+                        response.tool_calls = [fallback_call]
+                    else:
+                        final = response.text.strip()
+                        if not final:
+                            error = "provider returned an empty response"
+                            if response.finish_reason and response.finish_reason != "stop":
+                                error += f" (finish_reason={response.finish_reason})"
+                            state.errors.append(error)
+                            self.logger.record(trace_id, events.TASK_FAILED, {
+                                "goal": goal[:200], "error": error,
+                            })
+                            self._finish_observation(False, "", state, iteration)
+                            return AgentResult(
+                                success=False, response="", trace_id=trace_id, state=state,
+                                error=error, observation=self._result_observation(state),
+                                perf=self._end_perf(tracer, root),
+                            )
+                        self.logger.record(trace_id, events.TASK_COMPLETED, {
+                            "goal": goal[:200],
+                            "iterations": iteration,
+                            "tokens": state.tokens_used,
+                            "provider": response.provider,
                         })
-                        self._finish_observation(False, "", state, iteration)
+                        self._finish_observation(True, final, state, iteration)
                         return AgentResult(
-                            success=False, response="", trace_id=trace_id, state=state,
-                            error=error, observation=self._result_observation(state),
+                            success=True, response=final, trace_id=trace_id, state=state,
+                            observation=self._result_observation(state),
                             perf=self._end_perf(tracer, root),
                         )
-                    self.logger.record(trace_id, events.TASK_COMPLETED, {
-                        "goal": goal[:200],
-                        "iterations": iteration,
-                        "tokens": state.tokens_used,
-                        "provider": response.provider,
-                    })
-                    self._finish_observation(True, final, state, iteration)
-                    return AgentResult(
-                        success=True, response=final, trace_id=trace_id, state=state,
-                        observation=self._result_observation(state),
-                        perf=self._end_perf(tracer, root),
-                    )
 
                 for call in response.tool_calls:
                     if not call.id:

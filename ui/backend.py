@@ -182,8 +182,8 @@ class TuiDataSource:
 
     # ── commands ────────────────────────────────────────────────────────
 
-async def run_goal(self, goal: str,
-                   on_event: EventCallback | None = None) -> dict:
+    async def run_goal(self, goal: str,
+                       on_event: EventCallback | None = None) -> dict:
         """Submit a goal; stream observer events; return the result dict."""
         if self._client is None:
             return {"success": False,
