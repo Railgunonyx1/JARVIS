@@ -102,6 +102,7 @@ class AgentLoop:
         max_iterations: int = 10,
         max_tokens: int | None = None,
         temperature: float = 0.4,
+        max_tool_calls_per_step: int = 6,
         confirmation_handler: Callable[[str, dict[str, Any]], bool] | None = None,
         observer: TaskObserver | None = None,
         context_manager: ContextManager | None = None,

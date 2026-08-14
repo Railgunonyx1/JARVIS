@@ -1,6 +1,7 @@
 """Ollama Provider - Local inference for privacy-first / offline mode."""
 
 import importlib.util
+import json
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -38,6 +39,30 @@ class OllamaProvider(LLMProvider):
             self._client = ollama.AsyncClient(host=self.base_url)
         return self._client
 
+    def _convert_messages(self, messages: list[dict], system_prompt: str | None = None) -> list[dict]:
+        """Ollama's SDK validates messages via pydantic and requires
+        ``tool_calls[].function.arguments`` to be a dict, not a JSON string."""
+        out = []
+        if system_prompt:
+            out.append({"role": "system", "content": system_prompt})
+        for msg in messages:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                calls = []
+                for tc in msg["tool_calls"]:
+                    fn = tc.get("function", {}) or {}
+                    raw = fn.get("arguments", "{}")
+                    try:
+                        parsed = json.loads(raw) if isinstance(raw, str) else raw
+                        if not isinstance(parsed, dict):
+                            parsed = {"value": parsed}
+                    except (TypeError, ValueError):
+                        parsed = {}
+                    calls.append({**tc, "function": {**fn, "arguments": parsed}})
+                out.append({**msg, "tool_calls": calls})
+            else:
+                out.append(msg)
+        return out
+
     async def complete(
         self,
         messages: list[dict],
@@ -47,10 +72,7 @@ class OllamaProvider(LLMProvider):
         tools: list | None = None,
     ) -> LLMResponse:
         client = self._get_client()
-        full_messages = []
-        if system_prompt:
-            full_messages.append({"role": "system", "content": system_prompt})
-        full_messages.extend(messages)
+        full_messages = self._convert_messages(messages, system_prompt)
 
         tool_param = openai_tools_param(tools)
         start = time.time()
@@ -100,10 +122,7 @@ class OllamaProvider(LLMProvider):
         tools: list | None = None,
     ) -> AsyncIterator[str]:
         client = self._get_client()
-        full_messages = []
-        if system_prompt:
-            full_messages.append({"role": "system", "content": system_prompt})
-        full_messages.extend(messages)
+        full_messages = self._convert_messages(messages, system_prompt)
 
         tool_param = openai_tools_param(tools)
         start = time.time()
