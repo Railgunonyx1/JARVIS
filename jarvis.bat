@@ -1,39 +1,30 @@
 @echo off
 title JARVIS MK-X - Autonomous Engineering Agent
 color 0a
+cd /d "%~dp0"
 
 :: ============================================================================
 :: JARVIS MK-X - Autonomous Engineering Agent
-:: Launches daemon and opens UI — backend messages from JARVIS
+:: Launches the daemon, opens the command center, then closes this window.
 :: ============================================================================
 
-:: Change to the web directory
-pushd web
+:: Launcher window closes automatically once everything is up.
 
-:: Check if we're in the right directory
-if not exist package.json (
+if not exist "venv\Scripts\python.exe" (
+    echo JARVIS venv not found. Run: python -m venv venv ^&^& venv\Scripts\pip install -r requirements.txt
+    pause
     exit /b 1
 )
 
-:: Start the JARVIS Daemon (WebSocket server on ws://localhost:8787)
-:: launched in background — output goes to daemon log
-start "JARVIS Daemon" /min cmd /c "%~dp0venv\Scripts\python.exe daemon\jarvis_daemon_handler.py"
+:: Start the JARVIS daemon (WebSocket bridge on ws://127.0.0.1:8787/ws).
+:: The handler spawns the daemon fully detached (no window) and returns.
+"venv\Scripts\python.exe" "daemon\jarvis_daemon_handler.py"
 
-:: Wait for daemon to initialize
-timeout /t 3 /nobreak >nul
+:: Give the daemon a moment to bind the socket.
+timeout /t 4 /nobreak >nul
 
-:: Start the Vite development server (may be skipped if port in use)
-findstr /c:" listening on" "%~dp0..\..\..\web\logs\vite.log" 2>nul | find "5173" >nul
-if errorlevel 1 (
-    start /b cmd /c "npm run dev" >nul 2>&1
-)
-timeout /t 3 /nobreak >nul
-
-:: Open the JARVIS UI — this connects to the daemon via WebSocket
-:: and shows all backend messages (DAEMON ONLINE, task events, etc.)
+:: Open the JARVIS command center (connects to the daemon over WebSocket).
 start "" "file:///C:/Users/aayan/Downloads/jarvis-mkx-command-center.html"
 
-:: Keep window open
-:waitloop
-timeout /t 30 /nobreak >nul
-goto waitloop
+:: Done — close the launcher window.
+exit /b 0

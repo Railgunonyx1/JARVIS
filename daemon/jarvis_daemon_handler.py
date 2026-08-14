@@ -8,9 +8,8 @@ import subprocess
 import sys
 import os
 
-# Get the JARVIS root directory (where jarvis.bat lives)
-jarvis_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else os.getcwd()
-# Resolve to absolute path if relative
+# The JARVIS root directory (parent of this daemon/ package).
+jarvis_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if not os.path.isabs(jarvis_dir):
     jarvis_dir = os.path.abspath(jarvis_dir)
 
@@ -23,11 +22,8 @@ cmd = [
     "-m", "daemon.server",
     "start",
     "--project-dir", project_dir,
+    "--ui-port", "8787",
 ]
-
-# Start daemon (detached so bat can continue)
- subprocess.StartupInformation = None
- subprocess.CREATE_NEW_CONSOLE = 0x00000010
 
 try:
     subprocess.Popen(
@@ -36,6 +32,7 @@ try:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
     )
 except Exception:
     # Fallback: just print the command for user to run manually
