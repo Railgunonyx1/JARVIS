@@ -96,8 +96,48 @@ class LLMResponse:
 
 
 def openai_tools_param(tools: list | None) -> list | None:
-    """Return OpenAI-style tools (the canonical form) or None when empty."""
-    return tools or None
+    """Return OpenAI-style tools (the canonical form) or None when empty.
+
+    Schemas are compressed before sending: property-level descriptions are
+    dropped (kept names/types/enums/required) and tool descriptions are
+    truncated to ~60 chars. Cuts ~800 tokens off the 16-tool catalog (~1900
+    tokens), which keeps calls under provider TPM budgets (e.g. Groq's
+    6000/min) so the fast provider isn't abandoned after one request.
+    """
+    return _compress_tools(tools) if tools else None
+
+
+def _compress_tools(tools: list) -> list:
+    out: list[dict] = []
+    for entry in tools:
+        fn = entry.get("function", entry) if isinstance(entry, dict) else entry
+        name = str(fn.get("name", ""))
+        desc = str(fn.get("description", "") or "")
+        if len(desc) > 60:
+            desc = desc[:57].rstrip() + "..."
+        params = fn.get("parameters") or {}
+        props = {}
+        for pname, pval in (params.get("properties") or {}).items():
+            prop = {"type": pval.get("type", "string")}
+            if isinstance(pval.get("items"), dict) and pval["items"].get("type"):
+                prop["items"] = {"type": pval["items"]["type"]}
+            if pval.get("enum") is not None:
+                prop["enum"] = pval["enum"]
+            props[pname] = prop
+        compressed = {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": desc,
+                "parameters": {
+                    "type": "object",
+                    "properties": props,
+                    "required": list(params.get("required") or []),
+                },
+            },
+        }
+        out.append(compressed)
+    return out
 
 
 def parse_openai_tool_calls(choice_message) -> list[ToolCall]:

@@ -24,6 +24,8 @@ ENV_TO_KEY = {
     "OPENAI_API_KEY": "openai_api_key",
     "ANTHROPIC_API_KEY": "anthropic_api_key",
     "MISTRAL_API_KEY": "mistral_api_key",
+    "MISTRAL_API_KEY_2": "mistral_api_key_2",
+    "NVIDIA_NIM_API_KEY": "nvidia_nim_api_key",
     "OPENROUTER_API_KEY": "openrouter_api_key",
     "OPENROUTER_API_KEY_2": "openrouter_api_key_2",
     "OPENROUTER_API_KEY_3": "openrouter_api_key_3",

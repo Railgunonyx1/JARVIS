@@ -42,11 +42,14 @@ class AgentContextBuilder:
         lines.append(f"Available tools ({len(tools)}):")
         for tool in tools:
             fn = tool["function"]
-            lines.append(f"- {fn['name']}: {fn['description']}")
+            desc = fn["description"]
+            if len(desc) > 60:
+                desc = desc[:57].rstrip() + "..."
+            lines.append(f"- {fn['name']}: {desc}")
         if mem is not None:
             project_root = getattr(project, "root_path", None)
             mem_text = mem.format_for_prompt(
-                str(project_root) if project_root else "", max_tokens=1500,
+                str(project_root) if project_root else "", max_tokens=800,
             )
             if mem_text:
                 lines.append(mem_text)

@@ -1,6 +1,6 @@
 [router]
 default_provider = "groq"
-fallback_chain = ["groq", "gemini", "openrouter", "opencode_zen", "omni_route", "ollama"]
+fallback_chain = ["groq", "gemini", "openrouter", "opencode_zen", "mistral", "nvidia_nim", "omni_route", "ollama"]
 max_retries = 2
 timeout_seconds = 30
 
@@ -56,6 +56,34 @@ priority = 4
 [opencode_zen.fallback]
 model = "deepseek-v4-flash-free"
 max_tokens = 4096
+temperature = 0.7
+
+[mistral]
+model = "mistral-small-latest"
+max_tokens = 2048
+temperature = 0.7
+base_url = "https://api.mistral.ai/v1"
+requests_per_minute = 30
+requests_per_day = 500
+priority = 4
+
+[mistral.fallback]
+model = "open-mistral-nemo"
+max_tokens = 2048
+temperature = 0.7
+
+[nvidia_nim]
+model = "nvidia/llama-3.3-70b-instruct"
+max_tokens = 2048
+temperature = 0.7
+base_url = "https://integrate.api.nvidia.com/v1"
+requests_per_minute = 40
+requests_per_day = 1000
+priority = 4
+
+[nvidia_nim.fallback]
+model = "nvidia/nemotron-4-340b-instruct"
+max_tokens = 2048
 temperature = 0.7
 
 [ollama]

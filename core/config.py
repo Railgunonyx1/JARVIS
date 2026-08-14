@@ -130,6 +130,9 @@ class Config:
                 raw.get("openrouter_api_key_4", ""),
             ],
             "opencode_zen": raw.get("opencode_zen_api_key", ""),
+            "mistral": raw.get("mistral_api_key", ""),
+            "mistral_extra": [raw.get("mistral_api_key_2", "")],
+            "nvidia_nim": raw.get("nvidia_nim_api_key", ""),
         }
         self._api_keys_cached_at = now
         return self._api_keys_cache

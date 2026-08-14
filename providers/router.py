@@ -8,6 +8,8 @@ from reliability_engine.circuit_breaker import CircuitBreaker
 from providers.base import LLMProvider, LLMResponse
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
+from providers.mistral_provider import MistralProvider
+from providers.nvidia_nim_provider import NVIDIAProvider
 from providers.ollama_provider import OllamaProvider
 from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
@@ -48,6 +50,8 @@ class ProviderRouter:
             "gemini": CircuitBreaker(),
             "openrouter": CircuitBreaker(),
             "opencode_zen": CircuitBreaker(),
+            "mistral": CircuitBreaker(),
+            "nvidia_nim": CircuitBreaker(),
             "omni_route": CircuitBreaker(),
             "ollama": CircuitBreaker(),
         }
@@ -67,6 +71,15 @@ class ProviderRouter:
         if "opencode_zen" in config and api_keys.get("opencode_zen"):
             self._providers["opencode_zen"] = OpenCodeZenProvider(
                 config["opencode_zen"], api_keys["opencode_zen"],
+            )
+        if "mistral" in config and api_keys.get("mistral"):
+            extra_mistral = [k for k in api_keys.get("mistral_extra", []) if k]
+            self._providers["mistral"] = MistralProvider(
+                config["mistral"], api_keys["mistral"], extra_keys=extra_mistral,
+            )
+        if "nvidia_nim" in config and api_keys.get("nvidia_nim"):
+            self._providers["nvidia_nim"] = NVIDIAProvider(
+                config["nvidia_nim"], api_keys["nvidia_nim"],
             )
         if "omni_route" in config:
             self._providers["omni_route"] = OmniRouteProvider(
