@@ -159,7 +159,7 @@ class ProviderRouter:
                 provider = self._providers[provider_name]
                 # Circuit breaker check — skip if this provider is currently open
                 cb = self._circuit_breakers.get(provider_name)
-                if cb and not cb.is_available():
+                if cb and not cb.is_available(provider_name):
                     failures = cb.failures if hasattr(cb, 'failures') else 0
                     logger.warning(
                         "Circuit breaker open for %s (consecutive failures: %d), skipping",
