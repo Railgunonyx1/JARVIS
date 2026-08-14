@@ -28,6 +28,8 @@ class ProviderRouter:
         self._config = config or {}
         self._last_provider: str | None = None
         self._last_model: str | None = None
+        self.preferred_provider: str | None = None
+        self.preferred_model: str | None = None
         self._warmed = False
         self._available_chain: list[str] | None = None
         self._chain_checked_at: float = 0.0

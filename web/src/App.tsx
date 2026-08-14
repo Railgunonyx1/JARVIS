@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { initJarvis, useJarvis } from "@/store/jarvis"
 import { workspaceApi } from "@/lib/workspace-api"
 import { Workspace } from "@/components/workspace"
+import { client } from "@/lib/ipc/client"
 import { cn } from "@/lib/utils"
 
 /** Preserve the URL-config connect contract (ws / bootstrap / ws_port). */
@@ -60,7 +61,11 @@ export function App() {
           <select
             className="mode-select"
             value={mode}
-            onChange={(e) => setMode(e.target.value as Mode)}
+            onChange={(e) => {
+              const next = e.target.value as Mode
+              setMode(next)
+              client.send({ type: "mode.set", payload: { mode: next.toLowerCase() as "smart" | "agent" | "controlled" | "plan" } })
+            }}
             title="Agent mode"
           >
             {MODES.map((m) => (

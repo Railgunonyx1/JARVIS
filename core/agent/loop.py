@@ -114,6 +114,7 @@ class AgentLoop:
                         max_tokens=self.max_tokens,
                         temperature=self.temperature,
                         tools=tools,
+                        preferred_provider=getattr(self.router, "preferred_provider", None),
                     )
                     if span is not None:
                         span.set_attribute("provider", response.provider)

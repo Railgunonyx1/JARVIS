@@ -70,9 +70,9 @@ from runtime.transport.protocol import (
 )
 from runtime.transport.tcp import start_server
 from runtime.transport.ws import start_ws_server
+from daemon.ui_ws import DEFAULT_UI_PORT, UiBridge
 
 logger = logging.getLogger("jarvis.daemon")
-
 _MODES = ("plan", "controlled", "smart", "agent")
 KernelFactory = Callable[[str | None], Any]
 
@@ -126,6 +126,7 @@ class DaemonServer:
         registry_dir: Path | None = None,
         state_dir: Path | None = None,
         ws_port: int | None = None,
+        ui_port: int | None = None,
     ) -> None:
         self.kernel_factory = kernel_factory
         self.project_dir = str(Path(project_dir).resolve()) if project_dir else str(Path.cwd().resolve())
@@ -133,6 +134,7 @@ class DaemonServer:
         self.host = host
         self.port = port or pick_port()
         self.ws_port = ws_port or pick_port()
+        self.ui_port = ui_port or DEFAULT_UI_PORT
         self.token = token or generate_token()
         self.registry_dir = Path(registry_dir) if registry_dir else DAEMONS_DIR
         self.state_dir = Path(state_dir) if state_dir else STATE_DIR
@@ -141,6 +143,7 @@ class DaemonServer:
         self._server = None
         self._ws_server = None
         self._pipe_server = None
+        self._ui_bridge: UiBridge | None = None
         self._connections = set()
         self._ws_clients: set = set()
         self._bootstrap_tokens: dict[str, float] = {}
@@ -201,6 +204,22 @@ class DaemonServer:
             logger.info("daemon %s listening on ws://%s:%s", self.project_id,
                         self.host, self.ws_port)
 
+            self._ui_bridge = UiBridge(
+                self.kernel, project_dir=self.project_dir,
+                host=self.host, port=self.ui_port,
+            )
+            for attempt in range(3):
+                try:
+                    await self._ui_bridge.start()
+                    break
+                except OSError:
+                    if attempt == 2:
+                        raise
+                    self.ui_port = pick_port()
+                    self._ui_bridge.port = self.ui_port
+            logger.info("daemon %s UI bridge on ws://%s:%s/ws", self.project_id,
+                        self.host, self.ui_port)
+
             try:
                 from runtime.transport.pipe import start_pipe_server
                 pipe_name = rf"\\.\pipe\jarvis-{self.project_id}"
@@ -214,6 +233,7 @@ class DaemonServer:
                 "project": self.project_dir,
                 "port": self.port,
                 "ws_port": self.ws_port,
+                "ui_port": self.ui_port,
                 "pid": os.getpid(),
                 "token": self.token,
                 "version": PROTOCOL_VERSION,
@@ -294,6 +314,8 @@ class DaemonServer:
         if self._pipe_server is not None:
             self._pipe_server.close()
             await self._pipe_server.wait_closed()
+        if self._ui_bridge is not None:
+            await self._ui_bridge.close()
         for sender in list(self._senders):
             sender.cancel()
         for run in list(self._detached_runs):
@@ -427,6 +449,7 @@ class DaemonServer:
             "mode": self._mode(),
             "port": self.port,
             "ws_port": self.ws_port,
+            "ui_port": self.ui_port,
             "started_at": self.started_at,
             "uptime": time.time() - self.started_at,
         }, rid)
@@ -490,6 +513,7 @@ class DaemonServer:
             "mode": self._mode(),
             "port": self.port,
             "ws_port": self.ws_port,
+            "ui_port": self.ui_port,
             "provider": getattr(self.kernel.router, "_last_provider", None),
             "model": getattr(self.kernel.router, "_last_model", None),
             "tools": len(self.kernel.registry.list()),
@@ -888,6 +912,7 @@ def _start_daemon(args) -> None:
         pass
     server = DaemonServer(project_dir=project_dir, port=args.port,
                           ws_port=args.ws_port,
+                          ui_port=getattr(args, "ui_port", None),
                           registry_dir=args.registry_dir,
                           state_dir=args.state_dir)
 
@@ -930,7 +955,7 @@ def _stop_daemon(args) -> None:
 
 
 def _print_dashboard_url(project_dir: str) -> None:
-    """Issue a bootstrap credential and print the dashboard launch URL."""
+    """Print the dashboard launch URL pointing at the UI WebSocket bridge."""
     import asyncio as _asyncio
 
     from daemon.client import DaemonClient
@@ -939,6 +964,11 @@ def _print_dashboard_url(project_dir: str) -> None:
         entry = load_entry(project_id(Path(project_dir)))
         if entry is None:
             return None
+        ui_port = entry.get("ui_port")
+        if ui_port:
+            return {"ui_port": ui_port}
+        # Fallback: older daemon without the UI bridge — hand a bootstrap
+        # credential for the envelope WS endpoint instead.
         client = DaemonClient("127.0.0.1", int(entry["port"]),
                               token=entry["token"])
         try:
@@ -953,6 +983,10 @@ def _print_dashboard_url(project_dir: str) -> None:
     if credential is None:
         print("no daemon running for this project")
         sys.exit(1)
+    ui_port = credential.get("ui_port")
+    if ui_port:
+        print(f"http://localhost:5173/?ws_port={ui_port}")
+        return
     ws_port = credential.get("ws_port", "")
     query = f"?bootstrap={credential.get('bootstrap', '')}"
     if ws_port:
@@ -982,6 +1016,7 @@ def main(argv=None) -> None:
     start.add_argument("--project-dir", default=None)
     start.add_argument("--port", type=int, default=None)
     start.add_argument("--ws-port", type=int, default=None)
+    start.add_argument("--ui-port", type=int, default=None)
     start.add_argument("--log", default=None)
     start.add_argument("--registry-dir", default=None)
     start.add_argument("--state-dir", default=None)

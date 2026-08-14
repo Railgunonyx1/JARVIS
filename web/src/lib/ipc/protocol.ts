@@ -181,5 +181,6 @@ export type ClientCommand =
   | { type: "task.create"; payload: { title: string } }
   | { type: "task.cancel"; payload: { id: string } }
   | { type: "provider.select"; payload: { provider: string; model: string } }
+  | { type: "mode.set"; payload: { mode: "smart" | "agent" | "controlled" | "plan" } }
   | { type: "fs.read"; payload: { path: string } }
   | { type: "subscribe"; payload: { channels: string[] } }
