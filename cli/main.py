@@ -209,7 +209,7 @@ def _capture_notification(name: str, payload: dict, notifications: list) -> None
 
 async def _run_once(goal: str, loop, json_output: bool = False,
                     collapsed: bool = False, notifications: list | None = None,
-                    perf: bool = False) -> None:
+                    perf: bool = False, bridge=None) -> None:
     from cli.ux import LiveTaskDisplay
 
     loop._last_goal = goal
@@ -221,9 +221,13 @@ async def _run_once(goal: str, loop, json_output: bool = False,
 
     def _on_event(name: str, payload: dict) -> None:
         _capture_notification(name, payload, notifications)
+        if bridge is not None:
+            bridge.on_event(name, payload)
         if not json_output:
             display._on_event(name, payload)
 
+    if bridge is not None:
+        bridge.start_run(goal)
     if not json_output:
         display.attach(loop.observer)
     loop.observer.on_event = _on_event
@@ -231,9 +235,15 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         display.start()
     try:
         result = await loop.run(goal)
+    except Exception as exc:
+        if bridge is not None:
+            bridge.fail_run(str(exc))
+        raise
     finally:
         display.stop()
     loop._last_result = result
+    if bridge is not None:
+        bridge.finish_run(result)
     if json_output:
         payload = result.to_dict()
         state = payload.pop("state", {})

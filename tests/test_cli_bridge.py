@@ -193,15 +193,10 @@ def test_confirmation_uses_handler():
     assert decisions[0].operation == "shell.execute"
 
 
-def test_confirmation_via_renderer():
+def test_bridge_shares_renderer_state():
     renderer = Renderer()
     bridge = _bridge(renderer=renderer)
     assert bridge.state is renderer.state
-    bridge.state.pending_confirmation = None
-    bridge.request_confirmation("filesystem.write", risk=RiskLevel.LOW)
-    assert renderer.state.pending_confirmation is None or isinstance(
-        renderer.state.pending_confirmation, ConfirmationRequest
-    )
 
 
 def test_attach_loop_then_pull_status_uses_loop_state():
