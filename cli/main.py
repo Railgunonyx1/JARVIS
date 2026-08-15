@@ -410,10 +410,12 @@ def _print_startup_report() -> None:
 
 def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
+    from cli.bridge import AgentBridge
     from cli.cockpit import render_cockpit, render_notifications, render_status_bar
     from cli.details import render_expanded
     from cli.history import HistoryStore
     from cli.input import InputReader
+    from cli.renderer import Renderer
     from cli.startup_profile import get_profiler
 
     profiler = get_profiler()
@@ -421,6 +423,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     console.print(Text("JARVIS MK-X — terminal-first agent", style="bold cyan"))
     console.print(Text("/help for commands · /cockpit for the dashboard", style="dim"))
 
+    # The Event/State Bus owns the engine→UI contract for the whole session.
+    bridge = AgentBridge(renderer=Renderer(console=console))
     # Stage A/B split: the banner and prompt appear immediately; the kernel
     # (config, providers, memory) finishes booting in a background thread so
     # the user can start typing while heavy SDKs load.
@@ -476,6 +480,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 typer.secho(f"startup failed: {holder.get('error', 'unknown error')}",
                             err=True, fg="red")
                 break
+            bridge.attach_loop(loop)
+            bridge.pull_status()
             loop.router.warm()
             console.print(Text("  ✓ kernel ready", style="dim"))
             if profile_startup:
@@ -518,6 +524,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 print(f"  {tool.name} — {tool.description}")
         elif line == "/plan":
             loop.permissions.set_mode("plan")
+            bridge.pull_status()
             notifications.append(("info", "mode → plan (read-only)"))
             typer.secho("mode → plan (read-only)", fg="green")
         elif line == "/mode":
@@ -528,6 +535,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 typer.secho(f"Unknown mode '{new_mode}'.", err=True, fg="red")
             else:
                 loop.permissions.set_mode(new_mode)
+                bridge.pull_status()
                 notifications.append(("info", f"mode → {new_mode}"))
                 typer.secho(f"mode → {new_mode}", fg="green")
         elif line == "/model":
@@ -557,10 +565,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             if not goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
-                asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications))
+                asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge))
         else:
             try:
-                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications))
+                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge))
             except KeyboardInterrupt:
                 typer.secho("(interrupted)", dim=True)
             console.print(render_cockpit(loop))
