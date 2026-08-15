@@ -3,6 +3,8 @@ target-version = "py311"
 line-length = 120
 extend-exclude = [
     "ui/*.tcss",  # Textual CSS — not Python
+    "_archive",   # archived dead code — not part of the live surface
+    "_quarantine_removed",  # quarantined subsystems — guarded, not linted
 ]
 
 [tool.ruff.lint]
