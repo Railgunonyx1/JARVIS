@@ -263,6 +263,37 @@ class AgentBridge:
 
     # ── confirmation (Phase 5; security-owned) ──────────────────────────────
 
+    _RISK_BY_TOOL = {
+        "shell.execute": RiskLevel.CRITICAL,
+        "shell.run": RiskLevel.CRITICAL,
+        "package.remove": RiskLevel.HIGH,
+        "package.install": RiskLevel.HIGH,
+        "filesystem.delete": RiskLevel.HIGH,
+        "filesystem.write": RiskLevel.HIGH,
+        "process.kill": RiskLevel.HIGH,
+        "system.shutdown": RiskLevel.CRITICAL,
+        "system.restart": RiskLevel.CRITICAL,
+    }
+
+    def confirmation_call(self, tool_name: str, params: dict | None) -> str:
+        """Engine-compatible confirmation handler.
+
+        ``(tool_name, params) -> "once" | "run" | "deny"``. Never decides —
+        routes to the operator through the renderer. Denies when no UI path
+        is wired (fail-closed).
+        """
+        params = params or {}
+        details = ""
+        if params:
+            details = ", ".join(f"{k}={str(v)[:40]}" for k, v in params.items())[:200]
+        return self.request_confirmation(
+            operation=tool_name,
+            scope="tool invocation",
+            risk=self._RISK_BY_TOOL.get(tool_name, RiskLevel.MEDIUM),
+            reversible=True,
+            details=details,
+        )
+
     def request_confirmation(self, operation: str, scope: str = "",
                              risk: RiskLevel = RiskLevel.MEDIUM,
                              reversible: bool = True,

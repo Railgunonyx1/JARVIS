@@ -34,6 +34,7 @@ class AuditEntry:
     error: str | None = None
     params_hash: str = ""
     mode: str = ""
+    decision: str = ""  # once | run | deny (operator confirmation decision)
 
 
 class AuditLog:
@@ -78,7 +79,8 @@ class AuditLog:
                 success INTEGER DEFAULT 1,
                 error TEXT,
                 params_hash TEXT DEFAULT '',
-                mode TEXT DEFAULT ''
+                mode TEXT DEFAULT '',
+                decision TEXT DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id);
             CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
@@ -89,6 +91,8 @@ class AuditLog:
         if "trace_id" not in cols:
             conn.execute("ALTER TABLE audit_log ADD COLUMN trace_id TEXT DEFAULT ''")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_trace ON audit_log(trace_id)")
+        if "decision" not in cols:
+            conn.execute("ALTER TABLE audit_log ADD COLUMN decision TEXT DEFAULT ''")
         conn.commit()
 
     def log(self, entry: AuditEntry):
@@ -98,7 +102,7 @@ class AuditLog:
                 entry.timestamp, entry.session_id, entry.trace_id, entry.action,
                 entry.tool, entry.permission_level, int(entry.allowed),
                 int(entry.confirmed), entry.duration_ms, int(entry.success),
-                entry.error, entry.params_hash, entry.mode,
+                entry.error, entry.params_hash, entry.mode, entry.decision,
             ))
             if self._timer is None or not self._timer.is_alive():
                 self._timer = threading.Timer(self._FLUSH_INTERVAL, self._flush)
@@ -111,11 +115,11 @@ class AuditLog:
         conn.execute(
             "INSERT INTO audit_log (timestamp, session_id, trace_id, action, tool, "
             "permission_level, allowed, confirmed, duration_ms, success, error, "
-            "params_hash, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "params_hash, mode, decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (entry.timestamp, entry.session_id, entry.trace_id, entry.action,
              entry.tool, entry.permission_level, int(entry.allowed),
              int(entry.confirmed), entry.duration_ms, int(entry.success),
-             entry.error, entry.params_hash, entry.mode)
+             entry.error, entry.params_hash, entry.mode, entry.decision)
         )
         conn.commit()
 
@@ -129,7 +133,7 @@ class AuditLog:
         conn.executemany(
             "INSERT INTO audit_log (timestamp, session_id, trace_id, action, tool, "
             "permission_level, allowed, confirmed, duration_ms, success, error, "
-            "params_hash, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "params_hash, mode, decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             buffer
         )
         conn.commit()

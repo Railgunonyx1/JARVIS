@@ -82,7 +82,7 @@ def _build_router():
 
 
 def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
-                project_dir: str | None):
+                project_dir: str | None, confirmation_handler=None):
     from cli.startup_profile import get_profiler
     from core.agent.loop import AgentLoop
     from core.config import Config
@@ -116,6 +116,7 @@ def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
             max_iterations=max_iterations,
             max_tokens=max_tokens,
             mem=mem,
+            confirmation_handler=confirmation_handler,
         )
     finally:
         profiler.end_trace()
@@ -437,7 +438,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             try:
                 profiler.begin("kernel.boot")
                 try:
-                    holder["loop"] = _build_loop(mode, max_iterations, max_tokens, project_dir)
+                    holder["loop"] = _build_loop(
+                        mode, max_iterations, max_tokens, project_dir,
+                        confirmation_handler=bridge.confirmation_call,
+                    )
                 finally:
                     profiler.end("kernel.boot")
             finally:

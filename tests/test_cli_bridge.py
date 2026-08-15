@@ -199,6 +199,40 @@ def test_bridge_shares_renderer_state():
     assert bridge.state is renderer.state
 
 
+def test_confirmation_call_routes_through_handler():
+    bridge = _bridge()
+    calls = []
+
+    def handler(req: ConfirmationRequest) -> str:
+        calls.append(req)
+        return "once"
+
+    bridge.confirmation_handler = handler
+    decision = bridge.confirmation_call("shell.execute", {"command": "rm -rf"})
+    assert decision == "once"
+    assert calls[0].operation == "shell.execute"
+    assert calls[0].risk == RiskLevel.CRITICAL
+    assert "command" in calls[0].details
+
+
+def test_confirmation_call_defaults_deny_no_handler():
+    bridge = _bridge()
+    assert bridge.confirmation_call("package.remove", {}) == "deny"
+
+
+def test_confirmation_call_medium_risk_default():
+    bridge = _bridge()
+    seen = []
+
+    def handler(req: ConfirmationRequest) -> str:
+        seen.append(req)
+        return "deny"
+
+    bridge.confirmation_handler = handler
+    bridge.confirmation_call("repo.search", {"query": "auth"})
+    assert seen[0].risk == RiskLevel.MEDIUM
+
+
 def test_attach_loop_then_pull_status_uses_loop_state():
     bridge = _bridge()
     loop = _stub_loop(mem=None)

@@ -200,7 +200,7 @@ class SecurityManager:
 
     # ── Confirmation handler ───────────────────
 
-    def set_confirmation_handler(self, handler: Callable[[str, dict], bool]):
+    def set_confirmation_handler(self, handler: Callable[[str, dict], str]):
         self._engine.set_confirmation_handler(handler)
 
     # ── Plugin permission check ────────────────

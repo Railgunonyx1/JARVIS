@@ -27,7 +27,7 @@ class PermissionEngine:
         self,
         decision_logger: DecisionLogger,
         mode: str = ExecutionMode.AGENT,
-        confirmation_handler: Callable[[str, dict[str, Any]], bool] | None = None,
+        confirmation_handler: Callable[[str, dict[str, Any]], str] | None = None,
     ) -> None:
         self.logger = decision_logger
         self.mode_manager = get_mode_manager()

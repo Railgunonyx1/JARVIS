@@ -41,8 +41,9 @@ class SecurityEngine:
         self._action_counts: dict[str, list[float]] = {}
         self._rate_window = 60.0  # 1 minute window
 
-        # Confirmation callbacks
-        self._confirmation_handler: Callable[[str, dict], bool] | None = None
+        # Confirmation callbacks — return one of "once" | "run" | "deny".
+        # The decision is recorded in the audit log (operator-accountable).
+        self._confirmation_handler: Callable[[str, dict], str] | None = None
 
         logger.info("Security engine initialized (mode=%s)", mode)
 
@@ -64,8 +65,14 @@ class SecurityEngine:
             ))
             logger.info("Security mode changed to: %s", mode)
 
-    def set_confirmation_handler(self, handler: Callable[[str, dict], bool]):
-        """Set a callback for user confirmation prompts."""
+    def set_confirmation_handler(self, handler: Callable[[str, dict], str]):
+        """Set a callback for user confirmation prompts.
+
+        The handler receives (tool_name, params) and returns a decision:
+        ``"once"``, ``"run"``, or ``"deny"``. ``"once"``/``"run"`` are
+        treated as allow; ``"deny"`` blocks the action. The decision is
+        recorded in the audit log.
+        """
         self._confirmation_handler = handler
 
     def check_permission(self, tool_name: str, session_id: str = "",
@@ -91,12 +98,16 @@ class SecurityEngine:
         # Check confirmation requirement
         if rule and rule.requires_confirmation:
             if self._confirmation_handler:
-                confirmed = self._confirmation_handler(tool_name, params)
-                if not confirmed:
+                decision = self._confirmation_handler(tool_name, params)
+                if decision not in ("once", "run", "deny"):
+                    logger.warning("confirmation handler returned invalid decision %r", decision)
+                    decision = "deny"
+                if decision == "deny":
                     self._log_denied(tool_name, session_id, "User denied confirmation")
                     return False, f"Action '{tool_name}' was denied by user"
-                # Log confirmed action
-                self._log_action(tool_name, session_id, level, confirmed=True)
+                # Log confirmed action (once / run both allow)
+                self._log_action(tool_name, session_id, level, confirmed=True,
+                                 decision=decision)
             else:
                 logger.warning("Confirmation required for %s but no handler set", tool_name)
 
@@ -213,7 +224,7 @@ class SecurityEngine:
         self._audit.log(entry)
 
     def _log_action(self, tool: str, session_id: str, level: PermissionLevel,
-                    confirmed: bool = False):
+                    confirmed: bool = False, decision: str = ""):
         entry = AuditEntry(
             session_id=session_id,
             action="confirmed",
@@ -222,6 +233,7 @@ class SecurityEngine:
             allowed=True,
             confirmed=confirmed,
             mode=self._mode,
+            decision=decision,
         )
         self._audit.log(entry)
 

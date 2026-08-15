@@ -120,6 +120,71 @@ def test_shell_audit_tolerates_none_reason_and_stderr(monkeypatch):
     assert len(recorded) == 1
     assert recorded[0].error is None
 
+
+# ── Phase 5: decision-based confirmation (once/run/deny, stored in audit) ───
+
+def _make_engine(decision):
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: decision)
+    return engine
+
+
+def test_confirmation_run_allows():
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "run")
+    allowed, reason = engine.check_permission("action.shell.run")
+    assert allowed and reason == ""
+
+
+def test_confirmation_once_allows():
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "once")
+    allowed, _ = engine.check_permission("action.shell.run")
+    assert allowed
+
+
+def test_confirmation_deny_blocks():
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "deny")
+    allowed, reason = engine.check_permission("action.shell.run")
+    assert not allowed
+    assert "denied" in reason
+
+
+def test_confirmation_invalid_decision_fails_closed():
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "maybe")
+    allowed, _ = engine.check_permission("action.shell.run")
+    assert not allowed
+
+
+def test_confirmation_decision_recorded_in_audit(monkeypatch):
+    from security.audit import AuditEntry
+    from security.engine import SecurityEngine
+
+    recorded = []
+
+    class FakeLog:
+        def log(self, entry: AuditEntry) -> None:
+            recorded.append(entry)
+
+    monkeypatch.setattr("security.engine.get_audit_log", lambda: FakeLog())
+    engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "run")
+    allowed, _ = engine.check_permission("action.shell.run")
+    assert allowed
+    assert any(e.decision == "run" and e.confirmed for e in recorded)
+
     _audit_shell_execution(
         "whoami", [],
         ExecResult(success=False, blocked=False, stderr="boom"),
