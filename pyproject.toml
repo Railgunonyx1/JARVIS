@@ -5,6 +5,12 @@ extend-exclude = [
     "ui/*.tcss",  # Textual CSS — not Python
     "_archive",   # archived dead code — not part of the live surface
     "_quarantine_removed",  # quarantined subsystems — guarded, not linted
+    "memory/jarvis_memory_fabric",  # dead code — replaced by memory/mem
+    "inference_engine",  # dead — not imported by the live surface
+    "knowledge_graph",   # dead — not imported by the live surface
+    "external",          # dead — not imported by the live surface
+    "agents",            # dead — not imported by the live surface
+    "systems",           # dead — not imported by the live surface
 ]
 
 [tool.ruff.lint]
