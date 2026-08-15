@@ -251,12 +251,25 @@ class AgentBridge:
         self.state.plan = Plan.new(goal, [])
 
     def finish_run(self, result) -> None:
-        """Close out a successful run: agent message + final accounting."""
+        """Close out a successful run: agent message + final accounting.
+
+        If the answer was already streamed into the last agent message
+        (``stream_delta``), it is left untouched to avoid duplicating it.
+        """
         if result.response:
-            self.state.messages.append(Message(role="agent", content=result.response))
+            last = self.state.messages[-1] if self.state.messages else None
+            if last is None or last.role != "agent" or not last.content:
+                self.state.messages.append(Message(role="agent", content=result.response))
         self.pull_tokens(result)
         self._complete_active_events()
         self.state.status_message = ""
+
+    def stream_delta(self, delta: str) -> None:
+        """Append a streamed token to the in-progress agent message."""
+        if self.state.messages and self.state.messages[-1].role == "agent":
+            self.state.messages[-1].content += delta
+        else:
+            self.state.messages.append(Message(role="agent", content=delta))
 
     def fail_run(self, message: str) -> None:
         """Recover from an engine failure: mark the active event failed and

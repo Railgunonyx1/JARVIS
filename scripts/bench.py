@@ -1,16 +1,16 @@
 """
-JARVIS MK-X — Baseline Benchmark
-Measures 5 metrics before any optimization:
-  1. Cold-start time  (import + construct JarvisMKX)
-  2. Idle RSS         (memory after 5s idle)
-  3. Idle CPU         (CPU after 5s idle)
-  4. First-token latency (TTFT via streaming)
-  5. First-audio latency (TTS first WAV chunk)
+JARVIS MK-X — Terminal-First Benchmark.
+
+Measures the real CLI/agent stack (no daemon, no voice):
+  1. Cold start   — import ``cli.main`` + build the agent loop
+  2. Warm boot    — re-build loop inside one process (provider pre-warm)
+  3. First token  — TTFT via streaming (``loop.run(goal, on_chunk=...)``)
+  4. End-to-end   — one-shot goal latency through the same path as ``-m cli``
 
 Usage:
-  python bench.py              # Full benchmark
-  python bench.py --quick      # Skip TTS measurement
-  python bench.py --cold-only  # Only measure startup
+  python scripts/bench.py                # full benchmark (needs API keys)
+  python scripts/bench.py --cold-only    # only startup measurements
+  python scripts/bench.py --iterations N # streaming probes per goal
 """
 
 import os
@@ -18,23 +18,28 @@ import os
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 import sys
+import time
+from pathlib import Path
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-import asyncio
+
 import logging
-import time
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-# Suppress noisy logs during benchmark
 logging.basicConfig(level=logging.WARNING, handlers=[logging.NullHandler()])
-for name in ["jarvis", "urllib3", "httpx", "httpcore", "asyncio", "groq"]:
+for name in ["jarvis", "urllib3", "httpx", "httpcore", "asyncio", "groq",
+             "openai", "anthropic", "google"]:
     logging.getLogger(name).setLevel(logging.ERROR)
 
 import psutil
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Small goals so the model finishes quickly; the LLM is the variable part.
+PROBES = ["Say hello in one short sentence."]
+COLD_ONLY = "--cold-only" in sys.argv
+ITERATIONS = 1
 
 
 def banner(msg):
@@ -55,215 +60,169 @@ def fmt_bytes(b):
     return f"{b / (1024 * 1024):.1f}MB"
 
 
-# ── 1. Cold-Start Time ────────────────────────────────────────────────────
-def measure_cold_start():
-    banner("1. COLD-START TIME")
-    proc = psutil.Process(os.getpid())
+def _extract_iterations():
+    global ITERATIONS
+    for i, arg in enumerate(sys.argv):
+        if arg == "--iterations" and i + 1 < len(sys.argv):
+            try:
+                ITERATIONS = max(1, int(sys.argv[i + 1]))
+            except ValueError:
+                pass
 
+
+def measure_cold_start():
+    """Import cli.main and build an agent loop (config, tools, providers, memory)."""
+    banner("1. COLD-START (CLI import + kernel build)")
+    proc = psutil.Process(os.getpid())
     rss_before = proc.memory_info().rss
 
-    # Import the module (forces all imports inside jarvis.py)
+    from cli.main import _build_loop
+
+    t_start = time.perf_counter()
     t_import_start = time.perf_counter()
-    from core.jarvis import JarvisMKX
-    t_import_end = time.perf_counter()
+    import cli.main  # noqa: F401  (first import of the whole CLI stack)
+    t_import = (time.perf_counter() - t_import_start) * 1000
 
-    # Construct the instance
-    t_init_start = time.perf_counter()
-    jarvis = JarvisMKX()
-    t_init_end = time.perf_counter()
+    t_build_start = time.perf_counter()
+    loop = _build_loop("agent", 10, None, None)
+    t_build = (time.perf_counter() - t_build_start) * 1000
 
-    t_total = (t_init_end - t_import_start) * 1000
-    t_import = (t_import_end - t_import_start) * 1000
-    t_init = (t_init_end - t_init_start) * 1000
-
+    t_total = (time.perf_counter() - t_start) * 1000
     rss_after = proc.memory_info().rss
-    rss_delta = rss_after - rss_before
 
-    print(f"  Module import:     {fmt_time(t_import)}")
-    print(f"  Construction:      {fmt_time(t_init)}")
-    print(f"  Total cold start:  {fmt_time(t_total)}")
-    print(f"  RSS delta:         {fmt_bytes(rss_before)} -> {fmt_bytes(rss_after)} (+{fmt_bytes(rss_delta)})")
+    print(f"  CLI import:      {fmt_time(t_import)}")
+    print(f"  Kernel build:    {fmt_time(t_build)}")
+    print(f"  Total cold start:{fmt_time(t_total)}")
+    print(f"  RSS delta:       {fmt_bytes(rss_before)} -> {fmt_bytes(rss_after)} (+{fmt_bytes(rss_after - rss_before)})")
 
-    return jarvis, t_total, rss_after
-
-
-# ── 2–3. Idle RSS + CPU ──────────────────────────────────────────────────
-def measure_idle(jarvis, duration=5):
-    banner("2-3. IDLE RESOURCE USAGE")
-    print(f"  Sampling for {duration}s after construction...")
-
-    proc = psutil.Process(os.getpid())
-
-    # Let system settle
-    psutil.cpu_percent(interval=None)  # prime the counter
-    time.sleep(duration)
-
-    rss = proc.memory_info().rss
-    vms = proc.memory_info().vms
-    cpu_samples = []
-    for _ in range(10):
-        cpu_samples.append(psutil.cpu_percent(interval=0.2))
-
-    avg_cpu = sum(cpu_samples) / len(cpu_samples) if cpu_samples else 0
-    max_cpu = max(cpu_samples) if cpu_samples else 0
-
-    print(f"  RSS:               {fmt_bytes(rss)}")
-    print(f"  VMS:               {fmt_bytes(vms)}")
-    print(f"  Idle CPU (avg):    {avg_cpu:.1f}%")
-    print(f"  Idle CPU (max):    {max_cpu:.1f}%")
-
-    return rss, avg_cpu
+    return loop, t_total, rss_after
 
 
-# ── 4. First-Token Latency (TTFT) ────────────────────────────────────────
-def measure_ttft(jarvis):
-    banner("4. FIRST-TOKEN LATENCY (TTFT)")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+def measure_warm_boot():
+    """Re-build the loop in-process to isolate per-boot costs (provider pre-warm)."""
+    banner("2. WARM KERNEL BOOT (in-process rebuild)")
+    from cli.main import _build_loop
 
-    # Run startup first so providers are connected
-    print("  Running startup (TTS warmup + provider connect)...")
-    t_startup_start = time.perf_counter()
-    loop.run_until_complete(jarvis.startup())
-    t_startup = (time.perf_counter() - t_startup_start) * 1000
-    print(f"  Startup time:      {fmt_time(t_startup)}")
+    samples = []
+    for _ in range(2):
+        t0 = time.perf_counter()
+        _build_loop("agent", 10, None, None)
+        samples.append((time.perf_counter() - t0) * 1000)
+    best = min(samples)
+    print(f"  best:  {fmt_time(best)}")
+    print(f"  runs:  " + "  ".join(fmt_time(s) for s in samples))
+    return best
 
-    test_commands = [
-        "Hello, how are you?",
-        "What time is it?",
-        "Tell me a joke",
-    ]
+
+def measure_streaming(loop):
+    """TTFT + end-to-end through loop.run(goal, on_chunk=...)."""
+    import asyncio
+
+    banner("3. STREAMING (TTFT via on_chunk)")
+    if not PROBES:
+        print("  no probes defined")
+        return []
+
+    async def run_once(goal):
+        first = None
+        chunks = 0
+        t0 = time.perf_counter()
+
+        async def on_chunk(delta):
+            nonlocal first, chunks
+            if first is None:
+                first = (time.perf_counter() - t0) * 1000
+            chunks += 1
+
+        result = await loop.run(goal, session_id="", on_chunk=on_chunk)
+        return first, (time.perf_counter() - t0) * 1000, chunks, result
 
     ttfts = []
-    for cmd in test_commands:
-        print(f"\n  Sending: \"{cmd}\"")
-        first_token_time = None
-        t_start = time.perf_counter()
-        token_count = 0
-
-        async def measure():
-            nonlocal first_token_time, token_count
-            async for chunk_type, chunk_data in jarvis.process_text_streaming(cmd):
-                if chunk_type == "text" and first_token_time is None:
-                    first_token_time = (time.perf_counter() - t_start) * 1000
-                if chunk_type == "text":
-                    token_count += 1
-                if chunk_type in ("done", "error"):
-                    break
-
-        try:
-            loop.run_until_complete(asyncio.wait_for(measure(), timeout=30))
-        except TimeoutError:
-            print("    TIMEOUT (30s)")
-            continue
-
-        total = (time.perf_counter() - t_start) * 1000
-        if first_token_time:
-            ttfts.append(first_token_time)
-            print(f"    TTFT:            {fmt_time(first_token_time)}")
-            print(f"    Total:           {fmt_time(total)}")
-            print(f"    Tokens:          {token_count}")
-        else:
-            print("    No tokens received")
+    for goal in PROBES:
+        for i in range(ITERATIONS):
+            print(f"  probe: \"{goal[:50]}\"  (run {i + 1}/{ITERATIONS})")
+            try:
+                first, total, chunks, result = asyncio.run(
+                    asyncio.wait_for(run_once(goal), timeout=60)
+                )
+            except asyncio.TimeoutError:
+                print("    TIMEOUT (60s)")
+                continue
+            except Exception as exc:  # provider down, no key, etc.
+                print(f"    ERROR: {exc}")
+                continue
+            if first:
+                ttfts.append(first)
+                print(f"    TTFT:     {fmt_time(first)}")
+                print(f"    Total:    {fmt_time(total)}")
+                print(f"    Chunks:   {chunks}")
+                print(f"    Success:  {result.success}")
+            else:
+                print(f"    No streamed tokens (e2e {fmt_time(total)}ms, success={result.success})")
+                if not result.success:
+                    print(f"    error: {result.error}")
 
     if ttfts:
-        avg_ttft = sum(ttfts) / len(ttfts)
-        print(f"\n  Average TTFT:      {fmt_time(avg_ttft)}")
-        print(f"  Best TTFT:         {fmt_time(min(ttfts))}")
-        print(f"  Worst TTFT:        {fmt_time(max(ttfts))}")
-    else:
-        print("\n  No TTFT data collected")
-
+        print(f"\n  Avg TTFT:  {fmt_time(sum(ttfts) / len(ttfts))}")
+        print(f"  Best TTFT: {fmt_time(min(ttfts))}")
     return ttfts
 
 
-# ── 5. First-Audio Latency ───────────────────────────────────────────────
-def measure_first_audio(jarvis):
-    banner("5. FIRST-AUDIO LATENCY")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+def measure_oneshot(loop):
+    """Plain one-shot latency (same path as ``python -m cli 'goal'``)."""
+    import asyncio
 
-    cmd = "Say hello in one sentence."
-    print(f"  Sending: \"{cmd}\"")
-
-    first_audio_time = None
-    t_start = time.perf_counter()
-    audio_chunks = 0
-
-    async def measure():
-        nonlocal first_audio_time, audio_chunks
-        async for chunk_type, chunk_data in jarvis.process_text_streaming(cmd):
-            if chunk_type == "tts_chunk" and first_audio_time is None:
-                first_audio_time = (time.perf_counter() - t_start) * 1000
-            if chunk_type == "tts_chunk":
-                audio_chunks += 1
-            if chunk_type in ("done", "error"):
-                break
-
+    banner("4. ONE-SHOT LATENCY (plain complete, no streaming)")
+    if not PROBES:
+        return
+    goal = PROBES[0]
+    t0 = time.perf_counter()
     try:
-        loop.run_until_complete(asyncio.wait_for(measure(), timeout=30))
-    except TimeoutError:
-        print("  TIMEOUT (30s)")
-
-    total = (time.perf_counter() - t_start) * 1000
-    if first_audio_time:
-        print(f"  First audio chunk: {fmt_time(first_audio_time)}")
-        print(f"  Total time:        {fmt_time(total)}")
-        print(f"  Audio chunks:      {audio_chunks}")
-    else:
-        print("  No audio chunks received")
-
-    return first_audio_time
+        result = asyncio.run(asyncio.wait_for(loop.run(goal), timeout=60))
+        total = (time.perf_counter() - t0) * 1000
+        print(f"  Total:    {fmt_time(total)}")
+        print(f"  Success:  {result.success}")
+        if not result.success:
+            print(f"  error:    {result.error}")
+        tokens = result.state.tokens_used if result.state else 0
+        print(f"  Tokens:   {tokens}")
+    except Exception as exc:
+        print(f"  ERROR: {exc}")
 
 
-# ── Main ──────────────────────────────────────────────────────────────────
 def main():
-    banner("JARVIS MK-X — BASELINE BENCHMARK")
+    _extract_iterations()
+    banner("JARVIS MK-X — TERMINAL-FIRST BENCHMARK")
     print(f"  Python {sys.version.split()[0]}")
-    print(f"  PID {os.getpid()}")
+    print(f"  PID    {os.getpid()}")
 
-    quick = "--quick" in sys.argv
-    cold_only = "--cold-only" in sys.argv
+    loop, cold_start, rss = measure_cold_start()
+    loop.router.warm()
 
-    # 1. Cold start
-    jarvis, cold_start, rss = measure_cold_start()
-
-    if cold_only:
-        print(f"\n{'=' * 60}")
-        print("  SUMMARY")
-        print(f"{'=' * 60}")
+    if COLD_ONLY:
+        banner("SUMMARY (COLD-ONLY)")
         print(f"  Cold start:  {fmt_time(cold_start)}")
         print(f"  RSS:         {fmt_bytes(rss)}")
         return
 
-    # 2–3. Idle
-    idle_rss, idle_cpu = measure_idle(jarvis)
+    warm = measure_warm_boot()
+    ttfts = measure_streaming(loop)
+    if not COLD_ONLY and not ttfts:
+        print("\n  No streaming data — provider may be unavailable.")
+    measure_oneshot(loop)
 
-    # 4. TTFT
-    ttfts = measure_ttft(jarvis)
-
-    # 5. First audio (skip with --quick)
-    first_audio = None
-    if not quick:
-        first_audio = measure_first_audio(jarvis)
-
-    # ── Summary ───────────────────────────────────────────────────────
     banner("SUMMARY")
-    print(f"  Cold start:         {fmt_time(cold_start)}")
-    print(f"  Idle RSS:           {fmt_bytes(idle_rss)}")
-    print(f"  Idle CPU:           {idle_cpu:.1f}%")
+    print(f"  Cold start:   {fmt_time(cold_start)}")
+    print(f"  Warm boot:    {fmt_time(warm)}")
     if ttfts:
-        avg_ttft = sum(ttfts) / len(ttfts)
-        print(f"  Avg TTFT:           {fmt_time(avg_ttft)}")
-    if first_audio:
-        print(f"  First audio:        {fmt_time(first_audio)}")
-    print(f"{'=' * 60}")
+        print(f"  Avg TTFT:     {fmt_time(sum(ttfts) / len(ttfts))}")
+        print(f"  Best TTFT:    {fmt_time(min(ttfts))}")
 
-    # Cleanup
-    try:
-        jarvis.shutdown()
-    except Exception:
-        pass
+    if loop.mem is not None:
+        try:
+            loop.mem.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

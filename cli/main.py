@@ -235,7 +235,12 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     if not json_output:
         display.start()
     try:
-        result = await loop.run(goal)
+        if bridge is not None:
+            async def _on_chunk(delta: str) -> None:
+                bridge.stream_delta(delta)
+            result = await loop.run(goal, on_chunk=_on_chunk)
+        else:
+            result = await loop.run(goal)
     except Exception as exc:
         if bridge is not None:
             bridge.fail_run(str(exc))
