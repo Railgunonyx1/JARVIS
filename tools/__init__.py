@@ -30,6 +30,8 @@ def build_default_registry() -> ToolRegistry:
         world_monitor_search,
         world_monitor_world_brief,
     )
+    from tools.web_search import web_search
+    from tools.system_monitor import system_status
 
     registry = ToolRegistry()
     registry.register_many([
@@ -112,6 +114,44 @@ def build_default_registry() -> ToolRegistry:
             permission="shell.execute",
             handler=shell_execute,
             category="system",
+        ),
+        Tool(
+            name="system.status",
+            description=(
+                "Report read-only host health: CPU load, RAM usage, uptime, "
+                "process count, and (when available) CPU temperature and GPU "
+                "load. Use for system monitoring questions."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            permission="system.query",
+            handler=system_status,
+            category="system",
+        ),
+        Tool(
+            name="web.search",
+            description=(
+                "Search the web for a query and return ranked results (title, "
+                "snippet, URL). Set mode='news' for recent news coverage. "
+                "Uses Google ground-truth search when GEMINI_API_KEY is set, "
+                "otherwise DuckDuckGo. Use for current-events research and "
+                "fact lookup."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query."},
+                    "mode": {"type": "string", "enum": ["search", "news"], "description": "Search type. Default 'search'."},
+                    "limit": {"type": "integer", "description": "Max results. Default 6."},
+                },
+                "required": ["query"],
+            },
+            permission="web.search",
+            handler=web_search,
+            category="web",
         ),
         Tool(
             name="world_monitor.search",
