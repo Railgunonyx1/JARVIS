@@ -78,14 +78,25 @@ class SkillRegistry:
     # ── hot reload ─────────────────────────────────────────────────────
 
     def _fingerprint(self) -> dict[str, tuple[int, int]]:
-        """``{manifest_path: (mtime_ns, size)}`` — cheap change detector."""
+        """``{manifest_path: (mtime_ns, size)}`` — cheap change detector.
+
+        Same-size rewrites within a single filesystem timestamp tick
+        (NTFS mtime resolution is 100 ns) can be missed by mtime+size
+        alone, so the first N bytes of each manifest are included.
+        """
         out: dict[str, tuple[int, int]] = {}
         for path in sorted(self._loader.manifests_dir.glob("*.json")):
             try:
                 stat = path.stat()
             except OSError:
                 continue
-            out[str(path)] = (stat.st_mtime_ns, stat.st_size)
+            head = 0
+            try:
+                with path.open("rb") as fh:
+                    head = hash(fh.read(4096))
+            except OSError:
+                pass
+            out[str(path)] = (stat.st_mtime_ns, stat.st_size, head)
         return out
 
     def _refresh_if_changed(self) -> None:
