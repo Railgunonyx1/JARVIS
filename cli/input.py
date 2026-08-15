@@ -232,7 +232,7 @@ class InputReader:
         line = sys.stdin.readline()
         if not line:
             raise EOFError
-        return line.rstrip("\n")
+        return line.rstrip("\r\n")
 
     def _read_fallback(self, prompt: str) -> str:
         try:
