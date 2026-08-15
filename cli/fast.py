@@ -1,9 +1,9 @@
 """stdlib-only fast one-shot CLI (no typer/rich).
 
-``python -m cli.fast "goal"`` connects to the project's resident daemon
-(starting it if needed) and streams the run to stdout. Imports only the
-standard library plus the light daemon modules, so a warm daemon turns a
-command into: interpreter start + one loopback round trip.
+``python -m cli.fast "goal"`` runs one goal in-process against the real
+agent engine, streaming observer events to stdout. Imports only the
+standard library plus the engine modules, so a single request avoids the
+full typer/rich REPL startup.
 
 Output modes:
 
@@ -17,6 +17,7 @@ Exit codes: 0 on success, 1 on any failure.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 from collections.abc import Callable
@@ -25,30 +26,31 @@ from pathlib import Path
 __all__ = ["run_fast", "main"]
 
 
-def run_fast(entry: dict, goal: str, mode: str | None = None,
+async def _run_one(goal: str, mode: str | None = None,
+                   on_event: Callable[[str, dict], None] | None = None) -> dict:
+    """Run ``goal`` in-process through the real agent engine."""
+    from cli.main import _build_loop
+
+    loop = _build_loop(mode or "agent", 10, None, None)
+    if on_event is not None:
+        loop.observer.on_event = on_event
+    result = await loop.run(goal, session_id="", on_chunk=None)
+    return _result_dict(result)
+
+
+def _result_dict(result) -> dict:
+    return {
+        "success": bool(result.success),
+        "response": result.response,
+        "trace_id": getattr(result, "trace_id", ""),
+        "error": result.error,
+    }
+
+
+def run_fast(goal: str, mode: str | None = None,
              on_event: Callable[[str, dict], None] | None = None) -> dict:
-    """Run ``goal`` against a daemon registry entry; return the result dict.
-
-    Raises :class:`daemon.fastclient.FastError` on connection/protocol/run
-    failure. ``entry`` must contain ``port`` and ``token`` (``host`` optional,
-    default 127.0.0.1).
-    """
-    from daemon.fastclient import FastClient
-
-    host = entry.get("host", "127.0.0.1")
-    with FastClient(host=host, port=int(entry["port"]),
-                    token=str(entry.get("token", ""))) as client:
-        client.connect()
-        return client.run(goal, mode=mode, on_event=on_event)
-
-
-def _resolve_entry(project_dir: str, timeout: float = 30.0) -> dict | None:
-    from daemon.lifecycle import find_matching, start_daemon
-
-    entry = find_matching(project_dir)
-    if entry is not None:
-        return entry
-    return start_daemon(project_dir, timeout=timeout)
+    """Run ``goal`` in-process; return the result dict."""
+    return asyncio.run(_run_one(goal, mode=mode, on_event=on_event))
 
 
 def _print_human(result: dict) -> None:
@@ -65,7 +67,7 @@ def _print_json(result: dict) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="jarvis",
-        description="Fast stdlib-only one-shot agent CLI (daemon-backed).")
+        description="Fast stdlib-only one-shot agent CLI (in-process).")
     parser.add_argument("goal", help="task or request to run")
     parser.add_argument("--mode", default=None, choices=("plan", "controlled", "smart", "agent"),
                         help="permission/autonomy mode")
@@ -74,17 +76,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="stream observer events to stderr")
     parser.add_argument("--project-dir", default=None,
-                        help="project to attach a daemon to (default: cwd)")
+                        help="project root (default: cwd)")
     args = parser.parse_args(argv)
-
-    project = str(Path(args.project_dir).resolve()) if args.project_dir \
-        else str(Path.cwd().resolve())
-
-    entry = _resolve_entry(project)
-    if entry is None:
-        print("daemon failed to start — check ~/.jarvis/daemon.log",
-              file=sys.stderr)
-        return 1
 
     def _on_event(name: str, data: dict) -> None:
         if args.json:
@@ -93,8 +86,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"> {name}", file=sys.stderr)
 
     try:
-        result = run_fast(entry, args.goal, mode=args.mode, on_event=_on_event)
-    except Exception as exc:  # FastError + anything the kernel raised
+        result = run_fast(args.goal, mode=args.mode, on_event=_on_event)
+    except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

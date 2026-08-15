@@ -26,12 +26,10 @@ echo.
 echo   What would you like to do?
 echo.
 echo     [1]  Chat       Interactive terminal chat
-echo     [2]  Dashboard  Textual system dashboard
-echo     [3]  One-shot   Type a goal, get one answer
-echo     [4]  Daemon     Start the background kernel daemon
-echo     [5]  Perf       Show persisted performance data
-echo     [6]  Tests      Run the test suite
-echo     [7]  Install    Install or update dependencies
+echo     [2]  One-shot   Type a goal, get one answer
+echo     [3]  Perf       Show persisted performance data
+echo     [4]  Tests      Run the test suite
+echo     [5]  Install    Install or update dependencies
 echo     [Q]  Quit       Exit JARVIS
 echo.
 echo ---------------------------------------------------------
@@ -41,12 +39,10 @@ set /p choice="  jarvis> "
 
 if "%choice%"=="" exit /b
 if /i "%choice%"=="1" goto chat
-if /i "%choice%"=="2" goto dashboard
-if /i "%choice%"=="3" goto oneshot
-if /i "%choice%"=="4" goto daemon
-if /i "%choice%"=="5" goto perf
-if /i "%choice%"=="6" goto tests
-if /i "%choice%"=="7" goto install
+if /i "%choice%"=="2" goto oneshot
+if /i "%choice%"=="3" goto perf
+if /i "%choice%"=="4" goto tests
+if /i "%choice%"=="5" goto install
 if /i "%choice%"=="q" goto quit
 
 echo.
@@ -61,25 +57,12 @@ echo.
 "venv\Scripts\python.exe" -m cli
 exit /b
 
-:dashboard
-echo.
-"venv\Scripts\python.exe" -m cli tui
-exit /b
-
 :oneshot
 echo.
 set /p goal="  goal> "
 if "%goal%"=="" goto chat
 echo.
 "venv\Scripts\python.exe" -m cli "%goal%"
-pause
-exit /b
-
-:daemon
-echo   Starting daemon...
-"venv\Scripts\python.exe" -m cli daemon start
-echo.
-"venv\Scripts\python.exe" -m cli daemon status
 pause
 exit /b
 

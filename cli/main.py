@@ -260,10 +260,6 @@ def main(
     json_output: bool = typer.Option(False, "--json", help="Emit a JSON result for scripts/pipes."),
     profile_startup: bool = typer.Option(False, "--profile-startup",
                                          help="Print a startup phase timing report."),
-    daemon: bool = typer.Option(False, "--daemon",
-                                help="Use (and start if needed) the persistent kernel daemon."),
-    standalone: bool = typer.Option(False, "--standalone",
-                                    help="Boot an in-process kernel (ignore any running daemon)."),
     perf: bool = typer.Option(False, "--perf",
                               help="Print a request performance timeline after the run."),
 ) -> None:
@@ -277,70 +273,23 @@ def main(
     _setup_logging(verbose)
 
     if goal:
-        client = _resolve_transport(daemon, standalone, project_dir)
-        if client is not None:
-            from daemon.client import DaemonDisconnected, DaemonError
-
-            try:
-                _daemon_one_shot(goal, client, json_output=json_output,
-                                 perf=perf)
-            except (DaemonDisconnected, DaemonError, ConnectionError, OSError) as exc:
-                if daemon:
-                    typer.secho(f"daemon connection failed: {exc}", err=True, fg="red")
-                    raise typer.Exit(code=1) from None
-                client = None
-        if client is None:
-            loop = _build_loop(mode, max_iterations, max_tokens, project_dir)
-            asyncio.run(_run_once(goal, loop, json_output=json_output, perf=perf))
+        loop = _build_loop(mode, max_iterations, max_tokens, project_dir)
+        asyncio.run(_run_once(goal, loop, json_output=json_output, perf=perf))
         if profile_startup:
             _print_startup_report()
     else:
-        client = _resolve_transport(daemon, standalone, project_dir)
-        if client is not None:
-            _interactive_daemon(client, profile_startup=profile_startup)
-        else:
-            _interactive(mode, max_iterations, max_tokens, project_dir,
-                         profile_startup=profile_startup)
+        _interactive(mode, max_iterations, max_tokens, project_dir,
+                     profile_startup=profile_startup)
 
 
-# ── daemon transport ────────────────────────────────────────────────────────
+# ── transport (in-process only; no daemon) ───────────────────────────────────
 
 def _resolve_project_dir(project_dir: str | None) -> str:
     return str((Path(project_dir) if project_dir else Path.cwd()).resolve())
 
 
-def _resolve_transport(force_daemon: bool, force_standalone: bool,
-                       project_dir: str | None):
-    """Return a DaemonClient for this project when a daemon should be used.
-
-    ``--standalone`` forces an in-process kernel. Otherwise a healthy daemon
-    for this project is reused; if it is dead or absent it is resurrected
-    automatically so the CLI never pays a cold kernel boot when a resident
-    daemon can be (re)started instead. ``--daemon`` additionally treats a
-    start failure as fatal. The client is returned unconnected; the caller
-    connects on its own event loop (a transport can't cross loops).
-    """
-    from daemon.client import DaemonClient
-    from daemon.lifecycle import find_matching, start_daemon
-
-    project = _resolve_project_dir(project_dir)
-    entry = None
-    if not force_standalone:
-        entry = find_matching(project)
-        if entry is None:
-            entry = start_daemon(project)
-    if entry is None and force_daemon:
-        typer.secho("daemon failed to start — run `jarvis daemon status` "
-                    "or check ~/.jarvis/daemon.log", err=True, fg="red")
-        raise typer.Exit(code=1)
-    if entry is None:
-        return None
-    return DaemonClient(port=entry["port"], token=entry["token"],
-                        project_id=entry["project_id"])
-
-
 def _render_status_bar_dict(status: dict) -> Text:
-    """Status-bar line rendered from a daemon status dict."""
+    """Status-bar line rendered from an engine status dict."""
     bits = [Text("JARVIS", style="bold cyan")]
     bits.append(Text(f"mode={status.get('mode', 'agent')}", style="green"))
     if status.get("provider"):
@@ -356,99 +305,6 @@ def _render_status_bar_dict(status: dict) -> Text:
         bits.append(Text("busy", style="bold red blink"))
     bits.append(Text(f"time={datetime.datetime.now().strftime('%H:%M:%S')}", style="dim"))
     return Text("  │  ").join(bits)
-
-
-def _print_result_dict(result: dict) -> None:
-    """Render a daemon result dict exactly like a local AgentResult."""
-    state = result.get("state", {}) or {}
-    obs = result.get("observation", {}) or {}
-    steps = obs.get("steps", [])
-    if steps:
-        marks = {"ok": "ok", "error": "err", "denied": "deny", "running": "run"}
-        chain = " → ".join(
-            f"{s['tool']}[{marks.get(s['status'], s['status'])} {s['duration_ms']}ms]"
-            for s in steps
-        )
-        print(f"[steps] {chain}")
-    calls = state.get("tool_calls", [])
-    if calls:
-        chain = ", ".join(f"{c['name']}({c['duration_ms']}ms)" for c in calls)
-        print(f"[tools] {chain}")
-    for call in calls:
-        diff = call.get("diff")
-        if diff:
-            print(f"[diff] {call.get('output', '')}")
-            print(diff)
-    if result.get("success"):
-        _emit_response(result.get("response", ""))
-    else:
-        print(f"ERROR: {result.get('error', '')}", file=sys.stderr)
-    usage = obs.get("context_usage") or state.get("context_usage") or {}
-    compact = " [compacted]" if usage.get("compacted") else ""
-    print(f"[trace {result.get('trace_id')}] provider={state.get('provider')} "
-          f"model={state.get('model')} tokens={state.get('tokens_used')} "
-          f"duration_ms={state.get('duration_ms', '')}")
-    if usage:
-        print(f"[context] {usage.get('total_tokens', 0)}/{usage.get('total_budget', 0)} "
-              f"tokens system={usage.get('system_tokens', 0)} "
-              f"memory={usage.get('memory_tokens', 0)} files={usage.get('files_tokens', 0)} "
-              f"messages={usage.get('messages_tokens', 0)}{compact}")
-
-
-def _print_collapsed_dict(result: dict) -> None:
-    """Collapsed (conversation-dominant) rendering of a daemon result dict."""
-    state = result.get("state", {}) or {}
-    if result.get("success"):
-        _emit_response(result.get("response", ""))
-    else:
-        typer.secho(f"ERROR: {result.get('error', '')}", err=True, fg="red")
-    for call in state.get("tool_calls", []):
-        diff = call.get("diff")
-        if diff:
-            print(f"[diff] {call.get('output', '')}")
-            print(diff)
-    summary = (f"{len(state.get('tool_calls', []))} tools · "
-               f"{state.get('tokens_used', 0)} tokens · "
-               f"{state.get('duration_ms', 0):.0f}ms")
-    console.print(Text(f"  ▶ {summary}  (Enter to expand)", style="dim"))
-
-
-async def _run_once_daemon(goal: str, client, json_output: bool = False,
-                           collapsed: bool = False,
-                           notifications: list | None = None,
-                           perf: bool = False) -> dict:
-    """Run a goal against the daemon, streaming observer events to the UX."""
-    from cli.ux import LiveTaskDisplay
-
-    notifications = notifications if notifications is not None else []
-    display = LiveTaskDisplay(
-        status_getter=(lambda: client.cached_status),
-        enable=not json_output,
-    )
-
-    def _on_event(name: str, payload: dict) -> None:
-        _capture_notification(name, payload, notifications)
-        if not json_output:
-            display._on_event(name, payload)
-
-    if not json_output:
-        display.start()
-    try:
-        await client.connect()
-        result = await client.run(goal, on_event=_on_event)
-    finally:
-        display.stop()
-        await client.close()
-    if json_output:
-        print(json.dumps({"goal": goal, **result}, indent=2, default=str))
-    elif collapsed:
-        _print_collapsed_dict(result)
-    else:
-        _print_result_dict(result)
-    if perf:
-        _print_perf_trace(result)
-        _print_ui_render(display)
-    return result
 
 
 def _print_perf_trace(result) -> None:
@@ -471,304 +327,11 @@ def _print_ui_render(display) -> None:
     )
 
 
-def _daemon_one_shot(goal: str, client, json_output: bool = False,
-                     perf: bool = False) -> None:
-    asyncio.run(_run_once_daemon(goal, client, json_output=json_output, perf=perf))
-
-
-def _client_call(client, coro):
-    """Run one coroutine on a fresh event loop with a fresh connection."""
-    async def _wrapped():
-        await client.connect()
-        try:
-            return await coro
-        finally:
-            await client.close()
-    return asyncio.run(_wrapped())
-
-
-def _run_daemon_goal(goal: str, client, notifications: list) -> dict | None:
-    """Run one goal against the daemon, converting every failure into a visible
-    message instead of a crash or a silent freeze.
-
-    ``_run_once_daemon`` can raise ``DaemonDisconnected`` (peer drop mid-run),
-    ``DaemonError`` (an error frame, a busy timeout), or an unexpected
-    exception. None of them may escape the REPL: each is printed and turned
-    into a ``None`` result so the session keeps prompting.
-    """
-    from daemon.client import DaemonDisconnected, DaemonError
-
-    try:
-        return asyncio.run(_run_once_daemon(
-            goal, client, collapsed=True, notifications=notifications))
-    except KeyboardInterrupt:
-        typer.secho("(interrupted)", dim=True)
-        return None
-    except DaemonDisconnected as exc:
-        typer.secho(f"daemon connection lost: {exc}", err=True, fg="red")
-        return None
-    except (DaemonError, ConnectionError, OSError) as exc:
-        typer.secho(f"daemon error: {exc}", err=True, fg="red")
-        return None
-    except Exception as exc:
-        typer.secho(f"unexpected error: {exc}", err=True, fg="red")
-        return None
-
-
-def _interactive_daemon(client, profile_startup: bool = False) -> None:
-    """Interactive command center against a persistent daemon kernel."""
-    from rich import box
-    from rich.panel import Panel
-
-    from cli.cockpit import render_notifications
-    from cli.history import HistoryStore
-    from cli.input import InputReader
-
-    console.clear()
-    console.print(Panel(
-        Text("JARVIS MK-X — persistent daemon kernel", style="bold cyan"),
-        subtitle="terminal-first autonomous engineering agent",
-        box=box.ROUNDED,
-        border_style="cyan",
-    ))
-    console.print(Text("  /help for commands", style="dim"))
-
-    notifications: list = []
-    _configure_noise(verbose=False)
-
-    history = HistoryStore()
-    reader = InputReader()
-    reader.set_history(history.to_list())
-
-    try:
-        status = _client_call(client, client.status())
-    except Exception as exc:
-        # The registry entry we resolved may be stale (the daemon died without
-        # removing it). Try once to resurrect the daemon instead of dropping
-        # the user out of the REPL with no recourse.
-        typer.secho(f"daemon unreachable: {exc}", err=True, fg="yellow")
-        fresh = _resolve_transport(False, False, None)
-        if fresh is None:
-            typer.secho("daemon failed to restart — run `jarvis daemon status` "
-                        "or check ~/.jarvis/daemon.log", err=True, fg="red")
-            return
-        client = fresh
-        try:
-            status = _client_call(client, client.status())
-        except Exception as exc:
-            typer.secho(f"daemon still unreachable: {exc}", err=True, fg="red")
-            return
-    if not status:
-        typer.secho("daemon connection failed", err=True, fg="red")
-        return
-    if profile_startup:
-        _print_startup_report()
-
-    last_goal = ""
-    last_result: dict | None = None
-
-    while True:
-        try:
-            status = _client_call(client, client.status())
-            console.print()
-            console.print(_render_status_bar_dict(status))
-        except Exception as exc:
-            typer.secho(f"daemon status unreachable: {exc}", err=True, fg="yellow")
-        console.print()
-        try:
-            line = reader.read_line("JARVIS> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-        history.add(line)
-        history.save()
-        if not line:
-            if last_result is not None:
-                _print_result_dict(last_result)
-            continue
-        if line in ("/exit", "/quit"):
-            break
-        if line == "/help":
-            _print_help()
-        elif line == "/clear":
-            console.clear()
-        elif line == "/notifications":
-            console.print(render_notifications(notifications))
-        elif line == "/plan":
-            _client_call(client, client.set_mode("plan"))
-            notifications.append(("info", "mode → plan (read-only)"))
-            typer.secho("mode → plan (read-only)", fg="green")
-        elif line == "/mode":
-            info = _client_call(client, client.status())
-            print(f"mode: {info.get('mode')}")
-        elif line.startswith("/mode "):
-            new_mode = line[6:].strip()
-            if new_mode not in _MODES:
-                typer.secho(f"Unknown mode '{new_mode}'.", err=True, fg="red")
-            else:
-                _client_call(client, client.set_mode(new_mode))
-                notifications.append(("info", f"mode → {new_mode}"))
-                typer.secho(f"mode → {new_mode}", fg="green")
-        elif line == "/model":
-            info = _client_call(client, client.status())
-            print(f"model={info.get('model')} provider={info.get('provider')}")
-        elif line == "/models":
-            _print_models_dict(_client_call(client, client.models()))
-        elif line == "/status":
-            info = _client_call(client, client.status())
-            print(f"provider={info.get('provider')} model={info.get('model')}")
-            print(f"tools: {info.get('tools', 0)} registered")
-            print(f"mode: {info.get('mode')}")
-            print(f"memory: {info.get('mem_stats')}")
-            print(f"busy: {info.get('busy')}")
-        elif line == "/tools":
-            info = _client_call(client, client.status())
-            print(f"tools: {info.get('tools', 0)} registered (daemon)")
-        elif line in ("/context", "/tokens", "/compact", "/cockpit", "/tree", "/verbose"):
-            typer.secho(f"{line} is local-only — not available via the daemon",
-                        err=True, fg="yellow")
-        elif line.startswith("/memory"):
-            _cmd_memory_daemon(client, line)
-        elif line.startswith("/history"):
-            _cmd_history_daemon(client, line)
-        elif line == "/audit" or line.startswith("/audit "):
-            _cmd_audit(line)
-        elif line == "/resume":
-            if not last_goal:
-                typer.secho("no previous goal to resume", err=True, fg="red")
-            else:
-                last_result = _run_daemon_goal(last_goal, client, notifications)
-        else:
-            last_goal = line
-            last_result = _run_daemon_goal(line, client, notifications)
-
-    history.save()
-
-
-def _print_models_dict(data: dict) -> None:
-    from rich.table import Table
-
-    table = Table(title="Model status (daemon)")
-    table.add_column("Provider")
-    table.add_column("Model")
-    table.add_column("Available")
-    for name, info in data.items():
-        table.add_row(
-            name, info.get("model", ""),
-            "yes" if info.get("available") else "no",
-        )
-    console.print(table)
-
-
-def _cmd_memory_daemon(client, line: str) -> None:
-    parts = line.split(maxsplit=2)
-    if len(parts) == 1:
-        info = _client_call(client, client.status())
-        print(info.get("mem_stats"))
-        return
-    action = parts[1]
-    if action == "search" and len(parts) == 3:
-        hits = _client_call(client, client.memory_search(parts[2], top_k=5))
-        for hit in hits:
-            print(f"[{hit['source']}:{hit['score']:.2f}] {hit['content'][:160]}")
-    elif action == "add" and len(parts) == 3:
-        key, _, value = parts[2].partition("=")
-        message = _client_call(
-            client, client.memory_add(key.strip() or "note", value.strip()))
-        print(message)
-    else:
-        typer.secho("usage: /memory [search <query> | add <key>=<value>]", err=True, fg="red")
-
-
-def _cmd_history_daemon(client, line: str) -> None:
-    parts = line.split(maxsplit=1)
-    task_id = parts[1].strip() if len(parts) == 2 else ""
-    data = _client_call(client, client.history(task_id))
-    if task_id:
-        for event in data.get("events", []):
-            ts = datetime.datetime.fromtimestamp(event["timestamp"]).strftime("%H:%M:%S")
-            print(f"{ts} {event['name']} {json.dumps(event['data'], default=str)[:120]}")
-    else:
-        for trace in data.get("traces", []):
-            ts = datetime.datetime.fromtimestamp(trace["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{trace['trace_id']}  {ts}")
-
-
-def daemon_cli(argv) -> int:
-    """`jarvis daemon start|stop|status|list` — dispatched at the entry point.
-
-    Lives outside the typer app because click consumes the first positional
-    token as the callback's ``goal`` argument, making a typer subcommand named
-    ``daemon`` unreachable. ``entry()`` routes here before typer parses.
-    """
-    import argparse
-
-    from daemon.lifecycle import (
-        daemon_status,
-        list_daemons,
-        start_daemon,
-        stop_daemon,
-        sweep_stale_entries,
-    )
-
-    parser = argparse.ArgumentParser(
-        prog="jarvis daemon",
-        description="Control the persistent kernel daemon for this project.",
-    )
-    sub = parser.add_subparsers(dest="action", required=True)
-    sub.add_parser("start", help="start (and reuse if already running) the daemon")
-    sub.add_parser("stop", help="stop the daemon for this project")
-    sub.add_parser("status", help="show daemon status for this project")
-    sub.add_parser("list", help="list all running daemons")
-    sub.add_parser("sweep", help="remove registry entries for dead/unreachable daemons")
-    args = parser.parse_args(argv)
-
-    project = _resolve_project_dir(None)
-    if args.action == "start":
-        entry = start_daemon(project)
-        if entry is None:
-            typer.secho("daemon failed to start — check ~/.jarvis/daemon.log",
-                        err=True, fg="red")
-            return 1
-        print(f"daemon running: pid={entry['pid']} port={entry['port']} "
-              f"project={entry['project']}")
-        return 0
-    if args.action == "sweep":
-        removed = sweep_stale_entries()
-        if not removed:
-            print("no stale daemons to remove")
-            return 0
-        for entry in removed:
-            print(f"removed stale: {entry['project']}  pid={entry.get('pid')}  "
-                  f"port={entry.get('port')}")
-        return 0
-    if args.action == "stop":
-        ok = stop_daemon(project)
-        print("daemon stopped" if ok else "no daemon running / stop failed")
-        return 0 if ok else 1
-    if args.action == "status":
-        info = daemon_status(project)
-        if info is None:
-            print("no daemon running for this project")
-            return 1
-        for key, value in info.items():
-            print(f"{key}: {value}")
-        return 0
-    entries = list_daemons()
-    if not entries:
-        print("no daemons running")
-    for entry in entries:
-        print(f"{entry['project']}  pid={entry['pid']}  port={entry['port']}  "
-              f"healthy={entry['healthy']}")
-    return 0
-
-
 def perf_cli(argv) -> int:
     """`jarvis perf [latest|slowest|summary]` — read persisted performance data.
 
-    Runs in a separate process from the daemon, opening its own read-only
-    connection to the performance SQLite database (WAL-safe). Persisted by
-    the daemon on every request via ``runtime.observability.exporters``.
+    Opens its own read-only connection to the performance SQLite database
+    (WAL-safe), written on every request via ``runtime.observability.exporters``.
     """
     import argparse
 
@@ -789,7 +352,7 @@ def perf_cli(argv) -> int:
 
     path = perf_db_path()
     if not path.exists():
-        print("no performance data yet — run a request through the daemon first", file=sys.stderr)
+        print("no performance data yet — run a request first", file=sys.stderr)
         print(f"(db: {path})", file=sys.stderr)
         return 1
 
@@ -816,48 +379,10 @@ def perf_cli(argv) -> int:
     return 0
 
 
-def tui_cli(argv) -> int:
-    """`jarvis tui` — launch the Textual conversation client, a client of the daemon.
-
-    Imported lazily so the default REPL keeps a tiny startup profile; the TUI
-    talks to the running daemon (auto-starting it if needed) and streams agent
-    events into a conversation view. Pass ``--dashboard`` for the legacy
-    system-dashboard view.
-    """
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        prog="jarvis tui",
-        description="Textual conversation client for a running JARVIS daemon.",
-    )
-    parser.add_argument("--mock", action="store_true",
-                        help="force mock providers even if a daemon is reachable")
-    parser.add_argument("--url", default=None,
-                        help="daemon TCP URL override (default: auto-discover)")
-    parser.add_argument("--dashboard", action="store_true",
-                        help="show the legacy system dashboard instead")
-    parser.add_argument("--project-dir", default=None,
-                        help="project root for daemon discovery (default: cwd)")
-    args = parser.parse_args(argv)
-
-    if args.dashboard:
-        from ui.tui import JarvisApp as DashboardApp
-        DashboardApp(mock=args.mock, url=args.url).run()
-        return 0
-
-    from ui.conversation import JarvisApp
-    JarvisApp(mock=args.mock, url=args.url, project_dir=args.project_dir).run()
-    return 0
-
-
 def entry() -> None:
-    """Console entry point: route `daemon`/`perf`/`tui` before typer, else run the app."""
-    if len(sys.argv) > 1 and sys.argv[1] == "daemon":
-        sys.exit(daemon_cli(sys.argv[2:]))
+    """Console entry point: route `perf` before typer, else run the app."""
     if len(sys.argv) > 1 and sys.argv[1] == "perf":
         sys.exit(perf_cli(sys.argv[2:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "tui":
-        sys.exit(tui_cli(sys.argv[2:]))
     app()
 
 
@@ -1111,8 +636,7 @@ def _cmd_memory(loop, line: str) -> None:
 def _cmd_audit(line: str, limit_default: int = 12) -> None:
     """`/audit [trace <id> | <n> | <tool>]` — read the security audit log
     (stats + recent actions + per-trace replay). Reads the shared
-    ``~/.jarvis/data/audit.db``, so it works identically for the standalone
-    kernel and the daemon REPL."""
+    ``~/.jarvis/data/audit.db``."""
     from security.audit import get_audit_log
 
     parts = line.split(maxsplit=1)
