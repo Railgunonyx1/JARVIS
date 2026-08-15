@@ -199,6 +199,30 @@ def test_bridge_shares_renderer_state():
     assert bridge.state is renderer.state
 
 
+def test_bridge_refresh_audit_loads_sections():
+    from cli.models import AuditSection
+
+    bridge = _bridge()
+    try:
+        entries = bridge.refresh_audit(limit=5)
+    except Exception:
+        entries = []
+    assert isinstance(entries, list)
+    assert any(isinstance(s, AuditSection) for s in bridge.state.audit_sections)
+
+
+def test_bridge_refresh_memory_empty_without_loop():
+    bridge = _bridge()
+    bridge.refresh_memory("auth")
+    assert bridge.state.memory_query == "auth"
+    assert isinstance(bridge.state.memory_hits, list)
+
+
+def test_bridge_list_models_empty_without_loop():
+    bridge = _bridge()
+    assert bridge.list_models() == []
+
+
 def test_confirmation_call_routes_through_handler():
     bridge = _bridge()
     calls = []

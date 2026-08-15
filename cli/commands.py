@@ -30,8 +30,9 @@ class Command:
 
 
 class CommandRegistry:
-    def __init__(self, renderer: "Renderer") -> None:
+    def __init__(self, renderer: "Renderer", bridge=None) -> None:
         self.renderer = renderer
+        self.bridge = bridge
         self._commands: Dict[str, Command] = {}
         self._register_builtins()
 
@@ -65,6 +66,8 @@ class CommandRegistry:
             r.print("\n".join(lines))
 
         def status_cmd(args: List[str]) -> None:
+            if self.bridge is not None:
+                self.bridge.pull_status()
             s = r.state
             r.print(f"Mode      : {s.mode.value}  ({MODE_HELP.get(s.mode, '')})")
             r.print(f"Model     : {s.model}")
@@ -77,16 +80,20 @@ class CommandRegistry:
 
         def mode_cmd(args: List[str]) -> None:
             if not args:
-                r.print(f"Current mode: {r.state.mode.value}")
-                for m, desc in MODE_HELP.items():
-                    r.print(f"  {m.value:12} {desc}")
+                status_cmd(args)
+                r.print("Modes: agent | plan | controlled | smart")
                 return
             try:
                 m = Mode(args[0].upper())
-                r.set_mode(m)
-                r.print_success(f"Mode → {m.value}  ({MODE_HELP[m]})")
             except ValueError:
                 r.print_error("Unknown mode", "Use: agent | plan | controlled | smart")
+                return
+            if self.bridge is not None and self.bridge.loop is not None:
+                self.bridge.loop.permissions.set_mode(m.value.lower())
+                self.bridge.pull_status()
+            else:
+                r.set_mode(m)
+            r.print_success(f"Mode → {m.value}  ({MODE_HELP[m]})")
 
         def layout_cmd(args: List[str]) -> None:
             if not args:
@@ -120,25 +127,42 @@ class CommandRegistry:
             r.print_success("Conversation cleared")
 
         def tools_cmd(args: List[str]) -> None:
+            if self.bridge is not None and self.bridge.loop is not None:
+                reg = self.bridge.loop.registry
+                r.print("REGISTERED TOOLS")
+                for tool in reg.list():
+                    r.print(f"  {tool.name} — {tool.description}")
+                return
             if not r.state.events:
                 r.print("No events yet.")
                 return
             r.print(r.render_activity())
 
         def memory_cmd(args: List[str]) -> None:
+            if self.bridge is not None:
+                query = args[0] if args else ""
+                self.bridge.refresh_memory(query)
             r.set_workspace("memory")
             r.layout_mgr.set_mode("memory")
             r.print(r.render_memory())
 
         def audit_cmd(args: List[str]) -> None:
+            if self.bridge is not None:
+                limit = 12
+                if args and args[0].isdigit():
+                    limit = int(args[0])
+                self.bridge.refresh_audit(limit)
             r.set_workspace("audit")
             r.layout_mgr.set_mode("audit")
             r.print(r.render_audit())
 
         def code_cmd(args: List[str]) -> None:
+            if self.bridge is not None:
+                self.bridge.refresh_code(path=args[0] if args else "")
             r.set_workspace("code")
             r.layout_mgr.set_mode("code")
             r.print(r.render_code_header())
+            r.print(r.render_code_files())
             r.print(r.render_code_buffer())
 
         def palette_cmd(args: List[str]) -> None:
@@ -160,6 +184,55 @@ class CommandRegistry:
         def exit_cmd(args: List[str]) -> None:
             raise SystemExit(0)
 
+        def model_cmd(args: List[str]) -> None:
+            s = r.state
+            if args:
+                r.print_error("model switching not wired", "Only status is available in this session")
+                return
+            r.print(f"Model    : {s.model}")
+            r.print(f"Tokens   : {s.tokens_used}/{s.tokens_limit}")
+
+        def context_cmd(args: List[str]) -> None:
+            if self.bridge is None:
+                r.print_error("Context backend not connected", "Run the interactive session to enable it.")
+                return
+            loop = self.bridge.loop
+            report = loop.context_manager.last_report if loop is not None else None
+            if report is None:
+                r.print("No context report yet — run a task first")
+                return
+            data = report.to_dict()
+            r.print(f"[context] {data['total_tokens']}/{data['total_budget']} tokens"
+                    + (" [compacted]" if data["compacted"] else ""))
+            for section in data.get("sections", []):
+                ratio = section["ratio"]
+                bar = "█" * max(0, int(ratio * 12)) + "░" * max(0, 12 - int(ratio * 12))
+                r.print(f"  {section['section']:<9} {bar} {section['tokens']}/{section['budget']}")
+
+        def sessions_cmd(args: List[str]) -> None:
+            from core.event_store import get_event_store
+
+            traces = get_event_store().recent_traces(limit=10)
+            if not traces:
+                r.print("No task history yet")
+                return
+            r.print("RECENT TASKS")
+            for trace in traces:
+                ts = __import__("time").strftime("%Y-%m-%d %H:%M:%S",
+                                                 __import__("time").localtime(trace["timestamp"]))
+                r.print(f"  {trace['trace_id']}  {ts}")
+
+        def resume_cmd(args: List[str]) -> None:
+            if self.bridge is None or self.bridge.loop is None:
+                r.print_error("Session backend not connected", "Run the interactive session to enable it.")
+                return
+            goal = getattr(self.bridge.loop, "_last_goal", None)
+            if not goal:
+                r.print_error("No previous goal to resume")
+                return
+            r.print_success(f"Will resume: {goal[:80]}")
+            # The REPL loop re-runs this via its own dispatch path.
+
         def not_connected(name: str) -> Callable[[List[str]], None]:
             def _h(args: List[str]) -> None:
                 r.print_error(f"{name} backend not connected", "Wire the real component first.")
@@ -178,10 +251,11 @@ class CommandRegistry:
         self._register(Command("audit", "Open audit workspace", audit_cmd))
         self._register(Command("code", "Open code workspace", code_cmd))
         self._register(Command("exit", "Exit JARVIS", exit_cmd, ["quit", "q"]))
-        self._register(Command("model", "Show / switch model", not_connected("Model")))
-        self._register(Command("context", "Show context window", not_connected("Context")))
-        self._register(Command("sessions", "List sessions", not_connected("Sessions")))
-        self._register(Command("resume", "Resume a session", not_connected("Sessions")))
+        self._register(Command("model", "Show model + token status", model_cmd))
+        self._register(Command("context", "Show context window", context_cmd))
+        self._register(Command("sessions", "List recent tasks", sessions_cmd))
+        self._register(Command("resume", "Resume the last goal", resume_cmd))
+        self._register(Command("permissions", "Show permission/mode status", status_cmd, ["perms"]))
 
     def dispatch(self, line: str) -> bool:
         line = line.strip()

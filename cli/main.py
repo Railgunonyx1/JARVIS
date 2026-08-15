@@ -413,6 +413,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
     from cli.bridge import AgentBridge
     from cli.cockpit import render_cockpit, render_notifications, render_status_bar
+    from cli.commands import CommandRegistry
     from cli.details import render_expanded
     from cli.history import HistoryStore
     from cli.input import InputReader
@@ -426,6 +427,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
     # The Event/State Bus owns the engine→UI contract for the whole session.
     bridge = AgentBridge(renderer=Renderer(console=console))
+    commands = CommandRegistry(bridge.renderer, bridge=bridge)
     # Stage A/B split: the banner and prompt appear immediately; the kernel
     # (config, providers, memory) finishes booting in a background thread so
     # the user can start typing while heavy SDKs load.
@@ -508,9 +510,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
         if line in ("/exit", "/quit"):
             break
-        if line == "/help":
-            _print_help()
-        elif line == "/clear":
+        if line == "/clear":
             console.clear()
         elif line == "/cockpit":
             console.clear()
@@ -523,53 +523,27 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _configure_noise(_verbose)
             logging.getLogger().setLevel(logging.INFO if _verbose else logging.WARNING)
             typer.secho(f"backend messages: {'ON' if _verbose else 'OFF'}", fg="green")
-        elif line == "/tools":
-            for tool in loop.registry.list():
-                print(f"  {tool.name} — {tool.description}")
         elif line == "/plan":
             loop.permissions.set_mode("plan")
             bridge.pull_status()
             notifications.append(("info", "mode → plan (read-only)"))
             typer.secho("mode → plan (read-only)", fg="green")
-        elif line == "/mode":
-            print(f"mode: {loop.permissions.mode}")
-        elif line.startswith("/mode "):
-            new_mode = line[6:].strip()
-            if new_mode not in _MODES:
-                typer.secho(f"Unknown mode '{new_mode}'.", err=True, fg="red")
-            else:
-                loop.permissions.set_mode(new_mode)
-                bridge.pull_status()
-                notifications.append(("info", f"mode → {new_mode}"))
-                typer.secho(f"mode → {new_mode}", fg="green")
-        elif line == "/model":
-            print(f"model={loop.router._last_model} provider={loop.router._last_provider}")
-        elif line == "/models":
-            _print_models(loop)
-        elif line == "/status":
-            print(f"provider={loop.router._last_provider} model={loop.router._last_model}")
-            print(f"tools: {len(loop.registry.list())} registered")
-            print(f"mode: {loop.permissions.mode}")
-            if loop.mem is not None:
-                print(f"memory: {loop.mem.get_stats()}")
-        elif line == "/context":
-            _print_context(loop)
         elif line == "/tokens" or line == "/compact":
             _print_context(loop)
         elif line == "/tree":
             _print_tree(loop.project)
-        elif line.startswith("/memory"):
-            _cmd_memory(loop, line)
         elif line.startswith("/history"):
             _cmd_history(line)
-        elif line == "/audit" or line.startswith("/audit "):
-            _cmd_audit(line)
         elif line == "/resume":
             goal = getattr(loop, "_last_goal", None)
             if not goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
                 asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge))
+        elif line.startswith("/"):
+            # The v2 command registry owns every other slash command; it talks
+            # to the engine exclusively through the bridge.
+            commands.dispatch(line)
         else:
             try:
                 asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge))

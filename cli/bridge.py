@@ -47,6 +47,25 @@ _STEP_TO_EVENT_STATUS = {
     "running": EventStatus.RUNNING,
 }
 
+_EXT_TO_LANG = {
+    ".py": "python", ".pyw": "python", ".js": "javascript", ".ts": "typescript",
+    ".jsx": "javascript", ".tsx": "typescript", ".html": "html", ".htm": "html",
+    ".css": "css", ".scss": "scss", ".json": "json", ".md": "markdown",
+    ".yml": "yaml", ".yaml": "yaml", ".sh": "bash", ".bat": "bat",
+    ".ps1": "powershell", ".sql": "sql", ".c": "c", ".h": "c", ".cpp": "cpp",
+    ".hpp": "cpp", ".java": "java", ".go": "go", ".rs": "rust", ".rb": "ruby",
+    ".php": "php", ".lua": "lua", ".toml": "ini", ".ini": "ini",
+    ".cfg": "ini", ".xml": "xml", ".toml": "toml", ".txt": "text",
+    ".csv": "csv", ".ipynb": "json", ".dockerfile": "dockerfile",
+}
+
+
+def _guess_language(path: str) -> str:
+    _, ext = str(path).rsplit(".", 1) if "." in str(path) else ("", "")
+    if str(path).lower().endswith("dockerfile"):
+        return "dockerfile"
+    return _EXT_TO_LANG.get("." + ext.lower(), "text")
+
 
 class AgentBridge:
     """Translates engine output into ``AppState`` snapshots for the renderer.
@@ -92,6 +111,134 @@ class AgentBridge:
         if usage:
             self.state.tokens_used = usage.get("total_tokens", self.state.tokens_used)
             self.state.tokens_limit = usage.get("total_budget", self.state.tokens_limit)
+
+    # ── workspace data (Phase 6: real backends) ─────────────────────────────
+
+    def refresh_audit(self, limit: int = 12) -> list[dict]:
+        """Load real audit data into the renderer's audit workspace."""
+        from security.audit import get_audit_log
+
+        log = get_audit_log()
+        stats = log.get_stats()
+        entries = log.query(limit=limit)
+        sections = [
+            AuditSection(title="SYSTEM", items=[
+                ("done", f"Total actions: {stats['total_actions']}", ""),
+                ("warning", f"Denied: {stats['denied']}", ""),
+                ("failed", f"Failed: {stats['failed']}", ""),
+            ]),
+        ]
+        if stats.get("top_tools"):
+            top = ", ".join(f"{k}={v}" for k, v in list(stats["top_tools"].items())[:5])
+            sections.append(AuditSection(title="TOP TOOLS", items=[("done", top, "")]))
+        if entries:
+            items = []
+            for e in entries:
+                sym = "done" if e["allowed"] else "failed"
+                ts = time.strftime("%H:%M:%S", time.localtime(e["timestamp"]))
+                flag = "" if e["allowed"] else " DENIED"
+                detail = f"{e.get('duration_ms', 0):.0f}ms {e.get('session_id', '')[:8]}"
+                items.append((sym, f"{ts} {e['tool'] or e['action']}{flag}", detail))
+            sections.append(AuditSection(title="RECENT", items=items))
+        self.state.audit_sections = sections
+        return entries
+
+    def refresh_memory(self, query: str = "", top_k: int = 5) -> list[dict]:
+        """Run a real memory query (or stats when query is empty) into the
+        renderer's memory workspace."""
+        hits: list[MemoryHit] = []
+        loop = self.loop
+        if loop is not None and loop.mem is not None:
+            if query:
+                for hit in loop.mem.retrieve(query, project=str(loop.project.root_path), top_k=top_k):
+                    hits.append(MemoryHit(
+                        score=hit.get("score", 0.0),
+                        title=hit.get("content", "?")[:80] or hit.get("source", "?"),
+                        date="",
+                        snippet=hit.get("content", "")[:160],
+                    ))
+        self.state.memory_query = query
+        self.state.memory_hits = hits
+        return hits
+
+    def list_models(self) -> list[dict]:
+        """Router status for the models command (no renderer state change)."""
+        loop = self.loop
+        if loop is None:
+            return []
+        return [
+            {"name": name, **info}
+            for name, info in getattr(loop.router, "status", {}).items()
+        ]
+
+    def refresh_code(self, path: str = "", limit: int = 200) -> None:
+        """Load the project file tree into the code workspace, and read a
+        file into the focused buffer when ``path`` is given."""
+        loop = self.loop
+        root = loop.project.root_path if loop is not None else None
+        if root is None:
+            return
+        from .models import CodeFile
+
+        skip = {".git", "venv", "node_modules", "__pycache__", "_quarantine",
+                ".pytest_cache", "_archive", "dist", "build", ".venv"}
+        files: list[CodeFile] = []
+        if path:
+            target = (root / path).resolve()
+            try:
+                rel = str(target.relative_to(root))
+            except ValueError:
+                target = root
+                rel = ""
+            if target.is_dir():
+                self._fill_tree(target, skip, files, limit, rel_prefix="")
+            else:
+                self._read_code_file(target, root, rel or path)
+                return
+        else:
+            self._fill_tree(root, skip, files, limit)
+        self.state.code_files = files[:limit]
+
+    def _fill_tree(self, directory, skip: set, files, limit: int,
+                   rel_prefix: str = "") -> None:
+        from .models import CodeFile
+
+        try:
+            children = sorted(directory.iterdir())
+        except OSError:
+            return
+        for child in children:
+            if len(files) >= limit:
+                return
+            if child.name.startswith(".") or child.name in skip:
+                continue
+            if child.is_dir():
+                files.append(CodeFile(path=f"{rel_prefix}{child.name}/", modified=False))
+                self._fill_tree(child, skip, files, limit, f"{rel_prefix}{child.name}/")
+            else:
+                files.append(CodeFile(path=f"{rel_prefix}{child.name}", modified=False))
+
+    def _read_code_file(self, target, root, rel: str) -> None:
+        from .models import CodeFile
+
+        try:
+            content = target.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            self.state.status_message = f"cannot read {rel}"
+            return
+        self.state.code_path = rel
+        self.state.code_content = content
+        self.state.code_language = _guess_language(rel)
+        self.state.code_loc = content.count("\n") + 1
+        self.state.code_modified = False
+        self.state.code_files = [
+            CodeFile(path=str(p.relative_to(root)), modified=False)
+            for p in root.rglob("*")
+            if p.is_file() and not any(part.startswith(".") or part in {
+                ".git", "venv", "node_modules", "__pycache__", "_quarantine",
+                ".pytest_cache", "_archive", "dist", "build", ".venv"}
+                for part in p.parts)
+        ][:200]
 
     # ── run lifecycle ───────────────────────────────────────────────────────
 

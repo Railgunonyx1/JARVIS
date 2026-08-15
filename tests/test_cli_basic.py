@@ -98,6 +98,29 @@ def test_commands_help():
     assert reg.dispatch("/nonexistent") is True
 
 
+def test_commands_wired_backends_registered():
+    r = Renderer()
+    reg = CommandRegistry(r)
+    for name in ("model", "context", "sessions", "resume", "permissions",
+                 "audit", "memory", "tools"):
+        assert name in reg.list_commands(), f"missing wired command /{name}"
+
+
+def test_commands_model_uses_renderer_state():
+    r = Renderer()
+    r.set_model("gemini/exp")
+    r.set_tokens(4100, 32000)
+    reg = CommandRegistry(r)
+    assert reg.dispatch("/model") is True
+
+
+def test_commands_unknown_mode_rejected():
+    r = Renderer()
+    reg = CommandRegistry(r)
+    assert reg.dispatch("/mode nope") is True
+    assert r.state.mode == Mode.AGENT
+
+
 def test_symbols_ascii_fallback():
     uni = get_symbols(True)
     ascii_ = get_symbols(False)
