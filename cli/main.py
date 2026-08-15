@@ -544,7 +544,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             if not goal:
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
-                asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge))
+                try:
+                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge))
+                except Exception as exc:
+                    typer.secho(f"error: {exc}", err=True, fg="red")
         elif line.startswith("/"):
             # The v2 command registry owns every other slash command; it talks
             # to the engine exclusively through the bridge.
@@ -554,6 +557,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge))
             except KeyboardInterrupt:
                 typer.secho("(interrupted)", dim=True)
+            except Exception as exc:
+                typer.secho(f"error: {exc}", err=True, fg="red")
             console.print(render_cockpit(loop))
 
     if loop is not None:

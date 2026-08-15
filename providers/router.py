@@ -1,5 +1,6 @@
 """Provider Router - Intelligent fallback chain with quota management."""
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -17,6 +18,9 @@ from providers.openrouter_provider import OpenRouterProvider
 from providers.types import restore_tool_names, sanitize_tools
 
 logger = logging.getLogger("jarvis.providers.router")
+
+# Bounded retries for transient rate limits before falling back in the chain.
+_RATE_RETRIES = 2
 
 
 class ProviderRouter:
@@ -134,6 +138,27 @@ class ProviderRouter:
         self._available_chain = None
         self._chain_checked_at = 0.0
 
+    @staticmethod
+    def _is_rate_limit(exc: Exception) -> bool:
+        """True for transient 429/rate/quota failures that a retry may clear."""
+        text = str(exc).lower()
+        return any(w in text for w in (
+            "rate limit", "429", "too many", "quota", "credits", "tokens per minute",
+            "please try again",
+        ))
+
+    @staticmethod
+    def _rate_limit_delay(exc: Exception, default: float = 8.0, cap: float = 30.0) -> float:
+        """Parse a 'please try again in Xs' hint into a bounded backoff."""
+        import re
+        m = re.search(r"try again in ([\d.]+)\s*s", str(exc), re.I)
+        if not m:
+            return default
+        try:
+            return min(float(m.group(1)), cap)
+        except ValueError:
+            return default
+
     @property
     def status(self) -> dict:
         """Return status of all providers."""
@@ -220,6 +245,37 @@ class ProviderRouter:
                     self._invalidate_chain()
                     if span is not None:
                         span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
+                    # Transient rate limits deserve a bounded retry with
+                    # backoff before we abandon this provider for the chain.
+                    if self._is_rate_limit(e):
+                        for retry in range(_RATE_RETRIES):
+                            delay = self._rate_limit_delay(e)
+                            logger.warning(
+                                "Provider %s rate-limited — retry %d/%d in %.0fs",
+                                provider_name, retry + 1, _RATE_RETRIES, delay,
+                            )
+                            await asyncio.sleep(delay)
+                            try:
+                                response = await provider.complete(
+                                    messages, system_prompt, max_tokens, temperature, tools_param,
+                                )
+                                if name_map:
+                                    restore_tool_names(response.tool_calls, name_map)
+                                self._last_provider = provider_name
+                                self._last_model = provider.model
+                                metrics.counter(f"provider.ok.{provider_name}", 1)
+                                if span is not None:
+                                    span.set_attribute("provider", provider_name)
+                                    span.set_attribute("attempts", attempts)
+                                    span.set_attribute("latency_ms", response.latency_ms)
+                                    span.set_attribute("tokens", response.tokens_used)
+                                tracer.add_metric("llm.tokens_generated", response.tokens_used)
+                                return response
+                            except Exception as retry_err:
+                                last_error = retry_err
+                                metrics.counter(f"provider.fail.{provider_name}", 1)
+                                if not self._is_rate_limit(retry_err):
+                                    break
                     logger.warning("Provider %s failed: %s", provider_name, e)
                     continue
             if span is not None:
@@ -261,49 +317,63 @@ class ProviderRouter:
         with tracer.span("router.stream") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                try:
-                    with tracer.span("llm.request", {"provider": provider_name, "model": provider.model}) as req:
-                        start = time.perf_counter()
-                        chars = 0
-                        first_chunk = True
-                        async for chunk in provider.complete_stream(
-                            messages, system_prompt, max_tokens, temperature, tools,
-                        ):
-                            if first_chunk:
-                                first_chunk = False
-                                ttft_ms = (time.perf_counter() - start) * 1000
-                                if req is not None:
-                                    req.set_attribute("ttft_ms", round(ttft_ms, 1))
-                                    req.record_event("first_token", {"ttft_ms": round(ttft_ms, 1)})
-                                tracer.add_metric("llm.ttft_ms", ttft_ms)
-                                metrics.observe("llm.ttft_ms", ttft_ms)
-                            chars += len(chunk)
-                            yield chunk
-                        elapsed_ms = (time.perf_counter() - start) * 1000
-                        tokens = max(1, chars // 4)
-                        tokens_per_second = (tokens / (elapsed_ms / 1000.0)) if elapsed_ms > 0 else 0.0
-                        if req is not None:
-                            req.set_attribute("chars", chars)
-                            req.set_attribute("tokens_estimated", tokens)
-                            req.set_attribute("generation_ms", round(elapsed_ms, 1))
-                            req.set_attribute("tokens_per_second", round(tokens_per_second, 1))
-                        tracer.add_metric("llm.tokens_generated", tokens)
-                    self._last_provider = provider_name
-                    self._last_model = provider.model
-                    self._invalidate_chain()
-                    metrics.counter(f"provider.ok.{provider_name}", 1)
-                    if span is not None:
-                        span.set_attribute("provider", provider_name)
-                        span.set_attribute("model", provider.model)
-                    return  # Stream completed successfully
-                except Exception as e:
-                    last_error = e
-                    metrics.counter(f"provider.fail.{provider_name}", 1)
-                    self._invalidate_chain()
-                    if span is not None:
-                        span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
-                    logger.warning("Provider %s stream failed: %s", provider_name, e)
-                    continue
+                retries = 0
+                while True:
+                    try:
+                        with tracer.span("llm.request", {"provider": provider_name, "model": provider.model}) as req:
+                            start = time.perf_counter()
+                            chars = 0
+                            first_chunk = True
+                            async for chunk in provider.complete_stream(
+                                messages, system_prompt, max_tokens, temperature, tools,
+                            ):
+                                if first_chunk:
+                                    first_chunk = False
+                                    ttft_ms = (time.perf_counter() - start) * 1000
+                                    if req is not None:
+                                        req.set_attribute("ttft_ms", round(ttft_ms, 1))
+                                        req.record_event("first_token", {"ttft_ms": round(ttft_ms, 1)})
+                                    tracer.add_metric("llm.ttft_ms", ttft_ms)
+                                    metrics.observe("llm.ttft_ms", ttft_ms)
+                                chars += len(chunk)
+                                yield chunk
+                            elapsed_ms = (time.perf_counter() - start) * 1000
+                            tokens = max(1, chars // 4)
+                            tokens_per_second = (tokens / (elapsed_ms / 1000.0)) if elapsed_ms > 0 else 0.0
+                            if req is not None:
+                                req.set_attribute("chars", chars)
+                                req.set_attribute("tokens_estimated", tokens)
+                                req.set_attribute("generation_ms", round(elapsed_ms, 1))
+                                req.set_attribute("tokens_per_second", round(tokens_per_second, 1))
+                            tracer.add_metric("llm.tokens_generated", tokens)
+                        self._last_provider = provider_name
+                        self._last_model = provider.model
+                        self._invalidate_chain()
+                        metrics.counter(f"provider.ok.{provider_name}", 1)
+                        if span is not None:
+                            span.set_attribute("provider", provider_name)
+                            span.set_attribute("model", provider.model)
+                        return  # Stream completed successfully
+                    except Exception as e:
+                        # A rate-limit before any chunk is safe to retry with
+                        # backoff; mid-stream failures cannot be replayed.
+                        if self._is_rate_limit(e) and first_chunk and retries < _RATE_RETRIES:
+                            retries += 1
+                            delay = self._rate_limit_delay(e)
+                            logger.warning(
+                                "Provider %s stream rate-limited — retry %d/%d in %.0fs",
+                                provider_name, retries, _RATE_RETRIES, delay,
+                            )
+                            await asyncio.sleep(delay)
+                            self._invalidate_chain()
+                            continue
+                        last_error = e
+                        metrics.counter(f"provider.fail.{provider_name}", 1)
+                        self._invalidate_chain()
+                        if span is not None:
+                            span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
+                        logger.warning("Provider %s stream failed: %s", provider_name, e)
+                        break
             if span is not None:
                 span.set_attribute("last_error", str(last_error)[:200])
 
@@ -344,69 +414,82 @@ class ProviderRouter:
         with tracer.span("router.stream_typed") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                try:
-                    if not getattr(provider, "captures_stream_tool_calls", False):
-                        response = await provider.complete(
-                            messages, system_prompt, max_tokens, temperature, tools_param,
-                        )
-                        if name_map:
-                            restore_tool_names(response.tool_calls, name_map)
-                        self._last_provider = provider_name
-                        self._last_model = provider.model
-                        self._last_stream_tool_calls = response.tool_calls
-                        yield response.text, response.tool_calls
+                retries = 0
+                first_chunk = True
+                while True:
+                    try:
+                        if not getattr(provider, "captures_stream_tool_calls", False):
+                            response = await provider.complete(
+                                messages, system_prompt, max_tokens, temperature, tools_param,
+                            )
+                            if name_map:
+                                restore_tool_names(response.tool_calls, name_map)
+                            self._last_provider = provider_name
+                            self._last_model = provider.model
+                            self._last_stream_tool_calls = response.tool_calls
+                            yield response.text, response.tool_calls
+                            if span is not None:
+                                span.set_attribute("provider", provider_name)
+                                span.set_attribute("model", provider.model)
+                            return
+
+                        with tracer.span("llm.request", {"provider": provider_name, "model": provider.model}) as req:
+                            start = time.perf_counter()
+                            chars = 0
+                            first_chunk = True
+                            provider._init_stream_tool_calls()
+                            async for chunk in provider.complete_stream(
+                                messages, system_prompt, max_tokens, temperature, tools_param,
+                            ):
+                                if first_chunk:
+                                    first_chunk = False
+                                    ttft_ms = (time.perf_counter() - start) * 1000
+                                    if req is not None:
+                                        req.set_attribute("ttft_ms", round(ttft_ms, 1))
+                                        req.record_event("first_token", {"ttft_ms": round(ttft_ms, 1)})
+                                    tracer.add_metric("llm.ttft_ms", ttft_ms)
+                                    metrics.observe("llm.ttft_ms", ttft_ms)
+                                if chunk:
+                                    chars += len(chunk)
+                                    yield chunk, None
+                            calls = provider._stream_tool_call_results()
+                            if name_map:
+                                restore_tool_names(calls, name_map)
+                            self._last_provider = provider_name
+                            self._last_model = provider.model
+                            self._last_stream_tool_calls = calls
+                            yield None, calls
+                            elapsed_ms = (time.perf_counter() - start) * 1000
+                            tokens = max(1, chars // 4)
+                            if req is not None:
+                                req.set_attribute("chars", chars)
+                                req.set_attribute("tokens_estimated", tokens)
+                                req.set_attribute("generation_ms", round(elapsed_ms, 1))
+                            tracer.add_metric("llm.tokens_generated", tokens)
+                        self._invalidate_chain()
+                        metrics.counter(f"provider.ok.{provider_name}", 1)
                         if span is not None:
                             span.set_attribute("provider", provider_name)
                             span.set_attribute("model", provider.model)
                         return
-
-                    with tracer.span("llm.request", {"provider": provider_name, "model": provider.model}) as req:
-                        start = time.perf_counter()
-                        chars = 0
-                        first_chunk = True
-                        provider._init_stream_tool_calls()
-                        async for chunk in provider.complete_stream(
-                            messages, system_prompt, max_tokens, temperature, tools_param,
-                        ):
-                            if first_chunk:
-                                first_chunk = False
-                                ttft_ms = (time.perf_counter() - start) * 1000
-                                if req is not None:
-                                    req.set_attribute("ttft_ms", round(ttft_ms, 1))
-                                    req.record_event("first_token", {"ttft_ms": round(ttft_ms, 1)})
-                                tracer.add_metric("llm.ttft_ms", ttft_ms)
-                                metrics.observe("llm.ttft_ms", ttft_ms)
-                            if chunk:
-                                chars += len(chunk)
-                                yield chunk, None
-                        calls = provider._stream_tool_call_results()
-                        if name_map:
-                            restore_tool_names(calls, name_map)
-                        self._last_provider = provider_name
-                        self._last_model = provider.model
-                        self._last_stream_tool_calls = calls
-                        yield None, calls
-                        elapsed_ms = (time.perf_counter() - start) * 1000
-                        tokens = max(1, chars // 4)
-                        if req is not None:
-                            req.set_attribute("chars", chars)
-                            req.set_attribute("tokens_estimated", tokens)
-                            req.set_attribute("generation_ms", round(elapsed_ms, 1))
-                        tracer.add_metric("llm.tokens_generated", tokens)
-                    self._invalidate_chain()
-                    metrics.counter(f"provider.ok.{provider_name}", 1)
-                    if span is not None:
-                        span.set_attribute("provider", provider_name)
-                        span.set_attribute("model", provider.model)
-                    return
-                except Exception as e:
-                    last_error = e
-                    metrics.counter(f"provider.fail.{provider_name}", 1)
-                    self._invalidate_chain()
-                    if span is not None:
-                        span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
-                    logger.warning("Provider %s stream_typed failed: %s", provider_name, e)
-                    continue
+                    except Exception as e:
+                        if self._is_rate_limit(e) and first_chunk and retries < _RATE_RETRIES:
+                            retries += 1
+                            delay = self._rate_limit_delay(e)
+                            logger.warning(
+                                "Provider %s stream_typed rate-limited — retry %d/%d in %.0fs",
+                                provider_name, retries, _RATE_RETRIES, delay,
+                            )
+                            await asyncio.sleep(delay)
+                            self._invalidate_chain()
+                            continue
+                        last_error = e
+                        metrics.counter(f"provider.fail.{provider_name}", 1)
+                        self._invalidate_chain()
+                        if span is not None:
+                            span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
+                        logger.warning("Provider %s stream_typed failed: %s", provider_name, e)
+                        break
             if span is not None:
                 span.set_attribute("last_error", str(last_error)[:200])
 
