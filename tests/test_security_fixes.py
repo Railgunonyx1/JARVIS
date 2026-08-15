@@ -120,6 +120,12 @@ def test_shell_audit_tolerates_none_reason_and_stderr(monkeypatch):
     assert len(recorded) == 1
     assert recorded[0].error is None
 
+    _audit_shell_execution(
+        "whoami", [],
+        ExecResult(success=False, blocked=False, stderr="boom"),
+    )
+    assert recorded[-1].error == "boom"
+
 
 # ── Phase 5: decision-based confirmation (once/run/deny, stored in audit) ───
 
@@ -184,12 +190,6 @@ def test_confirmation_decision_recorded_in_audit(monkeypatch):
     allowed, _ = engine.check_permission("action.shell.run")
     assert allowed
     assert any(e.decision == "run" and e.confirmed for e in recorded)
-
-    _audit_shell_execution(
-        "whoami", [],
-        ExecResult(success=False, blocked=False, stderr="boom"),
-    )
-    assert recorded[-1].error == "boom"
 
 
 def test_shell_audit_none_is_success_no_error(monkeypatch):

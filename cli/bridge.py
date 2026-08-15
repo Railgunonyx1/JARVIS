@@ -24,9 +24,11 @@ from core import events
 from .models import (
     AgentEvent,
     AppState,
+    AuditSection,
     ConfirmationRequest,
     EventStatus,
     EventType,
+    MemoryHit,
     Message,
     Mode,
     Plan,
