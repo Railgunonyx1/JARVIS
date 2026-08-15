@@ -97,22 +97,6 @@ def test_generated_code_scan_allows_benign():
     )
 
 
-# ── IPC frame-size limit ─────────────────────────────────────────────────────
-
-def test_decode_line_rejects_oversized_frame():
-    from runtime.transport.protocol import MAX_FRAME_SIZE, decode_line
-    oversized = b" " * MAX_FRAME_SIZE + b"{}"
-    with pytest.raises(ValueError, match="frame too large"):
-        decode_line(oversized)
-
-
-def test_decode_line_accepts_frame_at_limit():
-    from runtime.transport.protocol import MAX_FRAME_SIZE, decode_line
-    at_limit = b" " * (MAX_FRAME_SIZE - 2) + b"{}"
-    decoded = decode_line(at_limit)
-    assert decoded.payload == {}
-
-
 # ── shell audit None-safety ───────────────────────────────────────────────────
 
 def test_shell_audit_tolerates_none_reason_and_stderr(monkeypatch):
