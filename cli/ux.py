@@ -1,10 +1,19 @@
-"""Reactive task display for the JARVIS MK-X terminal (Phase 4).
+"""Reactive task display for the JARVIS MK-X terminal (Phase 4 + hybrid UI).
 
 A single Rich ``Live`` region that re-renders ONLY when the agent emits an
 event through the TaskObserver callback (task.started / step.started /
-step.completed / task.finished / permission.observed). There is no polling
-and no fixed refresh loop — ``auto_refresh=False`` guarantees the terminal
-is untouched unless something actually changed.
+step.completed / task.finished / permission.observed) or a streaming token
+arrives (``stream_delta``). There is no polling and no fixed refresh loop —
+``auto_refresh=False`` guarantees the terminal is untouched unless something
+actually changed, and refreshes are throttled to ~12 FPS so fast streams stay
+smooth without hammering the console.
+
+Two render modes:
+    - full-screen task view (``screen=True`` + ``renderable_provider``): the
+      interactive REPL swaps to the alternate screen during a run and renders
+      the live conversation + activity from the renderer; when the run ends the
+      Live collapses back into the scrolled log (hybrid conversation-first UI).
+    - compact panel (default): the Phase 4 inline summary used by one-shot runs.
 
 Render contents (compact, keyboard-first):
     - task id + goal
@@ -17,15 +26,19 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from typing import Any
 
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
 from core import events
 from core.agent.observer import TaskObserver
+
+# ~12 FPS ceiling: delta bursts only repaint every 80ms at most.
+_MIN_REFRESH_S = 1.0 / 12.0
 
 _STATUS_MARK = {"ok": "+", "error": "!", "denied": "x", "running": ">"}
 
@@ -48,15 +61,20 @@ class LiveTaskDisplay:
 
     def __init__(self, console: Console | None = None,
                  status_getter: Callable[[], dict[str, Any]] | None = None,
-                 enable: bool = True, transient: bool = True) -> None:
+                 enable: bool = True, transient: bool = True,
+                 renderable_provider: Callable[[], RenderableType] | None = None,
+                 screen: bool = False) -> None:
         self.console = console or Console()
         self._status_getter = status_getter
         self._enable = enable
         self._transient = transient
+        self._renderable_provider = renderable_provider
+        self._screen = screen
         self._observer: TaskObserver | None = None
         self._live: Live | None = None
         self._started = 0.0
         self._goal = ""
+        self._last_refresh = 0.0
         self.renders = 0
         self.render_ms = 0.0
         self.last_render_ms = 0.0
@@ -72,14 +90,16 @@ class LiveTaskDisplay:
         if not self._enable:
             return
         self._started = time.time()
+        self._last_refresh = 0.0
         self._live = Live(
-            Group(Text("starting…")),
+            self._content(),
             console=self.console,
             auto_refresh=False,
             transient=self._transient,
+            screen=self._screen,
         )
         self._live.start()
-        self._refresh()
+        self._refresh(force=True)
 
     def stop(self) -> None:
         if self._live is not None:
@@ -87,6 +107,22 @@ class LiveTaskDisplay:
                 self._live.stop()
             finally:
                 self._live = None
+
+    @contextmanager
+    def pause(self):
+        """Suspend the alternate screen while blocking on user input (e.g. a
+        security confirmation), then re-enter it and repaint on exit."""
+        live = self._live
+        if live is not None:
+            live.stop()
+            self._live = None
+        try:
+            yield
+        finally:
+            if self._enable and live is not None:
+                self._live = live
+                self._live.start()
+                self._refresh(force=True)
 
     def _on_event(self, name: str, payload: dict[str, Any]) -> None:
         if not self._enable or self._live is None:
@@ -97,15 +133,31 @@ class LiveTaskDisplay:
             self._goal = f"{payload.get('goal', self._goal)} (queued — previous task running)"
         self._refresh()
 
-    def _refresh(self) -> None:
+    def stream_delta(self, delta: str) -> None:
+        """A streaming token arrived — repaint the task view (throttled)."""
+        self._refresh()
+
+    def _refresh(self, force: bool = False) -> None:
         if self._live is None:
             return
-        t0 = time.perf_counter()
-        self._live.update(self._render())
+        now = time.perf_counter()
+        if not force and (now - self._last_refresh) < _MIN_REFRESH_S:
+            return
+        self._last_refresh = now
+        t0 = now
+        self._live.update(self._content())
         ms = (time.perf_counter() - t0) * 1000.0
         self.renders += 1
         self.render_ms += ms
         self.last_render_ms = ms
+
+    def _content(self) -> RenderableType:
+        if self._renderable_provider is not None:
+            try:
+                return self._renderable_provider()
+            except Exception:
+                return Group(Text("(render error)", style="dim"))
+        return self._render()
 
     def _render(self) -> Group:
         try:

@@ -23,6 +23,15 @@ from cli.theme import PROMPT_TEXT
 
 KeySource = Callable[[], str]
 
+
+class PaletteRequest(Exception):
+    """Raised when Ctrl+K opens the command palette mid-prompt.
+
+    The REPL catches this, renders the palette, and re-prompts — the typed
+    draft is discarded (matching a true Ctrl+K palette, not a hotkey-inline
+    insert).
+    """
+
 # ANSI control codes (stdlib-only: the fast CLI path must not import rich).
 _ANSI_RESET = "\x1b[0m"
 _ANSI_BOLD_CYAN = "\x1b[1;36m"
@@ -31,6 +40,7 @@ _ANSI_BOLD_CYAN = "\x1b[1;36m"
 _ENTER = "\r"
 _CTRL_C = "\x03"
 _CTRL_Z = "\x1a"
+_CTRL_K = "\x0b"
 _BACKSPACE = "\x08"
 _DELETE = "\x7f"
 _TAB = "\t"
@@ -189,6 +199,9 @@ class InputReader:
             if ch == _CTRL_Z:
                 self._write("\n")
                 raise EOFError
+            if ch == _CTRL_K:
+                self._write("\n")
+                raise PaletteRequest
             if len(ch) == 2:  # extended key (arrow / Home / End / Delete)
                 self._extended_key(ch[1], buf)
             elif ch == _BACKSPACE:

@@ -11,10 +11,13 @@ class only turns ``AppState`` snapshots into Rich renderables.
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Any, List, Optional, Sequence
 
+from rich import box
 from rich.console import Console, Group, RenderableType
+from rich.layout import Layout
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -82,6 +85,7 @@ class Renderer:
         self.layout_mgr = LayoutManager(self.console)
         self.symbols = get_symbols(unicode)
         self.state = AppState()
+        self._live_display = None
 
     # ------------------------------------------------------------------
     # State mutators (called by AgentLoop / event bus only)
@@ -411,18 +415,98 @@ class Renderer:
         Decision is handed back to the security/policy layer.
         """
         self.set_confirmation(req)
-        self.console.print(self.render_confirmation())
-        try:
-            answer = input().strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            return "deny"
-        finally:
-            self.set_confirmation(None)
+        # During a full-screen task run the alternate screen must be suspended
+        # while we block on input, then resumed (hybrid UI).
+        pause = getattr(self._live_display, "pause", None)
+        cm = pause() if pause is not None else nullcontext()
+        with cm:
+            self.console.print(self.render_confirmation())
+            try:
+                answer = input().strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return "deny"
+            finally:
+                self.set_confirmation(None)
         if answer in ("y", "yes"):
             return "once"
         if answer in ("r", "run"):
             return "run"
         return "deny"
+
+    def attach_live(self, display) -> None:
+        """Give the task display a hook to suspend/resume around blocking I/O."""
+        self._live_display = display
+
+    def detach_live(self) -> None:
+        self._live_display = None
+
+    # ------------------------------------------------------------------
+    # Full-screen task view (hybrid UI) + command palette
+    # ------------------------------------------------------------------
+
+    def render_task_screen(self) -> RenderableType:
+        """The full-screen view shown while an agent run is live: header status
+        bar, conversation (streamed live), and — on wide terminals — the
+        activity stream beside it. Reads only ``AppState``; no decisions."""
+        header = Panel(
+            self.render_status(),
+            border_style=COLORS.border,
+            padding=(0, 1),
+            height=3,
+        )
+        conversation = Panel(
+            self.render_conversation(),
+            title="JARVIS",
+            border_style=COLORS.border,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+        if self.console.size.width >= 120:
+            layout = Layout()
+            layout.split_row(
+                Layout(conversation, ratio=7),
+                Layout(self.render_activity_panel(), ratio=3),
+            )
+            body = layout
+        else:
+            body = conversation
+        elements: List[RenderableType] = [header, Text(""), body]
+        if self.state.pending_confirmation is not None:
+            elements += [Text(""), self.render_confirmation()]
+        return Group(*elements)
+
+    def render_activity_panel(self) -> RenderableType:
+        return Panel(
+            self.render_activity(),
+            title="ACTIVITY",
+            border_style=COLORS.border,
+            box=box.ROUNDED,
+            padding=(0, 1),
+        )
+
+    def render_palette(self, entries: Optional[Sequence[tuple[str, str]]] = None) -> RenderableType:
+        """Command palette (Ctrl+K / /palette). ``entries`` are ``(key, help)``
+        pairs supplied by the command registry — never invented here."""
+        if not entries:
+            entries = [
+                ("chat", "Conversation (default)"),
+                ("plan", "Plan focus"),
+                ("code", "Code workspace"),
+                ("activity", "Live event stream"),
+                ("memory", "Memory workspace"),
+                ("audit", "Audit / health"),
+            ]
+        table = Table(show_header=False, box=None)
+        table.add_column(style="bold cyan", width=18)
+        table.add_column(style="dim")
+        for key, desc in entries:
+            table.add_row(key, desc)
+        return Panel(
+            table,
+            title="JARVIS COMMAND PALETTE",
+            border_style=COLORS.border,
+            box=box.ROUNDED,
+        )
 
     # ------------------------------------------------------------------
     # Layout assembly

@@ -34,6 +34,7 @@ if /i "%~1"=="plan" goto plan
 if /i "%~1"=="controlled" goto controlled
 if /i "%~1"=="smart" goto smart
 if /i "%~1"=="oneshot" goto oneshot
+if /i "%~1"=="demo" goto demo
 if /i "%~1"=="perf" goto perf
 if /i "%~1"=="tests" goto tests
 if /i "%~1"=="help" goto help
@@ -54,6 +55,7 @@ echo   [5]  One-shot    Type a goal, get one answer
 echo   [6]  Perf        Show persisted performance data
 echo   [7]  Tests       Run the test suite
 echo   [8]  Install     Install or update dependencies
+echo   [9]  Demo UI     Run the standalone UI prototype (fake events)
 echo   [Q]  Quit        Exit JARVIS
 echo.
 echo   Shortcuts: JARVIS.bat chat ^| plan ^| controlled ^| smart ^| oneshot
@@ -70,6 +72,7 @@ if /i "%choice%"=="5" goto oneshot
 if /i "%choice%"=="6" goto perf
 if /i "%choice%"=="7" goto tests
 if /i "%choice%"=="8" goto install
+if /i "%choice%"=="9" goto demo
 if /i "%choice%"=="q" goto quit
 
 echo.
@@ -107,6 +110,11 @@ exit /b
 pause
 exit /b
 
+:demo
+"%PY%" -m cli.ui_demo
+pause
+exit /b
+
 :tests
 "%PY%" -m pytest tests -q
 pause
@@ -120,7 +128,7 @@ exit /b
 
 :help
 echo.
-echo   JARVIS.bat [chat^|plan^|controlled^|smart^|oneshot^|perf^|tests^|help]
+echo   JARVIS.bat [chat^|plan^|controlled^|smart^|oneshot^|demo^|perf^|tests^|help]
 echo.
 echo     (no args)   show this menu
 echo     chat        interactive terminal chat (default mode: agent)
@@ -128,6 +136,7 @@ echo     plan        read-only plan mode
 echo     controlled  confirm every consequential action
 echo     smart       dynamic autonomy by risk
 echo     oneshot     single goal, single answer
+echo     demo        standalone UI prototype (fake events)
 echo     perf        show persisted performance data
 echo     tests       run the test suite
 echo.

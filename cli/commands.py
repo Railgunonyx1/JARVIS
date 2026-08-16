@@ -166,20 +166,23 @@ class CommandRegistry:
             r.print(r.render_code_buffer())
 
         def palette_cmd(args: List[str]) -> None:
-            """Conceptual Ctrl+K surface."""
-            r.print("COMMAND PALETTE")
-            r.print("  chat       Conversation (default)")
-            r.print("  plan       Plan panel focus")
-            r.print("  code       Code workspace")
-            r.print("  activity   Live event stream")
-            r.print("  memory     Memory workspace")
-            r.print("  audit      Audit / health")
-            r.print("  mode       Execution policy")
-            r.print("  status     Current state")
-            r.print("  clear      Clear conversation")
-            r.print("  exit       Quit")
-            r.print("")
-            r.print("Tip: /workspace <name>  or  /layout <name>")
+            """Conceptual Ctrl+K surface — the real registered commands."""
+            workspaces = [
+                ("chat", "Conversation (default)"),
+                ("plan", "Plan focus"),
+                ("code", "Code workspace"),
+                ("activity", "Live event stream"),
+                ("memory", "Memory workspace"),
+                ("audit", "Audit / health"),
+            ]
+            seen = set()
+            entries: List[tuple[str, str]] = list(workspaces)
+            for name, cmd in sorted(self._commands.items()):
+                if cmd.name in seen:
+                    continue
+                seen.add(cmd.name)
+                entries.append((f"/{cmd.name}", cmd.help))
+            r.print(r.render_palette(entries))
 
         def exit_cmd(args: List[str]) -> None:
             raise SystemExit(0)

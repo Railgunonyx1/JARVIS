@@ -210,14 +210,17 @@ def _capture_notification(name: str, payload: dict, notifications: list) -> None
 
 async def _run_once(goal: str, loop, json_output: bool = False,
                     collapsed: bool = False, notifications: list | None = None,
-                    perf: bool = False, bridge=None) -> None:
+                    perf: bool = False, bridge=None, screen: bool = False) -> None:
     from cli.ux import LiveTaskDisplay
 
     loop._last_goal = goal
     notifications = notifications if notifications is not None else []
+    renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     display = LiveTaskDisplay(
         status_getter=(lambda: _status_getter(loop)),
         enable=not json_output,
+        renderable_provider=(renderer.render_task_screen if renderer is not None else None),
+        screen=screen,
     )
 
     def _on_event(name: str, payload: dict) -> None:
@@ -231,6 +234,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         bridge.start_run(goal)
     if not json_output:
         display.attach(loop.observer)
+        if renderer is not None:
+            renderer.attach_live(display)
     loop.observer.on_event = _on_event
     if not json_output:
         display.start()
@@ -238,6 +243,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         if bridge is not None:
             async def _on_chunk(delta: str) -> None:
                 bridge.stream_delta(delta)
+                if not json_output:
+                    display.stream_delta(delta)
             result = await loop.run(goal, on_chunk=_on_chunk)
         else:
             result = await loop.run(goal)
@@ -247,6 +254,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         raise
     finally:
         display.stop()
+        if renderer is not None:
+            renderer.detach_live()
     loop._last_result = result
     if bridge is not None:
         bridge.finish_run(result)
@@ -421,7 +430,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     from cli.commands import CommandRegistry
     from cli.details import render_expanded
     from cli.history import HistoryStore
-    from cli.input import InputReader
+    from cli.input import InputReader, PaletteRequest
     from cli.renderer import Renderer
     from cli.startup_profile import get_profiler
 
@@ -469,10 +478,21 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     reader = InputReader()
     reader.set_history(history.to_list())
 
+    def _read_command(prompt: str = "JARVIS> ") -> str:
+        """Read a line; Ctrl+K opens the command palette and re-prompts."""
+        while True:
+            try:
+                return reader.read_line(prompt)
+            except PaletteRequest:
+                try:
+                    commands.dispatch("/palette")
+                except SystemExit:
+                    raise
+
     while True:
         if loop is None:
             try:
-                line = reader.read_line("JARVIS> ")
+                line = _read_command()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -499,7 +519,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 _print_startup_report()
         else:
             try:
-                line = reader.read_line("JARVIS> ").strip()
+                line = _read_command().strip()
             except (EOFError, KeyboardInterrupt):
                 print()
                 break
@@ -543,7 +563,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
                 try:
-                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge))
+                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=True))
                 except Exception as exc:
                     typer.secho(f"error: {exc}", err=True, fg="red")
         elif line.startswith("/"):
@@ -552,12 +572,11 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             commands.dispatch(line)
         else:
             try:
-                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge))
+                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=True))
             except KeyboardInterrupt:
                 typer.secho("(interrupted)", dim=True)
             except Exception as exc:
                 typer.secho(f"error: {exc}", err=True, fg="red")
-            console.print(render_cockpit(loop))
 
     if loop is not None:
         loop.logger.flush()
