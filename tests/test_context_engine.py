@@ -50,7 +50,7 @@ def test_context_budget_sections_and_totals():
     assert budget.section("memory") == 200
     assert budget.section("nope") == 0
     assert budget.to_dict()["system"] == 100
-    assert DEFAULT_BUDGET.total == 10_000 + 15_000 + 30_000 + 30_000 + 10_000
+    assert DEFAULT_BUDGET.total == 10_000 + 15_000 + 30_000 + 15_000 + 10_000
 
 
 def test_section_usage_and_report():

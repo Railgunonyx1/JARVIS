@@ -79,7 +79,11 @@ class OpenCodeZenProvider(LLMProvider):
             self.record_success(latency)
             return result
         except Exception as e:
-            self.record_failure(str(e))
+            error_str = str(e)
+            if "rate" in error_str.lower() or "429" in error_str.lower() or "quota" in error_str.lower() or "resource_exhausted" in error_str.lower():
+                self.record_rate_limit()
+            else:
+                self.record_failure(error_str)
             raise
 
     async def complete_stream(
@@ -120,5 +124,9 @@ class OpenCodeZenProvider(LLMProvider):
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as e:
-            self.record_failure(str(e))
+            error_str = str(e)
+            if "rate" in error_str.lower() or "429" in error_str.lower() or "quota" in error_str.lower() or "resource_exhausted" in error_str.lower():
+                self.record_rate_limit()
+            else:
+                self.record_failure(error_str)
             raise

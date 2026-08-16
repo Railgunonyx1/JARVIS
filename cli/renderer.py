@@ -21,6 +21,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from core.output_compressor import compress_output
 from .layout import LayoutManager
 from .models import (
     AgentEvent,
@@ -251,7 +252,14 @@ class Renderer:
         if e.duration_s is not None:
             parts.append(Text(f"  {e.duration_s:.1f}s", style="jarvis.muted"))
         if e.full_output and e.expanded:
-            out = e.full_output
+            # Compress output before truncation for token efficiency
+            compressed = compress_output(
+                e.full_output,
+                format_type="auto",
+                method="gzip",
+                max_size_reduction=0.3,
+            )
+            out = compressed if len(compressed) < len(e.full_output) else e.full_output
             if len(out) > 4000:
                 out = out[:4000] + "\n… (truncated)"
             parts.append(Text("  ── full output ──", style="jarvis.muted"))

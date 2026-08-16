@@ -9,7 +9,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-logger = logging.getLogger("jarvis.context")
+# Token-efficient prompt compression
+from core.prompt_compressor import compress_prompt, compress_tool_output, _split_into_sections
 
 
 @dataclass
@@ -74,16 +75,24 @@ class ContextEngine:
         old_turns = self.history[:-self.MAX_SUMMARY_TURNS]
         recent_turns = self.history[-self.MAX_SUMMARY_TURNS:]
 
-        # Build summary from old turns
+        # Build prompt from old turns and compress
+        old_prompt = "\n".join([f"{'User' if f.role == 'user' else 'JARVIS'}: {f.content}"
+                                for f in old_turns])
+        
+        # Use segment-aware prompt compression
+        compressed_prompt = compress_prompt(
+            old_prompt,
+            system_retain=0.7,
+            fewshot_retain=0.5,
+            rag_retain=0.3,
+            code_retain=0.5,
+        )
+        
+        # Build summary from compressed prompt
         summary_parts = []
         if self._conversation_summary:
             summary_parts.append(self._conversation_summary)
-
-        for f in old_turns:
-            role_label = "User" if f.role == "user" else "JARVIS"
-            # Truncate long messages in summary
-            content = f.content[:100] + "..." if len(f.content) > 100 else f.content
-            summary_parts.append(f"{role_label}: {content}")
+        summary_parts.append(f"[Compressed context]: {compressed_prompt}")
 
         self._conversation_summary = " | ".join(summary_parts)
 

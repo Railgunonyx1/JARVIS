@@ -55,7 +55,7 @@ class ContextBudget:
     system: int = 10_000      # system prompt + tool schemas
     memory: int = 15_000      # injected project/user memory
     files: int = 30_000       # file excerpts and search results
-    messages: int = 30_000    # conversation + tool results
+    messages: int = 15_000    # conversation + tool results
     response: int = 10_000    # reserved for the model's output
 
     @property

@@ -50,6 +50,7 @@ class TuiDataSource:
         self._provider_rows: list[tuple[str, str, str, str, str]] = list(MOCK_PROVIDERS)
         self._mock_providers = True
         self._mock_tasks = True
+        self._was_ever_real = False
         self._skills: list[dict] = []
         self._skill_rows: list[tuple[str, str, str]] = self._build_skill_rows([])
         self._mock_skills = True
@@ -93,6 +94,7 @@ class TuiDataSource:
         self._client = client
         self._connected = True
         self._last_error = ""
+        self._was_ever_real = True
         await self.refresh()
 
     def _start_entry(self) -> dict | None:
@@ -126,9 +128,10 @@ class TuiDataSource:
         self._connected = False
         self._client = None
         self._last_error = reason
-        # Only clear connection-specific data; preserve mock/real state
-        # so transient network blips don't cause a full UI state reset.
-        self._status = {}
+        # Preserve mock/real state across transient network blips.
+        # Only reset status if we've never had a successful daemon connection.
+        if not self._was_ever_real:
+            self._status = {}
 
     async def refresh(self) -> None:
         """Pull status + provider health + skill registry from the daemon.
@@ -182,8 +185,8 @@ class TuiDataSource:
 
     # ── commands ────────────────────────────────────────────────────────
 
-    async def run_goal(self, goal: str,
-                       on_event: EventCallback | None = None) -> dict:
+async def run_goal(self, goal: str,
+                   on_event: EventCallback | None = None) -> dict:
         """Submit a goal; stream observer events; return the result dict."""
         if self._client is None:
             return {"success": False,
@@ -191,12 +194,8 @@ class TuiDataSource:
         try:
             return await self._client.run(goal, on_event=on_event)
         except Exception as exc:
-            # Transient error — don't kill connection state; log and return failure
-            # Only mark disconnected if the error message indicates a broken connection
-            error_str = str(exc).lower()
-            if "connection" in error_str or "disconnect" in error_str or "broken" in error_str:
-                self._connected = False
-                self._last_error = str(exc)
+            # Let daemon.client.run() handle bounded retries (max 3, exponential backoff).
+            # Only mark disconnected if the outer caller needs to know.
             return {"success": False, "error": str(exc)}
 
     async def set_mode(self, mode: str) -> dict:

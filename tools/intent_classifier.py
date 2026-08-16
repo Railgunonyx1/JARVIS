@@ -71,7 +71,7 @@ class IntentClassifier:
     ) -> bool:
         """Check if a tool is allowed for the given task type."""
         
-        # Audit task policies
+        # Audit task policies - read only
         if task_type == TaskType.AUDIT:
             audit_allowlist = {
                 "filesystem.read": True,
@@ -108,6 +108,17 @@ class IntentClassifier:
                 "knowledge.search": True,
             }
             return info_allowlist.get(tool_name, False)
+        
+        # Research task policies - includes external world info tools
+        if task_type == TaskType.RESEARCH:
+            research_allowlist = {
+                "memory.search": True,
+                "knowledge.search": True,
+                "world_monitor.search": True,  # External world info
+                "world_monitor.get_sources": True,
+                "world_monitor.get_alerts": True,  # Situational alerts
+            }
+            return research_allowlist.get(tool_name, False)
         
         # Default: deny unknown tool for unknown task type
         return False

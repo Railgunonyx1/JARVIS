@@ -497,9 +497,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             console.print(Text("  ✓ kernel ready", style="dim"))
             if profile_startup:
                 _print_startup_report()
-            console.print(render_status_bar(loop))
         else:
-            console.print(render_status_bar(loop))
             try:
                 line = reader.read_line("JARVIS> ").strip()
             except (EOFError, KeyboardInterrupt):

@@ -12,6 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from tools.intent_classifier import TaskType
+
 from core.mode_manager import ExecutionMode, get_mode_manager
 
 logger = logging.getLogger("jarvis.agents")
@@ -78,6 +80,7 @@ class AgentState:
     last_activity: datetime = field(default_factory=datetime.now)
     error_count: int = 0
     last_error: str | None = None
+    task_type: TaskType = TaskType.CONVERSATION
 
 
 class BaseAgent:
@@ -137,6 +140,11 @@ class BaseAgent:
             self.state.current_task = task
             task.started_at = datetime.now()
             task.status = "running"
+            # Set task type from intent classifier
+            from tools.intent_classifier import IntentClassifier
+            self.state.task_type = IntentClassifier.classify(
+                task.parameters.get("user_input", "")
+            )
 
         start_time = time.time()
         try:

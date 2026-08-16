@@ -213,6 +213,52 @@
 
 ---
 
+## Batch 5 — Token Optimization & Prompt Compression (via GitHub API, 2026-08-13)
+
+### Prompt Compression (reduce input tokens before sending to LLM)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| civitas-io/promptshrink | "Prompt compression for LLM APIs — 30-50% token reduction, one-line integration" | 0 | Python | MIT | MEDIUM — segment-aware compression (system/few-shot/RAG/code); quality gate checks embedding similarity; early 2026, spec complete |
+| sarkar-dipankar/llm-prompt-compression | "Structured survey of prompt compression techniques" (links to LLMLingua, GIST tokens, 500xCompressor) | 1 | Python | MIT | R&D — comprehensive survey; compare LLMLingua-2 vs token-level vs learned methods |
+| LLMLingua/llmlingua | "Compressing prompts for accelerated inference of LLMs" (original, arXiv:2310.05736) | verified | Python | Apache-2.0 | R&D — token-level importance scoring with small LLM; 2x-20x compression, 90%+ performance retention |
+| atjsh/llmlingua-2-js | "JavaScript/TypeScript implementation of LLMLingua-2 (Experimental)" | 30 | TypeScript | MIT | R&D — port of LLMLingua-2 for web/node environments |
+| Paritok-official/paritok-4b-v1 | "Non-destructive compression gateway for AI coding agents" (25% turn 1 → 85% saturated sessions) | verified | ? | ? | MEDIUM — fits ~3x more turns in same context window; drop-in for Claude Code, Cursor |
+| Tura-AI/tura | "Build agent that uses 80% less token and delivers better results" | ? | Python | ? | R&D — claims 80% token reduction; early 2026 |
+| zdk/lowfat | "Slim your command output. strips noise, saves tokens." | ? | Go | ? | MEDIUM — CLI output sanitization; strips ANSI, filters noise |
+
+### Prompt Caching (reuse compressed prefix across calls)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| anthropic/anthropic-quickstart | "Prompt caching built-in" (Anthropic offers 50% cost reduction, 80% latency improvement for >1024-token prefixes) | verified | ? | ? | HIGH — if JARVIS uses Anthropic, enable caching natively |
+| openai/openai-py | "Batch API ~50% off for bulk async work (response within 24h)" | verified | Python | MIT | MEDIUM — for batched, non-time-sensitive agent runs |
+| civitas-io/presidium | "Organizational cost governance primitive... cross-agent deduplication, per-team cost attribution, budget enforcement" | 0 | Python | MIT | R&D — integrates with promptshrink; policy-driven spend caps |
+
+### CLI Proxies & Context Intelligence (reduce tokens at the edge)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| rtk-ai/rtk | "CLI proxy that reduces LLM token consumption by 60-90% on common dev commands. Single Rust binary, zero dependencies" | ? | Rust | MIT | HIGH — zero-dependency proxy; fits JARVIS terminal-first constraint; drop-in between agent and LLM API |
+| headroomlabs-ai/headroom | "Compress tool outputs, logs, files, and RAG chunks... 20% fewer tokens for coding agents, 60-95% fewer tokens for JSON, same answers" | ? | ? | Apache-2.0 | MEDIUM — library, proxy, MCP server; compresses before LLM sees it |
+| yvgude/lean-ctx | "Control what your AI can see. LeanCTX: context intelligence layer... 60-90% fewer tokens as the receipt. 76 MCP tools, 30+ agents, local-first." | ? | Rust | ? | MEDIUM — local-first context guard; decides what agent reads/remembers/touches |
+| jgravelle/jcodemunch-mcp | "Cut AI token costs 95%+ on code exploration. Leading MCP server for precise, symbol-level GitHub code retrieval via tree-sitter AST" | ? | ? | ? | MEDIUM — 313B+ tokens saved; works with Claude Code, Cursor & any MCP client |
+| edouard-claude/snip | "CLI proxy that reduces LLM token usage by 60-90%. Declarative YAML filters for Claude Code, Cursor, Copilot, Gemini. rtk alternative in Go" | ? | Go | ? | MEDIUM — Go-based rtk alternative; declarative filters |
+| anomalyco/opencode | "The open source coding agent" (196,983★, TS/MIT) | 196,983 | TypeScript | MIT | MEDIUM — already in research; heavy UI deps contradict JARVIS constraint; extract editor/tool patterns; may have token-reduction features |
+
+### Output Format & Structural Optimization
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| sriinnu/clipforge-PAKT | "Lossless-first prompt compression for JSON, YAML, CSV, and Markdown. Library, CLI, MCP server, desktop app, and browser extension." | 20 | TypeScript | ? | MEDIUM — lossless compression of structured output formats; preserves data integrity |
+| latet-gate/latent-gate | "VL-JEPA inspired pipeline — compress images/text locally via Ollama, send compact payloads to any LLM API. Cut token costs by ~80%." | 23 | Python | ? | MEDIUM — local compression before API call; ~80% token reduction claim |
+| kaderkck/hewn-forge | "HEWN 2.0 2026: AI Output Router for Precision Summaries & Polished Code" | 150 | HTML | MIT | R&D — output router for polished code summaries; may reduce post-token generation cost |
+| pleasesodisturb/awesome-llm-token-optimization | "A curated list of strategies, tools, papers, and resources for reducing LLM token costs and improving efficiency in production." | 37 | ? | ? | R&D — curated list; good starting point for deep dives |
+
+> Note: many of these repos are early-2026 or experimental; star counts and viability may change rapidly. JARVIS constraint: prefer zero-dependency Rust Go binaries (rtk, lowfat) or one-line Python integrations (promptshrink). Caching and structured output format compression (clipforge-PAKT) offer immediate wins with minimal code change.
+
+---
+
 ## Research Principle
 
 > The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.
