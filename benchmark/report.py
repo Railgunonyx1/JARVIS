@@ -38,10 +38,10 @@ def summarize(data: dict[str, Any]) -> dict[str, Any]:
         "context_build_ms": round(micro.get("context_build_ms", 0.0), 2),
         "memory_retrieve_ms": round(micro.get("memory_retrieve_ms", 0.0), 2),
         "provider_chain_ms": round(micro.get("provider_chain_ms", 0.0), 2),
-        "providers_available": micro.get("providers_available", 0),
+        "providers_available": int(micro.get("providers_available", 0)),
         "task_sec": task_sec,
-        "llm_calls": llm_calls,
-        "tool_calls": tool_calls,
+        "llm_calls": int(llm_calls),
+        "tool_calls": int(tool_calls),
         "context_tokens": int(context_tokens),
         "online": bool(online),
     }

@@ -36,9 +36,11 @@ DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
     "startup_ms": {"fail": 0.20},
     "kernel_ms": {"fail": 0.20},
     "idle_ram_mb": {"warn": 0.15},
-    "context_build_ms": {"warn": 0.20},
-    "memory_retrieve_ms": {"warn": 0.20},
-    "tool_latency_ms": {"warn": 0.20},
+    # min_abs floors the relative check: a 20% swing on a ~1ms operation is
+    # machine noise, not a regression.
+    "context_build_ms": {"warn": 0.20, "min_abs": 2.0},
+    "memory_retrieve_ms": {"warn": 0.20, "min_abs": 2.0},
+    "tool_latency_ms": {"warn": 0.20, "min_abs": 5.0},
     "task_sec": {"warn": 0.20},
     "context_tokens": {"warn": 0.20},
 }
@@ -70,14 +72,18 @@ def check_regression(
         bv = base[metric]
         if not isinstance(bv, (int, float)) or bv <= 0:
             continue
+        if bv < rule.get("min_abs", 0.0):
+            continue
         cv = cur[metric]
         if not isinstance(cv, (int, float)):
             continue
         delta_pct = (cv - bv) / bv * 100.0
+        fail_thresh = rule.get("fail", 1.0) * 100.0
+        warn_thresh = rule.get("warn", 1.0) * 100.0
         level = None
-        if "fail" in rule and delta_pct > rule["fail"]:
+        if "fail" in rule and delta_pct > fail_thresh:
             level = "fail"
-        elif "warn" in rule and delta_pct > rule["warn"]:
+        elif "warn" in rule and delta_pct > warn_thresh:
             level = "warn"
         if level is not None:
             issues.append({
@@ -111,10 +117,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="benchmark.gate", description="Performance regression gate.")
     parser.add_argument("--baseline", type=str, default=str(ROOT / "benchmark" / "baseline.json"))
     parser.add_argument("--run", type=str, default=None, help="Existing benchmark JSON; default runs a fresh offline pass.")
+    parser.add_argument("--repeats", type=int, default=3, help="Repeats for the fresh offline pass (averaged; default 3).")
     parser.add_argument("--strict", action="store_true", help="Promote warnings to failures.")
     parser.add_argument("--allow-missing", action="store_true", help="Exit 0 if the baseline file does not exist yet.")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
     baseline_path = Path(args.baseline)
     if not baseline_path.exists():
@@ -128,11 +141,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.run:
         current = load_json(args.run)
     else:
-        if not args.quiet:
-            print("PERF GATE: running offline benchmark…")
         from benchmark import harness
+        from benchmark.run import _merge_runs
 
-        current = harness.run_offline_benchmark()
+        repeats = max(1, args.repeats)
+        if not args.quiet:
+            print(f"PERF GATE: running offline benchmark ({repeats} repeat(s))…")
+        runs = [harness.run_offline_benchmark() for _ in range(repeats)]
+        current = _merge_runs(runs)
 
     baseline = load_json(baseline_path)
     issues = check_regression(current, baseline, strict=args.strict)

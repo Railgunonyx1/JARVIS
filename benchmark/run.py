@@ -31,6 +31,15 @@ from benchmark.report import (  # noqa: E402
 VERSION = "0.1.0"
 
 
+def _enable_utf8() -> None:
+    """UTF-8 stdout/stderr so the box-drawing report renders on Windows."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+
 def _merge_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Average numeric fields across repeat runs; keep the last strings."""
     if not runs:
@@ -80,6 +89,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="Suppress the report; only write JSON.")
     parser.add_argument("--version", action="version", version=f"benchmark {VERSION}")
     args = parser.parse_args(argv)
+
+    _enable_utf8()
 
     if args.repeats < 1:
         parser.error("--repeats must be >= 1")

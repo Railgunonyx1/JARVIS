@@ -124,6 +124,9 @@ def measure_memory(loop) -> dict[str, Any]:
     if loop.mem is None:
         return {"memory_retrieve_ms": 0.0, "memory_format_ms": 0.0, "memory_items": 0}
     project = str(loop.project.root_path)
+    # Warmup: the first retrieve pays the one-time embedding-model load (MiniLM
+    # from HuggingFace); we want the steady-state retrieval latency.
+    loop.mem.retrieve("warmup embedding model", project=project, top_k=3)
     t0 = time.perf_counter()
     items = loop.mem.retrieve("git branch benchmark", project=project, top_k=3)
     retrieve_ms = (time.perf_counter() - t0) * 1000.0
