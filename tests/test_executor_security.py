@@ -239,6 +239,7 @@ def test_shell_tool_blocked_injection():
 def test_engine_execute_sandboxed_uses_executor():
     from security.engine import SecurityEngine
     engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "run")
     result = engine.execute_sandboxed("echo via-engine")
     assert result.success
     assert "via-engine" in result.stdout
@@ -290,6 +291,7 @@ def test_permission_allowed_is_audited():
     from security.engine import SecurityEngine
 
     engine = SecurityEngine(mode="agent")
+    engine.set_confirmation_handler(lambda tool, params: "run")
     allowed, reason = engine.check_permission("action.shell.run")
     assert allowed and reason == ""
     get_audit_log().flush()
