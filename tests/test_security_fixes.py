@@ -202,6 +202,7 @@ def test_confirmation_required_without_handler_fails_closed():
     assert not allowed
     assert "confirmation" in reason
     # The denial must leave an auditable trail, not a silent skip.
+    engine._audit.flush()
     stats = engine.get_audit_stats()
     assert stats["denied"] >= 1
 
