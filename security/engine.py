@@ -109,7 +109,19 @@ class SecurityEngine:
                 self._log_action(tool_name, session_id, level, confirmed=True,
                                  decision=decision)
             else:
-                logger.warning("Confirmation required for %s but no handler set", tool_name)
+                # Fail closed: an action that requires operator confirmation
+                # must NOT proceed just because no handler is wired. A stale
+                # or absent handler is an operational problem, never a grant.
+                logger.error(
+                    "Confirmation required for %s but no handler set — denying",
+                    tool_name,
+                )
+                self._log_denied(
+                    tool_name,
+                    session_id,
+                    "Confirmation required but no handler available",
+                )
+                return False, f"Action '{tool_name}' requires confirmation but no handler is available"
 
         # Log allowed decisions too — the gate must leave an auditable trail
         # for every call, not just denials and confirmations.

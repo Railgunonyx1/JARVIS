@@ -184,12 +184,40 @@ def test_confirmation_decision_recorded_in_audit(monkeypatch):
         def log(self, entry: AuditEntry) -> None:
             recorded.append(entry)
 
-    monkeypatch.setattr("security.engine.get_audit_log", lambda: FakeLog())
+    monkeypatch.setattr("security.audit.get_audit_log", lambda: FakeLog())
     engine = SecurityEngine(mode="agent")
     engine.set_confirmation_handler(lambda tool, params: "run")
     allowed, _ = engine.check_permission("action.shell.run")
     assert allowed
     assert any(e.decision == "run" and e.confirmed for e in recorded)
+
+
+def test_confirmation_required_without_handler_fails_closed():
+    """P0: a confirmation-required action with no handler must be DENIED,
+    never allowed with just a warning."""
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="controlled")
+    allowed, reason = engine.check_permission("action.search")
+    assert not allowed
+    assert "confirmation" in reason
+    # The denial must leave an auditable trail, not a silent skip.
+    stats = engine.get_audit_stats()
+    assert stats["denied"] >= 1
+
+
+def test_confirmation_handler_reset_fails_closed():
+    """Clearing the handler (None) must not resurrect a stale grant."""
+    from security.engine import SecurityEngine
+
+    engine = SecurityEngine(mode="controlled")
+    engine.set_confirmation_handler(lambda tool, params: "run")
+    allowed, _ = engine.check_permission("action.search")
+    assert allowed
+    engine.set_confirmation_handler(None)
+    allowed, reason = engine.check_permission("action.search")
+    assert not allowed
+    assert "confirmation" in reason
 
 
 def test_shell_audit_none_is_success_no_error(monkeypatch):
