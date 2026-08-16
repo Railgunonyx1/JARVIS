@@ -3,21 +3,9 @@ setlocal
 chcp 65001 >nul 2>&1
 
 rem JARVIS MK-X launcher (terminal-first).
-rem Launches inside Windows Terminal when available.
-rem Falls back to current console host if wt.exe not found.
-if defined WT_SESSION (
-    rem Already inside Windows Terminal — proceed normally
-) else (
-    rem Check if wt.exe is available and launch Windows Terminal
-    where wt.exe >nul 2>&1
-    if not errorlevel 1 (
-        start "" wt.exe cmd /k call "%~f0" %*
-    )
-)
-
-title JARVIS MK-X
-color 0B
-cd /d "%~dp0"
+rem Launches python -m cli directly; the user's existing terminal remains the terminal.
+rem Windows Terminal can be launched explicitly: wt.exe -m cmd python -m cli
+rem (or via the OS terminal shortcut).
 
 rem Pick the venv python; fall back to PATH python.
 set "PY="
@@ -67,13 +55,13 @@ set /p choice="  jarvis> "
 if "%choice%"=="" exit /b
 if /i "%choice%"=="1" goto chat
 if /i "%choice%"=="2" goto plan
-if /i "%choice%"=="3" goto controlled
+if /i "%~1"=="3" goto controlled
 if /i "%~1"=="4" goto smart
-if /i "%choice%"=="5" goto oneshot
-if /i "%choice%"=="6" goto perf
-if /i "%choice%"=="7" goto tests
-if /i "%choice%"=="8" goto install
-if /i "%choice%"=="9" goto demo
+if /i "%~1"=="5" goto oneshot
+if /i "%~1"=="6" goto perf
+if /i "%~1"=="7" goto tests
+if /i "%~1"=="8" goto install
+if /i "%~1"=="9" goto demo
 if /i "%choice%"=="q" goto quit
 
 echo.

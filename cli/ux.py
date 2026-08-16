@@ -155,8 +155,11 @@ class LiveTaskDisplay:
         if self._renderable_provider is not None:
             try:
                 return self._renderable_provider()
-            except Exception:
-                return Group(Text("(render error)", style="dim"))
+            except Exception as exc:
+                import logging
+                logger = logging.getLogger("jarvis.ux")
+                logger.exception("renderable provider error")
+                return Group(Text(f"[error]render error: {exc}", style="dim"))
         return self._render()
 
     def _render(self) -> Group:

@@ -567,7 +567,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 typer.secho("no previous goal to resume", err=True, fg="red")
             else:
                 try:
-                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=True))
+                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
                 except Exception as exc:
                     typer.secho(f"error: {exc}", err=True, fg="red")
         elif line.startswith("/"):
@@ -576,7 +576,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             commands.dispatch(line)
         else:
             try:
-                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=True))
+                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
             except KeyboardInterrupt:
                 typer.secho("(interrupted)", dim=True)
             except Exception as exc:
