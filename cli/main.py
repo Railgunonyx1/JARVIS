@@ -307,7 +307,9 @@ def main(
                      profile_startup=profile_startup)
 
 
-# ── transport (in-process only; no daemon) ───────────────────────────────────
+# ── execution backend ──────────────────────────────────────────────────
+# The terminal client runs AgentLoop in-process.
+# This avoids a daemon/network hop for the local CLI.
 
 def _resolve_project_dir(project_dir: str | None) -> str:
     return str((Path(project_dir) if project_dir else Path.cwd()).resolve())
