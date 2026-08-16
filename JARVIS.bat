@@ -3,14 +3,15 @@ setlocal
 chcp 65001 >nul 2>&1
 
 rem JARVIS MK-X launcher (terminal-first).
-rem Relaunch inside Windows Terminal when available; fall back to the
-rem current console host otherwise.
-if not "%JARVIS_WT%"=="1" (
-    where wt.exe >nul 2>nul
+rem Launches inside Windows Terminal when available.
+rem Falls back to current console host if wt.exe not found.
+if defined WT_SESSION (
+    rem Already inside Windows Terminal — proceed normally
+) else (
+    rem Check if wt.exe is available and launch Windows Terminal
+    where wt.exe >nul 2>&1
     if not errorlevel 1 (
-        set "JARVIS_WT=1"
         start "" wt.exe cmd /k call "%~f0" %*
-        exit /b
     )
 )
 
@@ -67,7 +68,7 @@ if "%choice%"=="" exit /b
 if /i "%choice%"=="1" goto chat
 if /i "%choice%"=="2" goto plan
 if /i "%choice%"=="3" goto controlled
-if /i "%choice%"=="4" goto smart
+if /i "%~1"=="4" goto smart
 if /i "%choice%"=="5" goto oneshot
 if /i "%choice%"=="6" goto perf
 if /i "%choice%"=="7" goto tests
