@@ -184,7 +184,7 @@ def test_confirmation_decision_recorded_in_audit(monkeypatch):
         def log(self, entry: AuditEntry) -> None:
             recorded.append(entry)
 
-    monkeypatch.setattr("security.audit.get_audit_log", lambda: FakeLog())
+    monkeypatch.setattr("security.engine.get_audit_log", lambda: FakeLog())
     engine = SecurityEngine(mode="agent")
     engine.set_confirmation_handler(lambda tool, params: "run")
     allowed, _ = engine.check_permission("action.shell.run")
