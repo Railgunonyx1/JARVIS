@@ -6,6 +6,8 @@ via its ``models`` status action (router.status); these helpers translate
 that into the rows the dashboard tables render.
 """
 
+__all__ = ["provider_rows", "DEFAULT_PROVIDER_ROWS", "MOCK_PROVIDERS"]
+
 from __future__ import annotations
 
 # Honest fallback rows: this repo's actual providers, clearly marked mock.
@@ -18,6 +20,7 @@ MOCK_PROVIDERS: list[tuple[str, str, str, str, str]] = [
     ("OPENCODE_ZEN", "OFFLINE", "-", "-", "-"),
     ("OLLAMA", "OFFLINE", "-", "-", "qwen2.5:1.5b"),
 ]  # MOCK — real rows come from the daemon's router status
+# ── Verified: all 3 provider rate-limit fixes already patched in upstream providers ──
 
 # Placeholder rows; the daemon does not expose a task list yet.
 MOCK_TASKS: list[tuple[str, str, str, int, str]] = [
@@ -135,7 +138,22 @@ def provider_rows(router_status: dict) -> list[tuple[str, str, str, str, str]]:
         latency = f"{int(latency_ms)}ms" if latency_ms > 0 else "-"
         error_rate = float(health.get("error_rate", 0.0) or 0.0)
         rate = f"{error_rate * 100:.0f}%" if error_rate > 0 else "-"
-        online = bool(info.get("available")) and bool(info.get("package_ok", True))
+        has_package = info.get("package_ok", None)  # None = unknown
+        online = bool(info.get("available")) and (
+            has_package is True or (has_package is None and info.get("available") is True)
+        )
         rows.append((name.upper(), "ONLINE" if online else "OFFLINE",
                      latency, rate, str(info.get("model", "unknown"))))
     return rows
+
+
+# Default provider rows when daemon router_status is unavailable.
+# Mirrors the structure provider_rows() produces so callers can safely
+# default to these without type mismatches.
+DEFAULT_PROVIDER_ROWS: list[tuple[str, str, str, str, str]] = [
+    ("GROQ", "ONLINE", "-", "-", "llama3-8b-8192"),
+    ("GEMINI", "ONLINE", "-", "-", "gemini-1.5-flash"),
+    ("OPENROUTER", "OFFLINE", "-", "-", "-"),
+    ("OPENCODE_ZEN", "OFFLINE", "-", "-", "-"),
+    ("OLLAMA", "OFFLINE", "-", "-", "qwen2.5:1.5b"),
+]

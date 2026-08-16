@@ -698,12 +698,15 @@ class JarvisApp(App):
                 return
             for name in sorted(models):
                 info = models[name] or {}
-                online = bool(info.get("available")) and bool(info.get("package_ok", True))
-                color = ONLINE if online else ERROR
-                logs.write(
-                    f"[{color}]{'ONLINE' if online else 'OFFLINE'}[/{color}] "
-                    f"{name.upper()} -> {info.get('model', 'unknown')}"
-                )
+                has_package = info.get("package_ok", None)  # None = unknown
+        online = bool(info.get("available")) and (
+            has_package is True or (has_package is None and info.get("available") is True)
+        )
+        color = ONLINE if online else ERROR
+        logs.write(
+            f"[{color}]{'ONLINE' if online else 'OFFLINE'}[/{color}] "
+            f"{name.upper()} -> {info.get('model', 'unknown')}"
+        )
             return
 
         if cmd == "/mode":
