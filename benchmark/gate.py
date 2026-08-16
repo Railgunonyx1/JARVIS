@@ -45,6 +45,13 @@ DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
     "context_tokens": {"warn": 0.20},
 }
 
+# Machine-specific timing metrics. The committed baseline is captured on the
+# developer machine, so in CI these deltas are warn-only (never fail).
+TIMING_METRICS = frozenset({
+    "startup_ms", "kernel_ms", "idle_ram_mb", "context_build_ms",
+    "memory_retrieve_ms", "tool_latency_ms", "task_sec",
+})
+
 
 def check_regression(
     current: dict[str, Any],
@@ -119,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run", type=str, default=None, help="Existing benchmark JSON; default runs a fresh offline pass.")
     parser.add_argument("--repeats", type=int, default=3, help="Repeats for the fresh offline pass (averaged; default 3).")
     parser.add_argument("--strict", action="store_true", help="Promote warnings to failures.")
+    parser.add_argument("--ci", action="store_true", help="CI mode: timing deltas warn-only (machine-specific baseline); "
+                                                         "fails only on benchmark errors.")
     parser.add_argument("--allow-missing", action="store_true", help="Exit 0 if the baseline file does not exist yet.")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
@@ -152,6 +161,10 @@ def main(argv: list[str] | None = None) -> int:
 
     baseline = load_json(baseline_path)
     issues = check_regression(current, baseline, strict=args.strict)
+    if args.ci:
+        for issue in issues:
+            if issue["metric"] in TIMING_METRICS and issue["level"] == "fail":
+                issue["level"] = "warn"
     print(render_issues(issues, args.strict))
     failures = [i for i in issues if i["level"] == "fail"]
     return 1 if failures else 0

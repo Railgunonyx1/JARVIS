@@ -1,0 +1,92 @@
+# JARVIS MK-X CI — three tiers per the optimization plan (Phase 21).
+#
+#   fast     on every push/PR: safety lint, import smoke, unit+security tests,
+#            and the offline performance gate (CI mode: benchmark must complete;
+#            timing deltas are warn-only because the committed baseline is
+#            captured on the developer machine — real regression enforcement
+#            runs locally via `python -m benchmark.gate`).
+#   full     on PR + main: the entire pytest suite.
+#   security on PR + main + weekly: dependency audit + secret scan.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"  # weekly security sweep
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fast:
+    name: Fast (lint + unit + security + perf gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest
+      - name: Safety lint (real bugs: F821/F823/E9...)
+        run: ruff check . --select E9,F63,F7,F82
+      - name: Import smoke
+        run: python -c "import cli.main"
+      - name: Unit + security + benchmark tests
+        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_benchmark.py -q
+      - name: Performance gate (offline; CI mode)
+        run: python -m benchmark.gate --baseline benchmark/baseline.json --ci
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmark/results/*.json
+          if-no-files-found: ignore
+
+  full:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest
+      - name: Full pytest suite
+        run: python -m pytest tests/ -q
+
+  security:
+    name: Security (deps + secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Dependency audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+          pip-audit -r requirements.txt
+      - name: Secret scan (tracked files)
+        run: python scripts/scan_secrets.py
