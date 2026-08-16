@@ -37,6 +37,9 @@ voice_packs/
 scratch/
 *.tmp
 
+# Benchmark runtime output (committed baseline lives in benchmark/baseline.json)
+benchmark/results/
+
 # IDE
 .kilocode/
 .idea/

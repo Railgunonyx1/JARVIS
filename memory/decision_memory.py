@@ -114,6 +114,9 @@ class DecisionMemory:
             if self._conn:
                 self._conn.close()
                 self._conn = None
+        global _instance
+        if _instance is self:
+            _instance = None
 
 
 def get_decision_memory() -> DecisionMemory:

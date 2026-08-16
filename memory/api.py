@@ -333,6 +333,9 @@ class MemoryAPI:
 
     def close(self) -> None:
         self._controller.close()
+        global _instance
+        if _instance is self:
+            _instance = None
 
 
 def get_mem() -> MemoryAPI:
