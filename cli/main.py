@@ -435,7 +435,11 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     from cli.startup_profile import get_profiler
 
     profiler = get_profiler()
-    console.clear()
+    # DO NOT clear the console here — the initial banner + "starting kernel"
+    # must persist so the user sees something before the kernel finishes booting.
+    # Clearing too early (before ready.is_set()) causes the "blank CMD after kernel
+    # starts" symptom because the Rich-rendered area gets wiped just as the kernel
+    # comes online and tries to update the status bar.
     console.print(Text("JARVIS MK-X — terminal-first agent", style="bold cyan"))
     console.print(Text("/help for commands · /cockpit for the dashboard", style="dim"))
 
