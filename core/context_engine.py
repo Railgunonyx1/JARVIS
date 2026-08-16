@@ -12,6 +12,8 @@ from pathlib import Path
 # Token-efficient prompt compression
 from core.prompt_compressor import compress_prompt, compress_tool_output, _split_into_sections
 
+logger = logging.getLogger("jarvis.context")
+
 
 @dataclass
 class ContextFrame:

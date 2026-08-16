@@ -147,7 +147,7 @@ class JarvisMKX:
         models_cfg = self.config.get_section("models")
         voice_cfg = self.config.get_section("voice")
 
-        self.router = _mod_providers.ProviderRouter(models_cfg, api_keys)
+        self.router = _Mod_providers.ProviderRouter(models_cfg, api_keys)
 
         # Unified ModelManager: task classification → best provider/model selection,
         # with per-endpoint health, latency, cost, and cooldown tracking.
@@ -327,10 +327,10 @@ class JarvisMKX:
             return
         voice_cfg = self.config.get_section("voice")
         api_keys = self.config.api_keys
-        self.tts = _mod_tts.TextToSpeech(voice_cfg)
-        self.stt = _mod_stt.SpeechToText(voice_cfg, api_keys)
-        self.vad = _mod_vad.VoiceActivityDetector(voice_cfg)
-        self.wake_word = _mod_wake_word.WakeWordDetector(voice_cfg, on_wake=self._on_wake_word)
+        self.tts = _Mod_tts.TextToSpeech(voice_cfg)
+        self.stt = _Mod_stt.SpeechToText(voice_cfg, api_keys)
+        self.vad = _Mod_vad.VoiceActivityDetector(voice_cfg)
+        self.wake_word = _Mod_wake_word.WakeWordDetector(voice_cfg, on_wake=self._on_wake_word)
         self._voice_loaded = True
         logger.info("Voice services loaded")
 

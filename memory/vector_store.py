@@ -27,7 +27,10 @@ import threading
 import time
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # annotations are strings (PEP 563) — keep numpy lazy
+    import numpy as np
 
 logger = logging.getLogger("jarvis.memory.vector")
 
