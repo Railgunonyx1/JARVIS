@@ -101,7 +101,10 @@ class Sandbox:
 
     def execute(self, command: str, cwd: str | None = None,
                 env: dict[str, str] | None = None) -> SandboxResult:
-        """Execute a command in the sandbox."""
+        """Execute a command in the sandbox (shell=False)."""
+        import shlex
+        import platform
+
         # Pre-flight checks
         allowed, reason = self.check_command(command)
         if not allowed:
@@ -113,8 +116,12 @@ class Sandbox:
             if not path_ok:
                 return SandboxResult(success=False, blocked=True, block_reason=path_reason)
 
-        # Build environment
-        exec_env = os.environ.copy()
+        # Build environment — strip sensitive vars
+        exec_env = {k: v for k, v in os.environ.items()
+                    if not any(s in k.upper() for s in (
+                        "API_KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL",
+                        "PRIVATE", "AUTH",
+                    ))}
         exec_env.update(self.config.env_overrides)
         if env:
             exec_env.update(env)
@@ -122,18 +129,22 @@ class Sandbox:
         start_time = time.time()
         proc_id = hashlib.sha256(command.encode()).hexdigest()[:8]
 
+        # Split command into argv for shell=False execution
+        if platform.system() == "Windows":
+            # On Windows, use cmd /c for shell commands (safer than raw shell=True)
+            argv = ["cmd", "/c", command]
+        else:
+            argv = shlex.split(command)
+
         try:
-            # Use subprocess with timeout
-            is_windows = sys.platform == "win32"
-            # Command pre-validated by check_command() blocklists and operators.
             proc = subprocess.Popen(
-                command,
-                shell=True,
+                argv,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=cwd,
                 env=exec_env,
-                creationflags=subprocess.CREATE_NO_WINDOW if is_windows else 0,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )  # nosec B602
 
             with self._lock:

@@ -32,6 +32,11 @@ def build_default_registry() -> ToolRegistry:
     )
     from tools.web_search import web_search
     from tools.system_monitor import system_status
+    from tools.search import code_search, file_find
+    from tools.git_tools import (
+        git_status, git_diff, git_log, git_branch, git_add, git_commit, git_restore,
+    )
+    from tools.patch import patch_replace, patch_insert, patch_delete
 
     registry = ToolRegistry()
     registry.register_many([
@@ -370,6 +375,186 @@ def build_default_registry() -> ToolRegistry:
             permission="world_monitor.read",
             handler=world_monitor_world_brief,
             category="world",
+        ),
+        # ── Search ──────────────────────────────────────────────
+        Tool(
+            name="search.code",
+            description=(
+                "Search file contents using regex across the repository. "
+                "Returns file:line matches. Use for finding code, references, "
+                "definitions, and patterns."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern to search for."},
+                    "path": {"type": "string", "description": "Subdirectory to restrict search."},
+                    "include": {"type": "string", "description": "File glob filter (e.g. *.py)."},
+                    "max_results": {"type": "integer", "description": "Cap on results. Default 200."},
+                },
+                "required": ["pattern"],
+            },
+            permission="filesystem.read",
+            handler=code_search,
+            category="search",
+        ),
+        Tool(
+            name="search.find",
+            description="Find files by name pattern (glob) across the repository.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Glob pattern (e.g. *.py, **/test_*.py)."},
+                    "path": {"type": "string", "description": "Subdirectory to search in."},
+                },
+                "required": ["pattern"],
+            },
+            permission="filesystem.read",
+            handler=file_find,
+            category="search",
+        ),
+        # ── Git ─────────────────────────────────────────────────
+        Tool(
+            name="git.status",
+            description="Show the working tree status (short format).",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="filesystem.read",
+            handler=git_status,
+            category="git",
+        ),
+        Tool(
+            name="git.diff",
+            description="Show changes in the working tree or staged changes.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "staged": {"type": "boolean", "description": "Show staged changes. Default false."},
+                    "path": {"type": "string", "description": "Restrict to a specific file."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=git_diff,
+            category="git",
+        ),
+        Tool(
+            name="git.log",
+            description="Show recent commit history.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer", "description": "Number of commits. Default 10."},
+                    "path": {"type": "string", "description": "Restrict to a specific file."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=git_log,
+            category="git",
+        ),
+        Tool(
+            name="git.branch",
+            description="Show the current branch name.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="filesystem.read",
+            handler=git_branch,
+            category="git",
+        ),
+        Tool(
+            name="git.add",
+            description="Stage files for commit.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File or directory to stage. Use . for all."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.write",
+            handler=git_add,
+            category="git",
+        ),
+        Tool(
+            name="git.commit",
+            description="Create a commit with staged changes.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Commit message."},
+                },
+                "required": ["message"],
+            },
+            permission="filesystem.write",
+            handler=git_commit,
+            category="git",
+        ),
+        Tool(
+            name="git.restore",
+            description="Discard changes in working tree for a file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File to restore. Use . for all."},
+                    "staged": {"type": "boolean", "description": "Also unstage. Default false."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.write",
+            handler=git_restore,
+            category="git",
+        ),
+        # ── Patch editing ───────────────────────────────────────
+        Tool(
+            name="patch.replace",
+            description=(
+                "Replace exact text in a file. The old text must match uniquely "
+                "(or use all=true for multiple). Preferred over full-file overwrite."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File to edit."},
+                    "old": {"type": "string", "description": "Exact text to find."},
+                    "new": {"type": "string", "description": "Replacement text."},
+                    "all": {"type": "boolean", "description": "Replace all occurrences. Default false."},
+                },
+                "required": ["path", "old", "new"],
+            },
+            permission="filesystem.write",
+            handler=patch_replace,
+            category="patch",
+        ),
+        Tool(
+            name="patch.insert",
+            description="Insert text at a specific line number in a file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File to edit."},
+                    "line": {"type": "integer", "description": "Line number to insert before (1-indexed). 0 = append at end."},
+                    "text": {"type": "string", "description": "Text to insert."},
+                },
+                "required": ["path", "line", "text"],
+            },
+            permission="filesystem.write",
+            handler=patch_insert,
+            category="patch",
+        ),
+        Tool(
+            name="patch.delete",
+            description="Delete a range of lines from a file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File to edit."},
+                    "start": {"type": "integer", "description": "First line to delete (1-indexed, inclusive)."},
+                    "end": {"type": "integer", "description": "Last line to delete (inclusive). Defaults to start."},
+                },
+                "required": ["path", "start"],
+            },
+            permission="filesystem.write",
+            handler=patch_delete,
+            category="patch",
         ),
     ])
     return registry

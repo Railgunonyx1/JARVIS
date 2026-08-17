@@ -84,11 +84,11 @@ class FileAccessPolicy:
         return False, "Write access denied: path not in allowed directories"
 
     def sanitize_path(self, path: str) -> str:
-        """Resolve and block path traversal."""
+        """Resolve and block path traversal. Raises ValueError on traversal."""
         resolved = Path(path).resolve()
-        # Block '..' traversal out of the resolved tree
         if ".." in path.split(os.sep):
-            logger.warning("Path traversal detected: %s -> %s", path, resolved)
+            logger.warning("Path traversal blocked: %s -> %s", path, resolved)
+            raise ValueError(f"Path traversal not allowed: {path}")
         return str(resolved)
 
     def add_allowed_dir(self, path: str):

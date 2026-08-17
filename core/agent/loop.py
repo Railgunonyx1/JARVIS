@@ -18,7 +18,7 @@ from core import events
 from core.agent.context import AgentContextBuilder
 from core.agent.observer import TaskObserver, TaskStatus
 from core.agent.permissions import PermissionEngine
-from core.agent.state import AgentState
+from core.agent.state import AgentState, TaskStatus
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id
 from core.context.budget import estimate_tokens
 from core.context.manager import ContextManager
@@ -141,6 +141,7 @@ class AgentLoop:
             self.logger.record(trace_id, events.AGENT_REASONING_STARTED, {"goal": goal[:200]})
             self.observer.start(trace_id, goal)
             state = AgentState(task_id=trace_id, goal=goal)
+            state.transition(TaskStatus.EXECUTING)
             with tracer.span("context.build", {"project": str(self.project.root_path)}):
                 messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
             tools = self.registry.to_openai_tools()
@@ -177,6 +178,7 @@ class AgentLoop:
                             self.logger.record(trace_id, events.TASK_FAILED, {
                                 "goal": goal[:200], "error": error,
                             })
+                            state.transition(TaskStatus.FAILED)
                             self._finish_observation(False, "", state, iteration)
                             return AgentResult(
                                 success=False, response="", trace_id=trace_id, state=state,
@@ -189,6 +191,7 @@ class AgentLoop:
                             "tokens": state.tokens_used,
                             "provider": response.provider,
                         })
+                        state.transition(TaskStatus.COMPLETED)
                         self._finish_observation(True, final, state, iteration)
                         return AgentResult(
                             success=True, response=final, trace_id=trace_id, state=state,
@@ -227,6 +230,10 @@ class AgentLoop:
             error = str(e)[:500]
             state.errors.append(error)
             self.logger.record(trace_id, events.TASK_FAILED, {"goal": goal[:200], "error": error})
+            try:
+                state.transition(TaskStatus.FAILED)
+            except ValueError:
+                pass  # already in terminal state
             self._finish_observation(False, "", state, state.iteration)
             return AgentResult(
                 success=False, response="", trace_id=trace_id, state=state, error=error,
@@ -240,6 +247,10 @@ class AgentLoop:
         self.logger.record(trace_id, events.TASK_FAILED, {
             "goal": goal[:200], "error": "max iterations reached",
         })
+        try:
+            state.transition(TaskStatus.FAILED)
+        except ValueError:
+            pass
         self._finish_observation(False, "", state, state.iteration)
         return AgentResult(
             success=False,
@@ -394,6 +405,9 @@ class AgentLoop:
         if isinstance(path, str) and result.success:
             state.files_changed.append(path)
         content = result.output if result.success else f"ERROR: {result.error}"
+        # Redact secrets before tool output re-enters LLM context
+        from security.redaction import redact_sensitive
+        content = redact_sensitive(content)
         messages.append({
             "role": "tool", "tool_call_id": call.id, "name": call.name,
             "content": content,

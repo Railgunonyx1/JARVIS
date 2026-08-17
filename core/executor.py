@@ -194,10 +194,18 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
 
         print(f"[Executor] INFO: Running generated code: {tmp_path}")
 
+        # Sanitize environment — strip secrets before subprocess inherits
+        exec_env = {k: v for k, v in os.environ.items()
+                    if not any(s in k.upper() for s in (
+                        "API_KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL",
+                        "PRIVATE", "AUTH",
+                    ))}
+
         result = subprocess.run(
             [sys.executable, tmp_path],
             capture_output=True, text=True,
             timeout=120, cwd=str(Path.home()),
+            env=exec_env,
             check=False,
         )
 
