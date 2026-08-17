@@ -126,6 +126,19 @@ class MemoryController:
         """Merged candidates from every source, hybrid-ranked, top_k returned."""
         candidates: list[MemoryItem] = []
 
+        # Hot-tier fast path — point lookups by exact key are near-free.
+        # Only useful when the caller already knows the key (e.g. follow-up
+        # queries on a recently stored item), but costs almost nothing to try.
+        if self._tiers is not None:
+            hot = self._tiers.retrieve(query)
+            if hot is not None:
+                candidates.append(MemoryItem(
+                    id=f"tier:{query}", content=str(hot),
+                    type="hot", importance=0.8,
+                    last_accessed=time.time(), access_count=1,
+                ))
+                candidates[-1]._signals = {"semantic": 0.5, "lexical": 0.5}
+
         if self._vector is not None:
             for hit in self._vector.search_similar(query, top_k=max(top_k * 3, 3), min_score=min_score):
                 meta = self._metadata.get(str(hit["id"])) if self._metadata else None
@@ -193,6 +206,18 @@ class MemoryController:
 
         if not candidates:
             return []
+
+        # Deduplicate by normalized content — the same fact stored in KV and
+        # vector (or recalled from session) should appear only once.
+        seen_content: set[str] = set()
+        unique: list[MemoryItem] = []
+        for item in candidates:
+            norm = item.content.strip().lower()[:200]
+            if norm in seen_content:
+                continue
+            seen_content.add(norm)
+            unique.append(item)
+        candidates = unique
 
         now = time.time()
         ranked = []
