@@ -84,6 +84,12 @@ class OpenAICompatibleProvider(LLMProvider):
         logger.info("%s: rotated to key index %d", self.name, self._key_index)
         return old != self._key_index
 
+    # ── Extra headers hook ──────────────────────────────────────────────
+
+    def _extra_headers(self) -> dict:
+        """Override to inject extra HTTP headers into every SDK call."""
+        return {}
+
     # ── Rate-limit detection ────────────────────────────────────────────
 
     def _check_rate_limit(self, error_str: str) -> bool:
