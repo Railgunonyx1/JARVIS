@@ -116,6 +116,7 @@ class Sandbox:
 
         Commands containing shell operators (pipes, redirects, &&, etc.) require
         shell interpretation (cmd /c on Windows) and are classified as CMD_C/SHLEX.
+        On Windows, also checks for cmd builtins that have no standalone executable.
         Simple commands without shell syntax can be invoked directly.
         """
         shell_operators = ["|", "&&", "||", ">", ">>", "<", ";", "`", "$(", "${"]
@@ -124,6 +125,18 @@ class Sandbox:
                 if sys.platform == "win32":
                     return ShellMode.CMD_C
                 return ShellMode.SHLEX
+
+        # On Windows, cmd builtins need cmd /c (they have no standalone .exe)
+        if sys.platform == "win32":
+            first_token = command.strip().split()[0].lower()
+            cmd_builtins = {
+                "echo", "dir", "type", "copy", "move", "del", "ren", "cls",
+                "set", "path", "cd", "chdir", "md", "mkdir", "rd", "rmdir",
+                "vol", "label", "fsutil", " assoc", "ftype",
+            }
+            if first_token in cmd_builtins:
+                return ShellMode.CMD_C
+
         return ShellMode.DIRECT
 
     def execute(self, command: str, cwd: str | None = None,
