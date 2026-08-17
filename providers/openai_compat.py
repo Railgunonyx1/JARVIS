@@ -127,6 +127,9 @@ class OpenAICompatibleProvider(LLMProvider):
             start = time.time()
             try:
                 kwargs: dict = {}
+                headers = self._extra_headers()
+                if headers:
+                    kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
                 response = await client.chat.completions.create(
@@ -187,6 +190,9 @@ class OpenAICompatibleProvider(LLMProvider):
             start = time.time()
             try:
                 kwargs: dict = {}
+                headers = self._extra_headers()
+                if headers:
+                    kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
                 stream = await client.chat.completions.create(
