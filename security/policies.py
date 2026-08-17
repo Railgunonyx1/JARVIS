@@ -7,6 +7,7 @@ Policies are loaded from TOML config files and can be hot-reloaded.
 
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from dataclasses import dataclass, field
@@ -146,16 +147,18 @@ def build_smart_policy() -> Policy:
 
 
 def build_agent_policy() -> Policy:
-    """Build the Agent mode policy — maximum capability with guardrails."""
-    smart = build_smart_policy()
+    """Build the Agent mode policy — maximum capability with guardrails.
+
+    Deep-copies the smart policy to avoid mutating the cached shared object.
+    """
+    smart = copy.deepcopy(build_smart_policy())
     smart.name = "agent"
     smart.level = PermissionLevel.ADMIN
     smart.default_level = PermissionLevel.MODERATE
     smart.sandbox_enabled = True
     smart.max_concurrent_actions = 10
     # Agent mode runs core fs/shell tools elevated but without confirmation.
-    # Replace smart's confirmation-gated copies (first-match wins).
-    smart.rules[:] = [r for r in smart.rules if r.name not in ("fs_write", "shell_exec")]
+    smart.rules = [r for r in smart.rules if r.name not in ("fs_write", "shell_exec")]
     smart.rules.extend([
         PolicyRule("fs_write", r"^filesystem\.(write|delete|move|copy)$", PermissionLevel.ELEVATED),
         PolicyRule("shell_exec", r"^shell\.execute$", PermissionLevel.ELEVATED),

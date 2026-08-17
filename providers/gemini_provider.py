@@ -153,6 +153,8 @@ class GeminiProvider(LLMProvider):
         temperature: float | None = None,
         tools: list | None = None,
     ) -> AsyncIterator[str]:
+        import asyncio
+
         client = self._get_client()
         contents = self._convert_messages(messages, system_prompt)
 
@@ -165,18 +167,37 @@ class GeminiProvider(LLMProvider):
             config["tools"] = gemini_tools
 
         start = time.time()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        sentinel = object()
+
+        def _produce() -> None:
+            try:
+                response = client.models.generate_content(
+                    model=self._model,
+                    contents=contents,
+                    config=config,
+                    stream=True,
+                )
+                for chunk in response:
+                    if chunk.text:
+                        asyncio.run_coroutine_threadsafe(queue.put(chunk.text), loop)
+                asyncio.run_coroutine_threadsafe(queue.put(sentinel), loop)
+            except Exception as exc:
+                asyncio.run_coroutine_threadsafe(queue.put(exc), loop)
+
+        loop = asyncio.get_running_loop()
+        import threading
+        producer = threading.Thread(target=_produce, daemon=True)
+        producer.start()
+
         try:
-            import asyncio
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=self._model,
-                contents=contents,
-                config=config,
-                stream=True,
-            )
-            for chunk in response:
-                if chunk.text:
-                    yield chunk.text
+            while True:
+                item = await queue.get()
+                if item is sentinel:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as e:
