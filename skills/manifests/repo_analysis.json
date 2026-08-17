@@ -1,0 +1,7 @@
+{
+  "name": "repo_analysis",
+  "description": "Analyze repository structure, history, and code patterns",
+  "tools": ["filesystem.list", "search.code", "search.find", "git.status", "git.log", "git.diff"],
+  "tags": ["repo", "analysis", "code"],
+  "version": "1.0.0"
+}

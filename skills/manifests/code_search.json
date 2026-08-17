@@ -1,0 +1,7 @@
+{
+  "name": "code_search",
+  "description": "Search code by regex pattern and find files by name",
+  "tools": ["search.code", "search.find"],
+  "tags": ["search", "code", "find"],
+  "version": "1.0.0"
+}

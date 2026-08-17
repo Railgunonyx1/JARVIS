@@ -1,0 +1,7 @@
+{
+  "name": "file_edit",
+  "description": "Read, write, and patch files with targeted edits",
+  "tools": ["filesystem.read", "filesystem.write", "patch.replace", "patch.insert", "patch.delete"],
+  "tags": ["file", "edit", "write"],
+  "version": "1.0.0"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "code_review",
+  "description": "Review code changes: read files, search references, check git history",
+  "tools": ["filesystem.read", "search.code", "search.find", "git.diff", "git.log"],
+  "tags": ["code", "review", "analysis"],
+  "version": "1.0.0"
+}
