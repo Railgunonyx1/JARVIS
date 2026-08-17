@@ -228,6 +228,16 @@ class Sandbox:
                     shell_mode=shell_mode,
                 )
 
+        except FileNotFoundError:
+            # On Windows, DIRECT mode may fail if the command is a cmd builtin
+            # or not on PATH. Fall back to CMD_C if we haven't already tried it.
+            if shell_mode == ShellMode.DIRECT and sys.platform == "win32":
+                logger.info("Direct exec failed for '%s', retrying via cmd /c", command)
+                return self.execute(command, cwd=cwd, env=env)
+            duration_ms = (time.time() - start_time) * 1000
+            return SandboxResult(success=False, exit_code=-1, duration_ms=duration_ms,
+                                 stderr=f"Command not found: {argv[0]}", shell_mode=shell_mode)
+
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             logger.error("Sandbox execution error: %s", e)
