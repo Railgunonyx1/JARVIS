@@ -10,15 +10,24 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shlex
 import subprocess
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("jarvis.security.sandbox")
+
+
+class ShellMode(Enum):
+    """Classifies how a command is executed."""
+    DIRECT = "direct"       # Invoked as direct executable (safest)
+    CMD_C = "cmd_c"         # Invoked via cmd /c (shell interpretation still occurs)
+    SHLEX = "shlex"         # Parsed via shlex on non-Windows (Unix-like)
 
 
 @dataclass
@@ -46,6 +55,7 @@ class SandboxResult:
     timed_out: bool = False
     blocked: bool = False
     block_reason: str = ""
+    shell_mode: ShellMode = ShellMode.DIRECT
 
     def to_dict(self) -> dict:
         return {
@@ -57,6 +67,7 @@ class SandboxResult:
             "timed_out": self.timed_out,
             "blocked": self.blocked,
             "block_reason": self.block_reason,
+            "shell_mode": self.shell_mode.value,
         }
 
 
@@ -99,10 +110,31 @@ class Sandbox:
         except Exception as e:
             return False, f"Invalid path: {e}"
 
+    @staticmethod
+    def _classify_shell_mode(command: str) -> ShellMode:
+        """Determine if a command can be invoked directly or needs shell interpretation.
+
+        Commands containing shell operators (pipes, redirects, &&, etc.) require
+        shell interpretation (cmd /c on Windows) and are classified as CMD_C/SHLEX.
+        Simple commands without shell syntax can be invoked directly.
+        """
+        shell_operators = ["|", "&&", "||", ">", ">>", "<", ";", "`", "$(", "${"]
+        for op in shell_operators:
+            if op in command:
+                if sys.platform == "win32":
+                    return ShellMode.CMD_C
+                return ShellMode.SHLEX
+        return ShellMode.DIRECT
+
     def execute(self, command: str, cwd: str | None = None,
                 env: dict[str, str] | None = None) -> SandboxResult:
-        """Execute a command in the sandbox (shell=False)."""
-        import shlex
+        """Execute a command in the sandbox.
+
+        Shell mode classification:
+        - DIRECT: simple command, invoked directly (safest)
+        - CMD_C: contains shell operators, invoked via cmd /c on Windows
+        - SHLEX: contains shell operators, parsed via shlex on Unix
+        """
         import platform
 
         # Pre-flight checks
@@ -115,6 +147,11 @@ class Sandbox:
             path_ok, path_reason = self.check_path(cwd)
             if not path_ok:
                 return SandboxResult(success=False, blocked=True, block_reason=path_reason)
+
+        # Classify shell mode — determines risk level
+        shell_mode = self._classify_shell_mode(command)
+        if shell_mode != ShellMode.DIRECT:
+            logger.info("Shell mode %s for command: %s", shell_mode.value, command)
 
         # Build environment — strip sensitive vars
         exec_env = {k: v for k, v in os.environ.items()
@@ -129,9 +166,10 @@ class Sandbox:
         start_time = time.time()
         proc_id = hashlib.sha256(command.encode()).hexdigest()[:8]
 
-        # Split command into argv for shell=False execution
-        if platform.system() == "Windows":
-            # On Windows, use cmd /c for shell commands (safer than raw shell=True)
+        # Build argv based on classified shell mode
+        if shell_mode == ShellMode.DIRECT:
+            argv = shlex.split(command)
+        elif shell_mode == ShellMode.CMD_C:
             argv = ["cmd", "/c", command]
         else:
             argv = shlex.split(command)
@@ -163,6 +201,7 @@ class Sandbox:
                     stderr=stderr_str,
                     exit_code=proc.returncode,
                     duration_ms=duration_ms,
+                    shell_mode=shell_mode,
                 )
 
             except subprocess.TimeoutExpired:
@@ -172,7 +211,8 @@ class Sandbox:
                 logger.warning("Sandbox timeout: %s (%.0fs)", command, self.config.timeout_seconds)
                 return SandboxResult(
                     success=False, exit_code=-1, duration_ms=duration_ms,
-                    timed_out=True, stderr=f"Command timed out after {self.config.timeout_seconds}s"
+                    timed_out=True, stderr=f"Command timed out after {self.config.timeout_seconds}s",
+                    shell_mode=shell_mode,
                 )
 
         except Exception as e:
