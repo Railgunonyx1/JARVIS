@@ -33,7 +33,7 @@ class TieredMemoryStore:
 
         self._hot: OrderedDict[str, Any] = OrderedDict()
         self._hot_ts: dict[str, float] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
         self._stats = {
             "promotions": 0,
@@ -158,17 +158,17 @@ class TieredMemoryStore:
 
     def delete(self, key: str) -> bool:
         """Delete a key from every tier. Returns True if anything was removed."""
-        removed = False
         with self._lock:
             if key in self._hot:
                 del self._hot[key]
                 self._hot_ts.pop(key, None)
-                removed = True
-        if removed:
-            return True
+                return True
+            conn = self._conn
+        if conn is None:
+            return False
         try:
-            cur = self._conn.execute("DELETE FROM memory_tier WHERE key = ?", (key,))
-            self._conn.commit()
+            cur = conn.execute("DELETE FROM memory_tier WHERE key = ?", (key,))
+            conn.commit()
             return cur.rowcount > 0
         except Exception as e:
             logger.error("SQLite delete failed for key='%s': %s", key, e)
@@ -178,21 +178,23 @@ class TieredMemoryStore:
         """Return tier sizes and operation counts."""
         with self._lock:
             hot_size = len(self._hot)
+            conn = self._conn
 
         warm_size = 0
         cold_size = 0
-        try:
-            row = self._conn.execute(
-                "SELECT COUNT(*) as cnt FROM memory_tier WHERE tier='warm'"
-            ).fetchone()
-            warm_size = row["cnt"] if row else 0
+        if conn is not None:
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM memory_tier WHERE tier='warm'"
+                ).fetchone()
+                warm_size = row["cnt"] if row else 0
 
-            row = self._conn.execute(
-                "SELECT COUNT(*) as cnt FROM memory_tier WHERE tier='cold'"
-            ).fetchone()
-            cold_size = row["cnt"] if row else 0
-        except Exception:
-            pass
+                row = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM memory_tier WHERE tier='cold'"
+                ).fetchone()
+                cold_size = row["cnt"] if row else 0
+            except Exception:
+                pass
 
         with self._lock:
             stats = dict(self._stats)
@@ -218,9 +220,13 @@ class TieredMemoryStore:
         return removed
 
     def close(self) -> None:
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+        global _instance
+        with self._lock:
+            if self._conn:
+                self._conn.close()
+                self._conn = None
+            if _instance is self:
+                _instance = None
 
     def _promote_to_hot(self, key: str, value: Any) -> None:
         with self._lock:
@@ -238,8 +244,12 @@ class TieredMemoryStore:
                 self._put_sql(evicted_key, serialized, "warm", now)
 
     def _put_sql(self, key: str, value: str, tier: str, now: float) -> None:
+        with self._lock:
+            conn = self._conn
+        if conn is None:
+            return
         try:
-            self._conn.execute(
+            conn.execute(
                 """INSERT INTO memory_tier (key, value, tier, created_at, updated_at, access_count)
                    VALUES (?, ?, ?, ?, ?, 0)
                    ON CONFLICT(key) DO UPDATE SET
@@ -249,40 +259,52 @@ class TieredMemoryStore:
                      access_count=memory_tier.access_count + 1""",
                 (key, value, tier, now, now),
             )
-            self._conn.commit()
+            conn.commit()
         except Exception as e:
             logger.error("SQLite put failed for key='%s': %s", key, e)
 
     def _get_sql(self, key: str) -> dict | None:
+        with self._lock:
+            conn = self._conn
+        if conn is None:
+            return None
         try:
-            row = self._conn.execute(
+            row = conn.execute(
                 "SELECT * FROM memory_tier WHERE key=?", (key,)
             ).fetchone()
             if row:
-                self._conn.execute(
+                conn.execute(
                     "UPDATE memory_tier SET access_count=access_count+1 WHERE key=?",
                     (key,),
                 )
-                self._conn.commit()
+                conn.commit()
                 return dict(row)
         except Exception as e:
             logger.error("SQLite get failed for key='%s': %s", key, e)
         return None
 
     def _update_sql(self, key: str, tier: str) -> None:
+        with self._lock:
+            conn = self._conn
+        if conn is None:
+            return
         try:
-            self._conn.execute(
+            conn.execute(
                 "UPDATE memory_tier SET tier=?, updated_at=? WHERE key=?",
                 (tier, time.time(), key),
             )
-            self._conn.commit()
+            conn.commit()
         except Exception as e:
             logger.error("SQLite update failed for key='%s': %s", key, e)
 
     def _delete_sql(self, key: str) -> None:
+        with self._lock:
+            conn = self._conn
+        if conn is None:
+            return
         try:
-            self._conn.execute("DELETE FROM memory_tier WHERE key=?", (key,))
-            self._conn.commit()
+            conn.execute("DELETE FROM memory_tier WHERE key=?", (key,))
+            conn.commit()
         except Exception as e:
             logger.error("SQLite delete failed for key='%s': %s", key, e)
 
