@@ -15,6 +15,61 @@ from typing import Any
 _TOOL_NAME_SAFE = re.compile(r"[^a-zA-Z0-9_-]")
 
 
+# ── Error types ────────────────────────────────────────────────────────
+
+class ProviderError(Exception):
+    """Base error for all provider failures."""
+
+    def __init__(self, provider: str, message: str, *, retryable: bool = False):
+        self.provider = provider
+        self.retryable = retryable
+        super().__init__(f"[{provider}] {message}")
+
+
+class RateLimitError(ProviderError):
+    """Provider returned a 429 / rate-limit / quota error."""
+
+    def __init__(self, provider: str, message: str = "rate limit exceeded"):
+        super().__init__(provider, message, retryable=True)
+
+
+class ProviderTimeoutError(ProviderError):
+    """Provider request exceeded its configured timeout."""
+
+    def __init__(self, provider: str, timeout_s: float):
+        super().__init__(provider, f"timeout after {timeout_s}s", retryable=True)
+        self.timeout_s = timeout_s
+
+
+class ProviderAuthError(ProviderError):
+    """Provider rejected the API key / credentials."""
+
+    def __init__(self, provider: str, message: str = "authentication failed"):
+        super().__init__(provider, message, retryable=False)
+
+
+class ProviderUnavailableError(ProviderError):
+    """Provider is not reachable or package is missing."""
+
+    def __init__(self, provider: str, message: str = "provider unavailable"):
+        super().__init__(provider, message, retryable=True)
+
+
+# ── Rate-limit detection (shared) ──────────────────────────────────────
+
+_RATE_LIMIT_MARKERS = (
+    "rate limit", "429", "too many", "quota", "credits",
+    "tokens per minute", "please try again", "billing",
+    "limit exceeded", "resource_exhausted",
+)
+
+
+def is_rate_limit_error(error_str: str) -> bool:
+    """Return True if the error string indicates a transient rate limit."""
+    lower = error_str.lower()
+    return any(m in lower for m in _RATE_LIMIT_MARKERS)
+
+
 def sanitize_tools(tools: list | None) -> tuple[list | None, dict[str, str]]:
     """Replace illegal characters in tool names for strict upstreams.
 

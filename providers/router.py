@@ -15,7 +15,7 @@ from providers.ollama_provider import OllamaProvider
 from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
-from providers.types import restore_tool_names, sanitize_tools
+from providers.types import ProviderError, RateLimitError, is_rate_limit_error, restore_tool_names, sanitize_tools
 
 logger = logging.getLogger("jarvis.providers.router")
 
@@ -141,11 +141,11 @@ class ProviderRouter:
     @staticmethod
     def _is_rate_limit(exc: Exception) -> bool:
         """True for transient 429/rate/quota failures that a retry may clear."""
-        text = str(exc).lower()
-        return any(w in text for w in (
-            "rate limit", "429", "too many", "quota", "credits", "tokens per minute",
-            "please try again",
-        ))
+        if isinstance(exc, RateLimitError):
+            return True
+        if isinstance(exc, ProviderError):
+            return exc.retryable
+        return is_rate_limit_error(str(exc))
 
     @staticmethod
     def _rate_limit_delay(exc: Exception, default: float = 8.0, cap: float = 30.0) -> float:
