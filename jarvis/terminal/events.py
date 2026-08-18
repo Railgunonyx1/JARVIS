@@ -48,6 +48,7 @@ class EventType(enum.Enum):
     INTENT_LAYOUT = "intent.layout"
     INTENT_MODEL_SWITCH = "intent.model_switch"
     INTENT_PROVIDER_SWITCH = "intent.provider_switch"
+    INTENT_HARNESS_SWITCH = "intent.harness_switch"
 
 
 def make_terminal_event(event_type: EventType,

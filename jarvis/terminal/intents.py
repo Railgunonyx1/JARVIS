@@ -21,6 +21,7 @@ class IntentType(enum.Enum):
     SET_LAYOUT = "set_layout"
     SWITCH_MODEL = "switch_model"
     SWITCH_PROVIDER = "switch_provider"
+    SWITCH_HARNESS = "switch_harness"
     RESIZE = "resize"
     SCROLL_UP = "scroll_up"
     SCROLL_DOWN = "scroll_down"
@@ -59,6 +60,10 @@ def intent_switch_model(model: str) -> UIIntent:
 
 def intent_switch_provider(provider: str) -> UIIntent:
     return UIIntent(type=IntentType.SWITCH_PROVIDER, payload={"provider": provider})
+
+
+def intent_switch_harness(harness_type: str) -> UIIntent:
+    return UIIntent(type=IntentType.SWITCH_HARNESS, payload={"harness": harness_type})
 
 
 def intent_resize(width: int, height: int) -> UIIntent:

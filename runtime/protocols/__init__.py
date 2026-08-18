@@ -47,9 +47,10 @@ class MCPAdapter:
     MCP is the standard protocol for exposing tools to LLM clients.
     """
 
-    def __init__(self, agent_loop=None, tool_registry=None):
+    def __init__(self, agent_loop=None, tool_registry=None, tool_service=None):
         self._agent_loop = agent_loop
         self._registry = tool_registry
+        self._tool_service = tool_service
 
     def list_tools(self) -> list[dict]:
         """Expose JARVIS tools as MCP tool definitions."""
@@ -89,20 +90,16 @@ class MCPAdapter:
         )
 
     async def _call_tool(self, name: str, arguments: dict) -> Any:
-        if self._agent_loop is None:
-            return {"error": "No agent loop configured"}
+        if self._tool_service is None:
+            return {"error": "No tool execution service configured"}
         from providers.types import ToolCall
         call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
-        # Delegate to agent tool executor
-        try:
-            messages = []
-            state = None
-            await self._agent_loop._handle_call(
-                messages, call, state, "mcp-session", "mcp",
-            )
-            return {"status": "completed", "tool": name}
-        except Exception as e:
-            return {"error": str(e)[:500]}
+        result = await self._tool_service.execute_tool(call, trace_id="mcp")
+        return {
+            "status": "completed" if result.success else "error",
+            "tool": name,
+            "output": result.output[:1000] if result.success else result.error,
+        }
 
 
 class ACPAdapter:
@@ -111,9 +108,10 @@ class ACPAdapter:
     ACP enables editors (VS Code, etc.) to communicate with agents.
     """
 
-    def __init__(self, agent_loop=None, bus=None):
+    def __init__(self, agent_loop=None, bus=None, tool_service=None):
         self._agent_loop = agent_loop
         self._bus = bus
+        self._tool_service = tool_service
 
     async def handle_request(self, method: str, params: dict[str, Any]) -> ProtocolMessage:
         if method == "agent/status":

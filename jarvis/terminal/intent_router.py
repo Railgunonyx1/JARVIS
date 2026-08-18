@@ -89,6 +89,13 @@ def _handle_switch_provider(intent: UIIntent) -> Any:
     )
 
 
+def _handle_switch_harness(intent: UIIntent) -> Any:
+    return make_terminal_event(
+        EventType.INTENT_HARNESS_SWITCH,
+        payload={"harness": intent.payload.get("harness", "native")},
+    )
+
+
 _INTENT_HANDLERS: dict[IntentType, Any] = {
     IntentType.SUBMIT_MESSAGE: _handle_submit,
     IntentType.CANCEL: _handle_cancel,
@@ -97,4 +104,5 @@ _INTENT_HANDLERS: dict[IntentType, Any] = {
     IntentType.SET_LAYOUT: _handle_set_layout,
     IntentType.SWITCH_MODEL: _handle_switch_model,
     IntentType.SWITCH_PROVIDER: _handle_switch_provider,
+    IntentType.SWITCH_HARNESS: _handle_switch_harness,
 }

@@ -108,22 +108,42 @@ class AgentLoop:
         context_manager: ContextManager | None = None,
         mem=None,
         event_bus=None,
+        harness=None,
+        model_gateway=None,
     ) -> None:
+        from core.harness import HarnessConfig, HarnessType, Harness
+
         self.router = router
         self.registry = registry
         self.project = project or ProjectContext.discover()
         self.logger = decision_logger or get_decision_logger()
         self.context_builder = AgentContextBuilder(registry)
-        self.permissions = PermissionEngine(self.logger, mode=mode, confirmation_handler=confirmation_handler)
-        self.executor = AgentToolExecutor(registry, self.logger)
         self.observer = observer or TaskObserver()
         self.context_manager = context_manager or ContextManager()
         self.mem = mem
         self._bus = event_bus
-        self.max_iterations = max_iterations
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.max_tool_calls_per_step = max_tool_calls_per_step
+        self._model_gateway = model_gateway
+
+        # Harness integration: harness overrides scalar config when present
+        self._harness = harness
+        if harness is not None:
+            hc = harness.config
+            self.max_iterations = hc.max_iterations
+            self.temperature = hc.temperature
+            self.max_tool_calls_per_step = hc.max_tool_calls_per_step
+            self._verification_enabled = hc.enable_verification
+            self._planning_enabled = hc.enable_planning
+        else:
+            self.max_iterations = max_iterations
+            self.temperature = temperature
+            self.max_tool_calls_per_step = max_tool_calls_per_step
+            self._verification_enabled = True
+            self._planning_enabled = True
+
+        self.permissions = PermissionEngine(
+            self.logger, mode=mode, confirmation_handler=confirmation_handler,
+        )
+        self.executor = AgentToolExecutor(registry, self.logger)
         self._tool_counter = 0
 
     def _next_tool_id(self) -> str:
@@ -160,11 +180,41 @@ class AgentLoop:
             self.observer.start(trace_id, goal)
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
+
+            # Model Gateway: select model based on harness requirements
+            if self._model_gateway is not None:
+                requirements = set()
+                if self._harness is not None:
+                    for pref in self._harness.config.model_preference:
+                        from providers.model_gateway import Capability
+                        try:
+                            requirements.add(Capability(pref))
+                        except ValueError:
+                            pass
+                profile = self._model_gateway.select(
+                    requirements=requirements or None,
+                    session_id=session_id or None,
+                )
+                if profile is not None:
+                    state.provider = profile.provider
+                    state.model = profile.name
+                    self._emit("model.selected", {
+                        "provider": profile.provider,
+                        "model": profile.name,
+                    }, trace_id)
+
             state.transition(TaskStatus.CLASSIFYING)
             state.transition(TaskStatus.EXECUTING)
             with tracer.span("context.build", {"project": str(self.project.root_path)}):
                 messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
             tools = self.registry.to_openai_tools()
+
+            # Harness: filter tools and append system prompt addendum
+            if self._harness is not None:
+                tools = self._harness.filter_tools(tools)
+                addendum = self._harness.build_system_prompt_addendum()
+                if addendum:
+                    system_prompt = (system_prompt or "") + addendum
 
             for iteration in range(1, self.max_iterations + 1):
                 state.iteration = iteration

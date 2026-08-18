@@ -22,6 +22,9 @@ from typing import Any
 logger = logging.getLogger("jarvis.event_bus")
 
 
+CURRENT_SCHEMA_VERSION = 1
+
+
 @dataclass(frozen=True)
 class BusEvent:
     name: str
@@ -30,6 +33,8 @@ class BusEvent:
     trace_id: str = ""
     timestamp: float = field(default_factory=time.time)
     event_id: str = ""
+    schema_version: int = CURRENT_SCHEMA_VERSION
+    session_id: str = ""
 
 
 Handler = Callable[[BusEvent], Any]
