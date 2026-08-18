@@ -1,19 +1,24 @@
-"""Sprint 9B — Terminal event types.
+"""Canonical Event Envelope — single event type for all inter-module communication.
 
-Events describe what happened.  They flow from Core → Event Bus → Terminal.
-The terminal never emits events directly; it emits UIIntents instead.
+BusEvent (from runtime.event_bus) is the one canonical event type.
+TerminalEvent is a thin convenience adapter that creates a BusEvent with
+source="terminal" and name derived from EventType.
+
+Architecture contract:
+    Terminal UI -> UIIntent -> IntentRouter -> BusEvent -> Event Bus -> Core Kernel
+    Core Kernel -> BusEvent -> Event Bus -> Terminal Store (reducer)
 """
 
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass, field
 from typing import Any
 
-from jarvis.terminal.types import _uuid, _now
+from runtime.event_bus import BusEvent
 
 
 class EventType(enum.Enum):
+    """Canonical event names.  BusEvent.name should use the string value."""
     SESSION_STARTED = "session.started"
     SESSION_IDLE = "session.idle"
     SESSION_ERROR = "session.error"
@@ -36,12 +41,31 @@ class EventType(enum.Enum):
     CODE_FILE_OPENED = "code.file.opened"
     MEMORY_LOADED = "memory.loaded"
     BREAKPOINT_HIT = "breakpoint.hit"
+    # Intent-originated events (terminal -> core)
+    INTENT_SUBMITTED = "intent.submitted"
+    INTENT_CANCEL = "intent.cancel"
+    INTENT_CONFIRM = "intent.confirm"
+    INTENT_LAYOUT = "intent.layout"
+    INTENT_MODEL_SWITCH = "intent.model_switch"
+    INTENT_PROVIDER_SWITCH = "intent.provider_switch"
 
 
-@dataclass(frozen=True)
-class TerminalEvent:
-    type: EventType
-    payload: dict[str, Any] = field(default_factory=dict)
-    event_id: str = field(default_factory=_uuid)
-    timestamp: float = field(default_factory=_now)
-    trace_id: str = ""
+def make_terminal_event(event_type: EventType,
+                        payload: dict[str, Any] | None = None,
+                        trace_id: str = "",
+                        event_id: str = "") -> BusEvent:
+    """Create a BusEvent with source='terminal' from an EventType.
+
+    This is the ONLY way terminal code should create events.
+    """
+    return BusEvent(
+        name=event_type.value,
+        payload=payload or {},
+        source="terminal",
+        trace_id=trace_id,
+        event_id=event_id,
+    )
+
+
+# Backwards-compatible alias
+TerminalEvent = BusEvent

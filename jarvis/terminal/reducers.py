@@ -2,6 +2,9 @@
 
 Every reducer is a pure function.  They never mutate the incoming state;
 they return a new frozen SessionState.
+
+Events are BusEvent (from runtime.event_bus).  The dispatcher matches on
+event.name (a dot-separated string like "session.started").
 """
 
 from __future__ import annotations
@@ -25,8 +28,8 @@ from jarvis.terminal.types import (
 
 
 def reduce(state: SessionState, event: TerminalEvent) -> SessionState:
-    """Top-level dispatcher — routes to the right reducer by event type."""
-    handler = _DISPATCHERS.get(event.type)
+    """Top-level dispatcher — routes to the right reducer by event name."""
+    handler = _DISPATCHERS.get(event.name)
     if handler is None:
         return state
     return handler(state, event)
@@ -297,17 +300,17 @@ def _provider_switched(state: SessionState, event: TerminalEvent) -> SessionStat
 
 
 _DISPATCHERS = {
-    EventType.SESSION_STARTED: _session_started,
-    EventType.SESSION_IDLE: _session_idle,
-    EventType.SESSION_ERROR: _session_error,
-    EventType.PLAN_CREATED: _plan_created,
-    EventType.PLAN_STEP_STARTED: _plan_step_started,
-    EventType.PLAN_STEP_COMPLETED: _plan_step_completed,
-    EventType.TOOL_EXECUTED: _tool_executed,
-    EventType.MESSAGE_ADDED: _message_added,
-    EventType.STREAM_CHUNK: _stream_chunk,
-    EventType.STREAM_DONE: _stream_done,
-    EventType.LAYOUT_CHANGED: _layout_changed,
-    EventType.CONFIRMATION_REQUESTED: _confirmation_requested,
-    EventType.PROVIDER_SWITCHED: _provider_switched,
+    EventType.SESSION_STARTED.value: _session_started,
+    EventType.SESSION_IDLE.value: _session_idle,
+    EventType.SESSION_ERROR.value: _session_error,
+    EventType.PLAN_CREATED.value: _plan_created,
+    EventType.PLAN_STEP_STARTED.value: _plan_step_started,
+    EventType.PLAN_STEP_COMPLETED.value: _plan_step_completed,
+    EventType.TOOL_EXECUTED.value: _tool_executed,
+    EventType.MESSAGE_ADDED.value: _message_added,
+    EventType.STREAM_CHUNK.value: _stream_chunk,
+    EventType.STREAM_DONE.value: _stream_done,
+    EventType.LAYOUT_CHANGED.value: _layout_changed,
+    EventType.CONFIRMATION_REQUESTED.value: _confirmation_requested,
+    EventType.PROVIDER_SWITCHED.value: _provider_switched,
 }

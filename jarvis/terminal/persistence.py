@@ -95,7 +95,7 @@ class SessionPersistence:
         conn.execute(
             """INSERT INTO session_events (session_id, event_type, payload_json, timestamp, seq)
                VALUES (?, ?, ?, ?, ?)""",
-            (session_id, event.type.value, json.dumps(event.payload, ensure_ascii=False),
+            (session_id, event.name, json.dumps(event.payload, ensure_ascii=False),
              event.timestamp, seq),
         )
         conn.commit()
@@ -113,14 +113,11 @@ class SessionPersistence:
             return None
         state = SessionState(session_id=session_id)
         for event_type_str, payload_json, timestamp in rows:
-            try:
-                event_type = EventType(event_type_str)
-            except ValueError:
-                continue
-            event = TerminalEvent(
-                type=event_type,
+            event = BusEvent(
+                name=event_type_str,
                 payload=json.loads(payload_json),
                 timestamp=timestamp,
+                source="replay",
             )
             state = reduce(state, event)
         return state

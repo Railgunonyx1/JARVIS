@@ -192,6 +192,8 @@ class AgentLoop:
                             "tokens": state.tokens_used,
                             "provider": response.provider,
                         })
+                        state.transition(TaskStatus.OBSERVING)
+                        state.transition(TaskStatus.VERIFYING)
                         state.transition(TaskStatus.COMPLETED)
                         self._finish_observation(True, final, state, iteration)
                         return AgentResult(
@@ -227,6 +229,8 @@ class AgentLoop:
                 for call in response.tool_calls:
                     with tracer.span("tool.execute", {"tool": call.name}):
                         await self._handle_call(messages, call, state, trace_id, session_id)
+                state.transition(TaskStatus.OBSERVING)
+                state.transition(TaskStatus.EXECUTING)
         except Exception as e:
             error = str(e)[:500]
             state.errors.append(error)
