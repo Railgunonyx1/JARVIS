@@ -220,14 +220,14 @@ class TestToolExecutionService:
 
     def test_execute_known_tool(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        call = ToolCall(name="bash", arguments={"command": "echo ok"}, id="t2")
+        call = ToolCall(name="shell.execute", arguments={"command": "python -c \"print(42)\""}, id="t2")
         result = asyncio.run(svc.execute_tool(call))
         assert result.success
-        assert "ok" in result.output
+        assert "42" in result.output
 
     def test_execute_appends_to_messages(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        call = ToolCall(name="bash", arguments={"command": "echo hi"}, id="t3")
+        call = ToolCall(name="shell.execute", arguments={"command": "python -c \"print('hi')\""}, id="t3")
         msgs = []
         asyncio.run(svc.execute_tool(call, append_to_messages=msgs))
         assert len(msgs) == 1
@@ -237,8 +237,8 @@ class TestToolExecutionService:
     def test_execute_tools_batch(self):
         svc = ToolExecutionService(registry=build_default_registry())
         calls = [
-            ToolCall(name="bash", arguments={"command": "echo a"}, id="b1"),
-            ToolCall(name="bash", arguments={"command": "echo b"}, id="b2"),
+            ToolCall(name="shell.execute", arguments={"command": "python -c \"print('a')\""}, id="b1"),
+            ToolCall(name="shell.execute", arguments={"command": "python -c \"print('b')\""}, id="b2"),
         ]
         results = asyncio.run(svc.execute_tools(calls))
         assert len(results) == 2

@@ -123,6 +123,7 @@ class AgentLoop:
         self.mem = mem
         self._bus = event_bus
         self._model_gateway = model_gateway
+        self.max_tokens = max_tokens
 
         # Harness integration: harness overrides scalar config when present
         self._harness = harness
