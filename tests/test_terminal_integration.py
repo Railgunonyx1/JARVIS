@@ -12,11 +12,14 @@ import pytest
 
 from jarvis.terminal.breakpoints import Breakpoint, classify_width, panels_for_breakpoint, should_show
 from jarvis.terminal.events import EventType, TerminalEvent, make_terminal_event
+from jarvis.terminal.intent_router import IntentRouter
 from jarvis.terminal.intents import (
     IntentType,
     intent_cancel,
+    intent_confirm,
     intent_set_layout,
     intent_submit,
+    intent_switch_model,
 )
 from jarvis.terminal.keymap import KeyBinding, Keymap
 from jarvis.terminal.persistence import SessionPersistence, _serialize_state, _deserialize_state
@@ -65,16 +68,16 @@ class TestReducerPipeline:
 
     def test_streaming_accumulation(self):
         store = TerminalStore()
-        store.dispatch(TerminalEvent(type=EventType.MESSAGE_ADDED, payload={"role": "assistant", "content": ""}))
+        store.dispatch(BusEvent(name=EventType.MESSAGE_ADDED.value, source="terminal", payload={"role": "assistant", "content": ""}))
         for chunk in ["Hello", " ", "world"]:
-            store.dispatch(TerminalEvent(type=EventType.STREAM_CHUNK, payload={"chunk": chunk}))
+            store.dispatch(BusEvent(name=EventType.STREAM_CHUNK.value, source="terminal", payload={"chunk": chunk}))
         state = store.state
         assert state.messages[-1].content == "Hello world"
 
     def test_confirmation_flow(self):
         store = TerminalStore()
-        store.dispatch(TerminalEvent(type=EventType.SESSION_STARTED))
-        store.dispatch(TerminalEvent(type=EventType.CONFIRMATION_REQUESTED, payload={
+        store.dispatch(BusEvent(name=EventType.SESSION_STARTED.value, source="terminal"))
+        store.dispatch(BusEvent(name=EventType.CONFIRMATION_REQUESTED.value, source="terminal", payload={
             "tool_name": "shell.execute", "description": "rm -rf /", "risk_level": "high",
         }))
         assert store.state.status == SessionStatus.WAITING_CONFIRM
@@ -206,9 +209,9 @@ class TestPersistenceIntegration:
         persistence = SessionPersistence(db_path=tmp_path / "replay.db")
         sid = "replay-test"
         events = [
-            (TerminalEvent(type=EventType.SESSION_STARTED, payload={"session_id": sid}), 0),
-            (TerminalEvent(type=EventType.MESSAGE_ADDED, payload={"role": "user", "content": "hi"}), 1),
-            (TerminalEvent(type=EventType.SESSION_IDLE), 2),
+            (BusEvent(name=EventType.SESSION_STARTED.value, source="terminal", payload={"session_id": sid}), 0),
+            (BusEvent(name=EventType.MESSAGE_ADDED.value, source="terminal", payload={"role": "user", "content": "hi"}), 1),
+            (BusEvent(name=EventType.SESSION_IDLE.value, source="terminal"), 2),
         ]
         for event, seq in events:
             persistence.record_event(sid, event, seq)
@@ -260,3 +263,96 @@ class TestTaskQueueIntegration:
         time.sleep(0.5)
         assert task.state == TaskState.CANCELLED
         queue.stop()
+
+
+# ── Intent Router integration ──────────────────────────────────────────
+
+
+class TestIntentRouterIntegration:
+    def test_submit_intent_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_SUBMITTED.value, lambda e: received.append(e))
+
+        event = router.route(intent_submit("hello world"))
+        assert len(received) == 1
+        assert received[0].payload["text"] == "hello world"
+        assert received[0].source == "terminal"
+        assert event.name == EventType.INTENT_SUBMITTED.value
+
+    def test_cancel_intent_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_CANCEL.value, lambda e: received.append(e))
+
+        router.route(intent_cancel())
+        assert len(received) == 1
+        assert received[0].source == "terminal"
+
+    def test_confirm_yes_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_CONFIRM.value, lambda e: received.append(e))
+
+        router.route(intent_confirm(yes=True))
+        assert len(received) == 1
+        assert received[0].payload["accepted"] is True
+
+    def test_confirm_no_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_CONFIRM.value, lambda e: received.append(e))
+
+        router.route(intent_confirm(yes=False))
+        assert len(received) == 1
+        assert received[0].payload["accepted"] is False
+
+    def test_switch_model_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_MODEL_SWITCH.value, lambda e: received.append(e))
+
+        router.route(intent_switch_model("gemini-2.5-pro"))
+        assert len(received) == 1
+        assert received[0].payload["model"] == "gemini-2.5-pro"
+
+    def test_set_layout_routes_to_bus(self):
+        bus = EventBus()
+        router = IntentRouter(bus)
+        received = []
+        bus.subscribe(EventType.INTENT_LAYOUT.value, lambda e: received.append(e))
+
+        router.route(intent_set_layout("focus"))
+        assert len(received) == 1
+        assert received[0].payload["mode"] == "focus"
+
+    def test_full_terminal_to_bus_pipeline(self):
+        """Simulates the full pipeline: keystroke → keymap → intent → router → bus → store."""
+        bus = EventBus()
+        keymap = Keymap()
+        router = IntentRouter(bus)
+        store = TerminalStore()
+
+        def _on_intent(e):
+            if e.name == EventType.INTENT_SUBMITTED.value:
+                store.dispatch(BusEvent(
+                    name=EventType.MESSAGE_ADDED.value, source="core",
+                    payload={"role": "user", "content": e.payload.get("text", "")},
+                ))
+
+        bus.subscribe(EventType.INTENT_SUBMITTED.value, _on_intent)
+
+        # Simulate: press Ctrl+C → cancel intent → bus event
+        intent = keymap.resolve("c", ctrl=True)
+        assert intent.type == IntentType.CANCEL
+        router.route(intent)
+
+        # Simulate: type message → submit intent → bus → message_added → store
+        router.route(intent_submit("fix the bug"))
+        assert store.state.messages[0].content == "fix the bug"
+        assert store.state.messages[0].role == "user"
