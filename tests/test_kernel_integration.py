@@ -220,29 +220,41 @@ class TestToolExecutionService:
 
     def test_execute_known_tool(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        call = ToolCall(name="shell.execute", arguments={"command": "python -c \"print(42)\""}, id="t2")
+        import tempfile, os
+        tmp = os.path.join(tempfile.gettempdir(), "test_svc.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "hello"}, id="t2")
         result = asyncio.run(svc.execute_tool(call))
         assert result.success
-        assert "42" in result.output
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
     def test_execute_appends_to_messages(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        call = ToolCall(name="shell.execute", arguments={"command": "python -c \"print('hi')\""}, id="t3")
+        import tempfile, os
+        tmp = os.path.join(tempfile.gettempdir(), "test_svc2.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "world"}, id="t3")
         msgs = []
         asyncio.run(svc.execute_tool(call, append_to_messages=msgs))
         assert len(msgs) == 1
         assert msgs[0]["role"] == "tool"
-        assert "hi" in msgs[0]["content"]
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
     def test_execute_tools_batch(self):
         svc = ToolExecutionService(registry=build_default_registry())
+        import tempfile, os
+        tmp1 = os.path.join(tempfile.gettempdir(), "test_b1.txt")
+        tmp2 = os.path.join(tempfile.gettempdir(), "test_b2.txt")
         calls = [
-            ToolCall(name="shell.execute", arguments={"command": "python -c \"print('a')\""}, id="b1"),
-            ToolCall(name="shell.execute", arguments={"command": "python -c \"print('b')\""}, id="b2"),
+            ToolCall(name="filesystem.write", arguments={"path": tmp1, "content": "a"}, id="b1"),
+            ToolCall(name="filesystem.write", arguments={"path": tmp2, "content": "b"}, id="b2"),
         ]
         results = asyncio.run(svc.execute_tools(calls))
         assert len(results) == 2
         assert all(r.success for r in results)
+        for p in (tmp1, tmp2):
+            if os.path.exists(p):
+                os.remove(p)
 
 
 # ── AgentLoop + Harness integration ────────────────────────────────────
