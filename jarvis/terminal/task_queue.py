@@ -88,6 +88,7 @@ class TaskQueue:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._running = False
+        self._ready = threading.Event()
 
     def start(self) -> None:
         if self._running:
@@ -96,6 +97,7 @@ class TaskQueue:
         self._thread = threading.Thread(target=self._run_loop, daemon=True,
                                          name="jarvis-task-queue")
         self._thread.start()
+        self._ready.wait(timeout=5.0)
 
     def stop(self) -> None:
         self._running = False
@@ -152,6 +154,7 @@ class TaskQueue:
     def _run_loop(self) -> None:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
+        self._ready.set()
         self._loop.run_forever()
 
     async def _run_task(self, task: QueuedTask,

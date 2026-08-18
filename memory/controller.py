@@ -207,15 +207,17 @@ class MemoryController:
         if not candidates:
             return []
 
-        # Deduplicate by normalized content — the same fact stored in KV and
-        # vector (or recalled from session) should appear only once.
-        seen_content: set[str] = set()
+        # Deduplicate by (id + normalized content) — the same fact stored
+        # in KV and vector (or recalled from session) should appear only
+        # once, but different keys with identical content are intentional.
+        seen: set[str] = set()
         unique: list[MemoryItem] = []
         for item in candidates:
             norm = item.content.strip().lower()[:200]
-            if norm in seen_content:
+            dedup_key = f"{item.id}|{norm}"
+            if dedup_key in seen:
                 continue
-            seen_content.add(norm)
+            seen.add(dedup_key)
             unique.append(item)
         candidates = unique
 

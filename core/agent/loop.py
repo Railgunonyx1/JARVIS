@@ -141,6 +141,7 @@ class AgentLoop:
             self.logger.record(trace_id, events.AGENT_REASONING_STARTED, {"goal": goal[:200]})
             self.observer.start(trace_id, goal)
             state = AgentState(task_id=trace_id, goal=goal)
+            state.transition(TaskStatus.CLASSIFYING)
             state.transition(TaskStatus.EXECUTING)
             with tracer.span("context.build", {"project": str(self.project.root_path)}):
                 messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
