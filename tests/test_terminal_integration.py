@@ -11,7 +11,7 @@ import time
 import pytest
 
 from jarvis.terminal.breakpoints import Breakpoint, classify_width, panels_for_breakpoint, should_show
-from jarvis.terminal.events import EventType, TerminalEvent
+from jarvis.terminal.events import EventType, TerminalEvent, make_terminal_event
 from jarvis.terminal.intents import (
     IntentType,
     intent_cancel,
@@ -45,13 +45,13 @@ class TestReducerPipeline:
         state = SessionState()
         store = TerminalStore(state)
         events = [
-            TerminalEvent(type=EventType.SESSION_STARTED, payload={"session_id": "s1"}),
-            TerminalEvent(type=EventType.PLAN_CREATED, payload={"goal": "test", "steps": ["a", "b"]}),
-            TerminalEvent(type=EventType.PLAN_STEP_STARTED, payload={"step_id": "step-0"}),
-            TerminalEvent(type=EventType.TOOL_EXECUTED, payload={"step_id": "step-0", "tool_name": "bash"}),
-            TerminalEvent(type=EventType.PLAN_STEP_COMPLETED, payload={"step_id": "step-0"}),
-            TerminalEvent(type=EventType.MESSAGE_ADDED, payload={"role": "assistant", "content": "done"}),
-            TerminalEvent(type=EventType.SESSION_IDLE),
+            BusEvent(name=EventType.SESSION_STARTED.value, source="terminal", payload={"session_id": "s1"}),
+            BusEvent(name=EventType.PLAN_CREATED.value, source="terminal", payload={"goal": "test", "steps": ["a", "b"]}),
+            BusEvent(name=EventType.PLAN_STEP_STARTED.value, source="terminal", payload={"step_id": "step-0"}),
+            BusEvent(name=EventType.TOOL_EXECUTED.value, source="terminal", payload={"step_id": "step-0", "tool_name": "bash"}),
+            BusEvent(name=EventType.PLAN_STEP_COMPLETED.value, source="terminal", payload={"step_id": "step-0"}),
+            BusEvent(name=EventType.MESSAGE_ADDED.value, source="terminal", payload={"role": "assistant", "content": "done"}),
+            BusEvent(name=EventType.SESSION_IDLE.value, source="terminal"),
         ]
         for event in events:
             state = store.dispatch(event)

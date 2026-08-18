@@ -18,6 +18,7 @@ from jarvis.terminal.events import EventType, TerminalEvent
 from jarvis.terminal.reducers import reduce
 from jarvis.terminal.store import TerminalStore
 from jarvis.terminal.types import SessionState
+from runtime.event_bus import BusEvent
 
 logger = logging.getLogger("jarvis.terminal.persistence")
 
