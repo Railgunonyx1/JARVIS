@@ -1,3 +1,8 @@
+---
+name: optimizer-agent
+description: Iterative prompt optimization using LangSmith evals and error analysis. Walks you through setting up datasets, running baselines, analyzing error patterns, and improving prompts until convergence.
+---
+
 # Optimizer Agent Skill
 
 **Name:** optimizer-agent  
