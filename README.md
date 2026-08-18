@@ -1,270 +1,201 @@
-# JARVIS MK-X — Terminal-First Autonomous Engineering Agent
+<div align="center">
 
-**JARVIS MK-X** is a terminal-first autonomous engineering agent. It runs entirely in your local terminal using Rich for rendering, `msvcrt` for Windows key handling, and your choice of LLM providers (Groq, Gemini, OpenRouter, Ollama).
+# ⚡ JARVIS MK-X
 
-## Quick Start
+### *Terminal-First Autonomous Engineering Agent*
 
-```bash
-# Install dependencies
-python -m pip install -r requirements.txt
+[![CI Status](https://github.com/Railgunonyx1/JARVIS1/actions/workflows/ci.yml/badge.svg)](https://github.com/Railgunonyx1/JARVIS1/actions)
+[![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Architecture: In--Process](https://img.shields.io/badge/Architecture-In--Process-blueviolet)](#architecture)
 
-# Launch the interactive terminal (default: agent mode)
-python -m cli
+<p align="center">
+  <b>JARVIS MK-X</b> is a lightning-fast, terminal-native autonomous software engineering agent built for precision, local privacy, and zero-latency in-process execution.
+</p>
 
-# Or launch with a specific mode
-python -m cli --mode plan
-python -m cli --mode controlled
-python -m cli --mode smart
-python -m cli --mode agent
+[Quick Start](#-quick-start) •
+[Key Features](#-key-features) •
+[Execution Modes](#-execution-modes) •
+[CLI Commands](#-cli-commands) •
+[Architecture](#-architecture) •
+[LLM Router](#-multi-tiered-llm-routing) •
+[Contributing](#-contributing)
 
-# One-shot goal
-python -m cli "analyze this repository"
+---
 
-# JSON output for piping
-python -m cli --json "list files"
+</div>
 
-# Show help
-python -m cli --help
-```
+## 🌟 Highlights
 
-## Architecture
+- ⚡ **Zero-Latency In-Process Loop**: Runs directly inside your terminal process without heavy daemons or network hops.
+- 🎨 **Rich UI & Live Telemetry**: Live updating terminal UI with streaming telemetry, plans, tool outputs, and status gauges.
+- 🧠 **Multi-Provider Fallback Router**: Auto-falls back across Groq (Llama 3.1 8B), Google Gemini Flash, OpenRouter, and local Ollama.
+- 🛡️ **Multi-Tier Autonomy & Safety**: 4 distinct execution modes ranging from strict read-only planning to full autonomous execution with interactive confirmations.
+- 💾 **Persistent Categorized Memory**: SQLite & Vector store (`sqlite-vec`) for persistent long-term knowledge, facts, and developer preferences.
+- 🔍 **Integrated Developer Tooling**: Built-in AST file analysis, regex grep, file modifications, sandboxed command execution, and performance benchmarks.
 
-```
-JARVIS MK-X
-├── cli/                          # Rich terminal CLI
-│   ├── main.py                   # Entry point & interactive loop
-│   ├── renderer.py               # Rich rendering engine
-│   ├── bridge.py                 # AgentBridge (event translation)
-│   ├── models.py                 # View-models (AppState, Plan, Message, etc.)
-│   ├── layout.py                 # Responsive terminal layout
-│   ├── theme.py                  # Color vocabulary & symbols
-│   ├── input.py                  # Windows msvcrt key handling + history
-│   ├── daemon_ui.py              # Daemon WebSocket bridge (optional)
-│   ├── ux.py                     # LiveTaskDisplay (event-driven Live region)
-│   ├── commands.py               # Command registry (/help, /mode, etc.)
-│   ├── cockpit.py                # Diagnostic dashboard (on demand)
-│   └── details.py                # Expanded task views
-│
-├── core/agent/                   # Agent loop & observer pattern
-│   ├── loop.py                   # AgentLoop (decision making, tool execution)
-│   ├── observer.py               # TaskObserver (event stream)
-│   └── event_store.py            # Persistent event store
-│
-├── providers/                    # LLM provider abstraction
-│   ├── base.py                   # Abstract provider + health tracking
-│   ├── router.py                 # Fallback chain router
-│   ├── groq_provider.py          # Groq (Llama 3.1 8B, fast)
-│   ├── gemini_provider.py        # Gemini Flash (complex reasoning)
-│   ├── openrouter_provider.py    # OpenRouter free tier
-│   └── ollama_provider.py        # Ollama (local, offline)
-│
-├── tools/                        # Executable tool actions
-│   ├── filesystem/               # File read/write/delete
-│   ├── grep/                     # Text search
-│   ├── bash/                     # Command execution
-│   └── package/                  # Package management
-│
-├── memory/                       # Categorized memory system
-│   ├── store.py                  # SQLite + JSON backend
-│   └── memory_manager.py         # Identity, preferences, facts
-│
-├── context/                      # Context management
-│   └── engine.py                 # Sliding window + user profile
-│
-├── runtime/                      # Performance & observability
-│   ├── benchmark/                # Benchmark gate & performance tracking
-│   └── observability/            # Exporters & dashboards
-│
-├── actions/                      # Action handlers
-│   ├── open_app.py               # App launcher (60+ aliases)
-│   ├── web_search.py             # Multi-mode search
-│   ├── system_monitor.py         # GPU/CPU monitoring
-│   └── proactive.py              # Background proactive engine
-│
-├── tools/                        # Tool definitions & registry
-│
-├── config/                       # Configuration files
-│   ├── jarvis.toml               # Main config
-│   ├── models.toml               # Model settings (budgets, tokens)
-│   ├── voice.toml                # Voice settings (legacy)
-│   └── security.toml             # Security settings
-│
-└── benchmark/                    # Performance benchmarks & baselines
+---
 
-## Philosophy
+## 🚀 Quick Start
 
-**Terminal-first**: The terminal is the primary interface. No GUI, no voice, no web dashboard by default. Rich provides Markdown rendering, syntax highlighting, and live live-updates via the `Live` region driven by the agent's event stream.
-
-**In-process architecture**: AgentLoop runs in-process with the CLI. No daemon, no WebSocket, no network hop for the local terminal. This gives lower latency, fewer failure modes, and simpler debugging.
-
-**Provide**:
-- Multiple LLM providers (Groq → Gemini → OpenRouter → Ollama → template fallback)
-- Tool execution with permission prompts
-- Memory system for facts & context
-- Rich terminal rendering with live telemetry
-- Comprehensive CLI command set
-
-## Quick Start
+### 1. Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/Railgunonyx1/JARVIS1.git
+cd JARVIS1
+
+# Create and activate virtual environment
+python -m venv venv
+# On Windows:
+.\venv\Scripts\Activate.ps1
+# On Linux/macOS:
+source venv/bin/activate
+
 # Install dependencies
-python -m pip install -r requirements.txt
-
-# Launch the interactive terminal (default: agent mode)
-python -m cli
-
-# Or launch with a specific mode
-python -m cli --mode plan     # Read-only plan mode
-python -m cli --mode controlled  # Confirm every consequential action
-python -m cli --mode smart     # Dynamic autonomy by risk
-python -m cli --mode agent     # Full autonomous execution
-
-# One-shot goal
-python -m cli "inspect the repository"
-
-# JSON output for piping to other tools
-python -m cli --json "list files"
-
-# Show the help system
-python -m cli /help
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-## Commands
+### 2. Configure API Keys
 
-| Command | Description |
-|---------|-------------|
-| `python -m cli` | Interactive terminal (agent mode) |
-| `python -m cli --mode plan` | Read-only plan mode |
-| `python -m cli --mode controlled` | Confirm every consequential action |
-| `python -m cli --mode smart` | Dynamic autonomy by risk |
-| `python -m cli --mode agent` | Full autonomous execution |
-| `python -m cli "goal"` | One-shot goal |
-| `python -m cli --json "query"` | JSON output |
-| `python -m cli /help` | Show help |
-| `python -m cli /mode` | Show current mode |
-| `python -m cli /model` | Show last model/provider |
-| `python -m cli /status` | Show daemon status / in-process status |
-| `python -m cli /context` | Show context budget report |
-| `python -m cli /tokens` | Show context usage |
-| `python -m cli /memory search <q>` | Semantic memory retrieval |
-| `python -m cli /memory add <k>=<v>` | Remember a fact |
-| `python -m cli /history` | List recent tasks |
-| `python -m cli /history <id>` | Replay a task timeline |
-| `python -m cli /audit` | Security audit log |
-| `python -m cli /audit trace <id>` | Replay an audit trace |
-| `python -m cli /tree` | Show project tree |
-| `python -m cli /resume` | Re-run the last goal |
-| `python -m cli /cockpit` | Diagnostic dashboard (on demand) |
-| `python -m cli /verbose` | Toggle backend messages |
-| `python -m cli /clear` | Clear screen |
-| `python -m cli /exit` | Quit |
+Set your preferred provider keys in environment variables or create a `.env` file:
 
-## Architecture
-
-```
-JARVIS MK-X
-├── cli/                          # Rich terminal CLI
-│   ├── main.py                   # Entry point & interactive loop
-│   ├── renderer.py               # Rich rendering engine
-│   ├── bridge.py                 # AgentBridge (event translation)
-│   ├── models.py                 # View-models (AppState, Plan, Message, etc.)
-│   ├── layout.py                 # Responsive terminal layout
-│   ├── theme.py                  # Color vocabulary & symbols
-│   ├── input.py                  # Windows msvcrt key handling + history
-│   ├── daemon_ui.py              # Daemon WebSocket bridge (optional)
-│   ├── ux.py                     # LiveTaskDisplay (event-driven Live region)
-│   ├── commands.py               # Command registry (/help, /mode, etc.)
-│   ├── cockpit.py                # Diagnostic dashboard (on demand)
-│   └── details.py                # Expanded task views
-│
-├── core/agent/                   # Agent loop & observer pattern
-│   ├── loop.py                   # AgentLoop (decision making, tool execution)
-│   ├── observer.py               # TaskObserver (event stream)
-│   └── event_store.py            # Persistent event store
-│
-├── providers/                    # LLM provider abstraction
-│   ├── base.py                   # Abstract provider + health tracking
-│   ├── router.py                 # Fallback chain router
-│   ├── groq_provider.py          # Groq (Llama 3.1 8B, fast)
-│   ├── gemini_provider.py        # Gemini Flash (complex reasoning)
-│   ├── openrouter_provider.py    # OpenRouter free tier
-│   └── ollama_provider.py        # Ollama (local, offline)
-│
-├── tools/                        # Tool actions & registry
-│   ├── filesystem/               # File read/write/delete
-│   ├── grep/                     # Text search
-│   ├── bash/                     # Command execution
-│   └── package/                  # Package management
-│
-├── memory/                       # Categorized memory system
-│   ├── store.py                  # SQLite + JSON backend
-│   └── memory_manager.py         # Identity, preferences, facts
-│
-├── context/                      # Context management
-│   └── engine.py                 # Sliding window + user profile
-│
-├── runtime/                      # Performance & observability
-│   ├── benchmark/                # Benchmark gate & performance tracking
-│   └── observability/            # Exporters & dashboards
-│
-├── actions/                      # Action handlers
-│   ├── open_app.py               # App launcher (60+ aliases)
-│   ├── web_search.py             # Multi-mode search
-│   ├── system_monitor.py         # GPU/CPU monitoring
-│   └── proactive.py              # Background proactive engine
-│
-├── config/                       # Configuration files
-│   ├── jarvis.toml               # Main config
-│   ├── models.toml               # Model settings (budgets, tokens)
-│   ├── voice.toml                # Voice settings (legacy)
-│   └── security.toml             # Security settings
-│
-└── benchmark/                    # Performance benchmarks & baselines
-```
-
-## LLM Routing
-
-```
-Groq Llama 3.1 8B (fast) → Gemini Flash (complex) → OpenRouter Free → Ollama qwen2.5:1.5b (offline) → template fallback
-```
-
-## Hardware
-
-- Python 3.11.x
-- Rich terminal rendering
-- msvcrt Windows key handling (or `sys.stdin.readline()` off-Windows)
-- Optional: Groq API key, Gemini API key, OpenRouter API key, Ollama local model
-
-## Configuration
-
-Edit `config/jarvis.toml` for settings. API keys go in environment variables or `config/.env`:
-
-```
+```env
 GROQ_API_KEY=gsk_...
 GEMINI_API_KEY=AIza...
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-## Migration History
+*(Local Ollama offline models work without API keys!)*
 
-JARVIS evolved from a cloud-first voice assistant (PyQt6 HUD, Piper TTS, Flask backend, daemon/Web UI) to a **terminal-first autonomous engineering agent**. The in-process architecture was chosen for simplicity, lower latency, and fewer failure modes. The legacy GUI/voice architecture is documented in the **Architecture History** section below.
+### 3. Launch
 
-## Architecture History (Legacy)
+```bash
+# Launch interactive agent interface
+python -m cli
 
-> This section documents the previous architecture for reference. The current terminal-first design replaced it starting in Phase 4.
->
-> **OLD JARVIS**:
-> - Cloud-first voice assistant with local fallback
-> - PyQt6 Arc Reactor HUD UI
-> - Flask-based web server
-> - Daemon/WebSocket bridge (`127.0.0.1:8787`)
-> - Voice pipeline (Piper TTS, Groq Whisper, openWakeWord)
-> - State machine (IDLE → LISTENING → THINKING → SPEAKING)
-> - `python main.py` with `--gui`, `--text`, `--voice` flags
-> - `launcher.py` for venv + Ollama auto-start
->
-> The migration to terminal-first began in Phase 4 and completed with the current `cli/` architecture. All core reasoning, tool execution, and memory capabilities were preserved; the rendering and interaction layers were rebuilt for the terminal.
+# Or execute a one-shot task directly
+python -m cli "inspect repository structure and summarize findings"
+```
 
-## License
+---
 
-MIT License. See `LICENSE` for details.
+## 🎛️ Execution Modes
+
+| Mode | Flag | Description | Risk Profile |
+| :--- | :--- | :--- | :--- |
+| **Plan** | `--mode plan` | Generates execution plans without modifying files or running commands | 🟢 Read-Only (Zero Risk) |
+| **Controlled** | `--mode controlled` | Requests user confirmation before executing any tool or command | 🟡 High Oversight |
+| **Smart** | `--mode smart` | Auto-executes read operations; prompts confirmation for destructive changes | 🔵 Balanced Autonomy |
+| **Agent** | `--mode agent` | Fully autonomous goal solving loop with automatic tool execution | 🟣 Full Autonomy |
+
+```bash
+python -m cli --mode smart
+```
+
+---
+
+## 💻 Interactive Terminal Commands
+
+Inside the interactive terminal session, control JARVIS using fast built-in slash commands:
+
+```
+  /help                  Show help system and available commands
+  /mode <name>           Switch active mode (plan | controlled | smart | agent)
+  /model                 Inspect active LLM provider and token telemetry
+  /status                Show system diagnostics and memory state
+  /context               View token window usage and budget breakdown
+  /memory search <q>     Search semantic memory
+  /memory add <k>=<v>    Store a user preference or fact
+  /history               List previous tasks and goals
+  /audit                 View security action audit log
+  /tree                  Render project directory tree
+  /cockpit               Open diagnostic telemetry dashboard
+  /clear                 Clear terminal viewport
+  /exit                  Quit session
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+JARVIS MK-X
+├── cli/                          # Terminal Rendering & UX
+│   ├── main.py                   # CLI entry point & interactive loop
+│   ├── renderer.py               # Rich UI layout & panels
+│   ├── bridge.py                 # Agent event translation bridge
+│   ├── input.py                  # Low-latency Windows msvcrt / POSIX input
+│   └── cockpit.py                # Telemetry dashboard & analytics
+│
+├── core/agent/                   # Autonomous Agent Core
+│   ├── loop.py                   # ReAct decision & execution loop
+│   ├── observer.py               # Real-time event streams & hooks
+│   └── event_store.py            # Event persistence
+│
+├── providers/                    # Multi-LLM Provider Engine
+│   ├── router.py                 # Resilient fallback routing chain
+│   ├── groq_provider.py          # Ultra-fast Groq Llama 3.1 8B
+│   ├── gemini_provider.py        # Gemini Flash reasoning
+│   ├── openrouter_provider.py    # OpenRouter API integration
+│   └── ollama_provider.py        # Local offline Ollama provider
+│
+├── tools/                        # Safe Tool Registry
+│   ├── filesystem/               # Scoped file read / write / patch
+│   ├── grep/                     # Fast ripgrep / regex search
+│   └── bash/                     # Command runner with security isolation
+│
+├── memory/                       # Knowledge & Persistence
+│   ├── store.py                  # SQLite storage backend
+│   └── vector_store.py           # sqlite-vec vector embeddings
+│
+└── benchmark/                    # Continuous Performance Gates
+    ├── gate.py                   # Automated regression prevention
+    └── baseline.json             # Ground truth performance metrics
+```
+
+---
+
+## 🔄 Multi-Tiered LLM Routing
+
+JARVIS MK-X employs a tiered fallback chain to guarantee high availability and sub-second responses:
+
+```mermaid
+flowchart LR
+    A[Task Prompt] --> B[Groq Llama 3.1 8B\nFastest Response]
+    B -- Rate Limit / Fail --> C[Gemini Flash\nComplex Reasoning]
+    C -- Fallback --> D[OpenRouter\nAlternative Models]
+    D -- Offline / Fallback --> E[Ollama Local\nPrivate Offline]
+    E -- Fallback --> F[Template System]
+```
+
+---
+
+## 🧪 Testing & CI
+
+JARVIS MK-X includes a multi-tiered test suite and automated CI workflow:
+
+```bash
+# Run safety linter
+ruff check . --select E9,F63,F7,F82
+
+# Run full test suite
+pytest tests/ -q
+
+# Run benchmark performance gate
+python -m benchmark.gate --baseline benchmark/baseline.json --ci
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) and our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details on getting started, coding standards, and PR workflows.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

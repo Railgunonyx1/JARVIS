@@ -68,10 +68,12 @@ class ToolExecutionService:
         mode: str = "agent",
     ):
         self._registry = registry
-        self._permissions = permissions or PermissionEngine(decision_logger, mode=mode)
-        self._executor = executor or AgentToolExecutor(registry, decision_logger)
+        from core.decision_logger import get_decision_logger
+        _logger = decision_logger or get_decision_logger()
+        self._permissions = permissions or PermissionEngine(_logger, mode=mode)
+        self._executor = executor or AgentToolExecutor(registry, _logger)
         self._observer = observer or TaskObserver()
-        self._logger = decision_logger
+        self._logger = _logger
         self._bus = bus
         self._mode = mode
 
