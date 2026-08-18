@@ -167,6 +167,7 @@ class TaskQueue:
 
     async def _execute(self, task: QueuedTask, coro_factory) -> None:
         """Run a single task coroutine, update state."""
+        import asyncio as _aio
         task.state = TaskState.RUNNING
         task.started_at = time.time()
         try:
@@ -176,6 +177,9 @@ class TaskQueue:
         except CancelledError as e:
             task.state = TaskState.CANCELLED
             task.error = str(e)
+        except _aio.CancelledError:
+            task.state = TaskState.CANCELLED
+            task.error = "cancelled"
         except Exception as e:
             task.state = TaskState.FAILED
             task.error = str(e)[:500]
