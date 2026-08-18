@@ -91,7 +91,7 @@ class TieredMemoryStore:
         logger.debug("Stored key='%s' tier='%s'", key, tier)
 
     def retrieve(self, key: str) -> Any | None:
-        """Search hot -> warm -> cold tiers. Promotes on access."""
+        """Search hot → warm → cold tiers. Promotes cold→warm on access."""
         with self._lock:
             if key in self._hot:
                 self._hot.move_to_end(key)
@@ -110,11 +110,18 @@ class TieredMemoryStore:
 
         with self._lock:
             self._stats["hits"] += 1
-            if len(self._hot) < self._hot_max:
-                self._promote_to_hot(key, value)
 
+        # Promote cold → warm (warm stays in SQL, cold gets warmer)
         if tier == "cold":
             self._update_sql(key, "warm")
+            self._stats["promotions"] += 1
+
+        # Auto-promote to hot if slot available
+        with self._lock:
+            if len(self._hot) < self._hot_max:
+                self._promote_to_hot(key, value)
+                self._delete_sql(key)
+                self._stats["promotions"] += 1
 
         return value
 

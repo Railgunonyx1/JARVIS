@@ -1,7 +1,8 @@
-"""Sprint 13 -- Session persistence, replay, and resume.
+"""Sprint 13/14B -- Session persistence, replay, resume, and event-sourced recording.
 
-Saves session state + events to SQLite so sessions can be resumed
-after restart, and events can be replayed to reconstruct any past state.
+Saves session state + events to SQLite.  EventBusPersistenceSubscriber
+hooks the canonical event bus so events are recorded automatically without
+manual record_event calls.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from jarvis.terminal.events import EventType, TerminalEvent
 from jarvis.terminal.reducers import reduce
 from jarvis.terminal.store import TerminalStore
 from jarvis.terminal.types import SessionState
-from runtime.event_bus import BusEvent
+from runtime.event_bus import BusEvent, EventBus, get_event_bus
 
 logger = logging.getLogger("jarvis.terminal.persistence")
 
@@ -218,3 +219,43 @@ def _deserialize_state(data: dict[str, Any]) -> SessionState:
         created_at=data.get("created_at", 0.0),
         updated_at=data.get("updated_at", 0.0),
     )
+
+
+class EventBusPersistenceSubscriber:
+    """Automatically records BusEvents to persistence via the event bus.
+
+    Subscribes to all ``**`` events on the bus and records them to the
+    session event log.  This replaces manual ``record_event()`` calls.
+
+    Usage::
+
+        persistence = SessionPersistence()
+        subscriber = EventBusPersistenceSubscriber(persistence, session_id="s1")
+        subscriber.start()
+        # ... now all bus events are automatically recorded ...
+        subscriber.stop()
+    """
+
+    def __init__(self, persistence: SessionPersistence, session_id: str,
+                 bus: EventBus | None = None):
+        self._persistence = persistence
+        self._session_id = session_id
+        self._bus = bus or get_event_bus()
+        self._seq = 0
+        self._handler = self._on_event
+
+    def start(self) -> None:
+        """Subscribe to all bus events."""
+        self._bus.subscribe("**", self._handler)
+
+    def stop(self) -> None:
+        """Unsubscribe from the bus."""
+        self._bus.unsubscribe("**", self._handler)
+
+    def _on_event(self, event: BusEvent) -> None:
+        """Record every bus event to the persistence log."""
+        try:
+            self._persistence.record_event(self._session_id, event, self._seq)
+            self._seq += 1
+        except Exception as e:
+            logger.error("Failed to record event %s: %s", event.name, e)

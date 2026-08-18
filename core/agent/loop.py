@@ -107,6 +107,7 @@ class AgentLoop:
         observer: TaskObserver | None = None,
         context_manager: ContextManager | None = None,
         mem=None,
+        event_bus=None,
     ) -> None:
         self.router = router
         self.registry = registry
@@ -118,6 +119,7 @@ class AgentLoop:
         self.observer = observer or TaskObserver()
         self.context_manager = context_manager or ContextManager()
         self.mem = mem
+        self._bus = event_bus
         self.max_iterations = max_iterations
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -127,6 +129,22 @@ class AgentLoop:
     def _next_tool_id(self) -> str:
         self._tool_counter += 1
         return generate_tool_call_id(self._tool_counter)
+
+    def _emit(self, name: str, payload: dict[str, Any] | None = None,
+              trace_id: str = "") -> None:
+        """Publish a lifecycle event on the bus (if wired).  Never raises."""
+        if self._bus is None:
+            return
+        try:
+            from runtime.event_bus import BusEvent
+            self._bus.publish(BusEvent(
+                name=name,
+                payload=payload or {},
+                source="agent_loop",
+                trace_id=trace_id,
+            ))
+        except Exception:
+            pass
 
     async def run(
         self,
@@ -140,6 +158,7 @@ class AgentLoop:
             trace_id = self.logger.begin_task(goal, source="agent_loop")
             self.logger.record(trace_id, events.AGENT_REASONING_STARTED, {"goal": goal[:200]})
             self.observer.start(trace_id, goal)
+            self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
             state.transition(TaskStatus.CLASSIFYING)
             state.transition(TaskStatus.EXECUTING)
@@ -179,6 +198,7 @@ class AgentLoop:
                             self.logger.record(trace_id, events.TASK_FAILED, {
                                 "goal": goal[:200], "error": error,
                             })
+                            self._emit("task.failed", {"goal": goal[:200], "error": error}, trace_id)
                             state.transition(TaskStatus.FAILED)
                             self._finish_observation(False, "", state, iteration)
                             return AgentResult(
@@ -195,6 +215,11 @@ class AgentLoop:
                         state.transition(TaskStatus.OBSERVING)
                         state.transition(TaskStatus.VERIFYING)
                         state.transition(TaskStatus.COMPLETED)
+                        self._emit("task.completed", {
+                            "goal": goal[:200], "iterations": iteration,
+                            "tokens": state.tokens_used, "provider": response.provider,
+                            "response": final[:500],
+                        }, trace_id)
                         self._finish_observation(True, final, state, iteration)
                         return AgentResult(
                             success=True, response=final, trace_id=trace_id, state=state,
@@ -227,14 +252,17 @@ class AgentLoop:
                 })
 
                 for call in response.tool_calls:
+                    self._emit("step.started", {"tool": call.name, "iteration": iteration}, trace_id)
                     with tracer.span("tool.execute", {"tool": call.name}):
                         await self._handle_call(messages, call, state, trace_id, session_id)
+                    self._emit("step.completed", {"tool": call.name, "iteration": iteration}, trace_id)
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
         except Exception as e:
             error = str(e)[:500]
             state.errors.append(error)
             self.logger.record(trace_id, events.TASK_FAILED, {"goal": goal[:200], "error": error})
+            self._emit("task.failed", {"goal": goal[:200], "error": error}, trace_id)
             try:
                 state.transition(TaskStatus.FAILED)
             except ValueError:
