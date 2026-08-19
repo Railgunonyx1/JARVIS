@@ -19,6 +19,7 @@ from typing import Any
 
 from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
+from core.agent.state import FailureClass
 from core.agent.tools import AgentToolExecutor
 from core.decision_logger import DecisionLogger
 from providers.types import ToolCall
@@ -94,7 +95,6 @@ class ToolExecutionService:
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:
-            from core.agent.state import FailureClass
             error = f"Tool '{call.name}' is not registered"
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
             if step is not None:
@@ -117,7 +117,6 @@ class ToolExecutionService:
         )
         self._observer.observe_permission(call.name, allowed, reason) if has_obs else None
         if not allowed:
-            from core.agent.state import FailureClass
             self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
             if step is not None:
                 self._observer.step_finished(step, "denied", 0.0, reason)
@@ -158,7 +157,6 @@ class ToolExecutionService:
         if result.success:
             self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
         else:
-            from core.agent.state import FailureClass
             fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
             self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
         
@@ -174,7 +172,6 @@ class ToolExecutionService:
 
         result_fc = None
         if not result.success:
-            from core.agent.state import FailureClass
             result_fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
 
         return ToolExecutionResult(

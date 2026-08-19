@@ -18,7 +18,7 @@ from core import events
 from core.agent.context import AgentContextBuilder
 from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
-from core.agent.state import AgentState, TaskStatus, pick_worst_failure
+from core.agent.state import AgentState, FailureClass, TaskStatus, classify_failure, pick_worst_failure
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id
 from core.context.budget import estimate_tokens
 from core.context.manager import ContextManager
@@ -286,7 +286,6 @@ class AgentLoop:
                         if self._verification_enabled:
                             ver_report = await self._run_verification(trace_id)
                             if not ver_report.all_passed:
-                                from core.agent.state import FailureClass, classify_failure
                                 self._emit("verification.failed", {
                                     "steps_run": ver_report.steps_run,
                                     "steps_passed": ver_report.steps_passed,
@@ -371,7 +370,6 @@ class AgentLoop:
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
         except Exception as e:
-            from core.agent.state import FailureClass, classify_failure
             error = str(e)[:500]
             state.errors.append(error)
             fc = classify_failure(error)
