@@ -296,8 +296,7 @@ class AgentLoop:
                                 }, trace_id)
                                 failure_ctx = self._build_verification_failure_context(ver_report)
                                 state.errors.append(failure_ctx)
-                                fc = classify_failure(failure_ctx, is_verification=True)
-                                state.failure_class = pick_worst_failure(state.failure_class, fc)
+                                from core.agent.state import TerminalReason
                                 if iteration < self.max_iterations:
                                     messages.append({
                                         "role": "user",
@@ -311,6 +310,7 @@ class AgentLoop:
                                     state.transition(TaskStatus.EXECUTING)
                                     continue
                                 else:
+                                    state.terminal_reason = TerminalReason.VERIFICATION_FAIL
                                     self._emit("task.failed", {
                                         "goal": goal[:200],
                                         "error": "verification failed and no retries remaining",
@@ -398,6 +398,8 @@ class AgentLoop:
         except ValueError:
             pass
         self._finish_observation(False, "", state, state.iteration)
+        from core.agent.state import TerminalReason
+        state.terminal_reason = TerminalReason.MAX_ITERATIONS
         return AgentResult(
             success=False,
             response="",

@@ -401,20 +401,20 @@ class TestFailureClassification:
         fc = classify_failure("cancelled", is_cancelled=True)
         assert fc == FailureClass.CANCELLED
 
-    def test_classify_verification_fail(self):
-        from core.agent.state import classify_failure, FailureClass
-        fc = classify_failure("tests failed", is_verification=True)
-        assert fc == FailureClass.VERIFICATION_FAIL
-
     def test_classify_tool_failure_default(self):
         from core.agent.state import classify_failure, FailureClass
         fc = classify_failure("something went wrong")
         assert fc == FailureClass.TOOL_FAILURE
 
-    def test_classify_max_iterations(self):
+    def test_classify_provider_failure(self):
         from core.agent.state import classify_failure, FailureClass
-        fc = classify_failure("Max iterations (10) reached")
-        assert fc == FailureClass.MAX_ITERATIONS
+        fc = classify_failure("api error", is_provider=True)
+        assert fc == FailureClass.PROVIDER_FAILURE
+
+    def test_classify_context_overflow(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("too many tokens", is_context_overflow=True)
+        assert fc == FailureClass.CONTEXT_OVERFLOW
 
     def test_precedence_cancelled_wins(self):
         from core.agent.state import classify_failure, FailureClass
@@ -426,6 +426,11 @@ class TestFailureClassification:
         fc = classify_failure("Tool 'x' failed", is_timeout=True)
         assert fc == FailureClass.TIMEOUT
 
+    def test_precedence_timeout_beats_permission(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("error", is_permission=True, is_timeout=True)
+        assert fc == FailureClass.TIMEOUT
+
     def test_pick_worst(self):
         from core.agent.state import FailureClass, pick_worst_failure
         result = pick_worst_failure(FailureClass.TOOL_FAILURE, FailureClass.TIMEOUT)
@@ -434,6 +439,14 @@ class TestFailureClassification:
     def test_pick_worst_none(self):
         from core.agent.state import pick_worst_failure
         assert pick_worst_failure(None, None) is None
+
+    def test_pick_worst_first_none(self):
+        from core.agent.state import FailureClass, pick_worst_failure
+        assert pick_worst_failure(None, FailureClass.TIMEOUT) == FailureClass.TIMEOUT
+
+    def test_pick_worst_second_none(self):
+        from core.agent.state import FailureClass, pick_worst_failure
+        assert pick_worst_failure(FailureClass.TIMEOUT, None) == FailureClass.TIMEOUT
 
     def test_state_transition_to_recovering(self):
         from core.agent.state import AgentState, TaskStatus
@@ -462,6 +475,29 @@ class TestFailureClassification:
         s.failure_class = FailureClass.TOOL_FAILURE
         d = s.to_dict()
         assert d["failure_class"] == "tool_failure"
+
+    def test_terminal_reason_max_iterations(self):
+        from core.agent.state import AgentState, TaskStatus, TerminalReason
+        s = AgentState(task_id="t", goal="g")
+        s.terminal_reason = TerminalReason.MAX_ITERATIONS
+        d = s.to_dict()
+        assert d["terminal_reason"] == "max_iterations"
+
+    def test_terminal_reason_verification_fail(self):
+        from core.agent.state import AgentState, TerminalReason
+        s = AgentState(task_id="t", goal="g")
+        s.terminal_reason = TerminalReason.VERIFICATION_FAIL
+        assert s.terminal_reason == TerminalReason.VERIFICATION_FAIL
+
+    def test_failure_class_not_verification(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("tests failed", is_verification=True)
+        assert fc == FailureClass.TOOL_FAILURE
+
+    def test_failure_class_not_max_iterations(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("Max iterations (10) reached")
+        assert fc == FailureClass.TOOL_FAILURE
 
 
 # ── Unified Pipeline tests ──────────────────────────────────────────────
@@ -512,76 +548,225 @@ class TestUnifiedPipeline:
     def test_mcp_tools_call_goes_through_service(self):
         svc = self._make_svc()
         mcp = MCPAdapter(tool_service=svc)
+        tmp = os.path.join(tempfile.gettempdir(), "mcp_test.txt")
         result = asyncio.run(mcp._call_tool("filesystem.write", {
-            "path": os.path.join(tempfile.gettempdir(), "mcp_test.txt"),
-            "content": "mcp",
+            "path": tmp, "content": "mcp",
         }))
         assert result["status"] == "completed"
-        p = os.path.join(tempfile.gettempdir(), "mcp_test.txt")
-        if os.path.exists(p):
-            os.remove(p)
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
     def test_acp_tools_call_goes_through_service(self):
         svc = self._make_svc()
         acp = ACPAdapter(tool_service=svc)
+        tmp = os.path.join(tempfile.gettempdir(), "acp_test.txt")
         result = asyncio.run(acp._call_tool("filesystem.write", {
-            "path": os.path.join(tempfile.gettempdir(), "acp_test.txt"),
-            "content": "acp",
+            "path": tmp, "content": "acp",
         }))
         assert result["status"] == "completed"
-        p = os.path.join(tempfile.gettempdir(), "acp_test.txt")
-        if os.path.exists(p):
-            os.remove(p)
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
     def test_codex_tool_goes_through_service(self):
         svc = self._make_svc()
         codex = CodexExecAdapter(tool_service=svc)
+        tmp = os.path.join(tempfile.gettempdir(), "codex_test.txt")
         result = asyncio.run(codex.handle_tool("filesystem.write", {
-            "path": os.path.join(tempfile.gettempdir(), "codex_test.txt"),
-            "content": "codex",
+            "path": tmp, "content": "codex",
         }))
         assert result["status"] == "completed"
-        p = os.path.join(tempfile.gettempdir(), "codex_test.txt")
-        if os.path.exists(p):
-            os.remove(p)
-
-    def test_all_paths_produce_same_result_type(self):
-        svc = self._make_svc()
-        import tempfile, os
-        tmp = os.path.join(tempfile.gettempdir(), "unified_test.txt")
-        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "x"}, id="u1")
-        result = asyncio.run(svc.execute_tool(call))
-        assert isinstance(result, ToolExecutionResult)
-        assert result.success
         if os.path.exists(tmp):
             os.remove(tmp)
+
+    def test_service_list_tools(self):
+        svc = self._make_svc()
+        tools = svc.list_tools()
+        assert isinstance(tools, list)
+        assert len(tools) > 0
+        assert "function" in tools[0]
+        assert "name" in tools[0]["function"]
+
+    def test_acp_list_tools_uses_service(self):
+        svc = self._make_svc()
+        acp = ACPAdapter(tool_service=svc)
+        result = asyncio.run(acp.handle_request("tools/list", {}))
+        assert isinstance(result.result, list)
+        assert len(result.result) > 0
+
+    def test_mcp_tools_list(self):
+        svc = self._make_svc()
+        mcp = MCPAdapter(tool_service=svc)
+        result = asyncio.run(mcp.handle_request("tools/list", {}))
+        assert isinstance(result.result, list)
+        assert len(result.result) > 0
+
+    def test_no_bypass_all_paths_use_same_service(self):
+        svc = self._make_svc()
+        tmp = os.path.join(tempfile.gettempdir(), "bypass_test.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "bypass"}, id="b1")
+        result_direct = asyncio.run(svc.execute_tool(call))
+        assert result_direct.success
+
+        tmp2 = os.path.join(tempfile.gettempdir(), "bypass_mcp.txt")
+        mcp = MCPAdapter(tool_service=svc)
+        result_mcp = asyncio.run(mcp._call_tool("filesystem.write", {
+            "path": tmp2, "content": "bypass_mcp",
+        }))
+        assert result_mcp["status"] == "completed"
+
+        tmp3 = os.path.join(tempfile.gettempdir(), "bypass_acp.txt")
+        acp = ACPAdapter(tool_service=svc)
+        result_acp = asyncio.run(acp._call_tool("filesystem.write", {
+            "path": tmp3, "content": "bypass_acp",
+        }))
+        assert result_acp["status"] == "completed"
+
+        tmp4 = os.path.join(tempfile.gettempdir(), "bypass_codex.txt")
+        codex = CodexExecAdapter(tool_service=svc)
+        result_codex = asyncio.run(codex.handle_tool("filesystem.write", {
+            "path": tmp4, "content": "bypass_codex",
+        }))
+        assert result_codex["status"] == "completed"
+
+        for f in [tmp, tmp2, tmp3, tmp4]:
+            if os.path.exists(f):
+                os.remove(f)
 
     def test_permission_denial_blocks_all_paths(self):
         from core.agent.permissions import PermissionEngine
         from core.decision_logger import get_decision_logger
-        from unittest.mock import AsyncMock, patch
         logger = get_decision_logger()
         perm = PermissionEngine(logger, mode="agent")
         svc = ToolExecutionService(
-            registry=build_default_registry(),
-            permissions=perm,
+            registry=build_default_registry(), permissions=perm,
         )
-        call = ToolCall(name="shell.execute", arguments={"command": "echo pwned"}, id="denied1")
         original_check = perm.check
         async def deny_all(*a, **kw):
             return False, "test denial"
         perm.check = deny_all
+
+        call = ToolCall(name="shell.execute", arguments={"command": "echo pwned"}, id="denied1")
         result = asyncio.run(svc.execute_tool(call))
         assert result.permission_denied
-        assert not result.success or result.permission_denied
+
         perm.check = original_check
 
-    def test_redaction_applies_on_all_paths(self):
+    def test_permission_denial_mcp(self):
+        from core.agent.permissions import PermissionEngine
+        from core.decision_logger import get_decision_logger
+        logger = get_decision_logger()
+        perm = PermissionEngine(logger, mode="agent")
+        svc = ToolExecutionService(
+            registry=build_default_registry(), permissions=perm,
+        )
+        original_check = perm.check
+        async def deny_all(*a, **kw):
+            return False, "test denial"
+        perm.check = deny_all
+        mcp = MCPAdapter(tool_service=svc)
+        result = asyncio.run(mcp._call_tool("shell.execute", {"command": "echo pwned"}))
+        assert result["status"] == "error"
+        perm.check = original_check
+
+    def test_permission_denial_acp(self):
+        from core.agent.permissions import PermissionEngine
+        from core.decision_logger import get_decision_logger
+        logger = get_decision_logger()
+        perm = PermissionEngine(logger, mode="agent")
+        svc = ToolExecutionService(
+            registry=build_default_registry(), permissions=perm,
+        )
+        original_check = perm.check
+        async def deny_all(*a, **kw):
+            return False, "test denial"
+        perm.check = deny_all
+        acp = ACPAdapter(tool_service=svc)
+        result = asyncio.run(acp._call_tool("shell.execute", {"command": "echo pwned"}))
+        assert result["status"] == "error"
+        perm.check = original_check
+
+    def test_permission_denial_codex(self):
+        from core.agent.permissions import PermissionEngine
+        from core.decision_logger import get_decision_logger
+        logger = get_decision_logger()
+        perm = PermissionEngine(logger, mode="agent")
+        svc = ToolExecutionService(
+            registry=build_default_registry(), permissions=perm,
+        )
+        original_check = perm.check
+        async def deny_all(*a, **kw):
+            return False, "test denial"
+        perm.check = deny_all
+        codex = CodexExecAdapter(tool_service=svc)
+        result = asyncio.run(codex.handle_tool("shell.execute", {"command": "echo pwned"}))
+        assert result["status"] == "error"
+        perm.check = original_check
+
+    def test_malformed_tool_returns_failure_class(self):
         svc = self._make_svc()
-        import tempfile, os
-        tmp = os.path.join(tempfile.gettempdir(), "redact_test.txt")
-        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "test"}, id="r1")
+        call = ToolCall(name="nonexistent_tool", arguments={}, id="m1")
         result = asyncio.run(svc.execute_tool(call))
-        assert "REDACTED" not in result.output or result.success
+        assert not result.success
+        assert result.failure_class is not None
+        from core.agent.state import FailureClass
+        assert result.failure_class == FailureClass.MALFORMED_TOOL
+
+    def test_tool_failure_returns_failure_class(self):
+        svc = self._make_svc()
+        call = ToolCall(name="shell.execute", arguments={"command": "exit 1"}, id="t1")
+        result = asyncio.run(svc.execute_tool(call))
+        assert not result.success
+        from core.agent.state import FailureClass
+        assert result.failure_class is not None
+
+    def test_permission_denied_returns_failure_class(self):
+        from core.agent.permissions import PermissionEngine
+        from core.decision_logger import get_decision_logger
+        logger = get_decision_logger()
+        perm = PermissionEngine(logger, mode="agent")
+        svc = ToolExecutionService(
+            registry=build_default_registry(), permissions=perm,
+        )
+        original_check = perm.check
+        async def deny_all(*a, **kw):
+            return False, "test denial"
+        perm.check = deny_all
+        call = ToolCall(name="shell.execute", arguments={"command": "echo x"}, id="p1")
+        result = asyncio.run(svc.execute_tool(call))
+        from core.agent.state import FailureClass
+        assert result.failure_class == FailureClass.PERMISSION_DENIED
+        perm.check = original_check
+
+    def test_success_has_no_failure_class(self):
+        svc = self._make_svc()
+        tmp = os.path.join(tempfile.gettempdir(), "success_test.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "ok"}, id="s1")
+        result = asyncio.run(svc.execute_tool(call))
+        assert result.success
+        assert result.failure_class is None
         if os.path.exists(tmp):
             os.remove(tmp)
+
+    def test_acp_unknown_method(self):
+        svc = self._make_svc()
+        acp = ACPAdapter(tool_service=svc)
+        result = asyncio.run(acp.handle_request("unknown/method", {}))
+        assert result.error != ""
+
+    def test_mcp_unknown_method(self):
+        svc = self._make_svc()
+        mcp = MCPAdapter(tool_service=svc)
+        result = asyncio.run(mcp.handle_request("unknown/method", {}))
+        assert result.error != ""
+
+    def test_all_paths_return_tool_execution_result(self):
+        svc = self._make_svc()
+        call = ToolCall(name="filesystem.write", arguments={
+            "path": os.path.join(tempfile.gettempdir(), "type_test.txt"),
+            "content": "x",
+        }, id="t1")
+        direct = asyncio.run(svc.execute_tool(call))
+        assert isinstance(direct, ToolExecutionResult)
+        p = os.path.join(tempfile.gettempdir(), "type_test.txt")
+        if os.path.exists(p):
+            os.remove(p)

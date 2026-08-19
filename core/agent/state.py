@@ -178,6 +178,7 @@ class AgentState:
             "goal": self.goal,
             "status": self.status.value,
             "failure_class": self.failure_class.value if self.failure_class else None,
+            "terminal_reason": self.terminal_reason.value if self.terminal_reason else None,
             "tool_calls": self.tool_calls,
             "files_changed": self.files_changed,
             "errors": self.errors,

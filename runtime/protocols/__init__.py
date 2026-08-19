@@ -54,9 +54,12 @@ class MCPAdapter:
 
     def list_tools(self) -> list[dict]:
         """Expose JARVIS tools as MCP tool definitions."""
-        if self._registry is None:
+        if self._registry is not None:
+            tools = self._registry.to_openai_tools()
+        elif self._tool_service is not None:
+            tools = self._tool_service.list_tools()
+        else:
             return []
-        tools = self._registry.to_openai_tools()
         return [
             {
                 "name": t["function"]["name"],

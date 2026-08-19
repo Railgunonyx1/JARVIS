@@ -1,12 +1,12 @@
 @echo off
 setlocal
-chcp 65001 >/dev/null 2>&1
+chcp 65001 >nul 2>&1
 
 REM JARVIS MK-X scripts/start.bat
 REM Relaunches inside Windows Terminal when available.
 
 if not "%JARVIS_WT%"=="1" (
-    where wt.exe >/dev/null 2>/dev/null
+    where wt.exe >nul 2>nul
     if not errorlevel 1 (
         set "JARVIS_WT=1"
         start "" wt.exe "%~f0"
@@ -47,7 +47,7 @@ if /i "%choice%"=="q" goto quit
 
 echo.
 echo   Invalid option.
-timeout /t 2 >/dev/null
+timeout /t 2 >nul
 exit /b
 
 :chat
