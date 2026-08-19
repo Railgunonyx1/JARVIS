@@ -11,6 +11,7 @@ class only turns ``AppState`` snapshots into Rich renderables.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Sequence
 from contextlib import nullcontext
 from datetime import datetime
@@ -163,20 +164,19 @@ class Renderer:
         return f"{u}/{l}"
 
     def render_status(self) -> Text:
-        """
+        """Compact single-line status for Claude Code-style view.
+
         Priority collapse:
-          ≥120  full
-          90–119 drop TOOL + MEMORY
-          <70   drop model + time
+          ≥90  full (mode · model · tokens · tools · elapsed)
+          70–89 drop tools + elapsed
+          <70   drop model too
         """
+        import time as _time
         width = self.console.size.width
         sym = self.symbols
-        sep = Text(f" {sym['separator']} ", style="jarvis.muted")
+        sep = Text(" ", style="jarvis.muted")
         parts: list[Text] = [
-            Text(f"{sym['diamond']} ", style="jarvis.primary"),
-            Text("JARVIS", style="bold jarvis.primary"),
-            Text(f" {sym['separator']} ", style="jarvis.muted"),
-            Text(self.state.mode.value.upper(), style="jarvis.accent"),
+            Text(self.state.mode.value.lower(), style="jarvis.accent"),
         ]
 
         if width >= 70:
@@ -187,20 +187,13 @@ class Renderer:
 
         parts += [sep, Text(self._token_str(), style="jarvis.dim")]
 
-        if width >= 120:
-            tool_sym = sym['running'] if self.state.tools_active else sym['done']
-            tool_style = "jarvis.running" if self.state.tools_active else "jarvis.done"
-            tool_label = f"{tool_sym} 1 TOOL" if self.state.tools_active == 1 else f"{tool_sym} {self.state.tools_active} TOOLS" if self.state.tools_active else f"{sym['done']} IDLE"
-            parts += [sep, Text(tool_label, style=tool_style)]
-            if self.state.memory_enabled:
-                parts += [sep, Text(f"{sym['star']} MEMORY", style="jarvis.success")]
-
-        conn_sym = sym['done'] if self.state.connection == "ONLINE" else sym['failed']
-        conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
-        parts += [sep, Text(f"{conn_sym} {self.state.connection}", style=conn_style)]
-
         if width >= 90:
-            parts += [sep, Text(datetime.now().strftime("%H:%M:%S"), style="jarvis.dim")]
+            tool_count = self.state.tools_active
+            if tool_count:
+                parts += [sep, Text(f"{tool_count} tools", style="jarvis.running")]
+            elapsed_s = _time.time() - self.state.events[0].timestamp if self.state.events else 0
+            if elapsed_s > 0:
+                parts += [sep, Text(f"{elapsed_s:.0f}s", style="jarvis.dim")]
 
         return Text.assemble(*parts)
 
@@ -632,34 +625,26 @@ class Renderer:
     # ------------------------------------------------------------------
 
     def render_task_screen(self) -> RenderableType:
-        """The full-screen view shown while an agent run is live: header status
-        bar, conversation (streamed live), and — on wide terminals — the
-        activity stream beside it. Reads only ``AppState``; no decisions."""
-        header = Panel(
-            self.render_status(),
-            border_style=COLORS.border_focus,
-            box=BoxStyles.HEADER,
-            padding=(0, 1),
-            height=3,
-        )
-        conversation = Panel(
-            self.render_conversation(),
-            title=f"[jarvis.primary]{self.symbols['arrow_right']} JARVIS[/]",
-            title_align="left",
-            border_style=COLORS.border,
-            box=BoxStyles.PANEL,
-            padding=(0, 1),
-        )
-        if self.console.size.width >= 120:
-            layout = Layout()
-            layout.split_row(
-                Layout(conversation, ratio=7),
-                Layout(self.render_activity_panel(), ratio=3),
-            )
-            body = layout
-        else:
-            body = conversation
-        elements: list[RenderableType] = [header, Text(""), body]
+        """Claude Code-style conversation-first view.
+
+        Layout:
+          conversation (primary — occupies full viewport)
+          ──────────────────────────────────────────────
+          status line (compact, single-line)
+
+        Activity, Plan, Code panels are accessed via slash commands,
+        not shown permanently.
+        """
+        conversation = self.render_conversation()
+        status = self.render_status()
+        separator = Text("─" * min(self.console.size.width - 2, 80),
+                         style="jarvis.muted")
+        elements: list[RenderableType] = [
+            conversation,
+            Text("") if self.state.messages else Text(""),
+            separator,
+            status,
+        ]
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
         return Group(*elements)
