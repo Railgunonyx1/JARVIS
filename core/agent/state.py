@@ -138,6 +138,7 @@ class AgentState:
     model: str = ""
     context_usage: dict[str, Any] = field(default_factory=dict)
     failure_class: FailureClass | None = None
+    terminal_reason: TerminalReason | None = None
     _status_history: list[tuple[str, float]] = field(default_factory=list, repr=False)
 
     def transition(self, new_status: TaskStatus) -> None:

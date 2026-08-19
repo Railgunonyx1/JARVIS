@@ -1,18 +1,15 @@
 @echo off
 setlocal
-chcp 65001 >nul 2>&1
+chcp 65001 >/dev/null 2>&1
 
-rem ── JARVIS MK-X scripts/start.bat ────────────────────────────────────
-rem Relaunches inside Windows Terminal when available.
-rem Falls back to the current console otherwise.
-rem ──────────────────────────────────────────────────────────────────────
+REM JARVIS MK-X scripts/start.bat
+REM Relaunches inside Windows Terminal when available.
 
 if not "%JARVIS_WT%"=="1" (
-    where wt.exe >nul 2>nul
+    where wt.exe >/dev/null 2>/dev/null
     if not errorlevel 1 (
-        set JARVIS_WT=1
-        cd /d "%~dp0.."
-        start "" wt.exe -d "%~dp0.." cmd /k "set JARVIS_WT=1 && call scripts\start.bat"
+        set "JARVIS_WT=1"
+        start "" wt.exe "%~f0"
         exit /b
     )
 )
@@ -35,6 +32,8 @@ echo   ^|  [5]  Install    Update dependencies        ^|
 echo   ^|  [Q]  Quit                                  ^|
 echo   +=============================================+
 echo.
+echo   Quick: scripts/start.bat chat
+echo.
 
 set /p choice="  JARVIS> "
 
@@ -48,7 +47,7 @@ if /i "%choice%"=="q" goto quit
 
 echo.
 echo   Invalid option.
-timeout /t 2 >nul
+timeout /t 2 >/dev/null
 exit /b
 
 :chat
