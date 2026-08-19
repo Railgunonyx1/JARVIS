@@ -366,10 +366,8 @@ class AgentLoop:
                 })
 
                 for call in response.tool_calls:
-                    self._emit("step.started", {"tool": call.name, "iteration": iteration}, trace_id)
                     with tracer.span("tool.execute", {"tool": call.name}):
                         await self._handle_call(messages, call, state, trace_id, session_id)
-                    self._emit("step.completed", {"tool": call.name, "iteration": iteration}, trace_id)
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
         except Exception as e:

@@ -165,10 +165,7 @@ class ACPAdapter:
     def _list_tools(self) -> list[dict]:
         if self._tool_service is None:
             return []
-        registry = self._tool_service._registry
-        if registry is None:
-            return []
-        tools = registry.to_openai_tools()
+        tools = self._tool_service.list_tools()
         return [
             {
                 "name": t["function"]["name"],

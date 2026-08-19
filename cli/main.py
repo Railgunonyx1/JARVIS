@@ -482,7 +482,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             ready.set()
 
     threading.Thread(target=_boot, daemon=True, name="jarvis-kernel-boot").start()
-    console.print(Text("  ⏳ starting kernel…", style="dim"))
+    console.print(Text("  ⏳ starting kernel…  (providers, memory, tools)", style="bright_cyan"))
 
     notifications: list = []
     _configure_noise(verbose=False)
@@ -528,7 +528,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             bridge.attach_loop(loop)
             bridge.pull_status()
             loop.router.warm()
-            console.print(Text("  ✓ kernel ready", style="dim"))
+            console.print(Text("  ✓ kernel ready  ·  type a goal or /help", style="bright_green"))
             if profile_startup:
                 _print_startup_report()
         else:
@@ -739,32 +739,47 @@ def _cmd_history(line: str) -> None:
 
 
 def _print_help() -> None:
-    print("/help           show commands")
-    print("/tools          list available tools")
-    print("/mode           show current mode")
-    print("/mode <m>       switch mode (plan|controlled|smart|agent)")
-    print("/plan           switch to read-only plan mode")
-    print("/model          show last model + provider")
-    print("/models         show all providers")
-    print("/status         show provider, mode, memory stats")
-    print("/context        show last context budget report")
-    print("/tokens         show context usage + compacted flag")
-    print("/memory         show memory stats")
-    print("/memory search <q>   semantic memory retrieval")
-    print("/memory add <k>=<v>  remember a fact")
-    print("/history        list recent tasks")
-    print("/history <id>   replay a task timeline")
-    print("/audit          security audit log (stats + recent actions)")
-    print("/audit trace <id>   replay an audit trace")
-    print("/tree           show project tree")
-    print("/resume         re-run the last goal")
-    print("/cockpit        heavy diagnostic dashboard (on demand)")
-    print("/notifications  rolling event log")
-    print("/verbose        toggle backend messages")
-    print("/clear          clear screen")
-    print("/exit           quit")
-    print("")
-    print("press Enter on an empty line to expand the last task details")
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich.text import Text
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="bold bright_cyan", width=22)
+    table.add_column(style="dim")
+
+    table.add_row("/help", "show this help")
+    table.add_row("/tools", "list available tools")
+    table.add_row("/mode", "show current mode")
+    table.add_row("/mode <m>", "switch mode (plan|controlled|smart|agent)")
+    table.add_row("/plan", "switch to read-only plan mode")
+    table.add_row("/model", "show last model + provider")
+    table.add_row("/models", "show all providers")
+    table.add_row("/status", "provider, mode, memory stats")
+    table.add_row("/context", "context budget report")
+    table.add_row("/tokens", "context usage + compacted flag")
+    table.add_row("/memory", "show memory stats")
+    table.add_row("/memory search <q>", "semantic memory retrieval")
+    table.add_row("/memory add <k>=<v>", "remember a fact")
+    table.add_row("/history", "list recent tasks")
+    table.add_row("/history <id>", "replay a task timeline")
+    table.add_row("/audit", "security audit log")
+    table.add_row("/audit trace <id>", "replay an audit trace")
+    table.add_row("/tree", "show project tree")
+    table.add_row("/resume", "re-run the last goal")
+    table.add_row("/cockpit", "diagnostic dashboard")
+    table.add_row("/notifications", "rolling event log")
+    table.add_row("/verbose", "toggle backend messages")
+    table.add_row("/clear", "clear screen")
+    table.add_row("/exit", "quit")
+    table.add_row("", "")
+    table.add_row("Enter", "expand last task details (empty line)")
+
+    console.print(Panel(
+        table,
+        title="[bold bright_cyan] JARVIS MK-X Commands [/]",
+        border_style="bright_cyan",
+        padding=(1, 2),
+    ))
 
 
 if __name__ == "__main__":

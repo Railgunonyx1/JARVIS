@@ -39,6 +39,7 @@ class ToolExecutionResult:
     permission_denied: bool = False
     permission_reason: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    failure_class: Any | None = None
 
 
 class ToolExecutionService:
@@ -93,6 +94,7 @@ class ToolExecutionService:
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:
+            from core.agent.state import FailureClass
             error = f"Tool '{call.name}' is not registered"
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
             if step is not None:
@@ -104,6 +106,7 @@ class ToolExecutionService:
                 })
             return ToolExecutionResult(
                 tool_name=call.name, call_id=call.id, error=error,
+                failure_class=FailureClass.MALFORMED_TOOL,
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
 
@@ -114,6 +117,7 @@ class ToolExecutionService:
         )
         self._observer.observe_permission(call.name, allowed, reason) if has_obs else None
         if not allowed:
+            from core.agent.state import FailureClass
             self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
             if step is not None:
                 self._observer.step_finished(step, "denied", 0.0, reason)
