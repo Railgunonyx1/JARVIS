@@ -172,6 +172,11 @@ class ToolExecutionService:
             if isinstance(path, str) and result.success:
                 state.files_changed.append(path)
 
+        result_fc = None
+        if not result.success:
+            from core.agent.state import FailureClass
+            result_fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
+
         return ToolExecutionResult(
             tool_name=call.name,
             call_id=call.id,
@@ -180,6 +185,7 @@ class ToolExecutionService:
             error=result.error,
             duration_ms=duration_ms,
             metadata=result.metadata,
+            failure_class=result_fc,
         )
 
     async def execute_tools(

@@ -411,6 +411,55 @@ class Renderer:
     # ------------------------------------------------------------------
     # Code workspace
     # ------------------------------------------------------------------
+    # Verification & Recovery blocks
+    # ------------------------------------------------------------------
+
+    def render_verification_block(self, steps: list[dict]) -> RenderableType:
+        """Compact verification display:
+
+        Verification
+          ✓ tests (1.2s)
+          ✓ lint (0.3s)
+          ● typecheck...
+        """
+        sym = self.symbols
+        lines: List[RenderableType] = [Text("Verification", style="bold jarvis.info")]
+        for step in steps:
+            name = step.get("name", "")
+            passed = step.get("passed", False)
+            running = step.get("running", False)
+            duration = step.get("duration_ms", 0)
+            if running:
+                s, style = sym["running"], "jarvis.running"
+            elif passed:
+                s, style = sym["done"], "jarvis.done"
+            else:
+                s, style = sym["failed"], "jarvis.failed"
+            dur = f" ({duration:.0f}ms)" if duration > 0 else ""
+            lines.append(Text(f"  {s} {name}{dur}", style=style))
+        return Group(*lines)
+
+    def render_recovery_block(self, error: str, attempt: int = 1) -> RenderableType:
+        """Recovery display:
+
+        ↻ RECOVERING (attempt 2)
+          pytest failed: 2 tests failed in test_auth.py
+          Attempting repair...
+        """
+        sym = self.symbols
+        lines: List[RenderableType] = [
+            Text(f"{sym['arrow_right']} RECOVERING (attempt {attempt})",
+                 style="bold jarvis.warning"),
+        ]
+        if error:
+            preview = error[:200] + ("..." if len(error) > 200 else "")
+            lines.append(Text(f"  {preview}", style="jarvis.dim"))
+        lines.append(Text("  Attempting repair...", style="jarvis.muted"))
+        return Group(*lines)
+
+    # ------------------------------------------------------------------
+    # Code workspace
+    # ------------------------------------------------------------------
 
     def render_code_files(self) -> RenderableType:
         if not self.state.code_files:
