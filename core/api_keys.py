@@ -37,6 +37,10 @@ ENV_TO_KEY = {
     "OPENCODE_ZEN_API_KEY": "opencode_zen_api_key",
     "OMNIROUTE_API_KEY": "omni_route_api_key",
     "WORLDMONITOR_API_KEY": "worldmonitor_api_key",
+    "CEREBRAS_API_KEY": "cerebras_api_key",
+    "DEEPSEEK_API_KEY": "deepseek_api_key",
+    "HF_API_KEY": "huggingface_api_key",
+    "HUGGINGFACE_API_KEY": "huggingface_api_key",
 }
 
 
