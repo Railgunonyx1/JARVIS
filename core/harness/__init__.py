@@ -38,6 +38,7 @@ class HarnessConfig:
     tool_blacklist: tuple[str, ...] = ()
     model_preference: tuple[str, ...] = ()  # preferred model names
     description: str = ""
+    verification_steps: tuple[tuple[str, str], ...] = ()  # (name, command) pairs
 
 
 _HARNESS_PRESETS: dict[HarnessType, HarnessConfig] = {
