@@ -448,7 +448,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     banner = Panel(
         Text("JARVIS MK-X  ·  Terminal-First Autonomous Agent", style="bold bright_cyan"),
         subtitle="/help for commands  ·  /cockpit for dashboard",
-        subtitle_style="dim",
         border_style="bright_cyan",
         padding=(0, 1),
     )
