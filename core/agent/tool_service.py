@@ -190,6 +190,12 @@ class ToolExecutionService:
             results.append(result)
         return results
 
+    def list_tools(self) -> list[dict]:
+        """Return the tool catalog in OpenAI function-calling format."""
+        if self._registry is None:
+            return []
+        return self._registry.to_openai_tools()
+
     def _emit(self, name: str, payload: dict[str, Any] | None = None,
               trace_id: str = "") -> None:
         if self._bus is None:

@@ -16,7 +16,7 @@ from typing import Any
 
 from core import events
 from core.agent.context import AgentContextBuilder
-from core.agent.observer import TaskObserver, TaskStatus
+from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
 from core.agent.state import AgentState, TaskStatus, pick_worst_failure
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id

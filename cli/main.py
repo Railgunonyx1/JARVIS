@@ -51,7 +51,7 @@ warnings.filterwarnings("ignore", category=FutureWarning,
 # appear before the kernel finishes booting.
 
 app = typer.Typer(add_completion=False)
-console = Console()
+console = Console(theme=__import__("cli.theme", fromlist=["build_rich_theme"]).build_rich_theme())
 
 _IMPORT_MS = (time.perf_counter() - _IMPORT_START) * 1000.0
 
