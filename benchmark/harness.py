@@ -71,7 +71,7 @@ class ResourceMonitor:
             self._thread.join(timeout=self.interval * 2 + 0.2)
         return round(self.peak_rss_mb, 1), round(self.peak_cpu, 1)
 
-    def __enter__(self) -> "ResourceMonitor":
+    def __enter__(self) -> ResourceMonitor:
         self.start()
         return self
 
@@ -170,16 +170,13 @@ async def _run_offline_task(loop, task: dict[str, Any]) -> dict[str, Any]:
         outputs: list[str] = []
         steps = task.get("steps", [])
         for step in steps:
-            tool = loop.registry.get(step["tool"])
-            if tool is None:
-                raise RuntimeError(f"tool not registered: {step['tool']}")
             t = time.perf_counter()
-            allowed, reason = await loop.permissions.check(tool, step["args"], trace_id)
-            if not allowed:
-                raise RuntimeError(f"permission denied for {step['tool']}: {reason}")
-            result = await loop.executor.execute(step["tool"], step["args"], trace_id,
-                                                 mode=loop.permissions.mode)
+            from providers.types import ToolCall
+            call = ToolCall(name=step["tool"], arguments=step["args"], id=f"bench_{step['tool']}")
+            result = await loop._tool_service.execute_tool(call, trace_id=trace_id)
             tool_ms += (time.perf_counter() - t) * 1000.0
+            if result.permission_denied:
+                raise RuntimeError(f"permission denied for {step['tool']}: {result.permission_reason}")
             if not result.success:
                 raise RuntimeError(f"{step['tool']} failed: {result.error}")
             outputs.append(result.output or "")
@@ -212,12 +209,11 @@ async def _simulated_iteration(loop, task: dict[str, Any]) -> dict[str, Any]:
         record["context_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(
             json.dumps(messages, default=str))
         t = time.perf_counter()
-        tool = loop.registry.get("filesystem.read")
-        allowed, reason = await loop.permissions.check(tool, {"path": "pyproject.toml"}, "bench_iter")
-        if not allowed:
-            raise RuntimeError(f"permission denied in simulated iteration: {reason}")
-        result = await loop.executor.execute("filesystem.read", {"path": "pyproject.toml"},
-                                             "bench_iter", mode=loop.permissions.mode)
+        from providers.types import ToolCall
+        call = ToolCall(name="filesystem.read", arguments={"path": "pyproject.toml"}, id="bench_iter")
+        result = await loop._tool_service.execute_tool(call, trace_id="bench_iter")
+        if result.permission_denied:
+            raise RuntimeError(f"permission denied in simulated iteration: {result.permission_reason}")
         tool_ms = (time.perf_counter() - t) * 1000.0
         total_ms = (time.perf_counter() - t0) * 1000.0
         if not result.success:
@@ -284,7 +280,6 @@ def run_offline_benchmark() -> dict[str, Any]:
 
 def run_online_benchmark() -> dict[str, Any]:
     """Online pass: full AgentLoop tasks (requires a configured LLM provider)."""
-    from providers.router import ProviderRouter
     from runtime.kernel import build_kernel, close_kernel
 
     loop = build_kernel("agent", 10)

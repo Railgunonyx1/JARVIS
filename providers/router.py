@@ -5,7 +5,6 @@ import logging
 import time
 from collections.abc import AsyncIterator
 
-from reliability_engine.circuit_breaker import CircuitBreaker
 from providers.base import LLMProvider, LLMResponse
 from providers.cerebras_provider import CerebrasProvider
 from providers.deepseek_provider import DeepSeekProvider
@@ -19,6 +18,7 @@ from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
 from providers.types import ProviderError, RateLimitError, is_rate_limit_error, restore_tool_names, sanitize_tools
+from reliability_engine.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger("jarvis.providers.router")
 

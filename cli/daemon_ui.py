@@ -19,15 +19,14 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from rich.console import Console
 from rich.text import Text
 
 from cli.bridge import AgentBridge
+from cli.models import AppState
 from cli.renderer import Renderer
-from cli.layout import LayoutManager, LayoutMode, LayoutConfig
-from cli.models import Mode, AppState, ConfirmationRequest, RiskLevel
 
 logger = logging.getLogger("jarvis.daemon_ui")
 
@@ -37,7 +36,7 @@ WS_URL_BASE = "ws://127.0.0.1"
 
 # Mapping from daemon UI frame types to cli.bridge event names.
 # The bridge's _translate() dispatches these to the appropriate handlers.
-DAEMON_TO_BRIDGE_EVENT: Dict[str, str] = {
+DAEMON_TO_BRIDGE_EVENT: dict[str, str] = {
     "tool.call": "step.started",
     "tool.result": "step.completed",
     "chat.delta": "agent.delta",  # handled via stream_delta in renderer
@@ -52,7 +51,7 @@ DAEMON_TO_BRIDGE_EVENT: Dict[str, str] = {
 }
 
 
-def _map_daemon_frame(frame_type: str, payload: dict) -> Optional[tuple[str, dict]]:
+def _map_daemon_frame(frame_type: str, payload: dict) -> tuple[str, dict] | None:
     """Convert a daemon UI frame into (bridge_event_name, bridge_payload).
 
     The cli.bridge.AgentBridge._translate() expects event names such as:
@@ -229,7 +228,7 @@ class DaemonUI:
         """Render the Claude-style compact status bar at the bottom."""
         width = self.console.size.width
         sep = Text(" │ ", style="dim")
-        parts: List[Text] = [
+        parts: list[Text] = [
             Text("JARVIS", style="bold primary"),
             sep,
             Text(self.app_state.mode.value, style="jarvis.accent"),
@@ -264,7 +263,7 @@ class DaemonUI:
     def render_header(self) -> Text:
         """Render the top header bar — mirrors the Claude Code layout."""
         connected = getattr(self.app_state, 'connection', '') == 'ONLINE'
-        dot = f"[green]● Connected[/green]" if connected else f"[red]● Offline[/red]"
+        dot = "[green]● Connected[/green]" if connected else "[red]● Offline[/red]"
         bits = [
             Text("JARVIS MK-X", style="bold cyan"),
             Text(dot, style="bold"),
@@ -294,7 +293,6 @@ async def _ui_main(ui_port: int = 8787, project_dir: str | None = None) -> None:
 
 def main() -> None:
     """CLI entry point."""
-    import sys
     ui_port = 8787
     project_dir = None
     args = sys.argv[1:]

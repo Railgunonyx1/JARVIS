@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from collections import deque
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any

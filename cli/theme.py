@@ -8,10 +8,8 @@ green ok, yellow warn, red err, magenta provider, dim metadata).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
-from rich.box import ROUNDED, HEAVY, DOUBLE, MINIMAL, SIMPLE
-from rich.style import Style
+from rich.box import DOUBLE, HEAVY, MINIMAL, ROUNDED, SIMPLE
 from rich.theme import Theme
 
 # Brand / identity
@@ -109,7 +107,7 @@ def build_rich_theme() -> Theme:
 
 
 # Panel titles and status indicators
-PANEL_TITLES: Dict[str, str] = {
+PANEL_TITLES: dict[str, str] = {
     "plan": "PLAN",
     "activity": "ACTIVITY",
     "code": "CODE",
@@ -170,5 +168,5 @@ SYMBOLS_ASCII = {
 }
 
 
-def get_symbols(unicode_supported: bool = True) -> Dict[str, str]:
+def get_symbols(unicode_supported: bool = True) -> dict[str, str]:
     return SYMBOLS if unicode_supported else SYMBOLS_ASCII

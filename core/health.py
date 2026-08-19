@@ -33,7 +33,6 @@ def check_ollama() -> HealthCheck:
         url = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
         client = get_client()
         if client is not None:
-            import httpx
 
             resp = client.get(f"{url}/api/tags", timeout=1.5)
             status = resp.status_code

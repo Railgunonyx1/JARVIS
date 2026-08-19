@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     CREATED = "created"
     CLASSIFYING = "classifying"
     PLANNING = "planning"
@@ -35,7 +35,7 @@ class TaskStatus(str, Enum):
     ROLLED_BACK = "rolled_back"
 
 
-class FailureClass(str, Enum):
+class FailureClass(StrEnum):
     """Deterministic failure classification with explicit precedence.
 
     Precedence (highest first):

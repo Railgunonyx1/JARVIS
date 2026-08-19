@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
 from rich.console import Console, RenderableType
 from rich.layout import Layout
@@ -47,7 +46,7 @@ class PanelState:
 @dataclass
 class LayoutConfig:
     mode: LayoutMode = LayoutMode.NORMAL
-    panels: Dict[str, PanelState] = field(default_factory=dict)
+    panels: dict[str, PanelState] = field(default_factory=dict)
     show_status_bar: bool = True
     show_input: bool = True
 
@@ -67,11 +66,11 @@ class LayoutManager:
     MEDIUM = 90
     SMALL = 70
 
-    def __init__(self, console: Optional[Console] = None) -> None:
+    def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
         self.config = LayoutConfig()
         self._symbols = get_symbols(True)
-        self._force_mode: Optional[LayoutMode] = None
+        self._force_mode: LayoutMode | None = None
 
     def set_mode(self, mode: str | LayoutMode) -> None:
         try:
@@ -104,12 +103,12 @@ class LayoutManager:
     def build(
         self,
         conversation: RenderableType,
-        plan: Optional[RenderableType] = None,
-        activity: Optional[RenderableType] = None,
-        code: Optional[RenderableType] = None,
-        memory: Optional[RenderableType] = None,
-        audit: Optional[RenderableType] = None,
-        status: Optional[RenderableType] = None,
+        plan: RenderableType | None = None,
+        activity: RenderableType | None = None,
+        code: RenderableType | None = None,
+        memory: RenderableType | None = None,
+        audit: RenderableType | None = None,
+        status: RenderableType | None = None,
     ) -> Layout:
         mode = self.detect_mode()
         width = self.console.size.width
@@ -141,7 +140,7 @@ class LayoutManager:
             and activity is not None
         )
 
-        parts: List[Layout] = []
+        parts: list[Layout] = []
         if show_plan:
             left = Layout(name="plan", size=max(20, int(width * 0.20)))
             left.update(self._wrap("plan", plan))

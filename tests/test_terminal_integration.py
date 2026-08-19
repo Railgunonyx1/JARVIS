@@ -8,10 +8,8 @@ from __future__ import annotations
 import asyncio
 import time
 
-import pytest
-
 from jarvis.terminal.breakpoints import Breakpoint, classify_width, panels_for_breakpoint, should_show
-from jarvis.terminal.events import EventType, TerminalEvent, make_terminal_event
+from jarvis.terminal.events import EventType
 from jarvis.terminal.intent_router import IntentRouter
 from jarvis.terminal.intents import (
     IntentType,
@@ -22,13 +20,11 @@ from jarvis.terminal.intents import (
     intent_switch_model,
 )
 from jarvis.terminal.keymap import KeyBinding, Keymap
-from jarvis.terminal.persistence import SessionPersistence, _serialize_state, _deserialize_state
+from jarvis.terminal.persistence import SessionPersistence
 from jarvis.terminal.renderer import TerminalRenderer
-from jarvis.terminal.reducers import reduce
 from jarvis.terminal.store import TerminalStore
 from jarvis.terminal.task_queue import CancellationToken, TaskQueue, TaskState
 from jarvis.terminal.types import (
-    LayoutMode,
     Message,
     Plan,
     PlanStep,
@@ -36,9 +32,8 @@ from jarvis.terminal.types import (
     SessionStatus,
     StepStatus,
 )
-from runtime.event_bus import BusEvent, EventBus, get_event_bus
+from runtime.event_bus import BusEvent, EventBus
 from runtime.event_bus_bridge import EventBusBridge
-
 
 # ── Reducer integration tests ───────────────────────────────────────────
 
@@ -191,7 +186,6 @@ class TestRendererIntegration:
 
 class TestPersistenceIntegration:
     def test_save_and_load_roundtrip(self, tmp_path):
-        from jarvis.terminal.types import Message
         persistence = SessionPersistence(db_path=tmp_path / "test.db")
         state = SessionState(
             model="test-model",

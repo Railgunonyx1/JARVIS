@@ -159,7 +159,7 @@ class ToolExecutionService:
         else:
             fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
             self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
-        
+
         # Record tool result in AgentState if provided
         if state is not None:
             state.record_tool(
@@ -205,6 +205,17 @@ class ToolExecutionService:
         if self._registry is None:
             return []
         return self._registry.to_openai_tools()
+
+    # ── Mode management (exposed so CLI/protocols don't bypass the service) ──
+
+    @property
+    def mode(self) -> str:
+        """Current execution mode."""
+        return str(self._permissions.mode)
+
+    def set_mode(self, mode: str) -> bool:
+        """Switch execution mode (agent, plan, smart, controlled)."""
+        return self._permissions.set_mode(mode)
 
     def _emit(self, name: str, payload: dict[str, Any] | None = None,
               trace_id: str = "") -> None:

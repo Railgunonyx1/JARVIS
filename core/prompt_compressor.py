@@ -12,8 +12,8 @@ Categories supported:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple, Optional
 import json
+from typing import Any
 
 
 def _estimate_tokens(text: str) -> int:
@@ -48,13 +48,13 @@ def compress_prompt(
     # Split prompt into sections heuristically
     # Look for common section markers
     sections = _split_into_sections(prompt)
-    
+
     compressed_parts = []
     total_estimate = 0
-    
+
     for section_type, section_text in sections:
         original_tokens = _estimate_tokens(section_text)
-        
+
         if section_type == "system":
             retain = system_retain
         elif section_type == "fewshot":
@@ -65,39 +65,39 @@ def compress_prompt(
             retain = code_retain
         else:
             retain = 1.0  # Keep unknown sections fully
-        
+
         # Keep only the first portion (most important)
         target_tokens = max(1, int(original_tokens * retain))
-        
+
         # Simple approach: take first N characters proportional to token retention
         # Since ~4 chars/token, keep N*4 chars
         target_chars = target_tokens * 4
         compressed_text = section_text[:target_chars]
-        
+
         compressed_parts.append(compressed_text)
         total_estimate += _estimate_tokens(compressed_text)
-    
+
     result = "".join(compressed_parts)
-    
+
     # Apply hard token cap if specified
     if max_tokens and _estimate_tokens(result) > max_tokens:
         # Further compress proportionally
         ratio = max_tokens / _estimate_tokens(result)
         target_chars = int(len(result) * ratio)
         result = result[:max(0, target_chars)]
-    
+
     return result
 
 
-def _split_into_sections(prompt: str) -> List[Tuple[str, str]]:
+def _split_into_sections(prompt: str) -> list[tuple[str, str]]:
     """Heuristically split prompt into named sections.
     
     Returns list of (section_type, section_text) tuples.
     Recognizes: system prompt, user query, few-shot examples, RAG context, code.
     """
-    sections: List[Tuple[str, str]] = []
+    sections: list[tuple[str, str]] = []
     remaining = prompt
-    
+
     # Look for system prompt marker
     system_markers = ["<system>", "<SYSTEM>", "System:", "SYSTEM PROMPT", "<|system|>"]
     for marker in system_markers:
@@ -112,12 +112,12 @@ def _split_into_sections(prompt: str) -> List[Tuple[str, str]]:
                 pos = rest.find(nm)
                 if pos != -1 and pos < next_idx:
                     next_idx = pos
-            
+
             system_text = remaining[idx:idx + len(marker) + (next_idx if next_idx < len(rest) else 500)]
             sections.append(("system", system_text))
             remaining = rest[next_idx:] if next_idx < len(rest) else ""
             break
-    
+
     # Look for user query
     if remaining.strip():
         user_markers = ["<user>", "<USER>", "User:", "USER QUERY"]
@@ -128,14 +128,14 @@ def _split_into_sections(prompt: str) -> List[Tuple[str, str]]:
                 sections.append(("user", user_text))
                 remaining = remaining[idx + len(user_text):]
                 break
-    
+
     # Look for few-shot examples (pairs of user/assistant)
     if "<fewshot>" in remaining.lower() or "<few-shot>" in remaining.lower():
         fs_idx = remaining.lower().index("<fewshot>")
         fs_text = remaining[fs_idx:fs_idx + 800]
         sections.append(("fewshot", fs_text))
         remaining = remaining[fs_idx + 800:]
-    
+
     # Look for RAG context (typically starts with "Context:", "RAG:", "Retrieved:")
     rag_start_markers = ["Context:", "RAG:", "Retrieved:", "Context: "]
     for marker in rag_start_markers:
@@ -145,11 +145,11 @@ def _split_into_sections(prompt: str) -> List[Tuple[str, str]]:
             sections.append(("rag", rag_text))
             remaining = remaining[idx + len(rag_text):]
             break
-    
+
     # Remaining is code or misc
     if remaining.strip():
         sections.append(("code/misc", remaining[:500]))
-    
+
     return sections
 
 
@@ -171,7 +171,7 @@ def compress_tool_output(
     """
     if not output:
         return output
-    
+
     # Auto-detect format
     if format_type == "auto":
         lower = output.lower()
@@ -185,7 +185,7 @@ def compress_tool_output(
             format_type = "json"
         else:
             format_type = "text"
-    
+
     if format_type == "json":
         return _compress_json_output(output, max_chars)
     elif format_type == "yaml":
@@ -258,10 +258,10 @@ def _compress_text_output(output: str, max_chars: int) -> str:
     """General text compression: truncate with ellipsis, remove redundant whitespace."""
     if len(output) <= max_chars:
         return output
-    
+
     # Remove excessive whitespace
     cleaned = " ".join(output.split())
-    
+
     # Truncate with ellipsis
     available = max_chars - 3  # Reserve "..."
     return cleaned[:available] + "..."
@@ -273,7 +273,7 @@ def compress_context_budget(
     files_tokens: int,
     messages_tokens: int,
     budget: Any,
-) -> Tuple[int, int, int, int]:
+) -> tuple[int, int, int, int]:
     """Apply proportional compression to context budget sections.
     
     Returns reduced token counts that fit within the budget.
@@ -285,21 +285,21 @@ def compress_context_budget(
         getattr(budget, 'messages', 30000),
         getattr(budget, 'response', 10000),
     ])
-    
+
     total_tokens = system_tokens + memory_tokens + files_tokens + messages_tokens
-    
+
     if total_tokens <= total_budget:
         return system_tokens, memory_tokens, files_tokens, messages_tokens
-    
+
     # Proportional reduction
     reduction_ratio = total_budget / total_tokens
-    
+
     system_reduced = max(0, int(system_tokens * reduction_ratio))
     memory_reduced = max(0, int(memory_tokens * reduction_ratio))
     files_reduced = max(0, int(files_tokens * reduction_ratio))
     messages_reduced = max(0, int(messages_tokens * reduction_ratio))
-    
+
     # Ensure we don't reduce response budget below minimum
     response_min = getattr(budget, 'response', 1000) if hasattr(budget, '__class__') else 1000
-    
+
     return system_reduced, memory_reduced, files_reduced, messages_reduced

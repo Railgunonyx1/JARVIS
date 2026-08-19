@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 t0 = time.perf_counter()
 import cli.main  # noqa: F401
+
 launcher_ms = (time.perf_counter() - t0) * 1000.0
 
 import psutil  # noqa: E402

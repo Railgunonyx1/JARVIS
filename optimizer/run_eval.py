@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 import time
 
@@ -25,14 +24,12 @@ if sys.platform == "win32":
         pass
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 # Add project root to path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from optimizer.eval_dataset import get_dataset, get_categories
-
+from optimizer.eval_dataset import get_dataset
 
 # ── Prompt versions ────────────────────────────────────────────────────
 
@@ -188,7 +185,7 @@ def parse_tool_calls_from_response(response: str) -> list[str]:
     Only matches known JARVIS tool names to avoid false positives.
     """
     import re
-    
+
     # Known JARVIS tool names
     KNOWN_TOOLS = {
         'filesystem.read', 'filesystem.write', 'filesystem.list',

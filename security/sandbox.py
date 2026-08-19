@@ -148,7 +148,6 @@ class Sandbox:
         - CMD_C: contains shell operators, invoked via cmd /c on Windows
         - SHLEX: contains shell operators, parsed via shlex on Unix
         """
-        import platform
 
         # Pre-flight checks
         allowed, reason = self.check_command(command)

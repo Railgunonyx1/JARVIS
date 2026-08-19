@@ -1,9 +1,9 @@
 import json
 import re
 
+from core.config import ModelCatalog
 from core.mode_manager import ExecutionMode, get_mode_manager
 from core.utils import get_project_root as get_base_dir
-from core.config import ModelCatalog
 
 BASE_DIR = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"

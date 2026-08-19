@@ -15,9 +15,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from jarvis.terminal.events import EventType, TerminalEvent
+from jarvis.terminal.events import TerminalEvent
 from jarvis.terminal.reducers import reduce
-from jarvis.terminal.store import TerminalStore
 from jarvis.terminal.types import SessionState
 from runtime.event_bus import BusEvent, EventBus, get_event_bus
 

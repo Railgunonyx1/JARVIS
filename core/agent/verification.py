@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger("jarvis.verification")
@@ -31,11 +31,18 @@ class VerificationStep:
 
 @dataclass
 class VerificationResult:
+    """Structured result of a single verification step.
+
+    Provides bounded failure context for agent recovery:
+    enough evidence to fix, but not enough to overflow the context window.
+    """
     step_name: str = ""
     passed: bool = False
     exit_code: int = -1
+    command: str = ""
     stdout: str = ""
     stderr: str = ""
+    summary: str = ""  # bounded summary for recovery context
     duration_ms: float = 0.0
     error: str = ""
 
@@ -145,24 +152,36 @@ class VerificationEngine:
             )
             duration_ms = (time.perf_counter() - start) * 1000
             passed = proc.returncode in step.success_exit_codes
+            # Build bounded summary for recovery context
+            summary = ""
+            if not passed:
+                err_text = (proc.stderr or proc.stdout or "")[:300]
+                summary = f"{step.name} failed (exit {proc.returncode}): {err_text}"
             return VerificationResult(
                 step_name=step.name,
                 passed=passed,
                 exit_code=proc.returncode,
+                command=step.command,
                 stdout=proc.stdout[:2000],
                 stderr=proc.stderr[:2000],
+                summary=summary,
                 duration_ms=duration_ms,
             )
         except subprocess.TimeoutExpired:
             duration_ms = (time.perf_counter() - start) * 1000
             return VerificationResult(
                 step_name=step.name, passed=False,
+                command=step.command,
                 error=f"Timed out after {step.timeout_seconds}s",
+                summary=f"{step.name} timed out after {step.timeout_seconds}s",
                 duration_ms=duration_ms,
             )
         except Exception as e:
             duration_ms = (time.perf_counter() - start) * 1000
             return VerificationResult(
                 step_name=step.name, passed=False,
-                error=str(e)[:500], duration_ms=duration_ms,
+                command=step.command,
+                error=str(e)[:500],
+                summary=f"{step.name} error: {str(e)[:200]}",
+                duration_ms=duration_ms,
             )

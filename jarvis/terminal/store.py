@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from typing import Any
 
 from jarvis.terminal.events import TerminalEvent
 from jarvis.terminal.reducers import reduce

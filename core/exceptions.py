@@ -8,7 +8,6 @@ can be caught with a single ``except JARVISError`` if desired.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("jarvis.exceptions")
 
@@ -25,7 +24,7 @@ class JARVISError(Exception):
         self,
         message: str,
         component: str | None = None,
-        original_error: Optional[Exception] = None,
+        original_error: Exception | None = None,
     ):
         self.component = component
         self.original_error = original_error

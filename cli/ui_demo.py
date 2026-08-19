@@ -11,7 +11,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from rich import box
 from rich.console import Console, Group
@@ -22,7 +21,6 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
-
 
 console = Console()
 
@@ -105,7 +103,7 @@ class Plan:
     steps: list[PlanStep] = field(default_factory=list)
 
     @property
-    def current(self) -> Optional[PlanStep]:
+    def current(self) -> PlanStep | None:
         for step in self.steps:
             if step.status == PlanStatus.ACTIVE:
                 return step
@@ -148,7 +146,7 @@ class AppState:
 
     current_workspace: str = "chat"
 
-    confirmation: Optional[str] = None
+    confirmation: str | None = None
 
     streaming: bool = False
     streaming_text: str = ""

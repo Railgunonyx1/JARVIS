@@ -76,7 +76,7 @@ async def git_log(params: dict) -> ToolResult:
         Restrict log to a specific file.
     """
     count = min(int(params.get("count", 10)), 50)
-    args = ["log", f"--oneline", f"-{count}"]
+    args = ["log", "--oneline", f"-{count}"]
     path = params.get("path")
     if path:
         args.extend(["--", path])

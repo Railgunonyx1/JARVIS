@@ -6,7 +6,7 @@ Each render_* method produces a self-contained Rich renderable.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rich.console import Group
 from rich.markdown import Markdown
@@ -17,12 +17,9 @@ from rich.text import Text
 if TYPE_CHECKING:
     from rich.renderable import RenderableType
 
-from jarvis.terminal.breakpoints import Breakpoint, classify_width, panels_for_breakpoint
+from jarvis.terminal.breakpoints import classify_width, panels_for_breakpoint
 from jarvis.terminal.types import (
-    LayoutMode,
-    Message,
     Plan,
-    PlanStep,
     SessionState,
     SessionStatus,
     StepStatus,

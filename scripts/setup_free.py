@@ -18,8 +18,6 @@ Free providers included (sorted by quality):
     8. Ollama        — ollama.com        (local, unlimited, no API key)
 """
 
-import sys
-import os
 from pathlib import Path
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
@@ -76,7 +74,7 @@ def _prompt_key(name: str, url: str, help_text: str, existing: str) -> str:
     if existing:
         masked = existing[:4] + "..." + existing[-4:] if len(existing) > 8 else "***"
         print(f"  [OK] {name}: {masked}")
-        change = input(f"      Change? (y/N): ").strip().lower()
+        change = input("      Change? (y/N): ").strip().lower()
         if change != "y":
             return existing
 

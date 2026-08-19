@@ -6,23 +6,23 @@ Tests the full pipeline: Harness -> Gateway -> AgentLoop -> ToolExecution -> Bus
 from __future__ import annotations
 
 import asyncio
-
-import pytest
-
-from core.agent.loop import AgentLoop, AgentResult
-from core.agent.tool_service import ToolExecutionService, ToolExecutionResult
-from core.agent.verification import VerificationEngine, VerificationReport
-from core.harness import Harness, HarnessSelector, HarnessType, HarnessConfig
-from providers.model_gateway import (
-    Capability, Combo, ModelGateway, ModelProfile, ProviderHealth,
-)
-from providers.types import LLMResponse, ToolCall
-from tools import build_default_registry
-from core.project import ProjectContext
-from runtime.protocols import MCPAdapter, ACPAdapter, CodexExecAdapter
-
 import os
 import tempfile
+
+from core.agent.loop import AgentLoop
+from core.agent.tool_service import ToolExecutionResult, ToolExecutionService
+from core.agent.verification import VerificationEngine
+from core.harness import Harness, HarnessConfig, HarnessSelector, HarnessType
+from core.project import ProjectContext
+from providers.model_gateway import (
+    Capability,
+    Combo,
+    ModelGateway,
+    ModelProfile,
+)
+from providers.types import LLMResponse, ToolCall
+from runtime.protocols import ACPAdapter, CodexExecAdapter, MCPAdapter
+from tools import build_default_registry
 
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[1])
 
@@ -224,7 +224,8 @@ class TestToolExecutionService:
 
     def test_execute_known_tool(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        import tempfile, os
+        import os
+        import tempfile
         tmp = os.path.join(tempfile.gettempdir(), "test_svc.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "hello"}, id="t2")
         result = asyncio.run(svc.execute_tool(call))
@@ -234,7 +235,8 @@ class TestToolExecutionService:
 
     def test_execute_appends_to_messages(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        import tempfile, os
+        import os
+        import tempfile
         tmp = os.path.join(tempfile.gettempdir(), "test_svc2.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "world"}, id="t3")
         msgs = []
@@ -246,7 +248,8 @@ class TestToolExecutionService:
 
     def test_execute_tools_batch(self):
         svc = ToolExecutionService(registry=build_default_registry())
-        import tempfile, os
+        import os
+        import tempfile
         tmp1 = os.path.join(tempfile.gettempdir(), "test_b1.txt")
         tmp2 = os.path.join(tempfile.gettempdir(), "test_b2.txt")
         calls = [
@@ -382,52 +385,52 @@ class TestVerificationEngine:
 
 class TestFailureClassification:
     def test_classify_malformed_tool(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("Tool 'nonexistent' is not registered")
         assert fc == FailureClass.MALFORMED_TOOL
 
     def test_classify_permission_denied(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("denied", is_permission=True)
         assert fc == FailureClass.PERMISSION_DENIED
 
     def test_classify_timeout(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("timed out", is_timeout=True)
         assert fc == FailureClass.TIMEOUT
 
     def test_classify_cancelled(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("cancelled", is_cancelled=True)
         assert fc == FailureClass.CANCELLED
 
     def test_classify_tool_failure_default(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("something went wrong")
         assert fc == FailureClass.TOOL_FAILURE
 
     def test_classify_provider_failure(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("api error", is_provider=True)
         assert fc == FailureClass.PROVIDER_FAILURE
 
     def test_classify_context_overflow(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("too many tokens", is_context_overflow=True)
         assert fc == FailureClass.CONTEXT_OVERFLOW
 
     def test_precedence_cancelled_wins(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("error", is_cancelled=True, is_timeout=True)
         assert fc == FailureClass.CANCELLED
 
     def test_precedence_timeout_beats_tool(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("Tool 'x' failed", is_timeout=True)
         assert fc == FailureClass.TIMEOUT
 
     def test_precedence_timeout_beats_permission(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("error", is_permission=True, is_timeout=True)
         assert fc == FailureClass.TIMEOUT
 
@@ -470,14 +473,14 @@ class TestFailureClassification:
         assert s.status == TaskStatus.EXECUTING
 
     def test_state_dict_includes_failure_class(self):
-        from core.agent.state import AgentState, TaskStatus, FailureClass
+        from core.agent.state import AgentState, FailureClass
         s = AgentState(task_id="t", goal="g")
         s.failure_class = FailureClass.TOOL_FAILURE
         d = s.to_dict()
         assert d["failure_class"] == "tool_failure"
 
     def test_terminal_reason_max_iterations(self):
-        from core.agent.state import AgentState, TaskStatus, TerminalReason
+        from core.agent.state import AgentState, TerminalReason
         s = AgentState(task_id="t", goal="g")
         s.terminal_reason = TerminalReason.MAX_ITERATIONS
         d = s.to_dict()
@@ -490,12 +493,12 @@ class TestFailureClassification:
         assert s.terminal_reason == TerminalReason.VERIFICATION_FAIL
 
     def test_failure_class_not_verification(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("tests failed", is_verification=True)
         assert fc == FailureClass.TOOL_FAILURE
 
     def test_failure_class_not_max_iterations(self):
-        from core.agent.state import classify_failure, FailureClass
+        from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("Max iterations (10) reached")
         assert fc == FailureClass.TOOL_FAILURE
 
@@ -716,7 +719,6 @@ class TestUnifiedPipeline:
         call = ToolCall(name="shell.execute", arguments={"command": "exit 1"}, id="t1")
         result = asyncio.run(svc.execute_tool(call))
         assert not result.success
-        from core.agent.state import FailureClass
         assert result.failure_class is not None
 
     def test_permission_denied_returns_failure_class(self):

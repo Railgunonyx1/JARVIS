@@ -9,8 +9,6 @@ event.name (a dot-separated string like "session.started").
 
 from __future__ import annotations
 
-from typing import Any
-
 from jarvis.terminal.events import EventType, TerminalEvent
 from jarvis.terminal.types import (
     ActivityEvent,

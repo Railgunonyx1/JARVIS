@@ -6,11 +6,10 @@ Provides ~20-30% size reduction on typical outputs with zero quality loss.
 
 from __future__ import annotations
 
-import json
-import re
 import gzip
+import json
 import zlib
-from typing import Any, Optional, BinaryIO, TextIO
+from typing import Any
 
 
 def compress_output(
@@ -48,7 +47,7 @@ def compress_output(
             format_type = "json"
         else:
             format_type = "text"
-    
+
     # Serialize to string
     if format_type == "json":
         string_repr = json.dumps(data, separators=(',', ':'), sort_keys=True)
@@ -74,7 +73,7 @@ def compress_output(
         string_repr = str(data)
     else:
         string_repr = str(data)
-    
+
     # Apply compression method
     if method == "none":
         # Just try to detect and remove redundant whitespace
@@ -85,17 +84,17 @@ def compress_output(
         compressed = _gzip_compress(string_repr)
     else:
         compressed = string_repr
-    
+
     # Check if compression achieved target reduction
     original_size = len(string_repr.encode('utf-8'))
     compressed_size = len(compressed.encode('utf-8')) if isinstance(compressed, str) else len(compressed)
-    
+
     if original_size > 0:
         reduction = 1 - (compressed_size / original_size)
         if reduction < max_size_reduction:
             # Reduction below target - return original for reliability
             return string_repr
-    
+
     return compressed
 
 
@@ -150,7 +149,7 @@ def decompress_output(compressed: str, *, format_type: str = "auto") -> Any:
                 return _parse_format(decompressed, format_type)
             except Exception:
                 pass
-            
+
             # Try gzip decompression
             try:
                 binary = bytes.fromhex(compressed.strip())
@@ -160,13 +159,13 @@ def decompress_output(compressed: str, *, format_type: str = "auto") -> Any:
                 pass
     except Exception:
         pass
-    
+
     # Try direct parsing
     try:
         return json.loads(compressed)
     except Exception:
         pass
-    
+
     # Return as string
     return compressed
 

@@ -18,7 +18,7 @@ from core import events
 from core.agent.context import AgentContextBuilder
 from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
-from core.agent.state import AgentState, FailureClass, TaskStatus, classify_failure, pick_worst_failure
+from core.agent.state import AgentState, TaskStatus, classify_failure, pick_worst_failure
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id
 from core.context.budget import estimate_tokens
 from core.context.manager import ContextManager
@@ -112,7 +112,6 @@ class AgentLoop:
         model_gateway=None,
         tool_service=None,
     ) -> None:
-        from core.harness import HarnessConfig, HarnessType, Harness
 
         self.router = router
         self.registry = registry
@@ -142,26 +141,38 @@ class AgentLoop:
             self._verification_enabled = True
             self._planning_enabled = True
 
-        self.permissions = PermissionEngine(
-            self.logger, mode=mode, confirmation_handler=confirmation_handler,
-        )
-        self.executor = AgentToolExecutor(registry, self.logger)
         self._tool_counter = 0
 
-        # Single tool execution boundary
+        # Single tool execution boundary -- permissions and executor live
+        # inside ToolExecutionService; nothing outside may access them.
         if tool_service is not None:
             self._tool_service = tool_service
         else:
             from core.agent.tool_service import ToolExecutionService
+            _permissions = PermissionEngine(
+                self.logger, mode=mode, confirmation_handler=confirmation_handler,
+            )
+            _executor = AgentToolExecutor(registry, self.logger)
             self._tool_service = ToolExecutionService(
                 registry=registry,
-                permissions=self.permissions,
-                executor=self.executor,
+                permissions=_permissions,
+                executor=_executor,
                 observer=self.observer,
                 decision_logger=self.logger,
                 bus=event_bus,
                 mode=mode,
             )
+
+    # ── Mode management (delegates to ToolExecutionService) ────────────────
+
+    @property
+    def mode(self) -> str:
+        """Current execution mode."""
+        return self._tool_service.mode
+
+    def set_mode(self, mode: str) -> bool:
+        """Switch execution mode (agent, plan, smart, controlled)."""
+        return self._tool_service.set_mode(mode)
 
     def _next_tool_id(self) -> str:
         self._tool_counter += 1
@@ -480,14 +491,20 @@ class AgentLoop:
 
     @staticmethod
     def _build_verification_failure_context(report) -> str:
+        """Build bounded, structured failure context from VerificationReport.
+
+        Uses VerificationResult.summary for concise failure info (enough to
+        fix, not enough to overflow the context window). Falls back to raw
+        stderr for results without a summary.
+        """
         lines = []
         for r in report.results:
             if not r.passed:
-                lines.append(f"- {r.step_name}: exit_code={r.exit_code}")
-                if r.error:
-                    lines.append(f"  error: {r.error[:200]}")
-                elif r.stderr:
-                    lines.append(f"  stderr: {r.stderr[:200]}")
+                if r.summary:
+                    lines.append(f"- {r.summary}")
+                else:
+                    detail = r.error or r.stderr[:200] if r.stderr else "unknown"
+                    lines.append(f"- {r.step_name}: {detail}")
         return "\n".join(lines) if lines else "unknown verification failure"
 
     def _finish_observation(self, success: bool, response: str, state: AgentState,

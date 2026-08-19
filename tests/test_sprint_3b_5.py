@@ -1,5 +1,7 @@
 """Quick verification for Sprint 3b (sandbox ShellMode) and Sprint 5 (skills)."""
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from security.sandbox import Sandbox, ShellMode
 from skills import build_default_skill_registry

@@ -110,7 +110,7 @@ def measure_warm_boot():
         samples.append((time.perf_counter() - t0) * 1000)
     best = min(samples)
     print(f"  best:  {fmt_time(best)}")
-    print(f"  runs:  " + "  ".join(fmt_time(s) for s in samples))
+    print("  runs:  " + "  ".join(fmt_time(s) for s in samples))
     return best
 
 
@@ -145,7 +145,7 @@ def measure_streaming(loop):
                 first, total, chunks, result = asyncio.run(
                     asyncio.wait_for(run_once(goal), timeout=60)
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print("    TIMEOUT (60s)")
                 continue
             except Exception as exc:  # provider down, no key, etc.

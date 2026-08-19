@@ -11,9 +11,10 @@ class only turns ``AppState`` snapshots into Rich renderables.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from contextlib import nullcontext
 from datetime import datetime
-from typing import Any, List, Optional, Sequence
+from typing import Any
 
 from rich import box
 from rich.console import Console, Group, RenderableType
@@ -25,6 +26,7 @@ from rich.table import Table
 from rich.text import Text
 
 from core.output_compressor import compress_output
+
 from .layout import LayoutManager
 from .models import (
     AgentEvent,
@@ -38,7 +40,6 @@ from .models import (
     Message,
     Mode,
     Plan,
-    PlanStep,
     RiskLevel,
     StepStatus,
 )
@@ -80,7 +81,7 @@ def _looks_like_markdown(text: str) -> bool:
 class Renderer:
     """Pure display layer. Mutators only accept state that the backend already decided."""
 
-    def __init__(self, console: Optional[Console] = None, unicode: bool = True) -> None:
+    def __init__(self, console: Console | None = None, unicode: bool = True) -> None:
         self.console = console or Console(highlight=False, emoji=False)
         self.layout_mgr = LayoutManager(self.console)
         self.symbols = get_symbols(unicode)
@@ -103,7 +104,7 @@ class Renderer:
         self.state.tokens_used = used
         self.state.tokens_limit = limit
 
-    def set_plan(self, plan: Optional[Plan]) -> None:
+    def set_plan(self, plan: Plan | None) -> None:
         self.state.plan = plan
 
     def add_message(self, role: str, content: str) -> None:
@@ -119,7 +120,7 @@ class Renderer:
     def set_workspace(self, name: str) -> None:
         self.state.workspace = name.lower()
 
-    def set_confirmation(self, req: Optional[ConfirmationRequest]) -> None:
+    def set_confirmation(self, req: ConfirmationRequest | None) -> None:
         self.state.pending_confirmation = req
 
     def set_code(
@@ -171,7 +172,7 @@ class Renderer:
         width = self.console.size.width
         sym = self.symbols
         sep = Text(f" {sym['separator']} ", style="jarvis.muted")
-        parts: List[Text] = [
+        parts: list[Text] = [
             Text(f"{sym['diamond']} ", style="jarvis.primary"),
             Text("JARVIS", style="bold jarvis.primary"),
             Text(f" {sym['separator']} ", style="jarvis.muted"),
@@ -212,7 +213,7 @@ class Renderer:
         if not plan or not plan.steps:
             return Text("No active plan", style="jarvis.muted")
 
-        lines: List[Text] = []
+        lines: list[Text] = []
         for step in plan.steps:
             if step.status == StepStatus.COMPLETED:
                 sym, style = self.symbols["done"], "jarvis.done"
@@ -254,7 +255,7 @@ class Renderer:
             Text(f"{status_sym} ", style=style),
             Text(label, style="bold jarvis.tool"),
         )
-        parts: List[RenderableType] = [header]
+        parts: list[RenderableType] = [header]
 
         if e.arguments:
             parts.append(Text(f"  {e.arguments}", style="jarvis.dim"))
@@ -286,7 +287,7 @@ class Renderer:
     def render_conversation(self) -> RenderableType:
         if not self.state.messages:
             return Text("Ready. Type a request or /help.", style="jarvis.muted")
-        blocks: List[RenderableType] = []
+        blocks: list[RenderableType] = []
         for msg in self.state.messages[-30:]:
             if msg.role == "user":
                 blocks.append(self._render_user_message(msg.content))
@@ -383,7 +384,7 @@ class Renderer:
             )
 
         # Expanded view
-        lines: List[RenderableType] = [
+        lines: list[RenderableType] = [
             Text.assemble(
                 Text(f"  {status_sym} ", style=style),
                 Text(tool_name, style="bold jarvis.tool"),
@@ -437,7 +438,7 @@ class Renderer:
           ● typecheck...
         """
         sym = self.symbols
-        lines: List[RenderableType] = [Text("Verification", style="bold jarvis.info")]
+        lines: list[RenderableType] = [Text("Verification", style="bold jarvis.info")]
         for step in steps:
             name = step.get("name", "")
             passed = step.get("passed", False)
@@ -461,7 +462,7 @@ class Renderer:
           Attempting repair...
         """
         sym = self.symbols
-        lines: List[RenderableType] = [
+        lines: list[RenderableType] = [
             Text(f"{sym['arrow_right']} RECOVERING (attempt {attempt})",
                  style="bold jarvis.warning"),
         ]
@@ -512,7 +513,7 @@ class Renderer:
     # ------------------------------------------------------------------
 
     def render_memory(self) -> RenderableType:
-        parts: List[RenderableType] = []
+        parts: list[RenderableType] = []
         if self.state.memory_query:
             parts.append(Text("QUERY", style="jarvis.muted"))
             parts.append(Text(self.state.memory_query, style="jarvis.accent"))
@@ -538,7 +539,7 @@ class Renderer:
     def render_audit(self) -> RenderableType:
         if not self.state.audit_sections:
             return Text("No audit data (backend not connected)", style="jarvis.muted")
-        blocks: List[RenderableType] = []
+        blocks: list[RenderableType] = []
         for section in self.state.audit_sections:
             blocks.append(Text(section.title, style="bold jarvis.accent"))
             for status_key, label, detail in section.items:
@@ -583,9 +584,9 @@ class Renderer:
             Text.assemble(Text("  Scope:      ", style="jarvis.muted"), Text(req.scope)),
             Text.assemble(Text("  Reversible: ", style="jarvis.muted"), Text(rev, style="jarvis.done" if req.reversible else "jarvis.error")),
             Text(""),
-            Text(f"  Allow once?      [y]", style="jarvis.dim"),
-            Text(f"  Allow this run?  [r]", style="jarvis.dim"),
-            Text(f"  Deny             [n]", style="jarvis.dim"),
+            Text("  Allow once?      [y]", style="jarvis.dim"),
+            Text("  Allow this run?  [r]", style="jarvis.dim"),
+            Text("  Deny             [n]", style="jarvis.dim"),
         )
         return Panel(
             body,
@@ -658,7 +659,7 @@ class Renderer:
             body = layout
         else:
             body = conversation
-        elements: List[RenderableType] = [header, Text(""), body]
+        elements: list[RenderableType] = [header, Text(""), body]
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
         return Group(*elements)
@@ -673,7 +674,7 @@ class Renderer:
             padding=(0, 1),
         )
 
-    def render_palette(self, entries: Optional[Sequence[tuple[str, str]]] = None) -> RenderableType:
+    def render_palette(self, entries: Sequence[tuple[str, str]] | None = None) -> RenderableType:
         """Command palette (Ctrl+K / /palette). ``entries`` are ``(key, help)``
         pairs supplied by the command registry — never invented here."""
         if not entries:

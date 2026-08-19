@@ -21,7 +21,6 @@ import asyncio
 import json
 import sys
 from collections.abc import Callable
-from pathlib import Path
 
 __all__ = ["run_fast", "main"]
 

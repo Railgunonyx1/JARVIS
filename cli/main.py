@@ -126,7 +126,7 @@ def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
 
 def _status_getter(loop) -> dict:
     return {
-        "mode": str(loop.permissions.mode),
+        "mode": str(loop.mode),
         "provider": getattr(loop.router, "_last_provider", None),
         "model": getattr(loop.router, "_last_model", None),
     }
@@ -430,7 +430,7 @@ def _print_startup_report() -> None:
 def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
     from cli.bridge import AgentBridge
-    from cli.cockpit import render_cockpit, render_notifications, render_status_bar
+    from cli.cockpit import render_cockpit, render_notifications
     from cli.commands import CommandRegistry
     from cli.details import render_expanded
     from cli.history import HistoryStore
@@ -562,7 +562,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             logging.getLogger().setLevel(logging.INFO if _verbose else logging.WARNING)
             typer.secho(f"backend messages: {'ON' if _verbose else 'OFF'}", fg="green")
         elif line == "/plan":
-            loop.permissions.set_mode("plan")
+            loop.set_mode("plan")
             bridge.pull_status()
             notifications.append(("info", "mode → plan (read-only)"))
             typer.secho("mode → plan (read-only)", fg="green")
@@ -740,9 +740,8 @@ def _cmd_history(line: str) -> None:
 
 
 def _print_help() -> None:
-    from rich.table import Table
     from rich.panel import Panel
-    from rich.text import Text
+    from rich.table import Table
 
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column(style="bold bright_cyan", width=22)

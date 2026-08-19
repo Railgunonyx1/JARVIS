@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 from cli.bridge import AgentBridge
 from cli.models import (
-    AgentEvent,
     ConfirmationRequest,
     EventStatus,
     EventType,

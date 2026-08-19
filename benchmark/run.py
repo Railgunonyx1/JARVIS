@@ -22,7 +22,6 @@ if str(ROOT) not in sys.path:
 
 from benchmark.report import (  # noqa: E402
     default_output_path,
-    load_json,
     render_baseline,
     render_task_table,
     write_json,

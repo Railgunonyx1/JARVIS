@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 
-from tools.schema import ToolResult, tool_result, truncate
+from tools.schema import ToolResult, tool_result
 
 logger = logging.getLogger("jarvis.tools.patch")
 

@@ -8,10 +8,11 @@ Only commands that exist. No fake placeholders.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from .models import Mode, MODE_HELP
+from .models import MODE_HELP, Mode
 
 if TYPE_CHECKING:
     from .renderer import Renderer
@@ -21,8 +22,8 @@ if TYPE_CHECKING:
 class Command:
     name: str
     help: str
-    handler: Callable[[List[str]], None]
-    aliases: List[str] = None  # type: ignore
+    handler: Callable[[list[str]], None]
+    aliases: list[str] = None  # type: ignore
 
     def __post_init__(self) -> None:
         if self.aliases is None:
@@ -30,10 +31,10 @@ class Command:
 
 
 class CommandRegistry:
-    def __init__(self, renderer: "Renderer", bridge=None) -> None:
+    def __init__(self, renderer: Renderer, bridge=None) -> None:
         self.renderer = renderer
         self.bridge = bridge
-        self._commands: Dict[str, Command] = {}
+        self._commands: dict[str, Command] = {}
         self._register_builtins()
 
     def _register(self, cmd: Command) -> None:
@@ -44,7 +45,7 @@ class CommandRegistry:
     def _register_builtins(self) -> None:
         r = self.renderer
 
-        def help_cmd(args: List[str]) -> None:
+        def help_cmd(args: list[str]) -> None:
             lines = ["AVAILABLE COMMANDS", ""]
             seen = set()
             for name, cmd in sorted(self._commands.items()):
@@ -65,7 +66,7 @@ class CommandRegistry:
                 lines.append(f"  {m.value:12} {desc}")
             r.print("\n".join(lines))
 
-        def status_cmd(args: List[str]) -> None:
+        def status_cmd(args: list[str]) -> None:
             if self.bridge is not None:
                 self.bridge.pull_status()
             s = r.state
@@ -78,7 +79,7 @@ class CommandRegistry:
             r.print(f"Workspace : {s.workspace}")
             r.print(f"Layout    : {r.layout_mgr.detect_mode().value}")
 
-        def mode_cmd(args: List[str]) -> None:
+        def mode_cmd(args: list[str]) -> None:
             if not args:
                 status_cmd(args)
                 r.print("Modes: agent | plan | controlled | smart")
@@ -89,13 +90,13 @@ class CommandRegistry:
                 r.print_error("Unknown mode", "Use: agent | plan | controlled | smart")
                 return
             if self.bridge is not None and self.bridge.loop is not None:
-                self.bridge.loop.permissions.set_mode(m.value.lower())
+                self.bridge.loop.set_mode(m.value.lower())
                 self.bridge.pull_status()
             else:
                 r.set_mode(m)
             r.print_success(f"Mode → {m.value}  ({MODE_HELP[m]})")
 
-        def layout_cmd(args: List[str]) -> None:
+        def layout_cmd(args: list[str]) -> None:
             if not args:
                 r.print(f"Current layout: {r.layout_mgr.detect_mode().value}")
                 r.print("Available: minimal | normal | focus | plan | activity | code | memory | audit")
@@ -104,7 +105,7 @@ class CommandRegistry:
             r.set_workspace(args[0].lower() if args[0].lower() in ("code", "memory", "audit", "chat", "plan", "activity") else r.state.workspace)
             r.print_success(f"Layout → {args[0].lower()}")
 
-        def workspace_cmd(args: List[str]) -> None:
+        def workspace_cmd(args: list[str]) -> None:
             if not args:
                 r.print(f"Current workspace: {r.state.workspace}")
                 r.print("Available: chat | plan | code | activity | memory | audit")
@@ -121,12 +122,12 @@ class CommandRegistry:
                 r.layout_mgr.set_mode("normal")
             r.print_success(f"Workspace → {name}")
 
-        def clear_cmd(args: List[str]) -> None:
+        def clear_cmd(args: list[str]) -> None:
             r.state.messages.clear()
             r.clear()
             r.print_success("Conversation cleared")
 
-        def tools_cmd(args: List[str]) -> None:
+        def tools_cmd(args: list[str]) -> None:
             if self.bridge is not None and self.bridge.loop is not None:
                 reg = self.bridge.loop.registry
                 r.print("REGISTERED TOOLS")
@@ -138,7 +139,7 @@ class CommandRegistry:
                 return
             r.print(r.render_activity())
 
-        def memory_cmd(args: List[str]) -> None:
+        def memory_cmd(args: list[str]) -> None:
             if self.bridge is not None:
                 query = args[0] if args else ""
                 self.bridge.refresh_memory(query)
@@ -146,7 +147,7 @@ class CommandRegistry:
             r.layout_mgr.set_mode("memory")
             r.print(r.render_memory())
 
-        def audit_cmd(args: List[str]) -> None:
+        def audit_cmd(args: list[str]) -> None:
             if self.bridge is not None:
                 limit = 12
                 if args and args[0].isdigit():
@@ -156,7 +157,7 @@ class CommandRegistry:
             r.layout_mgr.set_mode("audit")
             r.print(r.render_audit())
 
-        def code_cmd(args: List[str]) -> None:
+        def code_cmd(args: list[str]) -> None:
             if self.bridge is not None:
                 self.bridge.refresh_code(path=args[0] if args else "")
             r.set_workspace("code")
@@ -165,7 +166,7 @@ class CommandRegistry:
             r.print(r.render_code_files())
             r.print(r.render_code_buffer())
 
-        def palette_cmd(args: List[str]) -> None:
+        def palette_cmd(args: list[str]) -> None:
             """Conceptual Ctrl+K surface — the real registered commands."""
             workspaces = [
                 ("chat", "Conversation (default)"),
@@ -176,7 +177,7 @@ class CommandRegistry:
                 ("audit", "Audit / health"),
             ]
             seen = set()
-            entries: List[tuple[str, str]] = list(workspaces)
+            entries: list[tuple[str, str]] = list(workspaces)
             for name, cmd in sorted(self._commands.items()):
                 if cmd.name in seen:
                     continue
@@ -184,10 +185,10 @@ class CommandRegistry:
                 entries.append((f"/{cmd.name}", cmd.help))
             r.print(r.render_palette(entries))
 
-        def exit_cmd(args: List[str]) -> None:
+        def exit_cmd(args: list[str]) -> None:
             raise SystemExit(0)
 
-        def model_cmd(args: List[str]) -> None:
+        def model_cmd(args: list[str]) -> None:
             s = r.state
             if args:
                 r.print_error("model switching not wired", "Only status is available in this session")
@@ -195,7 +196,7 @@ class CommandRegistry:
             r.print(f"Model    : {s.model}")
             r.print(f"Tokens   : {s.tokens_used}/{s.tokens_limit}")
 
-        def context_cmd(args: List[str]) -> None:
+        def context_cmd(args: list[str]) -> None:
             if self.bridge is None:
                 r.print_error("Context backend not connected", "Run the interactive session to enable it.")
                 return
@@ -212,7 +213,7 @@ class CommandRegistry:
                 bar = "█" * max(0, int(ratio * 12)) + "░" * max(0, 12 - int(ratio * 12))
                 r.print(f"  {section['section']:<9} {bar} {section['tokens']}/{section['budget']}")
 
-        def sessions_cmd(args: List[str]) -> None:
+        def sessions_cmd(args: list[str]) -> None:
             from core.event_store import get_event_store
 
             traces = get_event_store().recent_traces(limit=10)
@@ -225,7 +226,7 @@ class CommandRegistry:
                                                  __import__("time").localtime(trace["timestamp"]))
                 r.print(f"  {trace['trace_id']}  {ts}")
 
-        def resume_cmd(args: List[str]) -> None:
+        def resume_cmd(args: list[str]) -> None:
             if self.bridge is None or self.bridge.loop is None:
                 r.print_error("Session backend not connected", "Run the interactive session to enable it.")
                 return
@@ -236,8 +237,8 @@ class CommandRegistry:
             r.print_success(f"Will resume: {goal[:80]}")
             # The REPL loop re-runs this via its own dispatch path.
 
-        def not_connected(name: str) -> Callable[[List[str]], None]:
-            def _h(args: List[str]) -> None:
+        def not_connected(name: str) -> Callable[[list[str]], None]:
+            def _h(args: list[str]) -> None:
                 r.print_error(f"{name} backend not connected", "Wire the real component first.")
             return _h
 
@@ -280,5 +281,5 @@ class CommandRegistry:
             self.renderer.print_error(f"Command failed: /{name}", str(exc))
         return True
 
-    def list_commands(self) -> List[str]:
+    def list_commands(self) -> list[str]:
         return sorted({c.name for c in self._commands.values()})

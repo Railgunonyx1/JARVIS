@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -18,7 +17,6 @@ from providers.types import (
     RateLimitError,
     is_rate_limit_error,
 )
-
 
 # ── Fake providers for router-level tests ────────────────────────────────
 

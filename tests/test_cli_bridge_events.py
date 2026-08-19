@@ -12,7 +12,6 @@ from cli.bridge import AgentBridge
 from cli.models import Message
 from cli.renderer import Renderer
 
-
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 

@@ -3,6 +3,7 @@
 import json
 import os
 
+
 def load_json(path):
     if os.path.exists(path):
         with open(path) as f:
@@ -55,6 +56,7 @@ print("\n--- Dependency Check ---")
 # pip check status
 print("pip check: Running...")
 import subprocess
+
 proc = subprocess.run(['python', '-m', 'pip', 'check'], capture_output=True, text=True, cwd='C:\\Users\\aayan\\Desktop\\JARVIS')
 output = proc.stdout + proc.stderr
 if 'No broken requirements' in output:

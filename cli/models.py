@@ -12,8 +12,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Execution modes (real policies, not cosmetic labels)
@@ -51,12 +50,12 @@ class PlanStep:
     id: str
     description: str
     status: StepStatus = StepStatus.PENDING
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    related_event_ids: List[str] = field(default_factory=list)
+    started_at: float | None = None
+    completed_at: float | None = None
+    related_event_ids: list[str] = field(default_factory=list)
 
     @staticmethod
-    def new(description: str, status: StepStatus = StepStatus.PENDING) -> "PlanStep":
+    def new(description: str, status: StepStatus = StepStatus.PENDING) -> PlanStep:
         return PlanStep(id=str(uuid.uuid4())[:8], description=description, status=status)
 
 
@@ -64,13 +63,13 @@ class PlanStep:
 class Plan:
     id: str
     goal: str
-    steps: List[PlanStep] = field(default_factory=list)
+    steps: list[PlanStep] = field(default_factory=list)
     revision: int = 1
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
     @staticmethod
-    def new(goal: str, step_descriptions: List[str]) -> "Plan":
+    def new(goal: str, step_descriptions: list[str]) -> Plan:
         steps = [PlanStep.new(d) for d in step_descriptions]
         if steps:
             steps[0].status = StepStatus.ACTIVE
@@ -122,17 +121,17 @@ class AgentEvent:
     timestamp: float
     type: EventType
     status: EventStatus
-    tool: Optional[str] = None
+    tool: str | None = None
     arguments: str = ""
     result: str = ""
-    duration_s: Optional[float] = None
-    parent_run_id: Optional[str] = None
-    exit_code: Optional[int] = None
+    duration_s: float | None = None
+    parent_run_id: str | None = None
+    exit_code: int | None = None
     expanded: bool = False
     full_output: str = ""
 
     @staticmethod
-    def tool_start(tool: str, arguments: str = "", parent_run_id: Optional[str] = None) -> "AgentEvent":
+    def tool_start(tool: str, arguments: str = "", parent_run_id: str | None = None) -> AgentEvent:
         return AgentEvent(
             event_id=str(uuid.uuid4())[:8],
             timestamp=time.time(),
@@ -143,13 +142,13 @@ class AgentEvent:
             parent_run_id=parent_run_id,
         )
 
-    def complete(self, result: str = "", duration_s: Optional[float] = None, exit_code: Optional[int] = None) -> None:
+    def complete(self, result: str = "", duration_s: float | None = None, exit_code: int | None = None) -> None:
         self.status = EventStatus.COMPLETED
         self.result = result
         self.duration_s = duration_s
         self.exit_code = exit_code
 
-    def fail(self, result: str = "", duration_s: Optional[float] = None, exit_code: Optional[int] = None) -> None:
+    def fail(self, result: str = "", duration_s: float | None = None, exit_code: int | None = None) -> None:
         self.status = EventStatus.FAILED
         self.result = result
         self.duration_s = duration_s
@@ -211,7 +210,7 @@ class MemoryHit:
 @dataclass
 class AuditSection:
     title: str
-    items: List[tuple]  # (status_symbol_key, label, detail)
+    items: list[tuple]  # (status_symbol_key, label, detail)
 
 
 # ---------------------------------------------------------------------------
@@ -228,13 +227,13 @@ class AppState:
     memory_enabled: bool = False
     connection: str = "ONLINE"
 
-    plan: Optional[Plan] = None
-    messages: List[Message] = field(default_factory=list)
-    events: List[AgentEvent] = field(default_factory=list)  # Activity stream
+    plan: Plan | None = None
+    messages: list[Message] = field(default_factory=list)
+    events: list[AgentEvent] = field(default_factory=list)  # Activity stream
 
     # Workspaces
     workspace: str = "chat"  # chat | plan | code | activity | memory | audit
-    code_files: List[CodeFile] = field(default_factory=list)
+    code_files: list[CodeFile] = field(default_factory=list)
     code_path: str = ""
     code_content: str = ""
     code_language: str = "python"
@@ -242,15 +241,15 @@ class AppState:
     code_modified: bool = False
 
     memory_query: str = ""
-    memory_hits: List[MemoryHit] = field(default_factory=list)
+    memory_hits: list[MemoryHit] = field(default_factory=list)
 
-    audit_sections: List[AuditSection] = field(default_factory=list)
+    audit_sections: list[AuditSection] = field(default_factory=list)
 
-    pending_confirmation: Optional[ConfirmationRequest] = None
+    pending_confirmation: ConfirmationRequest | None = None
     status_message: str = ""
 
     # Verification state (first-class, not messages)
-    verification_steps: List[Dict[str, Any]] = field(default_factory=list)
+    verification_steps: list[dict[str, Any]] = field(default_factory=list)
     verification_status: str = ""  # "" | "running" | "passed" | "failed"
 
     # Recovery state (first-class, not messages)

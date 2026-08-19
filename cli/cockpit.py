@@ -32,7 +32,7 @@ def _bar(ratio: float, width: int = _W) -> Text:
 def _header_panel(loop) -> Panel:
     bits = [
         "JARVIS MK-X",
-        f"mode={loop.permissions.mode}",
+        f"mode={loop.mode}",
         f"project={loop.project.root_path}",
     ]
     if loop.project.language:
@@ -132,7 +132,7 @@ def render_cockpit(loop) -> Layout:
 def render_status_bar(loop) -> Text:
     """Compact single-line status shown before the prompt — no panels."""
     bits = ["JARVIS"]
-    bits.append(f"mode={loop.permissions.mode}")
+    bits.append(f"mode={loop.mode}")
     if getattr(loop.router, "_last_provider", None):
         bits.append(f"{loop.router._last_model}/{loop.router._last_provider}")
     bits.append(f"tools={len(loop.registry.list())}")

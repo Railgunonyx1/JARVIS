@@ -25,7 +25,7 @@ def _synthetic_data(tasks=None):
 # ── task definitions ───────────────────────────────────────────────────
 
 def test_task_registry_schema():
-    from benchmark.tasks import BENCHMARK_TASKS, TASK_FIELDS
+    from benchmark.tasks import BENCHMARK_TASKS
 
     ids = [t["id"] for t in BENCHMARK_TASKS]
     assert len(ids) == len(set(ids)), "task ids must be unique"

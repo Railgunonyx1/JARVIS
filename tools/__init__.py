@@ -12,8 +12,6 @@ from tools.schema import Tool, ToolResult, tool_result
 
 def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
-    from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
-    from tools.shell import shell_execute
     from tools.browser import (
         browser_click,
         browser_extract,
@@ -22,6 +20,21 @@ def build_default_registry() -> ToolRegistry:
         browser_status,
         browser_type,
     )
+    from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
+    from tools.git_tools import (
+        git_add,
+        git_branch,
+        git_commit,
+        git_diff,
+        git_log,
+        git_restore,
+        git_status,
+    )
+    from tools.patch import patch_delete, patch_insert, patch_replace
+    from tools.search import code_search, file_find
+    from tools.shell import shell_execute
+    from tools.system_monitor import system_status
+    from tools.web_search import web_search
     from tools.world_monitor import (
         world_monitor_get_alerts,
         world_monitor_get_event,
@@ -30,13 +43,6 @@ def build_default_registry() -> ToolRegistry:
         world_monitor_search,
         world_monitor_world_brief,
     )
-    from tools.web_search import web_search
-    from tools.system_monitor import system_status
-    from tools.search import code_search, file_find
-    from tools.git_tools import (
-        git_status, git_diff, git_log, git_branch, git_add, git_commit, git_restore,
-    )
-    from tools.patch import patch_replace, patch_insert, patch_delete
 
     registry = ToolRegistry()
     registry.register_many([

@@ -15,6 +15,7 @@ from typing import Any
 
 from core.agent.observer import TaskObserver
 from core.events import (
+    PERMISSION_OBSERVED,
     STEP_COMPLETED,
     STEP_FAILED,
     STEP_STARTED,
@@ -23,7 +24,6 @@ from core.events import (
     TASK_FAILED,
     TASK_FINISHED,
     TASK_STARTED,
-    PERMISSION_OBSERVED,
 )
 from runtime.event_bus import BusEvent, EventBus, get_event_bus
 

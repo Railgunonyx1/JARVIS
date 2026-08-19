@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("jarvis.async_utils")
 
@@ -20,7 +21,7 @@ logger = logging.getLogger("jarvis.async_utils")
 def safe_execute(
     fn: Callable[[], Any],
     *,
-    fallback: Optional[Any] = None,
+    fallback: Any | None = None,
     reraise: bool = False,
     log_level: str = "warning",
     reraise_msg: str = "Operation failed",
