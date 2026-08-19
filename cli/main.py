@@ -26,6 +26,8 @@ import typer
 from rich.console import Console
 from rich.text import Text
 
+from cli.theme import build_rich_theme
+
 # Pipes on Windows default to cp1252, which cannot encode arrows/dashes the
 # cockpit uses — force UTF-8 everywhere with a lossless fallback.
 for _stream in (sys.stdout, sys.stderr):
@@ -51,7 +53,7 @@ warnings.filterwarnings("ignore", category=FutureWarning,
 # appear before the kernel finishes booting.
 
 app = typer.Typer(add_completion=False)
-console = Console(theme=__import__("cli.theme", fromlist=["build_rich_theme"]).build_rich_theme())
+console = Console(theme=build_rich_theme())
 
 _IMPORT_MS = (time.perf_counter() - _IMPORT_START) * 1000.0
 
@@ -442,7 +444,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     # Clearing too early (before ready.is_set()) causes the "blank CMD after kernel
     # starts" symptom because the Rich-rendered area gets wiped just as the kernel
     # comes online and tries to update the status bar.
-    from cli.theme import build_rich_theme
     from rich.panel import Panel
     banner = Panel(
         Text("JARVIS MK-X  ·  Terminal-First Autonomous Agent", style="bold bright_cyan"),

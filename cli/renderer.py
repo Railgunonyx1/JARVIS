@@ -289,16 +289,124 @@ class Renderer:
         blocks: List[RenderableType] = []
         for msg in self.state.messages[-30:]:
             if msg.role == "user":
-                blocks.append(Text(f"USER\n{msg.content}", style="jarvis.user"))
+                blocks.append(self._render_user_message(msg.content))
             elif msg.role == "agent":
-                try:
-                    blocks.append(Markdown(msg.content, code_theme="monokai"))
-                except Exception:
-                    blocks.append(Text(msg.content, style="jarvis.agent"))
+                blocks.append(self._render_agent_message(msg.content))
+            elif msg.role == "tool":
+                blocks.append(self._render_tool_result(msg.content))
             else:
-                blocks.append(Text(msg.content, style="jarvis.system"))
-            blocks.append(Text(""))
+                blocks.append(self._render_system_event(msg.content))
         return Group(*blocks)
+
+    def _render_user_message(self, content: str) -> RenderableType:
+        """Claude Code-style user message: label + indented content."""
+        sym = self.symbols
+        return Group(
+            Text(f"{sym['arrow_right']} You", style="bold bright_white"),
+            Text(f"  {content}", style="jarvis.user"),
+            Text(""),
+        )
+
+    def _render_agent_message(self, content: str) -> RenderableType:
+        """Claude Code-style assistant message: label + markdown content."""
+        sym = self.symbols
+        try:
+            md = Markdown(content, code_theme="monokai")
+        except Exception:
+            md = Text(content, style="jarvis.agent")
+        return Group(
+            Text(f"{sym['diamond']} JARVIS", style="bold bright_cyan"),
+            md,
+            Text(""),
+        )
+
+    def _render_tool_result(self, content: str) -> RenderableType:
+        """Tool result: compact, dim, no label."""
+        if len(content) > 300:
+            content = content[:300] + f"\n  {self.symbols['ellipsis']} (truncated)"
+        return Group(
+            Text(f"  {content}", style="jarvis.dim"),
+        )
+
+    def _render_system_event(self, content: str) -> RenderableType:
+        """System/verification event: muted style."""
+        return Group(
+            Text(f"  {content}", style="jarvis.system"),
+        )
+
+    # ------------------------------------------------------------------
+    # Tool cards — collapsed by default, expandable
+    # ------------------------------------------------------------------
+
+    def render_tool_card(self, tool_name: str, arguments: dict,
+                         status: str = "running", result: str = "",
+                         duration_ms: float = 0.0, expanded: bool = False) -> RenderableType:
+        """A single tool execution card.
+
+        Collapsed:  ✓ filesystem.read src/auth.py  (18ms)
+        Expanded:   full details panel
+        """
+        sym = self.symbols
+        arg_summary = self._summarize_args(arguments)
+
+        if status == "running":
+            status_sym, style = sym["running"], "jarvis.running"
+        elif status == "ok":
+            status_sym, style = sym["done"], "jarvis.done"
+        elif status == "denied":
+            status_sym, style = sym["failed"], "jarvis.warning"
+        else:
+            status_sym, style = sym["failed"], "jarvis.failed"
+
+        duration_str = f" ({duration_ms:.0f}ms)" if duration_ms > 0 else ""
+
+        if not expanded:
+            return Text.assemble(
+                Text(f"  {status_sym} ", style=style),
+                Text(tool_name, style="bold jarvis.tool"),
+                Text(f" {arg_summary}", style="jarvis.dim"),
+                Text(duration_str, style="jarvis.muted"),
+            )
+
+        # Expanded view
+        lines: List[RenderableType] = [
+            Text.assemble(
+                Text(f"  {status_sym} ", style=style),
+                Text(tool_name, style="bold jarvis.tool"),
+                Text(duration_str, style="jarvis.muted"),
+            ),
+        ]
+        if arguments:
+            for k, v in arguments.items():
+                val = str(v)
+                if len(val) > 80:
+                    val = val[:77] + "..."
+                lines.append(Text(f"    {k}: {val}", style="jarvis.dim"))
+        if result and status != "running":
+            res_preview = result[:200] + ("..." if len(result) > 200 else "")
+            lines.append(Text(f"    result: {res_preview}", style=style))
+        return Group(*lines)
+
+    def _summarize_args(self, arguments: dict) -> str:
+        """Create a one-line summary of tool arguments."""
+        if not arguments:
+            return ""
+        # For filesystem tools, show the path
+        if "path" in arguments:
+            return str(arguments["path"])
+        if "pattern" in arguments:
+            return str(arguments["pattern"])
+        if "command" in arguments:
+            cmd = str(arguments["command"])
+            return cmd[:50] + ("..." if len(cmd) > 50 else "")
+        if "query" in arguments:
+            return str(arguments["query"])
+        # Generic: first value
+        first_val = next(iter(arguments.values()), None)
+        if first_val is not None:
+            s = str(first_val)
+            return s[:40] + ("..." if len(s) > 40 else "")
+        return ""
 
     # ------------------------------------------------------------------
     # Code workspace

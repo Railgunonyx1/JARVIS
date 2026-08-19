@@ -129,6 +129,7 @@ class ToolExecutionService:
             return ToolExecutionResult(
                 tool_name=call.name, call_id=call.id,
                 permission_denied=True, permission_reason=reason,
+                failure_class=FailureClass.PERMISSION_DENIED,
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
 
@@ -157,8 +158,10 @@ class ToolExecutionService:
         if result.success:
             self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
         else:
+            from core.agent.state import FailureClass
+            fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
             self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
-
+        
         # Record tool result in AgentState if provided
         if state is not None:
             state.record_tool(
