@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
+from rich.box import ROUNDED, HEAVY, DOUBLE, MINIMAL, SIMPLE
 from rich.style import Style
 from rich.theme import Theme
 
@@ -54,6 +55,7 @@ class JarvisColors:
 
     # UI chrome
     border: str = "bright_black"
+    border_focus: str = "bright_cyan"
     muted: str = "bright_black"
     dim: str = "dim"
     highlight: str = "white"
@@ -66,7 +68,7 @@ class JarvisColors:
     active: str = "bright_cyan"
 
     # Conversation
-    user: str = "bright_white"
+    user: str = "bold bright_white"
     agent: str = "bright_cyan"
     tool: str = "yellow"
     system: str = "bright_black"
@@ -98,7 +100,7 @@ def build_rich_theme() -> Theme:
             "jarvis.failed": COLORS.failed,
             "jarvis.active": COLORS.active,
             # Markdown helpers
-            "markdown.code": "bright_white on black",
+            "markdown.code": "bright_white on grey11",
             "markdown.h1": "bold bright_cyan",
             "markdown.h2": "bold cyan",
             "markdown.h3": "bold white",
@@ -118,18 +120,35 @@ PANEL_TITLES: Dict[str, str] = {
 }
 
 
-# Status symbols (ASCII-safe fallbacks available)
-SYMBOLS = {
-    "running": "●",
-    "done": "✓",
-    "failed": "✗",
-    "planned": "○",
-    "current": "→",
-    "bullet": "•",
-    "prompt": ">",
-    "separator": "·",
-}
+# Box styles for different panel types
+class BoxStyles:
+    """Consistent box styles for different UI contexts."""
+    HEADER = HEAVY          # Status bar — strong, authoritative
+    PANEL = ROUNDED         # Side panels — modern, clean
+    PROMPT = MINIMAL        # Input area — lightweight
+    ACTIVITY = SIMPLE       # Activity stream — unobtrusive
+    CONFIRMATION = DOUBLE   # Security dialogs — attention-grabbing
+    CODE = MINIMAL          # Code blocks — no visual noise
 
+
+# Status symbols (Unicode preferred, ASCII fallback)
+SYMBOLS = {
+    "running": "\u25cf",    # ●
+    "done": "\u2713",       # ✓
+    "failed": "\u2717",     # ✗
+    "planned": "\u25cb",    # ○
+    "current": "\u2192",    # →
+    "bullet": "\u2022",     # •
+    "prompt": "\u203a",     # ›
+    "separator": "\u00b7",  # ·
+    "star": "\u2605",       # ★
+    "arrow_right": "\u25b6",# ▶
+    "ellipsis": "\u2026",   # …
+    "bar_full": "\u2588",   # █
+    "bar_empty": "\u2591",  # ░
+    "diamond": "\u25c6",    # ◆
+    "sparkle": "\u2728",    # ✨
+}
 
 # ASCII-safe alternatives for non-Unicode terminals
 SYMBOLS_ASCII = {
@@ -141,6 +160,13 @@ SYMBOLS_ASCII = {
     "bullet": "-",
     "prompt": ">",
     "separator": "|",
+    "star": "*",
+    "arrow_right": ">",
+    "ellipsis": "...",
+    "bar_full": "#",
+    "bar_empty": "-",
+    "diamond": "+",
+    "sparkle": "*",
 }
 
 

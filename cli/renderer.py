@@ -42,11 +42,11 @@ from .models import (
     RiskLevel,
     StepStatus,
 )
-from .theme import COLORS, get_symbols
+from .theme import COLORS, BoxStyles, get_symbols
 
 logger = logging.getLogger("jarvis.cli.renderer")
 
-CODE_THEME = "solarized-dark"
+CODE_THEME = "monokai"
 
 
 def render_markdown(text: str, *, plain: bool = False):
@@ -169,26 +169,34 @@ class Renderer:
           <70   drop model + time
         """
         width = self.console.size.width
-        sep = Text(f" {self.symbols['separator']} ", style="jarvis.muted")
+        sym = self.symbols
+        sep = Text(f" {sym['separator']} ", style="jarvis.muted")
         parts: List[Text] = [
+            Text(f"{sym['diamond']} ", style="jarvis.primary"),
             Text("JARVIS", style="bold jarvis.primary"),
-            sep,
-            Text(self.state.mode.value, style="jarvis.accent"),
+            Text(f" {sym['separator']} ", style="jarvis.muted"),
+            Text(self.state.mode.value.upper(), style="jarvis.accent"),
         ]
 
         if width >= 70:
-            parts += [sep, Text(self.state.model, style="jarvis.secondary")]
+            model_display = self.state.model
+            if len(model_display) > 25:
+                model_display = model_display[:22] + "..."
+            parts += [sep, Text(model_display, style="jarvis.secondary")]
 
         parts += [sep, Text(self._token_str(), style="jarvis.dim")]
 
         if width >= 120:
-            tool_label = "1 TOOL" if self.state.tools_active == 1 else f"{self.state.tools_active} TOOLS"
-            parts += [sep, Text(tool_label, style="jarvis.dim")]
+            tool_sym = sym['running'] if self.state.tools_active else sym['done']
+            tool_style = "jarvis.running" if self.state.tools_active else "jarvis.done"
+            tool_label = f"{tool_sym} 1 TOOL" if self.state.tools_active == 1 else f"{tool_sym} {self.state.tools_active} TOOLS" if self.state.tools_active else f"{sym['done']} IDLE"
+            parts += [sep, Text(tool_label, style=tool_style)]
             if self.state.memory_enabled:
-                parts += [sep, Text("MEMORY", style="jarvis.success")]
+                parts += [sep, Text(f"{sym['star']} MEMORY", style="jarvis.success")]
 
+        conn_sym = sym['done'] if self.state.connection == "ONLINE" else sym['failed']
         conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
-        parts += [sep, Text(self.state.connection, style=conn_style)]
+        parts += [sep, Text(f"{conn_sym} {self.state.connection}", style=conn_style)]
 
         if width >= 90:
             parts += [sep, Text(datetime.now().strftime("%H:%M:%S"), style="jarvis.dim")]
@@ -231,18 +239,19 @@ class Renderer:
         return Group(*items)
 
     def _render_event(self, e: AgentEvent) -> RenderableType:
+        sym = self.symbols
         if e.status == EventStatus.RUNNING:
-            sym, style = self.symbols["running"], "jarvis.running"
+            status_sym, style = sym["running"], "jarvis.running"
         elif e.status == EventStatus.COMPLETED:
-            sym, style = self.symbols["done"], "jarvis.done"
+            status_sym, style = sym["done"], "jarvis.done"
         elif e.status == EventStatus.FAILED:
-            sym, style = self.symbols["failed"], "jarvis.failed"
+            status_sym, style = sym["failed"], "jarvis.failed"
         else:
-            sym, style = self.symbols["planned"], "jarvis.muted"
+            status_sym, style = sym["planned"], "jarvis.muted"
 
         label = e.tool or e.type.value
         header = Text.assemble(
-            Text(f"{sym} ", style=style),
+            Text(f"{status_sym} ", style=style),
             Text(label, style="bold jarvis.tool"),
         )
         parts: List[RenderableType] = [header]
@@ -265,8 +274,8 @@ class Renderer:
             )
             out = compressed if len(compressed) < len(e.full_output) else e.full_output
             if len(out) > 4000:
-                out = out[:4000] + "\n… (truncated)"
-            parts.append(Text("  ── full output ──", style="jarvis.muted"))
+                out = out[:4000] + f"\n{sym['ellipsis']} (truncated)"
+            parts.append(Text(f"  {sym['separator']}{sym['separator']}{sym['separator']} full output {sym['separator']}{sym['separator']}{sym['separator']}", style="jarvis.muted"))
             parts.append(Text(out, style="jarvis.dim"))
         return Group(*parts)
 
@@ -395,19 +404,25 @@ class Renderer:
         }.get(req.risk, "jarvis.warning")
         rev = "YES" if req.reversible else "NO"
         body = Group(
-            Text("JARVIS wants to execute:", style="jarvis.dim"),
+            Text(f"  {self.symbols['failed']} JARVIS wants to execute:", style="jarvis.error"),
             Text(""),
             Text(f"  {req.operation}", style="bold jarvis.accent"),
             Text(""),
-            Text.assemble(Text("Risk:       ", style="jarvis.muted"), Text(req.risk.value, style=risk_style)),
-            Text.assemble(Text("Scope:      ", style="jarvis.muted"), Text(req.scope)),
-            Text.assemble(Text("Reversible: ", style="jarvis.muted"), Text(rev, style="jarvis.done" if req.reversible else "jarvis.error")),
+            Text.assemble(Text("  Risk:       ", style="jarvis.muted"), Text(req.risk.value.upper(), style=risk_style)),
+            Text.assemble(Text("  Scope:      ", style="jarvis.muted"), Text(req.scope)),
+            Text.assemble(Text("  Reversible: ", style="jarvis.muted"), Text(rev, style="jarvis.done" if req.reversible else "jarvis.error")),
             Text(""),
-            Text("Allow once?     [y]", style="jarvis.dim"),
-            Text("Allow this run? [r]", style="jarvis.dim"),
-            Text("Deny            [n]", style="jarvis.dim"),
+            Text(f"  Allow once?      [y]", style="jarvis.dim"),
+            Text(f"  Allow this run?  [r]", style="jarvis.dim"),
+            Text(f"  Deny             [n]", style="jarvis.dim"),
         )
-        return Panel(body, title="[bold jarvis.error] SECURITY CONFIRMATION [/]", border_style="bright_red", padding=(1, 2))
+        return Panel(
+            body,
+            title=f"[bold jarvis.error] {self.symbols['failed']} SECURITY CONFIRMATION [/]",
+            border_style="bright_red",
+            box=BoxStyles.CONFIRMATION,
+            padding=(1, 2),
+        )
 
     def confirm_interactive(self, req: ConfirmationRequest) -> str:
         """
@@ -450,15 +465,17 @@ class Renderer:
         activity stream beside it. Reads only ``AppState``; no decisions."""
         header = Panel(
             self.render_status(),
-            border_style=COLORS.border,
+            border_style=COLORS.border_focus,
+            box=BoxStyles.HEADER,
             padding=(0, 1),
             height=3,
         )
         conversation = Panel(
             self.render_conversation(),
-            title="JARVIS",
+            title=f"[jarvis.primary]{self.symbols['arrow_right']} JARVIS[/]",
+            title_align="left",
             border_style=COLORS.border,
-            box=box.ROUNDED,
+            box=BoxStyles.PANEL,
             padding=(0, 1),
         )
         if self.console.size.width >= 120:
@@ -478,9 +495,10 @@ class Renderer:
     def render_activity_panel(self) -> RenderableType:
         return Panel(
             self.render_activity(),
-            title="ACTIVITY",
+            title=f"[jarvis.muted]{self.symbols['arrow_right']} ACTIVITY[/]",
+            title_align="left",
             border_style=COLORS.border,
-            box=box.ROUNDED,
+            box=BoxStyles.ACTIVITY,
             padding=(0, 1),
         )
 
@@ -523,10 +541,16 @@ class Renderer:
         )
 
     def print_status_bar(self) -> None:
-        self.console.print(Panel(self.render_status(), border_style=COLORS.border, padding=(0, 1), height=3))
+        self.console.print(Panel(
+            self.render_status(),
+            border_style=COLORS.border_focus,
+            box=BoxStyles.HEADER,
+            padding=(0, 1),
+            height=3,
+        ))
 
     def print_prompt(self) -> str:
-        return f"JARVIS [{self.state.mode.value}]> "
+        return f" {self.symbols['prompt']} JARVIS [{self.state.mode.value}]> "
 
     def clear(self) -> None:
         self.console.clear()
@@ -535,11 +559,11 @@ class Renderer:
         self.console.print(*args, **kwargs)
 
     def print_error(self, title: str, detail: str = "", fallback: str = "") -> None:
-        self.console.print(Text(f"✗ {title}", style="jarvis.error"))
+        self.console.print(Text(f"{self.symbols['failed']} {title}", style="jarvis.error"))
         if detail:
             self.console.print(Text(f"  {detail}", style="jarvis.dim"))
         if fallback:
             self.console.print(Text(f"  {fallback}", style="jarvis.warning"))
 
     def print_success(self, msg: str) -> None:
-        self.console.print(Text(f"✓ {msg}", style="jarvis.success"))
+        self.console.print(Text(f"{self.symbols['done']} {msg}", style="jarvis.success"))

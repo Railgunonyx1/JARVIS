@@ -22,6 +22,7 @@ env/
 # Logs
 logs/
 *.log
+daemon.log
 
 # Memory / databases
 memory/*.db
@@ -37,7 +38,7 @@ voice_packs/
 scratch/
 *.tmp
 
-# Benchmark runtime output (committed baseline lives in benchmark/baseline.json)
+# Benchmark runtime output (committed baseline lives in benchmark/benchmark/baseline.json)
 benchmark/results/
 
 # IDE
@@ -50,6 +51,31 @@ benchmark/results/
 # OS
 Thumbs.db
 .DS_Store
+
+# Transient root artifacts (debug dumps, temp scripts, test output)
+*_output.txt
+*_results.txt
+all_tests.txt
+bridge_results.txt
+changes.txt
+cli_py.txt
+explain.txt
+final_results.txt
+fix_package_ok.py
+hello.txt
+jarvis_bat_commit.txt
+jarvis_bat_original.txt
+prompt
+pytest_output.txt
+results2.txt
+ruff_output.txt
+set_pref.py
+setpref.py
+summary.txt
+test_output.txt
+test_results.txt
+verify.ps1
+verify.py
 
 # Legacy (reference only, not active code)
 temp_extract/

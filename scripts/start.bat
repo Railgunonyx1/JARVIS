@@ -2,13 +2,17 @@
 setlocal
 chcp 65001 >nul 2>&1
 
-rem Relaunch inside Windows Terminal when available; fall back to the
-rem current console host otherwise.
+rem ── JARVIS MK-X scripts/start.bat ────────────────────────────────────
+rem Relaunches inside Windows Terminal when available.
+rem Falls back to the current console otherwise.
+rem ──────────────────────────────────────────────────────────────────────
+
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
         set "JARVIS_WT=1"
-        start "" wt.exe cmd /k call "%~f0"
+        cd /d "%~dp0.."
+        start "" wt.exe -d "%~dp0.." cmd /k "JARVIS_WT=1 scripts\start.bat"
         exit /b
     )
 )
@@ -19,23 +23,21 @@ cd /d "%~dp0.."
 
 cls
 echo.
-echo   JARVIS MK-X
-echo   MARK LXXXV - Cloud-First AI Assistant
-echo ---------------------------------------------------------
-echo.
-echo   What would you like to do?
-echo.
-echo     [1]  Chat       Interactive terminal chat
-echo     [2]  One-shot   Type a goal, get one answer
-echo     [3]  Perf       Show persisted performance data
-echo     [4]  Tests      Run the test suite
-echo     [5]  Install    Install or update dependencies
-echo     [Q]  Quit       Exit JARVIS
-echo.
-echo ---------------------------------------------------------
+echo   ╔═══════════════════════════════════════════════════╗
+echo   ║           JARVIS MK-X  ·  Terminal Agent         ║
+echo   ╠═══════════════════════════════════════════════════╣
+echo   ║                                                   ║
+echo   ║   [1]  Chat       Interactive terminal chat       ║
+echo   ║   [2]  One-shot   Type a goal, get one answer     ║
+echo   ║   [3]  Perf       Performance data                ║
+echo   ║   [4]  Tests      Run the test suite              ║
+echo   ║   [5]  Install    Update dependencies             ║
+echo   ║   [Q]  Quit                                       ║
+echo   ║                                                   ║
+echo   ╚═══════════════════════════════════════════════════╝
 echo.
 
-set /p choice="  jarvis> "
+set /p choice="  JARVIS> "
 
 if "%choice%"=="" exit /b
 if /i "%choice%"=="1" goto chat
@@ -46,7 +48,7 @@ if /i "%choice%"=="5" goto install
 if /i "%choice%"=="q" goto quit
 
 echo.
-echo   Invalid option. Try again.
+echo   Invalid option.
 timeout /t 2 >nul
 exit /b
 
