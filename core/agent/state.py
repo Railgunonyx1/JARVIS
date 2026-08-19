@@ -52,7 +52,7 @@ class FailureClass(StrEnum):
     TOOL_FAILURE = "tool_failure"
 
 
-class TerminalReason(str, Enum):
+class TerminalReason(StrEnum):
     """Why the task stopped. Not a failure class -- a termination reason."""
     VERIFICATION_FAIL = "verification_fail"
     MAX_ITERATIONS = "max_iterations"
@@ -107,10 +107,19 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.CREATED: {TaskStatus.CLASSIFYING, TaskStatus.PLANNING, TaskStatus.CANCELLED},
     TaskStatus.CLASSIFYING: {TaskStatus.PLANNING, TaskStatus.EXECUTING, TaskStatus.CANCELLED},
     TaskStatus.PLANNING: {TaskStatus.EXECUTING, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
-    TaskStatus.EXECUTING: {TaskStatus.OBSERVING, TaskStatus.FAILED, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
-    TaskStatus.OBSERVING: {TaskStatus.VERIFYING, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED},
-    TaskStatus.VERIFYING: {TaskStatus.COMPLETED, TaskStatus.RECOVERING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
-    TaskStatus.RECOVERING: {TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
+    TaskStatus.EXECUTING: {
+        TaskStatus.OBSERVING, TaskStatus.FAILED, TaskStatus.BLOCKED, TaskStatus.CANCELLED,
+    },
+    TaskStatus.OBSERVING: {
+        TaskStatus.VERIFYING, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED,
+    },
+    TaskStatus.VERIFYING: {
+        TaskStatus.COMPLETED, TaskStatus.RECOVERING, TaskStatus.FAILED,
+        TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED,
+    },
+    TaskStatus.RECOVERING: {
+        TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED,
+    },
     TaskStatus.BLOCKED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
     TaskStatus.ROLLED_BACK: {TaskStatus.FAILED, TaskStatus.EXECUTING},
     # Terminal states

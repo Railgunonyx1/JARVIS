@@ -157,7 +157,6 @@ class ToolExecutionService:
         if result.success:
             self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
         else:
-            fc = FailureClass.TIMEOUT if result.metadata.get("timed_out") else FailureClass.TOOL_FAILURE
             self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
 
         # Record tool result in AgentState if provided

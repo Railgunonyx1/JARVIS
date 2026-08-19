@@ -155,7 +155,10 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query."},
-                    "mode": {"type": "string", "enum": ["search", "news"], "description": "Search type. Default 'search'."},
+                    "mode": {
+                        "type": "string", "enum": ["search", "news"],
+                        "description": "Search type. Default 'search'.",
+                    },
                     "limit": {"type": "integer", "description": "Max results. Default 6."},
                 },
                 "required": ["query"],

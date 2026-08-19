@@ -149,6 +149,7 @@ class VerificationEngine:
                 text=True,
                 timeout=step.timeout_seconds,
                 cwd=self._project_root or None,
+                check=False,
             )
             duration_ms = (time.perf_counter() - start) * 1000
             passed = proc.returncode in step.success_exit_codes
