@@ -2,18 +2,17 @@
 setlocal
 chcp 65001 >nul 2>&1
 
-rem ── JARVIS MK-X Launcher ─────────────────────────────────────────────
-rem Always attempts to open in Windows Terminal (wt.exe).
-rem Falls back to current console if Windows Terminal is not installed.
-rem ──────────────────────────────────────────────────────────────────────
+rem ==============================================
+rem JARVIS MK-X Launcher
+rem ==============================================
 
-rem Pick the venv python; fall back to PATH python.
+rem Pick the venv python
 set "PY="
 if exist "venv\Scripts\python.exe" set "PY=venv\Scripts\python.exe"
 if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
 if not defined PY set "PY=python"
 
-rem ── Relaunch in Windows Terminal if not already inside it ─────────────
+rem Relaunch in Windows Terminal if not already inside it
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
@@ -24,11 +23,9 @@ if not "%JARVIS_WT%"=="1" (
     )
 )
 
-rem ── Already in Windows Terminal (or wt not found) -- continue ─────────
 title JARVIS MK-X
 color 0B
 
-rem Route arguments to the correct mode
 set "MODE=agent"
 
 if "%~1"=="" goto menu
@@ -48,9 +45,9 @@ goto unknown
 :menu
 cls
 echo.
-echo   +=============================================+
+echo   +---------------------------------------------+
 echo   ^|          JARVIS MK-X  -  Terminal Agent     ^|
-echo   +=============================================+
+echo   +---------------------------------------------+
 echo   ^|                                              ^|
 echo   ^|  [1]  Chat        Interactive terminal chat ^|
 echo   ^|  [2]  Plan        Read-only plan mode       ^|
@@ -63,8 +60,7 @@ echo   ^|  [8]  Install     Update dependencies       ^|
 echo   ^|  [9]  Demo UI     Standalone UI prototype   ^|
 echo   ^|  [Q]  Quit                                 ^|
 echo   ^|                                              ^|
-echo   ^|  Quick: JARVIS.bat chat ^| plan ^| smart      ^|
-echo   +=============================================+
+echo   +---------------------------------------------+
 echo.
 set /p choice="  JARVIS> "
 
