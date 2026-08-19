@@ -50,8 +50,14 @@ class FailureClass(str, Enum):
     PROVIDER_FAILURE = "provider_failure"
     MODEL_FAILURE = "model_failure"
     TOOL_FAILURE = "tool_failure"
+
+
+class TerminalReason(str, Enum):
+    """Why the task stopped. Not a failure class -- a termination reason."""
     VERIFICATION_FAIL = "verification_fail"
     MAX_ITERATIONS = "max_iterations"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 _FAILURE_PRECEDENCE: dict[FailureClass, int] = {
@@ -63,8 +69,6 @@ _FAILURE_PRECEDENCE: dict[FailureClass, int] = {
     FailureClass.PROVIDER_FAILURE: 5,
     FailureClass.MODEL_FAILURE: 6,
     FailureClass.TOOL_FAILURE: 7,
-    FailureClass.VERIFICATION_FAIL: 8,
-    FailureClass.MAX_ITERATIONS: 9,
 }
 
 
@@ -83,13 +87,9 @@ def classify_failure(error: str, *, is_timeout: bool = False,
         return FailureClass.CONTEXT_OVERFLOW
     if is_provider:
         return FailureClass.PROVIDER_FAILURE
-    if is_verification:
-        return FailureClass.VERIFICATION_FAIL
     err = error.lower()
     if "not registered" in err or "unknown tool" in err:
         return FailureClass.MALFORMED_TOOL
-    if "max iterations" in err:
-        return FailureClass.MAX_ITERATIONS
     return FailureClass.TOOL_FAILURE
 
 

@@ -7,11 +7,12 @@ if exist "venv\Scripts\python.exe" set "PY=venv\Scripts\python.exe"
 if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
 if not defined PY set "PY=python"
 
+REM Launch in Windows Terminal if available (first launch only)
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
-        set JARVIS_WT=1
-        start "" wt.exe -d "%~dp0" cmd /k "set JARVIS_WT=1&& call JARVIS.bat"
+        set "JARVIS_WT=1"
+        start "" wt.exe "%~f0"
         exit /b
     )
 )
@@ -53,6 +54,8 @@ echo   ^|  [9]  Demo UI     Standalone UI prototype   ^|
 echo   ^|  [Q]  Quit                                 ^|
 echo   ^|                                              ^|
 echo   +---------------------------------------------+
+echo.
+echo   Quick: JARVIS.bat chat ^| plan ^| smart
 echo.
 set /p choice="  JARVIS> "
 if "%choice%"=="" exit /b
