@@ -540,7 +540,10 @@ def build_default_registry() -> ToolRegistry:
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "File to edit."},
-                    "line": {"type": "integer", "description": "Line number to insert before (1-indexed). 0 = append at end."},
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number to insert before (1-indexed). 0 = append at end.",
+                    },
                     "text": {"type": "string", "description": "Text to insert."},
                 },
                 "required": ["path", "line", "text"],

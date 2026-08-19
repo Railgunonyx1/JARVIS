@@ -64,6 +64,29 @@ USER / CLIENT -> INTENT ROUTER -> AGENT KERNEL -> HARNESS -> MODEL GATEWAY
 
 **Test strategy:** Build all implementation first, run full test suite once at end of Phase A.
 
+## Research Pipeline
+
+```text
+Priority A:
+├── OpenWork
+├── Nanocoder
+├── Rowboat
+├── Freebuff / Codebuff
+├── TUIOS
+├── Terminal UI / OS projects
+└── OpenObserve
+
+Priority B:
+├── Switchyard
+├── Kronos
+├── Council of High Intelligence
+├── Mindwalk
+└── OpenWork ecosystem
+```
+
+Research runs in parallel but cannot destabilize the active sprint.
+See `jarvis-research-tags.md` for full analysis.
+
 ## Windows Notes
 
 - cp1252 stdout. Always encode safely.

@@ -259,6 +259,51 @@
 
 ---
 
+## Batch 6 — Agentic Coding Agents (via GitHub API, 2026-08-19)
+
+### Coding Agent Platforms
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| CodebuffAI/freebuff | "The free coding agent" — built on Codebuff framework; specialized agents for context gathering, implementation, research, tool execution, and review; parallel local workspaces; evals; AGENTS.md | 8,400+ | TypeScript | ? | **HIGH** — direct architecture comparison: sub-agent orchestration, context discovery, verification/review loop, tool execution boundary, terminal UX |
+| CodebuffAI/codebuff | "The open multi-agent coding framework" — orchestration, tools, SDK; underlying framework for Freebuff | ? | TypeScript | ? | **HIGH** — more valuable than Freebuff for JARVIS; study agent orchestration, tool architecture, SDK patterns |
+
+### Freebuff/Codebuff Research Focus Areas
+
+| Area | JARVIS Relevance | What to Study |
+|------|------------------|---------------|
+| Specialized agents | Very high | How context-gathering, implementation, research, and review agents coordinate |
+| Context/file discovery | Very high | Automated codebase understanding; file-finding agents |
+| Agent orchestration | Very high | Multi-agent delegation patterns; how agents hand off work |
+| Parallel workspaces | High | Running multiple agent instances without interference |
+| Tool architecture | Very high | Compare against ToolExecutionService single-boundary invariant |
+| Verification/review | Very high | How agents check their own work before presenting results |
+| Browser/research agents | High | Web-research integration patterns |
+| SDK architecture | High | Protocol layer design for external integrations |
+| Evals framework | Very high | Agent evaluation patterns; maps to JARVIS future verification system |
+| Terminal UX | High | CLI interaction patterns for Claude-Code-style terminal |
+| AGENTS.md conventions | High | Architecture contract comparison with JARVIS AGENTS.md |
+
+### Research Question
+
+> What does Freebuff/Codebuff do better than JARVIS, and can those ideas fit without violating JARVIS's execution-boundary architecture?
+
+### Caveat
+
+Freebuff is an ad-supported service. Prompts, messages, code, files, and repository data may be processed by its systems/providers. Treat as **architecture/research source only** — do not integrate blindly.
+
+### Compare Against
+
+- AgentLoop → Codebuff agent orchestration
+- ToolExecutionService → Codebuff tool execution boundary
+- VerificationEngine → Codebuff review/verification loop
+- HarnessSelector → Codebuff agent specialization
+- ModelGateway → Codebuff model selection
+- MCP/ACP/Codex adapters → Codebuff SDK protocol layer
+- Future multi-agent orchestration → Codebuff parallel workspaces
+
+---
+
 ## Research Principle
 
 > The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.
