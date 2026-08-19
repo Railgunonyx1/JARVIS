@@ -2,6 +2,9 @@
 setlocal
 chcp 65001 >nul 2>&1
 
+REM Always cd to the directory containing this bat file
+cd /d "%~dp0.."
+
 REM JARVIS MK-X scripts/start.bat
 REM Relaunches inside Windows Terminal when available.
 
@@ -14,9 +17,18 @@ if not "%JARVIS_WT%"=="1" (
     )
 )
 
+REM Force UTF-8 for Python
+set "PYTHONIOENCODING=utf-8"
+
+REM Detect Python (same logic as JARVIS.bat)
+set "PY="
+if exist "venv\Scripts\python.exe" set "PY=venv\Scripts\python.exe"
+if not defined PY if exist "..\venv\Scripts\python.exe" set "PY=..\venv\Scripts\python.exe"
+if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
+if not defined PY set "PY=python"
+
 title JARVIS MK-X
 color 0B
-cd /d "%~dp0.."
 
 cls
 echo.
@@ -54,7 +66,7 @@ exit /b
 echo.
 echo   Type /help for commands, /exit to quit.
 echo.
-"venv\Scripts\python.exe" -m cli
+"%PY%" -m cli
 exit /b
 
 :oneshot
@@ -62,23 +74,23 @@ echo.
 set /p goal="  goal> "
 if "%goal%"=="" goto chat
 echo.
-"venv\Scripts\python.exe" -m cli "%goal%"
+"%PY%" -m cli "%goal%"
 pause
 exit /b
 
 :perf
-"venv\Scripts\python.exe" -m cli perf summary
+"%PY%" -m cli perf summary
 pause
 exit /b
 
 :tests
-"venv\Scripts\python.exe" -m pytest tests -q
+"%PY%" -m pytest tests -q
 pause
 exit /b
 
 :install
 echo   Updating dependencies...
-"venv\Scripts\python.exe" -m pip install -r requirements.txt
+"%PY%" -m pip install -r requirements.txt
 pause
 exit /b
 
