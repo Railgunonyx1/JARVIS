@@ -1,12 +1,8 @@
 """Import guards for the Phase 1 controlled demolition.
 
 Sprint 1 quarantined the legacy voice/vision/desktop subsystems
-(``pipeline/``, ``actions/``, ``voice_engine/``) into ``_quarantine_removed/``
-as JARVIS pivots to a terminal-native engineering agent. These tests:
-
-1. Fail if any quarantined package is resurrected at its old path.
-2. Fail if the surviving entry surface ever imports a quarantined package
-   eagerly (they must stay out of ``sys.modules`` after boot imports).
+(``pipeline/``, ``actions/``, ``voice_engine/``) and later deleted them
+entirely. These tests ensure they are never resurrected at their old path.
 """
 
 import sys
@@ -14,22 +10,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 QUARANTINED = ("pipeline", "actions", "voice_engine")
-QUARANTINE_DIR = ROOT / "_quarantine_removed"
 
 
 def test_quarantined_packages_removed_from_tree():
     for name in QUARANTINED:
         assert not (ROOT / name).exists(), (
-            f"{name}/ was quarantined in Phase 1 (see {QUARANTINE_DIR.name}/) — "
-            "do not resurrect it."
-        )
-
-
-def test_quarantine_archive_present():
-    assert QUARANTINE_DIR.is_dir(), "missing _quarantine_removed/ archive"
-    for name in QUARANTINED:
-        assert (QUARANTINE_DIR / name).is_dir(), (
-            f"{name} is missing from the quarantine archive"
+            f"{name}/ was removed in Phase 1 — do not resurrect it."
         )
 
 

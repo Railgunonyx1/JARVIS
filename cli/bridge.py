@@ -181,7 +181,7 @@ class AgentBridge:
         from .models import CodeFile
 
         skip = {".git", "venv", "node_modules", "__pycache__", "_quarantine",
-                ".pytest_cache", "_archive", "dist", "build", ".venv"}
+                ".pytest_cache", "dist", "build", ".venv"}
         files: list[CodeFile] = []
         if path:
             target = (root / path).resolve()
@@ -236,7 +236,7 @@ class AgentBridge:
             for p in root.rglob("*")
             if p.is_file() and not any(part.startswith(".") or part in {
                 ".git", "venv", "node_modules", "__pycache__", "_quarantine",
-                ".pytest_cache", "_archive", "dist", "build", ".venv"}
+                ".pytest_cache", "dist", "build", ".venv"}
                 for part in p.parts)
         ][:200]
 
