@@ -7,8 +7,11 @@ from collections.abc import AsyncIterator
 
 from reliability_engine.circuit_breaker import CircuitBreaker
 from providers.base import LLMProvider, LLMResponse
+from providers.cerebras_provider import CerebrasProvider
+from providers.deepseek_provider import DeepSeekProvider
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
+from providers.huggingface_provider import HuggingFaceProvider
 from providers.mistral_provider import MistralProvider
 from providers.nvidia_nim_provider import NVIDIAProvider
 from providers.ollama_provider import OllamaProvider
@@ -59,6 +62,9 @@ class ProviderRouter:
             "nvidia_nim": CircuitBreaker(),
             "omni_route": CircuitBreaker(),
             "ollama": CircuitBreaker(),
+            "cerebras": CircuitBreaker(),
+            "deepseek": CircuitBreaker(),
+            "huggingface": CircuitBreaker(),
         }
         for _name, _breaker in self._circuit_breakers.items():
             _breaker.register(_name)
@@ -92,6 +98,12 @@ class ProviderRouter:
             )
         if "ollama" in config:
             self._providers["ollama"] = OllamaProvider(config["ollama"])
+        if "cerebras" in config and api_keys.get("cerebras"):
+            self._providers["cerebras"] = CerebrasProvider(config["cerebras"], api_keys["cerebras"])
+        if "deepseek" in config and api_keys.get("deepseek"):
+            self._providers["deepseek"] = DeepSeekProvider(config["deepseek"], api_keys["deepseek"])
+        if "huggingface" in config and api_keys.get("huggingface"):
+            self._providers["huggingface"] = HuggingFaceProvider(config["huggingface"], api_keys["huggingface"])
 
         available = [name for name in self._chain if name in self._providers]
         logger.info("Router initialized: %s", " → ".join(available))

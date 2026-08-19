@@ -133,6 +133,9 @@ class Config:
             "mistral": raw.get("mistral_api_key", ""),
             "mistral_extra": [raw.get("mistral_api_key_2", "")],
             "nvidia_nim": raw.get("nvidia_nim_api_key", ""),
+            "cerebras": raw.get("cerebras_api_key", ""),
+            "deepseek": raw.get("deepseek_api_key", ""),
+            "huggingface": raw.get("huggingface_api_key", ""),
         }
         self._api_keys_cached_at = now
         return self._api_keys_cache
