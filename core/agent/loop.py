@@ -110,6 +110,7 @@ class AgentLoop:
         event_bus=None,
         harness=None,
         model_gateway=None,
+        tool_service=None,
     ) -> None:
         from core.harness import HarnessConfig, HarnessType, Harness
 
@@ -146,6 +147,21 @@ class AgentLoop:
         )
         self.executor = AgentToolExecutor(registry, self.logger)
         self._tool_counter = 0
+
+        # Single tool execution boundary
+        if tool_service is not None:
+            self._tool_service = tool_service
+        else:
+            from core.agent.tool_service import ToolExecutionService
+            self._tool_service = ToolExecutionService(
+                registry=registry,
+                permissions=self.permissions,
+                executor=self.executor,
+                observer=self.observer,
+                decision_logger=self.logger,
+                bus=event_bus,
+                mode=mode,
+            )
 
     def _next_tool_id(self) -> str:
         self._tool_counter += 1
@@ -448,51 +464,8 @@ class AgentLoop:
 
     async def _handle_call(self, messages: list[dict[str, Any]], call, state: AgentState,
                            trace_id: str, session_id: str) -> None:
-        step = self.observer.step_started(call.name, call.arguments, call.id)
-        tool = self.registry.get(call.name)
-        if tool is None:
-            error = f"Tool '{call.name}' is not registered"
-            self.logger.record(trace_id, events.TOOL_FAILED, {"tool": call.name, "error": error})
-            self.observer.step_finished(step, "error", 0.0, error)
-            messages.append({
-                "role": "tool", "tool_call_id": call.id, "name": call.name,
-                "content": f"ERROR: {error}",
-            })
-            return
-
         self.logger.record(trace_id, events.TOOL_REQUESTED, {"tool": call.name})
-        allowed, reason = await self.permissions.check(tool, call.arguments, trace_id, session_id)
-        self.observer.observe_permission(call.name, allowed, reason)
-        if not allowed:
-            self.logger.record(trace_id, events.TOOL_FAILED, {"tool": call.name, "error": reason})
-            self.observer.step_finished(step, "denied", 0.0, reason)
-            messages.append({
-                "role": "tool", "tool_call_id": call.id, "name": call.name,
-                "content": f"PERMISSION DENIED: {reason}",
-            })
-            return
-
-        result = await self.executor.execute(
-            call.name, call.arguments, trace_id,
-            mode=self.permissions.mode, session_id=session_id,
+        await self._tool_service.execute_tool(
+            call, trace_id=trace_id, session_id=session_id,
+            append_to_messages=messages, state=state,
         )
-        self.observer.step_finished(
-            step, "ok" if result.success else "error",
-            result.metadata.get("duration_ms", 0.0), result.error,
-        )
-        state.record_tool(
-            call.name, call.id, result.success,
-            result.metadata.get("duration_ms", 0.0),
-            result.output, result.error, result.metadata,
-        )
-        path = result.metadata.get("path")
-        if isinstance(path, str) and result.success:
-            state.files_changed.append(path)
-        content = result.output if result.success else f"ERROR: {result.error}"
-        # Redact secrets before tool output re-enters LLM context
-        from security.redaction import redact_sensitive
-        content = redact_sensitive(content)
-        messages.append({
-            "role": "tool", "tool_call_id": call.id, "name": call.name,
-            "content": content,
-        })

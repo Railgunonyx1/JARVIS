@@ -1,17 +1,13 @@
-"""Sprint 20C -- ToolExecutionService: shared tool execution for AgentLoop, MCP, ACP, Codex.
+"""ToolExecutionService -- single tool execution boundary for JARVIS.
 
-Extracted from AgentLoop._handle_call so all execution paths share the same
-tool execution, permission checking, and event emission logic.
+All tool execution MUST pass through this service. No protocol, adapter,
+or agent path may bypass it.
 
 Architecture:
-    AgentLoop / MCP / ACP / Codex
-              │
-              ▼
-    ToolExecutionService
-              │
-    ┌─────────┼─────────┐
-    ▼         ▼         ▼
- Permission  Executor  Observer
+    Terminal ----|
+    MCP ---------|
+    ACP ---------|---> ToolExecutionService ---> Permission ---> Executor ---> Result
+    Codex -------|
 """
 
 from __future__ import annotations
@@ -83,6 +79,7 @@ class ToolExecutionService:
         trace_id: str = "",
         session_id: str = "",
         append_to_messages: list[dict[str, Any]] | None = None,
+        state: Any | None = None,
     ) -> ToolExecutionResult:
         """Execute a single tool call with full permission + observer lifecycle.
 
@@ -90,12 +87,14 @@ class ToolExecutionService:
         the tool response is appended to it (for AgentLoop compatibility).
         """
         start = time.perf_counter()
+        step = self._observer.step_started(call.name, call.arguments, call.id)
 
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:
             error = f"Tool '{call.name}' is not registered"
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            self._observer.step_finished(step, "error", 0.0, error)
             if append_to_messages is not None:
                 append_to_messages.append({
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
@@ -111,8 +110,10 @@ class ToolExecutionService:
         allowed, reason = await self._permissions.check(
             tool, call.arguments, trace_id, session_id,
         )
+        self._observer.observe_permission(call.name, allowed, reason)
         if not allowed:
             self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
+            self._observer.step_finished(step, "denied", 0.0, reason)
             if append_to_messages is not None:
                 append_to_messages.append({
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
@@ -131,6 +132,10 @@ class ToolExecutionService:
         )
         duration_ms = result.metadata.get("duration_ms", 0.0)
 
+        # Observer: step finished
+        status = "ok" if result.success else "error"
+        self._observer.step_finished(step, status, duration_ms, result.error)
+
         # Redact secrets
         content = result.output if result.success else f"ERROR: {result.error}"
         content = redact_sensitive(content)
@@ -145,6 +150,16 @@ class ToolExecutionService:
             self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
         else:
             self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
+
+        # Record tool result in AgentState if provided
+        if state is not None:
+            state.record_tool(
+                call.name, call.id, result.success, duration_ms,
+                result.output, result.error, result.metadata,
+            )
+            path = result.metadata.get("path")
+            if isinstance(path, str) and result.success:
+                state.files_changed.append(path)
 
         return ToolExecutionResult(
             tool_name=call.name,
@@ -162,11 +177,12 @@ class ToolExecutionService:
         trace_id: str = "",
         session_id: str = "",
         append_to_messages: list[dict[str, Any]] | None = None,
+        state: Any | None = None,
     ) -> list[ToolExecutionResult]:
         """Execute multiple tool calls sequentially."""
         results = []
         for call in calls:
-            result = await self.execute_tool(call, trace_id, session_id, append_to_messages)
+            result = await self.execute_tool(call, trace_id, session_id, append_to_messages, state)
             results.append(result)
         return results
 
