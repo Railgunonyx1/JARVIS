@@ -18,7 +18,7 @@ from core import events
 from core.agent.context import AgentContextBuilder
 from core.agent.observer import TaskObserver, TaskStatus
 from core.agent.permissions import PermissionEngine
-from core.agent.state import AgentState, TaskStatus
+from core.agent.state import AgentState, TaskStatus, pick_worst_failure
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id
 from core.context.budget import estimate_tokens
 from core.context.manager import ContextManager
@@ -281,6 +281,53 @@ class AgentLoop:
                         })
                         state.transition(TaskStatus.OBSERVING)
                         state.transition(TaskStatus.VERIFYING)
+
+                        # Post-execution verification gate
+                        if self._verification_enabled:
+                            ver_report = await self._run_verification(trace_id)
+                            if not ver_report.all_passed:
+                                from core.agent.state import FailureClass, classify_failure
+                                self._emit("verification.failed", {
+                                    "steps_run": ver_report.steps_run,
+                                    "steps_passed": ver_report.steps_passed,
+                                    "failures": [
+                                        {"name": r.step_name, "error": r.error or r.stderr[:200]}
+                                        for r in ver_report.results if not r.passed
+                                    ],
+                                }, trace_id)
+                                failure_ctx = self._build_verification_failure_context(ver_report)
+                                state.errors.append(failure_ctx)
+                                fc = classify_failure(failure_ctx, is_verification=True)
+                                state.failure_class = pick_worst_failure(state.failure_class, fc)
+                                if iteration < self.max_iterations:
+                                    messages.append({
+                                        "role": "user",
+                                        "content": (
+                                            "Verification failed. The following checks did not pass:\n"
+                                            + failure_ctx
+                                            + "\nPlease fix the issues and try again."
+                                        ),
+                                    })
+                                    state.transition(TaskStatus.RECOVERING)
+                                    state.transition(TaskStatus.EXECUTING)
+                                    continue
+                                else:
+                                    self._emit("task.failed", {
+                                        "goal": goal[:200],
+                                        "error": "verification failed and no retries remaining",
+                                    }, trace_id)
+                                    state.transition(TaskStatus.FAILED)
+                                    self._finish_observation(False, "", state, iteration)
+                                    return AgentResult(
+                                        success=False, response=final, trace_id=trace_id,
+                                        state=state, error="verification failed",
+                                        observation=self._result_observation(state),
+                                        perf=self._end_perf(tracer, root),
+                                    )
+                            self._emit("verification.passed", {
+                                "steps_run": ver_report.steps_run,
+                            }, trace_id)
+
                         state.transition(TaskStatus.COMPLETED)
                         self._emit("task.completed", {
                             "goal": goal[:200], "iterations": iteration,
@@ -326,10 +373,13 @@ class AgentLoop:
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
         except Exception as e:
+            from core.agent.state import FailureClass, classify_failure
             error = str(e)[:500]
             state.errors.append(error)
+            fc = classify_failure(error)
+            state.failure_class = pick_worst_failure(state.failure_class, fc)
             self.logger.record(trace_id, events.TASK_FAILED, {"goal": goal[:200], "error": error})
-            self._emit("task.failed", {"goal": goal[:200], "error": error}, trace_id)
+            self._emit("task.failed", {"goal": goal[:200], "error": error, "failure_class": fc.value}, trace_id)
             try:
                 state.transition(TaskStatus.FAILED)
             except ValueError:
@@ -418,6 +468,29 @@ class AgentLoop:
     def _end_perf(tracer, root, status: str = "OK", error: str = "") -> dict[str, Any]:
         trace = tracer.end(root, status=status, error=error)
         return trace or {}
+
+    async def _run_verification(self, trace_id: str):
+        from core.agent.verification import VerificationEngine, VerificationStep
+        engine = VerificationEngine(project_root=str(self.project.root_path))
+        if self._harness is not None and self._harness.config.verification_steps:
+            for name, cmd in self._harness.config.verification_steps:
+                engine.add_step(VerificationStep(name=name, command=cmd))
+        else:
+            engine.configure_defaults()
+        self._emit("verification.started", {}, trace_id)
+        return await engine.verify()
+
+    @staticmethod
+    def _build_verification_failure_context(report) -> str:
+        lines = []
+        for r in report.results:
+            if not r.passed:
+                lines.append(f"- {r.step_name}: exit_code={r.exit_code}")
+                if r.error:
+                    lines.append(f"  error: {r.error[:200]}")
+                elif r.stderr:
+                    lines.append(f"  stderr: {r.stderr[:200]}")
+        return "\n".join(lines) if lines else "unknown verification failure"
 
     def _finish_observation(self, success: bool, response: str, state: AgentState,
                             iteration: int) -> None:

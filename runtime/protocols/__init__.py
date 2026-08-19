@@ -106,6 +106,7 @@ class ACPAdapter:
     """Adapts JARVIS to the Agent Client Protocol (ACP).
 
     ACP enables editors (VS Code, etc.) to communicate with agents.
+    All tool calls go through ToolExecutionService.
     """
 
     def __init__(self, agent_loop=None, bus=None, tool_service=None):
@@ -132,7 +133,49 @@ class ACPAdapter:
             return ProtocolMessage(method=method, error="No agent loop", protocol=ProtocolType.ACP)
         if method == "agent/cancel":
             return ProtocolMessage(method=method, result={"cancelled": True}, protocol=ProtocolType.ACP)
+        if method == "tools/call":
+            tool_name = params.get("name", "")
+            arguments = params.get("arguments", {})
+            result = await self._call_tool(tool_name, arguments)
+            return ProtocolMessage(
+                method=method,
+                result=result,
+                protocol=ProtocolType.ACP,
+            )
+        if method == "tools/list":
+            return ProtocolMessage(
+                method=method,
+                result=self._list_tools(),
+                protocol=ProtocolType.ACP,
+            )
         return ProtocolMessage(method=method, error=f"Unknown ACP method: {method}", protocol=ProtocolType.ACP)
+
+    async def _call_tool(self, name: str, arguments: dict) -> Any:
+        if self._tool_service is None:
+            return {"error": "No tool execution service configured"}
+        from providers.types import ToolCall
+        call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
+        result = await self._tool_service.execute_tool(call, trace_id="acp")
+        return {
+            "status": "completed" if result.success else "error",
+            "tool": name,
+            "output": result.output[:1000] if result.success else result.error,
+        }
+
+    def _list_tools(self) -> list[dict]:
+        if self._tool_service is None:
+            return []
+        registry = self._tool_service._registry
+        if registry is None:
+            return []
+        tools = registry.to_openai_tools()
+        return [
+            {
+                "name": t["function"]["name"],
+                "description": t["function"].get("description", ""),
+            }
+            for t in tools
+        ]
 
 
 class CodexExecAdapter:
@@ -140,10 +183,12 @@ class CodexExecAdapter:
 
     Enables JARVIS to act as a drop-in replacement for the Codex binary
     via path override, without replacing JARVIS's internal protocol.
+    All tool calls go through ToolExecutionService.
     """
 
-    def __init__(self, agent_loop=None):
+    def __init__(self, agent_loop=None, tool_service=None):
         self._agent_loop = agent_loop
+        self._tool_service = tool_service
 
     async def handle_exec(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle a Codex exec protocol request."""
@@ -161,6 +206,19 @@ class CodexExecAdapter:
             }
         except Exception as e:
             return {"error": str(e)[:500]}
+
+    async def handle_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Direct tool execution through ToolExecutionService."""
+        if self._tool_service is None:
+            return {"error": "No tool execution service configured"}
+        from providers.types import ToolCall
+        call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
+        result = await self._tool_service.execute_tool(call, trace_id="codex")
+        return {
+            "status": "completed" if result.success else "error",
+            "tool": name,
+            "output": result.output[:1000] if result.success else result.error,
+        }
 
 
 class ProtocolRegistry:

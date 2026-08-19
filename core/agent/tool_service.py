@@ -87,14 +87,16 @@ class ToolExecutionService:
         the tool response is appended to it (for AgentLoop compatibility).
         """
         start = time.perf_counter()
-        step = self._observer.step_started(call.name, call.arguments, call.id)
+        has_obs = self._observer.observation is not None
+        step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:
             error = f"Tool '{call.name}' is not registered"
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
-            self._observer.step_finished(step, "error", 0.0, error)
+            if step is not None:
+                self._observer.step_finished(step, "error", 0.0, error)
             if append_to_messages is not None:
                 append_to_messages.append({
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
@@ -110,10 +112,11 @@ class ToolExecutionService:
         allowed, reason = await self._permissions.check(
             tool, call.arguments, trace_id, session_id,
         )
-        self._observer.observe_permission(call.name, allowed, reason)
+        self._observer.observe_permission(call.name, allowed, reason) if has_obs else None
         if not allowed:
             self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
-            self._observer.step_finished(step, "denied", 0.0, reason)
+            if step is not None:
+                self._observer.step_finished(step, "denied", 0.0, reason)
             if append_to_messages is not None:
                 append_to_messages.append({
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
@@ -134,7 +137,8 @@ class ToolExecutionService:
 
         # Observer: step finished
         status = "ok" if result.success else "error"
-        self._observer.step_finished(step, status, duration_ms, result.error)
+        if step is not None:
+            self._observer.step_finished(step, status, duration_ms, result.error)
 
         # Redact secrets
         content = result.output if result.success else f"ERROR: {result.error}"

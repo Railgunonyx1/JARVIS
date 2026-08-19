@@ -5,7 +5,9 @@ Includes a formal task status state machine:
     CREATED → CLASSIFYING → PLANNING → EXECUTING → OBSERVING → VERIFYING → COMPLETED
 
 Failure paths:
-    → BLOCKED → ROLLED_BACK
+    → RECOVERING → EXECUTING (retry with context)
+    → ROLLED_BACK → FAILED
+    → BLOCKED → FAILED
     → FAILED
     → CANCELLED
 """
@@ -25,11 +27,79 @@ class TaskStatus(str, Enum):
     EXECUTING = "executing"
     OBSERVING = "observing"
     VERIFYING = "verifying"
+    RECOVERING = "recovering"
     COMPLETED = "completed"
     FAILED = "failed"
     BLOCKED = "blocked"
     CANCELLED = "cancelled"
     ROLLED_BACK = "rolled_back"
+
+
+class FailureClass(str, Enum):
+    """Deterministic failure classification with explicit precedence.
+
+    Precedence (highest first):
+        CANCELLED > TIMEOUT > PERMISSION_DENIED > MALFORMED_TOOL
+        > CONTEXT_OVERFLOW > PROVIDER_FAILURE > MODEL_FAILURE > TOOL_FAILURE
+    """
+    CANCELLED = "cancelled"
+    TIMEOUT = "timeout"
+    PERMISSION_DENIED = "permission_denied"
+    MALFORMED_TOOL = "malformed_tool"
+    CONTEXT_OVERFLOW = "context_overflow"
+    PROVIDER_FAILURE = "provider_failure"
+    MODEL_FAILURE = "model_failure"
+    TOOL_FAILURE = "tool_failure"
+    VERIFICATION_FAIL = "verification_fail"
+    MAX_ITERATIONS = "max_iterations"
+
+
+_FAILURE_PRECEDENCE: dict[FailureClass, int] = {
+    FailureClass.CANCELLED: 0,
+    FailureClass.TIMEOUT: 1,
+    FailureClass.PERMISSION_DENIED: 2,
+    FailureClass.MALFORMED_TOOL: 3,
+    FailureClass.CONTEXT_OVERFLOW: 4,
+    FailureClass.PROVIDER_FAILURE: 5,
+    FailureClass.MODEL_FAILURE: 6,
+    FailureClass.TOOL_FAILURE: 7,
+    FailureClass.VERIFICATION_FAIL: 8,
+    FailureClass.MAX_ITERATIONS: 9,
+}
+
+
+def classify_failure(error: str, *, is_timeout: bool = False,
+                     is_permission: bool = False, is_verification: bool = False,
+                     is_cancelled: bool = False, is_context_overflow: bool = False,
+                     is_provider: bool = False) -> FailureClass:
+    """Deterministic failure classification. Always returns the highest-precedence match."""
+    if is_cancelled:
+        return FailureClass.CANCELLED
+    if is_timeout:
+        return FailureClass.TIMEOUT
+    if is_permission:
+        return FailureClass.PERMISSION_DENIED
+    if is_context_overflow:
+        return FailureClass.CONTEXT_OVERFLOW
+    if is_provider:
+        return FailureClass.PROVIDER_FAILURE
+    if is_verification:
+        return FailureClass.VERIFICATION_FAIL
+    err = error.lower()
+    if "not registered" in err or "unknown tool" in err:
+        return FailureClass.MALFORMED_TOOL
+    if "max iterations" in err:
+        return FailureClass.MAX_ITERATIONS
+    return FailureClass.TOOL_FAILURE
+
+
+def pick_worst_failure(a: FailureClass | None, b: FailureClass | None) -> FailureClass | None:
+    """Return the higher-precedence (lower index) of two failure classes."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a if _FAILURE_PRECEDENCE[a] <= _FAILURE_PRECEDENCE[b] else b
 
 
 # Valid transitions: from → set of allowed destinations
@@ -39,7 +109,8 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PLANNING: {TaskStatus.EXECUTING, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.EXECUTING: {TaskStatus.OBSERVING, TaskStatus.FAILED, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.OBSERVING: {TaskStatus.VERIFYING, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED},
-    TaskStatus.VERIFYING: {TaskStatus.COMPLETED, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
+    TaskStatus.VERIFYING: {TaskStatus.COMPLETED, TaskStatus.RECOVERING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
+    TaskStatus.RECOVERING: {TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED},
     TaskStatus.BLOCKED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
     TaskStatus.ROLLED_BACK: {TaskStatus.FAILED, TaskStatus.EXECUTING},
     # Terminal states
@@ -66,6 +137,7 @@ class AgentState:
     provider: str = ""
     model: str = ""
     context_usage: dict[str, Any] = field(default_factory=dict)
+    failure_class: FailureClass | None = None
     _status_history: list[tuple[str, float]] = field(default_factory=list, repr=False)
 
     def transition(self, new_status: TaskStatus) -> None:
@@ -104,6 +176,7 @@ class AgentState:
             "task_id": self.task_id,
             "goal": self.goal,
             "status": self.status.value,
+            "failure_class": self.failure_class.value if self.failure_class else None,
             "tool_calls": self.tool_calls,
             "files_changed": self.files_changed,
             "errors": self.errors,

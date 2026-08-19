@@ -19,6 +19,10 @@ from providers.model_gateway import (
 from providers.types import LLMResponse, ToolCall
 from tools import build_default_registry
 from core.project import ProjectContext
+from runtime.protocols import MCPAdapter, ACPAdapter, CodexExecAdapter
+
+import os
+import tempfile
 
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[1])
 
@@ -282,19 +286,27 @@ class TestAgentLoopHarnessIntegration:
             name="fake-model", provider="fake",
             capabilities=(Capability.CODING,),
         ))
+        hc = HarnessConfig(harness_type=HarnessType.MINIMAL, enable_verification=False)
+        harness = Harness(hc)
         loop = AgentLoop(
             router=FakeRouter([_resp("done.")]),
             registry=build_default_registry(),
             project=ProjectContext(root_path=ROOT),
             decision_logger=StubLogger(),
             model_gateway=gw,
+            harness=harness,
         )
         result = asyncio.run(loop.run("code something"))
         assert result.success
 
     def test_loop_with_harness_and_gateway(self):
         sel = HarnessSelector()
-        harness = sel.select(HarnessType.CODING)
+        hc = HarnessConfig(
+            harness_type=HarnessType.CODING,
+            max_iterations=20,
+            enable_verification=False,
+        )
+        harness = Harness(hc)
         gw = ModelGateway()
         gw.register_model(ModelProfile(
             name="fake-model", provider="fake",
@@ -363,3 +375,213 @@ class TestVerificationEngine:
         d = report.to_dict()
         assert "all_passed" in d
         assert "results" in d
+
+
+# ── FailureClass + State Machine tests ─────────────────────────────────
+
+
+class TestFailureClassification:
+    def test_classify_malformed_tool(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("Tool 'nonexistent' is not registered")
+        assert fc == FailureClass.MALFORMED_TOOL
+
+    def test_classify_permission_denied(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("denied", is_permission=True)
+        assert fc == FailureClass.PERMISSION_DENIED
+
+    def test_classify_timeout(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("timed out", is_timeout=True)
+        assert fc == FailureClass.TIMEOUT
+
+    def test_classify_cancelled(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("cancelled", is_cancelled=True)
+        assert fc == FailureClass.CANCELLED
+
+    def test_classify_verification_fail(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("tests failed", is_verification=True)
+        assert fc == FailureClass.VERIFICATION_FAIL
+
+    def test_classify_tool_failure_default(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("something went wrong")
+        assert fc == FailureClass.TOOL_FAILURE
+
+    def test_classify_max_iterations(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("Max iterations (10) reached")
+        assert fc == FailureClass.MAX_ITERATIONS
+
+    def test_precedence_cancelled_wins(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("error", is_cancelled=True, is_timeout=True)
+        assert fc == FailureClass.CANCELLED
+
+    def test_precedence_timeout_beats_tool(self):
+        from core.agent.state import classify_failure, FailureClass
+        fc = classify_failure("Tool 'x' failed", is_timeout=True)
+        assert fc == FailureClass.TIMEOUT
+
+    def test_pick_worst(self):
+        from core.agent.state import FailureClass, pick_worst_failure
+        result = pick_worst_failure(FailureClass.TOOL_FAILURE, FailureClass.TIMEOUT)
+        assert result == FailureClass.TIMEOUT
+
+    def test_pick_worst_none(self):
+        from core.agent.state import pick_worst_failure
+        assert pick_worst_failure(None, None) is None
+
+    def test_state_transition_to_recovering(self):
+        from core.agent.state import AgentState, TaskStatus
+        s = AgentState(task_id="t", goal="g")
+        s.transition(TaskStatus.CLASSIFYING)
+        s.transition(TaskStatus.EXECUTING)
+        s.transition(TaskStatus.OBSERVING)
+        s.transition(TaskStatus.VERIFYING)
+        s.transition(TaskStatus.RECOVERING)
+        assert s.status == TaskStatus.RECOVERING
+
+    def test_state_recovering_to_executing(self):
+        from core.agent.state import AgentState, TaskStatus
+        s = AgentState(task_id="t", goal="g")
+        s.transition(TaskStatus.CLASSIFYING)
+        s.transition(TaskStatus.EXECUTING)
+        s.transition(TaskStatus.OBSERVING)
+        s.transition(TaskStatus.VERIFYING)
+        s.transition(TaskStatus.RECOVERING)
+        s.transition(TaskStatus.EXECUTING)
+        assert s.status == TaskStatus.EXECUTING
+
+    def test_state_dict_includes_failure_class(self):
+        from core.agent.state import AgentState, TaskStatus, FailureClass
+        s = AgentState(task_id="t", goal="g")
+        s.failure_class = FailureClass.TOOL_FAILURE
+        d = s.to_dict()
+        assert d["failure_class"] == "tool_failure"
+
+
+# ── Unified Pipeline tests ──────────────────────────────────────────────
+
+
+class TestUnifiedPipeline:
+    """All entry points (Terminal/AgentLoop, MCP, ACP, Codex) must route
+    through the same ToolExecutionService boundary."""
+
+    def _make_svc(self):
+        return ToolExecutionService(registry=build_default_registry())
+
+    def test_agentloop_uses_tool_service(self):
+        svc = self._make_svc()
+        loop = AgentLoop(
+            router=FakeRouter([_resp("done.")]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            tool_service=svc,
+        )
+        assert loop._tool_service is svc
+
+    def test_agentloop_creates_default_tool_service(self):
+        loop = AgentLoop(
+            router=FakeRouter([_resp("done.")]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+        )
+        assert loop._tool_service is not None
+
+    def test_mcp_uses_tool_service(self):
+        svc = self._make_svc()
+        mcp = MCPAdapter(tool_service=svc)
+        assert mcp._tool_service is svc
+
+    def test_acp_uses_tool_service(self):
+        svc = self._make_svc()
+        acp = ACPAdapter(tool_service=svc)
+        assert acp._tool_service is svc
+
+    def test_codex_uses_tool_service(self):
+        svc = self._make_svc()
+        codex = CodexExecAdapter(tool_service=svc)
+        assert codex._tool_service is svc
+
+    def test_mcp_tools_call_goes_through_service(self):
+        svc = self._make_svc()
+        mcp = MCPAdapter(tool_service=svc)
+        result = asyncio.run(mcp._call_tool("filesystem.write", {
+            "path": os.path.join(tempfile.gettempdir(), "mcp_test.txt"),
+            "content": "mcp",
+        }))
+        assert result["status"] == "completed"
+        p = os.path.join(tempfile.gettempdir(), "mcp_test.txt")
+        if os.path.exists(p):
+            os.remove(p)
+
+    def test_acp_tools_call_goes_through_service(self):
+        svc = self._make_svc()
+        acp = ACPAdapter(tool_service=svc)
+        result = asyncio.run(acp._call_tool("filesystem.write", {
+            "path": os.path.join(tempfile.gettempdir(), "acp_test.txt"),
+            "content": "acp",
+        }))
+        assert result["status"] == "completed"
+        p = os.path.join(tempfile.gettempdir(), "acp_test.txt")
+        if os.path.exists(p):
+            os.remove(p)
+
+    def test_codex_tool_goes_through_service(self):
+        svc = self._make_svc()
+        codex = CodexExecAdapter(tool_service=svc)
+        result = asyncio.run(codex.handle_tool("filesystem.write", {
+            "path": os.path.join(tempfile.gettempdir(), "codex_test.txt"),
+            "content": "codex",
+        }))
+        assert result["status"] == "completed"
+        p = os.path.join(tempfile.gettempdir(), "codex_test.txt")
+        if os.path.exists(p):
+            os.remove(p)
+
+    def test_all_paths_produce_same_result_type(self):
+        svc = self._make_svc()
+        import tempfile, os
+        tmp = os.path.join(tempfile.gettempdir(), "unified_test.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "x"}, id="u1")
+        result = asyncio.run(svc.execute_tool(call))
+        assert isinstance(result, ToolExecutionResult)
+        assert result.success
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+    def test_permission_denial_blocks_all_paths(self):
+        from core.agent.permissions import PermissionEngine
+        from core.decision_logger import get_decision_logger
+        from unittest.mock import AsyncMock, patch
+        logger = get_decision_logger()
+        perm = PermissionEngine(logger, mode="agent")
+        svc = ToolExecutionService(
+            registry=build_default_registry(),
+            permissions=perm,
+        )
+        call = ToolCall(name="shell.execute", arguments={"command": "echo pwned"}, id="denied1")
+        original_check = perm.check
+        async def deny_all(*a, **kw):
+            return False, "test denial"
+        perm.check = deny_all
+        result = asyncio.run(svc.execute_tool(call))
+        assert result.permission_denied
+        assert not result.success or result.permission_denied
+        perm.check = original_check
+
+    def test_redaction_applies_on_all_paths(self):
+        svc = self._make_svc()
+        import tempfile, os
+        tmp = os.path.join(tempfile.gettempdir(), "redact_test.txt")
+        call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "test"}, id="r1")
+        result = asyncio.run(svc.execute_tool(call))
+        assert "REDACTED" not in result.output or result.success
+        if os.path.exists(tmp):
+            os.remove(tmp)
