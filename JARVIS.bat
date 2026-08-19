@@ -2,10 +2,16 @@
 setlocal
 chcp 65001 >nul 2>&1
 
+REM Always cd to the directory containing this bat file
+cd /d "%~dp0"
+
 set "PY="
 if exist "venv\Scripts\python.exe" set "PY=venv\Scripts\python.exe"
 if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
 if not defined PY set "PY=python"
+
+REM Force UTF-8 for Python (Rich outputs Unicode box-drawing chars)
+set "PYTHONIOENCODING=utf-8"
 
 REM Launch in Windows Terminal if available (first launch only)
 if not "%JARVIS_WT%"=="1" (

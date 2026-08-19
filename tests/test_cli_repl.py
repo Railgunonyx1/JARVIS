@@ -179,6 +179,7 @@ def test_status_bar_has_clock():
     from cli.cockpit import render_status_bar
 
     loop = types.SimpleNamespace(
+        mode="agent",
         permissions=types.SimpleNamespace(mode="agent"),
         router=types.SimpleNamespace(_last_provider="ollama", _last_model="qwen3"),
         registry=types.SimpleNamespace(list=lambda: [1, 2, 3]),
