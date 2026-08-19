@@ -391,6 +391,7 @@ class AgentBridge:
             if s.status == StepStatus.ACTIVE:
                 s.status = StepStatus.COMPLETED
                 s.completed_at = time.time()
+        self.state.recovery_active = False
 
     def _on_task_cancelled(self, payload: dict[str, Any]) -> None:
         self._complete_active_events()
@@ -399,7 +400,8 @@ class AgentBridge:
     # ── verification & recovery events ──────────────────────────────────
 
     def _on_verification_started(self, payload: dict[str, Any]) -> None:
-        self._verification_steps: list[dict] = []
+        self.state.verification_steps = []
+        self.state.verification_status = "running"
 
     def _on_verification_step(self, payload: dict[str, Any]) -> None:
         step = {
@@ -408,37 +410,25 @@ class AgentBridge:
             "running": payload.get("running", False),
             "duration_ms": payload.get("duration_ms", 0),
         }
-        self._verification_steps.append(step)
-        if self.renderer is not None:
-            self.state.messages.append(Message(
-                role="tool",
-                content=f"[verify] {step['name']}: {'running...' if step['running'] else ('ok' if step['passed'] else 'failed')}",
-            ))
+        self.state.verification_steps.append(step)
 
     def _on_verification_passed(self, payload: dict[str, Any]) -> None:
-        steps_run = payload.get("steps_run", 0)
-        self.state.messages.append(Message(
-            role="system", content=f"Verification passed ({steps_run} steps)",
-        ))
+        self.state.verification_status = "passed"
+        self.state.status_message = ""
 
     def _on_verification_failed(self, payload: dict[str, Any]) -> None:
+        self.state.verification_status = "failed"
         failures = payload.get("failures", [])
         detail = "\n".join(
             f"  - {f.get('name', '?')}: {f.get('error', '')[:100]}" for f in failures
         ) or "unknown failure"
-        self.state.messages.append(Message(
-            role="system", content=f"Verification failed:\n{detail}",
-        ))
-        self.state.status_message = "verification failed — recovering"
+        self.state.status_message = f"verification failed: {detail}"
 
     def _on_recovery_started(self, payload: dict[str, Any]) -> None:
-        error = payload.get("error", "")
-        attempt = payload.get("attempt", 1)
-        self.state.messages.append(Message(
-            role="system",
-            content=f"Recovering (attempt {attempt}): {error[:200]}",
-        ))
-        self.state.status_message = f"recovering (attempt {attempt})"
+        self.state.recovery_active = True
+        self.state.recovery_attempt = payload.get("attempt", 1)
+        self.state.recovery_error = payload.get("error", "")[:200]
+        self.state.status_message = f"recovering (attempt {self.state.recovery_attempt})"
 
     # ── internal helpers ────────────────────────────────────────────────────
 

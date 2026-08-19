@@ -296,6 +296,20 @@ class Renderer:
                 blocks.append(self._render_tool_result(msg.content))
             else:
                 blocks.append(self._render_system_event(msg.content))
+
+        # Inject verification block if steps exist
+        if self.state.verification_steps:
+            blocks.append(Text(""))
+            blocks.append(self.render_verification_block(self.state.verification_steps))
+
+        # Inject recovery block if active
+        if self.state.recovery_active:
+            blocks.append(Text(""))
+            blocks.append(self.render_recovery_block(
+                self.state.recovery_error,
+                attempt=self.state.recovery_attempt,
+            ))
+
         return Group(*blocks)
 
     def _render_user_message(self, content: str) -> RenderableType:

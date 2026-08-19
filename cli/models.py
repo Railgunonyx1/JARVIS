@@ -248,3 +248,12 @@ class AppState:
 
     pending_confirmation: Optional[ConfirmationRequest] = None
     status_message: str = ""
+
+    # Verification state (first-class, not messages)
+    verification_steps: List[Dict[str, Any]] = field(default_factory=list)
+    verification_status: str = ""  # "" | "running" | "passed" | "failed"
+
+    # Recovery state (first-class, not messages)
+    recovery_active: bool = False
+    recovery_attempt: int = 0
+    recovery_error: str = ""
