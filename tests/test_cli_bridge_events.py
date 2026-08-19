@@ -6,15 +6,11 @@ dedicated AppState fields, and that the renderer produces correct blocks.
 
 from __future__ import annotations
 
-import asyncio
-import time
-
-import pytest
+from rich.console import Console
 
 from cli.bridge import AgentBridge
-from cli.models import AppState, Message, StepStatus
+from cli.models import Message
 from cli.renderer import Renderer
-from cli.ux import LiveTaskDisplay
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -24,6 +20,14 @@ def _make_bridge() -> AgentBridge:
     """Create a bridge with a fresh renderer and state."""
     renderer = Renderer()
     return AgentBridge(renderer=renderer)
+
+
+def _render_to_str(renderable) -> str:
+    """Render a Rich renderable to a string for content assertions."""
+    console = Console(width=120, force_terminal=True, no_color=True)
+    with console.capture() as capture:
+        console.print(renderable)
+    return capture.get()
 
 
 # ── Verification event tests ────────────────────────────────────────────
@@ -75,7 +79,7 @@ class TestVerificationEvents:
         assert len(bridge.state.messages) == initial_count
 
     def test_full_verification_sequence(self):
-        """Simulate: started → step1 → step2 → step3 → passed."""
+        """Simulate: started -> step1 -> step2 -> step3 -> passed."""
         bridge = _make_bridge()
         bridge._on_verification_started({})
         bridge._on_verification_step({"name": "tests", "passed": True, "duration_ms": 1200})
@@ -88,7 +92,7 @@ class TestVerificationEvents:
         assert all(s["passed"] for s in bridge.state.verification_steps)
 
     def test_verification_failure_sequence(self):
-        """Simulate: started → step1(pass) → step2(fail) → failed."""
+        """Simulate: started -> step1(pass) -> step2(fail) -> failed."""
         bridge = _make_bridge()
         bridge._on_verification_started({})
         bridge._on_verification_step({"name": "tests", "passed": True, "duration_ms": 1200})
@@ -147,8 +151,10 @@ class TestConversationWithVerification:
         ]
         renderer.state.verification_status = "passed"
 
-        block = renderer.render_conversation()
-        assert block is not None
+        output = _render_to_str(renderer.render_conversation())
+        assert "Verification" in output
+        assert "tests" in output
+        assert "lint" in output
 
     def test_conversation_includes_recovery_block(self):
         """When recovery is active, the conversation includes the recovery block."""
@@ -161,18 +167,23 @@ class TestConversationWithVerification:
         renderer.state.recovery_attempt = 2
         renderer.state.recovery_error = "pytest: 2 tests failed"
 
-        block = renderer.render_conversation()
-        assert block is not None
+        output = _render_to_str(renderer.render_conversation())
+        assert "RECOVERING" in output
+        assert "attempt 2" in output
+        assert "pytest: 2 tests failed" in output
 
     def test_conversation_without_verification_or_recovery(self):
         """Normal conversation without verification/recovery works fine."""
         renderer = Renderer()
         renderer.state.messages = [
             Message(role="user", content="hello"),
-            Message(role="agent", content="Hi!"),
+            Message(role="agent", content="Hi there!"),
         ]
-        block = renderer.render_conversation()
-        assert block is not None
+        output = _render_to_str(renderer.render_conversation())
+        assert "You" in output
+        assert "JARVIS" in output
+        assert "hello" in output
+        assert "Hi there!" in output
 
 
 # ── Renderer tool card tests ────────────────────────────────────────────
@@ -187,7 +198,10 @@ class TestToolCards:
             status="ok",
             duration_ms=18,
         )
-        assert card is not None
+        output = _render_to_str(card)
+        assert "filesystem.read" in output
+        assert "src/auth.py" in output
+        assert "18ms" in output
 
     def test_expanded_tool_card(self):
         renderer = Renderer()
@@ -198,7 +212,11 @@ class TestToolCards:
             duration_ms=1200,
             expanded=True,
         )
-        assert card is not None
+        output = _render_to_str(card)
+        assert "shell.execute" in output
+        assert "command" in output
+        assert "pytest tests/" in output
+        assert "1200ms" in output
 
     def test_running_tool_card(self):
         renderer = Renderer()
@@ -207,7 +225,9 @@ class TestToolCards:
             {"pattern": "TODO"},
             status="running",
         )
-        assert card is not None
+        output = _render_to_str(card)
+        assert "search.code" in output
+        assert "TODO" in output
 
     def test_denied_tool_card(self):
         renderer = Renderer()
@@ -216,7 +236,22 @@ class TestToolCards:
             {"command": "rm -rf /"},
             status="denied",
         )
-        assert card is not None
+        output = _render_to_str(card)
+        assert "shell.execute" in output
+        assert "rm -rf /" in output
+
+    def test_failed_tool_card(self):
+        renderer = Renderer()
+        card = renderer.render_tool_card(
+            "filesystem.write",
+            {"path": "bad.txt"},
+            status="failed",
+            result="Permission denied",
+        )
+        output = _render_to_str(card)
+        assert "filesystem.write" in output
+        # Failed status shows the failure symbol (e.g. \u2717)
+        assert "\u2717" in output or "failed" in output.lower()
 
 
 # ── Verification/Recovery renderer tests ────────────────────────────────
@@ -229,8 +264,12 @@ class TestVerificationRecoveryRenderer:
             {"name": "tests", "passed": True, "duration_ms": 1200},
             {"name": "lint", "passed": True, "duration_ms": 300},
         ]
-        block = renderer.render_verification_block(steps)
-        assert block is not None
+        output = _render_to_str(renderer.render_verification_block(steps))
+        assert "Verification" in output
+        assert "tests" in output
+        assert "lint" in output
+        assert "1200ms" in output
+        assert "300ms" in output
 
     def test_verification_block_with_failure(self):
         renderer = Renderer()
@@ -238,20 +277,31 @@ class TestVerificationRecoveryRenderer:
             {"name": "tests", "passed": True, "duration_ms": 1200},
             {"name": "lint", "passed": False, "duration_ms": 300},
         ]
-        block = renderer.render_verification_block(steps)
-        assert block is not None
+        output = _render_to_str(renderer.render_verification_block(steps))
+        assert "Verification" in output
+        assert "tests" in output
+        assert "lint" in output
 
     def test_verification_block_empty(self):
         renderer = Renderer()
-        block = renderer.render_verification_block([])
-        assert block is not None
+        output = _render_to_str(renderer.render_verification_block([]))
+        assert "Verification" in output
 
     def test_recovery_block(self):
         renderer = Renderer()
-        block = renderer.render_recovery_block("pytest failed: 2 tests", attempt=2)
-        assert block is not None
+        output = _render_to_str(
+            renderer.render_recovery_block("pytest failed: 2 tests", attempt=2)
+        )
+        assert "RECOVERING" in output
+        assert "attempt 2" in output
+        assert "pytest failed: 2 tests" in output
+        assert "Attempting repair" in output
 
     def test_recovery_block_first_attempt(self):
         renderer = Renderer()
-        block = renderer.render_recovery_block("permission denied", attempt=1)
-        assert block is not None
+        output = _render_to_str(
+            renderer.render_recovery_block("permission denied", attempt=1)
+        )
+        assert "RECOVERING" in output
+        assert "attempt 1" in output
+        assert "permission denied" in output

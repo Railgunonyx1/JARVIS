@@ -1,6 +1,6 @@
 @echo off
 setlocal
-chcp 65001 >/dev/null 2>&1
+chcp 65001 >nul 2>&1
 
 set "PY="
 if exist "venv\Scripts\python.exe" set "PY=venv\Scripts\python.exe"
@@ -8,7 +8,7 @@ if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\pyth
 if not defined PY set "PY=python"
 
 if not "%JARVIS_WT%"=="1" (
-    where wt.exe >/dev/null 2>/dev/null
+    where wt.exe >nul 2>nul
     if not errorlevel 1 (
         set JARVIS_WT=1
         start "" wt.exe -d "%~dp0" cmd /k "set JARVIS_WT=1&& call JARVIS.bat"
@@ -68,7 +68,7 @@ if /i "%choice%"=="9" goto demo
 if /i "%choice%"=="q" goto quit
 echo.
 echo   Invalid option.
-timeout /t 2 >/dev/null
+timeout /t 2 >nul
 exit /b
 
 :chat

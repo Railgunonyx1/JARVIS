@@ -4,7 +4,7 @@
 
 ### *Terminal-First Autonomous Engineering Agent*
 
-[![CI Status](https://github.com/Railgunonyx1/JARVIS1/actions/workflows/ci.yml/badge.svg)](https://github.com/Railgunonyx1/JARVIS1/actions)
+[![CI Status](https://github.com/Railgunonyx1/JARVIS/actions/workflows/ci.yml/badge.svg)](https://github.com/Railgunonyx1/JARVIS/actions)
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)](https://github.com/astral-sh/ruff)
@@ -28,7 +28,7 @@
 
 ## 🌟 Highlights
 
-- ⚡ **Zero-Latency In-Process Loop**: Runs directly inside your terminal process without heavy daemons or network hops.
+- ⚡ **Low-Overhead In-Process Loop**: Runs directly inside your terminal process without heavy daemons or network hops.
 - 🎨 **Rich UI & Live Telemetry**: Live updating terminal UI with streaming telemetry, plans, tool outputs, and status gauges.
 - 🧠 **Multi-Provider Fallback Router**: Auto-falls back across Groq (Llama 3.1 8B), Google Gemini Flash, OpenRouter, and local Ollama.
 - 🛡️ **Multi-Tier Autonomy & Safety**: 4 distinct execution modes ranging from strict read-only planning to full autonomous execution with interactive confirmations.
@@ -43,8 +43,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/Railgunonyx1/JARVIS1.git
-cd JARVIS1
+git clone https://github.com/Railgunonyx1/JARVIS.git
+cd JARVIS
 
 # Create and activate virtual environment
 python -m venv venv
