@@ -17,15 +17,14 @@ rem ── Relaunch in Windows Terminal if not already inside it ─────
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
-        set "JARVIS_WT=1"
-        rem Use the same directory as this .bat file
+        set JARVIS_WT=1
         cd /d "%~dp0"
-        start "" wt.exe -d "%~dp0" cmd /k "JARVIS_WT=1 JARVIS.bat %*"
+        start "" wt.exe -d "%~dp0" cmd /k "set JARVIS_WT=1 && call JARVIS.bat"
         exit /b
     )
 )
 
-rem ── Already in Windows Terminal (or wt not found) — continue ─────────
+rem ── Already in Windows Terminal (or wt not found) -- continue ─────────
 title JARVIS MK-X
 color 0B
 
@@ -49,23 +48,23 @@ goto unknown
 :menu
 cls
 echo.
-echo   ╔═══════════════════════════════════════════════════╗
-echo   ║           JARVIS MK-X  ·  Terminal Agent         ║
-echo   ╠═══════════════════════════════════════════════════╣
-echo   ║                                                   ║
-echo   ║   [1]  Chat        Interactive terminal chat      ║
-echo   ║   [2]  Plan        Read-only plan mode            ║
-echo   ║   [3]  Controlled  Confirm every action           ║
-echo   ║   [4]  Smart       Dynamic autonomy               ║
-echo   ║   [5]  One-shot    Single goal, single answer     ║
-echo   ║   [6]  Perf        Performance data               ║
-echo   ║   [7]  Tests       Run test suite                 ║
-echo   ║   [8]  Install     Update dependencies            ║
-echo   ║   [9]  Demo UI     Standalone UI prototype        ║
-echo   ║   [Q]  Quit                                      ║
-echo   ║                                                   ║
-echo   ║   Quick: JARVIS.bat chat ^| plan ^| smart           ║
-echo   ╚═══════════════════════════════════════════════════╝
+echo   +=============================================+
+echo   ^|          JARVIS MK-X  -  Terminal Agent     ^|
+echo   +=============================================+
+echo   ^|                                              ^|
+echo   ^|  [1]  Chat        Interactive terminal chat ^|
+echo   ^|  [2]  Plan        Read-only plan mode       ^|
+echo   ^|  [3]  Controlled  Confirm every action      ^|
+echo   ^|  [4]  Smart       Dynamic autonomy          ^|
+echo   ^|  [5]  One-shot    Single goal, one answer   ^|
+echo   ^|  [6]  Perf        Performance data          ^|
+echo   ^|  [7]  Tests       Run test suite            ^|
+echo   ^|  [8]  Install     Update dependencies       ^|
+echo   ^|  [9]  Demo UI     Standalone UI prototype   ^|
+echo   ^|  [Q]  Quit                                 ^|
+echo   ^|                                              ^|
+echo   ^|  Quick: JARVIS.bat chat ^| plan ^| smart      ^|
+echo   +=============================================+
 echo.
 set /p choice="  JARVIS> "
 

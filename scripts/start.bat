@@ -10,9 +10,9 @@ rem ─────────────────────────�
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
-        set "JARVIS_WT=1"
+        set JARVIS_WT=1
         cd /d "%~dp0.."
-        start "" wt.exe -d "%~dp0.." cmd /k "JARVIS_WT=1 scripts\start.bat"
+        start "" wt.exe -d "%~dp0.." cmd /k "set JARVIS_WT=1 && call scripts\start.bat"
         exit /b
     )
 )
@@ -23,18 +23,17 @@ cd /d "%~dp0.."
 
 cls
 echo.
-echo   ╔═══════════════════════════════════════════════════╗
-echo   ║           JARVIS MK-X  ·  Terminal Agent         ║
-echo   ╠═══════════════════════════════════════════════════╣
-echo   ║                                                   ║
-echo   ║   [1]  Chat       Interactive terminal chat       ║
-echo   ║   [2]  One-shot   Type a goal, get one answer     ║
-echo   ║   [3]  Perf       Performance data                ║
-echo   ║   [4]  Tests      Run the test suite              ║
-echo   ║   [5]  Install    Update dependencies             ║
-echo   ║   [Q]  Quit                                       ║
-echo   ║                                                   ║
-echo   ╚═══════════════════════════════════════════════════╝
+echo   +=============================================+
+echo   ^|          JARVIS MK-X  -  Terminal Agent     ^|
+echo   +=============================================+
+echo   ^|                                              ^|
+echo   ^|  [1]  Chat       Interactive terminal chat  ^|
+echo   ^|  [2]  One-shot   Single goal, one answer    ^|
+echo   ^|  [3]  Perf       Performance data           ^|
+echo   ^|  [4]  Tests      Run the test suite         ^|
+echo   ^|  [5]  Install    Update dependencies        ^|
+echo   ^|  [Q]  Quit                                  ^|
+echo   +=============================================+
 echo.
 
 set /p choice="  JARVIS> "
