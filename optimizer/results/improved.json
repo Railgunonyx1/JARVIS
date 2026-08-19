@@ -1,0 +1,344 @@
+{
+  "prompt_version": "improved",
+  "avg_tool_accuracy": 0.8809523809523809,
+  "avg_penalty_score": 0.8809523809523809,
+  "forbidden_violations": 1,
+  "total_duration_ms": 493688.15429999994,
+  "results": [
+    {
+      "id": "fs_01",
+      "goal": "List all Python files in the project",
+      "category": "filesystem",
+      "tools_called": [
+        "search.find"
+      ],
+      "correct_tools": [
+        "search.find"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 51416.24050000064
+    },
+    {
+      "id": "fs_02",
+      "goal": "Read the contents of requirements.txt",
+      "category": "filesystem",
+      "tools_called": [
+        "filesystem.read"
+      ],
+      "correct_tools": [
+        "filesystem.read"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 25185.992599999736
+    },
+    {
+      "id": "fs_03",
+      "goal": "Create a new file called hello.py that prints 'Hello, World!'",
+      "category": "filesystem",
+      "tools_called": [
+        "filesystem.write"
+      ],
+      "correct_tools": [
+        "filesystem.write"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 19264.630900000157
+    },
+    {
+      "id": "fs_04",
+      "goal": "Show me the git status of this repository",
+      "category": "git",
+      "tools_called": [
+        "git.status"
+      ],
+      "correct_tools": [
+        "git.status"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 10287.123500000234
+    },
+    {
+      "id": "fs_05",
+      "goal": "What are the last 5 commits in this repo?",
+      "category": "git",
+      "tools_called": [
+        "git.log"
+      ],
+      "correct_tools": [
+        "git.log"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 23933.294299999943
+    },
+    {
+      "id": "edit_01",
+      "goal": "In main.py, change the print statement to say 'Hello, JARVIS' instead of 'Hello, World'",
+      "category": "editing",
+      "tools_called": [
+        "filesystem.read"
+      ],
+      "correct_tools": [
+        "filesystem.read"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 3271.4191000004575
+    },
+    {
+      "id": "edit_02",
+      "goal": "Add a new function calculate_average to utils.py that takes a list of numbers and returns the average",
+      "category": "editing",
+      "tools_called": [
+        "search.find",
+        "filesystem.list"
+      ],
+      "correct_tools": [],
+      "wrong_tools": [
+        "search.find",
+        "filesystem.list"
+      ],
+      "forbidden_called": [],
+      "penalty_score": 0.0,
+      "error": "",
+      "duration_ms": 20562.39689999984
+    },
+    {
+      "id": "edit_03",
+      "goal": "Remove the unused import 'os' from app.py",
+      "category": "editing",
+      "tools_called": [
+        "filesystem.read"
+      ],
+      "correct_tools": [
+        "filesystem.read"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 6428.036500000417
+    },
+    {
+      "id": "search_01",
+      "goal": "Find all places where 'sqlite' is imported in this project",
+      "category": "search",
+      "tools_called": [
+        "search.code"
+      ],
+      "correct_tools": [
+        "search.code"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 23580.166099999587
+    },
+    {
+      "id": "search_02",
+      "goal": "Find the definition of the AgentLoop class",
+      "category": "search",
+      "tools_called": [
+        "search.code"
+      ],
+      "correct_tools": [
+        "search.code"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 18757.69120000041
+    },
+    {
+      "id": "multi_01",
+      "goal": "Check what's in the config/ directory and read the main config file",
+      "category": "multi_step",
+      "tools_called": [
+        "filesystem.list"
+      ],
+      "correct_tools": [
+        "filesystem.list"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 4044.3877999996403
+    },
+    {
+      "id": "multi_02",
+      "goal": "Show me the project structure and then read the README",
+      "category": "multi_step",
+      "tools_called": [
+        "filesystem.list",
+        "filesystem.read"
+      ],
+      "correct_tools": [
+        "filesystem.list",
+        "filesystem.read"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 18471.345199999632
+    },
+    {
+      "id": "sys_01",
+      "goal": "What is the current CPU and memory usage?",
+      "category": "system",
+      "tools_called": [
+        "shell.execute"
+      ],
+      "correct_tools": [],
+      "wrong_tools": [
+        "shell.execute"
+      ],
+      "forbidden_called": [
+        "shell.execute"
+      ],
+      "penalty_score": 0.0,
+      "error": "",
+      "duration_ms": 51451.81320000029
+    },
+    {
+      "id": "edge_01",
+      "goal": "What is 2 + 2?",
+      "category": "no_tools",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 25764.629700000114
+    },
+    {
+      "id": "edge_02",
+      "goal": "Tell me a joke",
+      "category": "no_tools",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 18306.171299999733
+    },
+    {
+      "id": "inspect_01",
+      "goal": "Find where the ProviderRouter class is defined and show me its __init__ method",
+      "category": "inspect_before_act",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 4691.0714999994525
+    },
+    {
+      "id": "inspect_02",
+      "goal": "List files in the tools/ directory, then read the registry.py file",
+      "category": "inspect_before_act",
+      "tools_called": [
+        "filesystem.list",
+        "filesystem.read"
+      ],
+      "correct_tools": [
+        "filesystem.list",
+        "filesystem.read"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 54318.392200000744
+    },
+    {
+      "id": "git_01",
+      "goal": "Show me what files have changed and what the diff looks like",
+      "category": "git",
+      "tools_called": [
+        "git.status"
+      ],
+      "correct_tools": [
+        "git.status"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 20066.08159999996
+    },
+    {
+      "id": "git_02",
+      "goal": "What branch am I on and what's the recent commit history?",
+      "category": "git",
+      "tools_called": [
+        "git.status",
+        "git.log"
+      ],
+      "correct_tools": [
+        "git.log"
+      ],
+      "wrong_tools": [
+        "git.status"
+      ],
+      "forbidden_called": [],
+      "penalty_score": 0.5,
+      "error": "",
+      "duration_ms": 18989.16079999981
+    },
+    {
+      "id": "behavior_01",
+      "goal": "Read the entire codebase and summarize every file",
+      "category": "behavior",
+      "tools_called": [
+        "filesystem.list"
+      ],
+      "correct_tools": [
+        "filesystem.list"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 22760.499199999686
+    },
+    {
+      "id": "behavior_02",
+      "goal": "Search for all TODO comments in the codebase",
+      "category": "behavior",
+      "tools_called": [
+        "search.code"
+      ],
+      "correct_tools": [
+        "search.code"
+      ],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 20433.02539999968
+    }
+  ]
+}

@@ -121,8 +121,8 @@ class GeminiProvider(LLMProvider):
             except Exception:
                 text = ""
             tool_calls = parse_gemini_function_calls(response)
-            prompt_tokens = response.usage_metadata.prompt_token_count if response.usage_metadata else 0
-            completion_tokens = response.usage_metadata.candidates_token_count if response.usage_metadata else 0
+            prompt_tokens = (response.usage_metadata.prompt_token_count or 0) if response.usage_metadata else 0
+            completion_tokens = (response.usage_metadata.candidates_token_count or 0) if response.usage_metadata else 0
 
             result = LLMResponse(
                 text=text,

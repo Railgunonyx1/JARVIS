@@ -1,0 +1,269 @@
+{
+  "prompt_version": "baseline",
+  "avg_tool_accuracy": 0.9047619047619048,
+  "avg_penalty_score": 0.9047619047619048,
+  "forbidden_violations": 0,
+  "total_duration_ms": 182193.86529999974,
+  "results": [
+    {
+      "id": "fs_01",
+      "goal": "List all Python files in the project",
+      "category": "filesystem",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 14180.951499999537
+    },
+    {
+      "id": "fs_02",
+      "goal": "Read the contents of requirements.txt",
+      "category": "filesystem",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 676.6812999994727
+    },
+    {
+      "id": "fs_03",
+      "goal": "Create a new file called hello.py that prints 'Hello, World!'",
+      "category": "filesystem",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1046.3995999998588
+    },
+    {
+      "id": "fs_04",
+      "goal": "Show me the git status of this repository",
+      "category": "git",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 821.3168000002042
+    },
+    {
+      "id": "fs_05",
+      "goal": "What are the last 5 commits in this repo?",
+      "category": "git",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1623.4065999997256
+    },
+    {
+      "id": "edit_01",
+      "goal": "In main.py, change the print statement to say 'Hello, JARVIS' instead of 'Hello, World'",
+      "category": "editing",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1057.8073000006043
+    },
+    {
+      "id": "edit_02",
+      "goal": "Add a new function calculate_average to utils.py that takes a list of numbers and returns the average",
+      "category": "editing",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 9460.533999999825
+    },
+    {
+      "id": "edit_03",
+      "goal": "Remove the unused import 'os' from app.py",
+      "category": "editing",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 17582.21599999979
+    },
+    {
+      "id": "search_01",
+      "goal": "Find all places where 'sqlite' is imported in this project",
+      "category": "search",
+      "tools_called": [
+        "the"
+      ],
+      "correct_tools": [],
+      "wrong_tools": [
+        "the"
+      ],
+      "forbidden_called": [],
+      "penalty_score": 0.0,
+      "error": "",
+      "duration_ms": 2303.3943000000363
+    },
+    {
+      "id": "search_02",
+      "goal": "Find the definition of the AgentLoop class",
+      "category": "search",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1066.7804000004253
+    },
+    {
+      "id": "multi_01",
+      "goal": "Check what's in the config/ directory and read the main config file",
+      "category": "multi_step",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1309.576399999969
+    },
+    {
+      "id": "multi_02",
+      "goal": "Show me the project structure and then read the README",
+      "category": "multi_step",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 987.7224000001661
+    },
+    {
+      "id": "sys_01",
+      "goal": "What is the current CPU and memory usage?",
+      "category": "system",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 921.3777000004484
+    },
+    {
+      "id": "edge_01",
+      "goal": "What is 2 + 2?",
+      "category": "no_tools",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 7545.527899999797
+    },
+    {
+      "id": "edge_02",
+      "goal": "Tell me a joke",
+      "category": "no_tools",
+      "tools_called": [
+        "tools"
+      ],
+      "correct_tools": [],
+      "wrong_tools": [
+        "tools"
+      ],
+      "forbidden_called": [],
+      "penalty_score": 0.0,
+      "error": "",
+      "duration_ms": 10068.745700000363
+    },
+    {
+      "id": "inspect_01",
+      "goal": "Find where the ProviderRouter class is defined and show me its __init__ method",
+      "category": "inspect_before_act",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 28183.05540000074
+    },
+    {
+      "id": "inspect_02",
+      "goal": "List files in the tools/ directory, then read the registry.py file",
+      "category": "inspect_before_act",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 9302.724500000295
+    },
+    {
+      "id": "git_01",
+      "goal": "Show me what files have changed and what the diff looks like",
+      "category": "git",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 18992.119300000013
+    },
+    {
+      "id": "git_02",
+      "goal": "What branch am I on and what's the recent commit history?",
+      "category": "git",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 1795.9371000006286
+    },
+    {
+      "id": "behavior_01",
+      "goal": "Read the entire codebase and summarize every file",
+      "category": "behavior",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 27351.312400000097
+    },
+    {
+      "id": "behavior_02",
+      "goal": "Search for all TODO comments in the codebase",
+      "category": "behavior",
+      "tools_called": [],
+      "correct_tools": [],
+      "wrong_tools": [],
+      "forbidden_called": [],
+      "penalty_score": 1.0,
+      "error": "",
+      "duration_ms": 25901.237499999297
+    }
+  ]
+}
