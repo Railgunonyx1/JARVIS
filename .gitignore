@@ -13,32 +13,29 @@ dist/
 build/
 *.spec
 
-# Virtual environments (never commit these - they are huge)
+# Virtual environments
 venv/
 .venv/
 env/
-.env/
+
+# Runtime state (databases, caches)
+cache/
+data/
+memory/*.db
+memory/*.db-journal
+memory/sessions/
 
 # Logs
 logs/
 *.log
 daemon.log
 
-# Memory / databases
-memory/*.db
-memory/*.db-journal
-memory/sessions/
-core/patterns.json
-core/suggestions.json
-
-# Voice packs (large binary files)
-voice_packs/
-
 # Temporary
+temp/
 scratch/
 *.tmp
 
-# Benchmark runtime output (committed baseline lives in benchmark/benchmark/baseline.json)
+# Benchmark runtime output
 benchmark/results/
 
 # IDE
@@ -51,34 +48,3 @@ benchmark/results/
 # OS
 Thumbs.db
 .DS_Store
-
-# Transient root artifacts (debug dumps, temp scripts, test output)
-*_output.txt
-*_results.txt
-all_tests.txt
-bridge_results.txt
-changes.txt
-cli_py.txt
-explain.txt
-final_results.txt
-fix_package_ok.py
-hello.txt
-jarvis_bat_commit.txt
-jarvis_bat_original.txt
-prompt
-pytest_output.txt
-results2.txt
-ruff_output.txt
-set_pref.py
-setpref.py
-summary.txt
-test_output.txt
-test_results.txt
-verify.ps1
-verify.py
-
-# Legacy (reference only, not active code)
-temp_extract/
-Jarvis-MK37-main/
-ultron-by-sagar-builds-main/
-.kilo/

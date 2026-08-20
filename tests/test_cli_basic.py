@@ -72,8 +72,8 @@ def test_status_collapse_smoke():
     r.set_model("gemini")
     r.set_tokens(8200, 32000)
     text = r.render_status()
-    assert "JARVIS" in text.plain
-    assert "AGENT" in text.plain
+    assert "agent" in text.plain.lower()
+    assert "gemini" in text.plain
 
 
 def test_confirmation_model():

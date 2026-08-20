@@ -19,6 +19,7 @@ from core import events
 
 def _stub_loop(**overrides) -> SimpleNamespace:
     default = {
+        "mode": "agent",
         "observer": SimpleNamespace(on_event=None),
         "permissions": SimpleNamespace(mode="agent"),
         "router": SimpleNamespace(_last_model=None, _last_provider=None),

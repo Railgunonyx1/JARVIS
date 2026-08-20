@@ -54,7 +54,7 @@ _EXT_TO_LANG = {
     ".yml": "yaml", ".yaml": "yaml", ".sh": "bash", ".bat": "bat",
     ".ps1": "powershell", ".sql": "sql", ".c": "c", ".h": "c", ".cpp": "cpp",
     ".hpp": "cpp", ".java": "java", ".go": "go", ".rs": "rust", ".rb": "ruby",
-    ".php": "php", ".lua": "lua", ".toml": "ini", ".ini": "ini",
+    ".php": "php", ".lua": "lua", ".ini": "ini",
     ".cfg": "ini", ".xml": "xml", ".toml": "toml", ".txt": "text",
     ".csv": "csv", ".ipynb": "json", ".dockerfile": "dockerfile",
 }

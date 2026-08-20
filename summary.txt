@@ -1,0 +1,41 @@
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 85%]
+............F
+================================== FAILURES ===================================
+_______________________ test_loop_populates_observation _______________________
+
+    def test_loop_populates_observation():
+        loop = AgentLoop(
+            router=FakeRouter([
+                _resp(tool_calls=[
+                    ToolCall(name="filesystem.write", id="tc_t_00001",
+                             arguments={"path": "temp/observer_test.txt", "content": "hello"}),
+                    ToolCall(name="filesystem.list", id="tc_t_00002",
+                             arguments={"path": "."}),
+                ]),
+                _resp("All done."),
+            ]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            mode="agent",
+        )
+        target = ROOT / "temp" / "observer_test.txt"
+        try:
+            result = asyncio.run(loop.run("write a file then list the root"))
+            assert result.success
+            obs = result.observation
+            assert obs["status"] == "completed"
+            assert obs["iterations"] == 2
+            tools = [s["tool"] for s in obs["steps"]]
+            assert tools == ["filesystem.write", "filesystem.list"]
+            assert all(s["status"] == "ok" for s in obs["steps"])
+>           assert obs["steps"][0]["duration_ms"] > 0
+E           assert 0.0 > 0
+
+tests\test_task_observer.py:145: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_task_observer.py::test_loop_populates_observation - assert ...
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 228 passed in 39.09s
