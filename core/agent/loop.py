@@ -65,6 +65,12 @@ class AgentLoop:
         re.DOTALL,
     )
 
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """Strip <think>...</think>...</think><think> tags from model output."""
+        import re
+        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
     @classmethod
     def _parse_text_tool_call(cls, text: str, registry: ToolRegistry):
         """Recover a tool call from plain text when the provider refused
@@ -210,6 +216,57 @@ class AgentLoop:
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
 
+            # Fast path: simple greetings/questions that don't need tools
+            _simple = goal.strip().lower()
+            _SIMPLE_INPUTS = {
+                'hello': 'Hello! How can I help you today?',
+                'hi': 'Hi there! What would you like me to work on?',
+                'hey': 'Hey! What are we building?',
+                'yo': 'Yo! What do you need?',
+                'sup': 'Not much! What can I help with?',
+                'help': 'I can help with coding, debugging, file operations, and more. Just describe what you need.',
+                'what can you do': 'I can read, write, and edit files, run commands, search code, manage git, and more. Tell me what you need!',
+                'who are you': 'I am JARVIS MK-X, an autonomous engineering agent. I help with software engineering tasks.',
+                'what is my name': "I don't have your name yet. What should I call you?",
+                'whats my name': "I don't have your name yet. What should I call you?",
+                'tell me a joke': 'Why do programmers prefer dark mode? Because light attracts bugs! 🐛',
+                'good morning': 'Good morning! Ready to code?',
+                'good night': 'Good night! Sleep well.',
+                'thanks': "You're welcome!",
+                'thank you': "You're welcome!",
+                'bye': 'Goodbye! Come back anytime.',
+                'quit': 'Goodbye!',
+                'exit': 'Goodbye!',
+            }
+            # Check exact match first, then prefix match for common patterns
+            if _simple in _SIMPLE_INPUTS:
+                final = _SIMPLE_INPUTS[_simple]
+            elif _simple.startswith(('what is ', 'whats ', 'how do ', 'how to ', 'who is ', 'who are ', 'where is ', 'where are ')):
+                # Conversational questions — answer directly, no tools needed
+                final = f"That's a great question! As JARVIS, I'm focused on software engineering tasks. For general knowledge, I'd recommend using a search engine. But if you have a coding question, I'm here to help!"
+            elif any(_simple.startswith(p) for p in ('my name is ', 'i am ', 'im ', 'call me ')):
+                # Personal introduction — acknowledge, no tools needed
+                name = _simple.split('is ', 1)[-1].strip() if 'is ' in _simple else _simple.split('me ', 1)[-1].strip()
+                final = f"Nice to meet you, {name.title()}! I'm JARVIS. What would you like to work on?"
+            elif ' is my name' in _simple:
+                # "X is my name" pattern
+                name = _simple.split(' is my name')[0].strip()
+                final = f"Nice to meet you, {name.title()}! I'm JARVIS. What would you like to work on?"
+            else:
+                final = None
+
+            if final is not None:
+                self._emit("task.completed", {
+                    "goal": goal[:200], "iterations": 0,
+                    "tokens": 0, "provider": "direct", "response": final,
+                }, trace_id)
+                self._finish_observation(True, final, state, 0)
+                return AgentResult(
+                    success=True, response=final, trace_id=trace_id, state=state,
+                    observation=self._result_observation(state),
+                    perf=self._end_perf(tracer, root),
+                )
+
             # Model Gateway: select model based on harness requirements
             if self._model_gateway is not None:
                 requirements = set()
@@ -246,7 +303,7 @@ class AgentLoop:
                     system_prompt = (system_prompt or "") + addendum
 
             _run_start = time.time()
-            _HARD_TIMEOUT_S = 90.0  # wall-time safety net
+            _HARD_TIMEOUT_S = 30.0  # wall-time safety net — kills runaway tool loops
 
             for iteration in range(1, self.max_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
@@ -271,8 +328,8 @@ class AgentLoop:
                         messages, self._system_tokens(system_prompt, tools),
                     )
                 state.context_usage = report.to_dict()
-                _PER_CALL_TIMEOUT = 30.0  # seconds per provider call
-                remaining = max(5.0, _HARD_TIMEOUT_S - (time.time() - _run_start))
+                _PER_CALL_TIMEOUT = 15.0  # seconds per provider call
+                remaining = max(3.0, _HARD_TIMEOUT_S - (time.time() - _run_start))
                 _call_timeout = min(_PER_CALL_TIMEOUT, remaining)
                 with tracer.span("provider.complete") as span:
                     try:
@@ -282,12 +339,11 @@ class AgentLoop:
                         )
                     except asyncio.TimeoutError:
                         # Provider didn't respond in time — treat as provider failure
-                        from providers.types import ProviderError
-                        response = type('TimeoutResp', (), {
-                            'text': '', 'tool_calls': [], 'has_tool_calls': False,
-                            'provider': 'timeout', 'model': '', 'tokens_used': 0,
-                            'tokens_prompt': 0, 'tokens_completion': 0, 'latency_ms': 0,
-                        })()
+                        from providers.types import LLMResponse
+                        response = LLMResponse(
+                            text='', model='', provider='timeout',
+                            latency_ms=_call_timeout * 1000,
+                        )
                     if span is not None:
                         span.set_attribute("provider", response.provider)
                         span.set_attribute("model", response.model)
@@ -302,7 +358,7 @@ class AgentLoop:
                     if fallback_call is not None:
                         response.tool_calls = [fallback_call]
                     else:
-                        final = response.text.strip()
+                        final = self._strip_thinking(response.text).strip()
                         if not final:
                             error = "provider returned an empty response"
                             if response.finish_reason and response.finish_reason != "stop":
