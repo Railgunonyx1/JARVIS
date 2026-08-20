@@ -55,7 +55,92 @@ class ProviderUnavailableError(ProviderError):
         super().__init__(provider, message, retryable=True)
 
 
-# ── Rate-limit detection (shared) ──────────────────────────────────────
+# ── Structured error classification ───────────────────────────────────
+
+import enum
+
+
+class ErrorKind(str, enum.Enum):
+    """Classification of provider errors for router decision-making."""
+    RATE_LIMIT = "rate_limit"           # 429 / temporary throttling
+    QUOTA_EXHAUSTED = "quota_exhausted"  # daily/monthly quota hit
+    AUTH = "auth"                       # bad API key
+    INVALID_REQUEST = "invalid_request" # malformed request
+    TIMEOUT = "timeout"                 # request timed out
+    OVERLOADED = "overloaded"           # 503 / server overloaded
+    NETWORK = "network"                 # connection error
+    SERVER_ERROR = "server_error"       # other 5xx
+    UNKNOWN = "unknown"
+
+
+def classify_provider_error(error_str: str, status_code: int | None = None) -> ErrorKind:
+    """Classify an error string into a structured ErrorKind.
+
+    Uses status codes when available, falls back to substring matching.
+    Separates temporary throttling from permanent quota exhaustion.
+    """
+    lower = error_str.lower()
+
+    # Status code takes priority
+    if status_code == 429:
+        # Distinguish temporary from permanent
+        if any(m in lower for m in ("daily", "monthly", "permanently", "exceeded quota")):
+            return ErrorKind.QUOTA_EXHAUSTED
+        return ErrorKind.RATE_LIMIT
+    if status_code == 401 or status_code == 403:
+        return ErrorKind.AUTH
+    if status_code == 400 or status_code == 422:
+        return ErrorKind.INVALID_REQUEST
+    if status_code == 503:
+        return ErrorKind.OVERLOADED
+    if status_code and status_code >= 500:
+        return ErrorKind.SERVER_ERROR
+
+    # Substring fallback
+    if any(m in lower for m in ("429", "rate limit", "too many requests", "throttl")):
+        if any(m in lower for m in ("daily", "monthly", "permanently")):
+            return ErrorKind.QUOTA_EXHAUSTED
+        return ErrorKind.RATE_LIMIT
+    if any(m in lower for m in ("quota exhausted", "daily quota", "credits", "billing")):
+        return ErrorKind.QUOTA_EXHAUSTED
+    if any(m in lower for m in ("resource_exhausted",)):
+        # resource_exhausted can be temporary or permanent
+        if any(m in lower for m in ("retry", "try again", "seconds")):
+            return ErrorKind.RATE_LIMIT
+        return ErrorKind.QUOTA_EXHAUSTED
+    if any(m in lower for m in ("timeout", "timed out")):
+        return ErrorKind.TIMEOUT
+    if any(m in lower for m in ("connection", "connect", "network", "dns")):
+        return ErrorKind.NETWORK
+    if any(m in lower for m in ("overloaded", "capacity", "503", "service unavailable")):
+        return ErrorKind.OVERLOADED
+    if any(m in lower for m in ("unauthorized", "invalid key", "bad key", "authentication")):
+        return ErrorKind.AUTH
+    if any(m in lower for m in ("invalid", "malformed", "bad request")):
+        return ErrorKind.INVALID_REQUEST
+
+    return ErrorKind.UNKNOWN
+
+
+def parse_retry_after(error_str: str) -> float | None:
+    """Extract retry-after delay from error text. Returns seconds or None."""
+    import re
+    m = re.search(r"try again in ([\d.]+)\s*s", error_str, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    m = re.search(r"retry after ([\d.]+)\s*s", error_str, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            pass
+    return None
+
+
+# ── Legacy rate-limit detection (kept for backwards compat) ────────────
 
 _RATE_LIMIT_MARKERS = (
     "rate limit", "429", "too many", "quota", "credits",
@@ -66,8 +151,8 @@ _RATE_LIMIT_MARKERS = (
 
 def is_rate_limit_error(error_str: str) -> bool:
     """Return True if the error string indicates a transient rate limit."""
-    lower = error_str.lower()
-    return any(m in lower for m in _RATE_LIMIT_MARKERS)
+    kind = classify_provider_error(error_str)
+    return kind in (ErrorKind.RATE_LIMIT, ErrorKind.OVERLOADED)
 
 
 def sanitize_tools(tools: list | None) -> tuple[list | None, dict[str, str]]:

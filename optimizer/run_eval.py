@@ -35,14 +35,46 @@ from optimizer.eval_dataset import get_dataset
 
 CURRENT_PROMPT = """\
 You are JARVIS MK-X, an autonomous engineering agent running on a Windows PC.
-You accomplish the user's goal by calling tools. You may call tools repeatedly.
+
+CRITICAL: For simple questions, greetings, opinions, math, jokes, or anything
+that does NOT require reading/writing files or running commands, answer directly
+in 1-3 sentences. Do NOT call tools for things you can answer from knowledge.
+Examples of DIRECT answers (no tools needed):
+  - 'hello' -> 'Hello! How can I help you today?'
+  - 'what is 2+2' -> '4'
+  - 'tell me a joke' -> tell a joke
+  - 'what time is it' -> give the time
+
+For tasks that require code changes, file operations, or system commands:
+
+Methodology (follow this order):
+1. UNDERSTAND: Parse the user's goal. Identify what information or changes are needed.
+2. EXPLORE: Before making changes, read relevant files first.
+3. PLAN: State your approach in 1-2 sentences before acting.
+4. EXECUTE: Make precise, minimal changes.
+5. VERIFY: After changes, confirm the result is correct.
+
+Tool Selection Rules:
+- Use filesystem.read to read file contents (NOT shell.execute with cat/type)
+- Use filesystem.list to list directories (NOT shell.execute with dir/ls)
+- Use search.code to search file contents (NOT shell.execute with grep)
+- Use search.find to find files by name pattern (NOT shell.execute with find/where)
+- Use git.status / git.diff / git.log for git operations (NOT shell.execute)
+- Use patch.replace for editing existing files — provide exact old text and new text
+- Use patch.insert to add code at a specific line
+- Use patch.delete to remove lines from a file
+- Use filesystem.write ONLY for creating new files
+- Use shell.execute ONLY when no other tool can accomplish the task
+
 Rules:
-- Inspect before acting: use filesystem.list / filesystem.read before guessing.
+- Inspect before acting: always read a file before modifying it.
 - Pass exact argument names shown in each tool's schema; never invent parameters.
 - On a tool error, read it, adapt, and retry with a corrected call.
 - Never fabricate tool results. Report what actually happened.
-- If a tool is denied or fails, do NOT retry the same call — adapt or explain why the goal cannot be completed.
-- Stop as soon as the goal is complete and summarize what you did in 2-3 sentences."""
+- If a tool is denied or fails, do NOT retry the same call — adapt or explain.
+- Make minimal changes: edit only what needs to change, don't rewrite entire files.
+- Stop as soon as the goal is complete and summarize what you did in 2-3 sentences.
+- Do NOT call tools unless the task explicitly requires file/system operations."""
 
 IMPROVED_PROMPT = """\
 You are JARVIS MK-X, an autonomous engineering agent running on a Windows PC.
@@ -181,20 +213,16 @@ class EvalReport:
 
 def parse_tool_calls_from_response(response: str) -> list[str]:
     """Extract tool call names from an LLM response.
-    
-    Only matches known JARVIS tool names to avoid false positives.
+
+    Only matches tool names in actual tool-call contexts (XML tags, JSON
+    function calls, or explicit 'I will use X' statements), not random
+    mentions in natural language.
     """
     import re
 
-    # Known JARVIS tool names
     KNOWN_TOOLS = {
         'filesystem.read', 'filesystem.write', 'filesystem.list',
         'shell.execute', 'system.status', 'web.search',
-        'world_monitor.search', 'world_monitor.get_alerts',
-        'world_monitor.get_region', 'world_monitor.get_event',
-        'world_monitor.get_sources', 'world_monitor.world_brief',
-        'browser.open', 'browser.screenshot', 'browser.click',
-        'browser.type', 'browser.extract', 'browser.status',
         'search.code', 'search.find',
         'git.status', 'git.diff', 'git.log', 'git.branch',
         'git.add', 'git.commit', 'git.restore',
@@ -216,13 +244,14 @@ def parse_tool_calls_from_response(response: str) -> list[str]:
         if name in KNOWN_TOOLS:
             tools.append(name)
 
-    # Pattern 3: Direct mentions of known tool names
-    for tool_name in KNOWN_TOOLS:
-        # Look for the tool name in context (with word boundaries)
-        escaped = re.escape(tool_name)
-        if re.search(r'\b' + escaped + r'\b', response):
-            if tool_name not in tools:
-                tools.append(tool_name)
+    # Pattern 3: Explicit tool usage statements ("I will use X", "calling X", "use X")
+    use_pattern = re.compile(
+        r'(?:I will use|calling|use|using|invoke|execute)\s+(' +
+        r'|'.join(re.escape(t) for t in KNOWN_TOOLS) + r')',
+        re.IGNORECASE
+    )
+    for m in use_pattern.finditer(response):
+        tools.append(m.group(1))
 
     return list(dict.fromkeys(tools))  # deduplicate preserving order
 

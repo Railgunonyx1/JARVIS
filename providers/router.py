@@ -17,13 +17,17 @@ from providers.ollama_provider import OllamaProvider
 from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
-from providers.types import ProviderError, RateLimitError, is_rate_limit_error, restore_tool_names, sanitize_tools
+from providers.types import (
+    ProviderError, RateLimitError, ErrorKind,
+    classify_provider_error, parse_retry_after,
+    is_rate_limit_error, restore_tool_names, sanitize_tools,
+)
 from reliability_engine.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger("jarvis.providers.router")
 
-# Bounded retries for transient rate limits before falling back in the chain.
-_RATE_RETRIES = 2
+# Maximum retry-after delay before we fallback instead of waiting.
+_MAX_RETRY_WAIT_S = 5.0
 
 
 class ProviderRouter:
@@ -151,25 +155,43 @@ class ProviderRouter:
         self._chain_checked_at = 0.0
 
     @staticmethod
-    def _is_rate_limit(exc: Exception) -> bool:
-        """True for transient 429/rate/quota failures that a retry may clear."""
+    def _classify_error(exc: Exception) -> ErrorKind:
+        """Structured classification of an exception."""
         if isinstance(exc, RateLimitError):
-            return True
+            return ErrorKind.RATE_LIMIT
         if isinstance(exc, ProviderError):
-            return exc.retryable
-        return is_rate_limit_error(str(exc))
+            return classify_provider_error(str(exc))
+        return classify_provider_error(str(exc))
 
     @staticmethod
-    def _rate_limit_delay(exc: Exception, default: float = 8.0, cap: float = 30.0) -> float:
-        """Parse a 'please try again in Xs' hint into a bounded backoff."""
-        import re
-        m = re.search(r"try again in ([\d.]+)\s*s", str(exc), re.I)
-        if not m:
-            return default
-        try:
-            return min(float(m.group(1)), cap)
-        except ValueError:
-            return default
+    def _is_rate_limit(exc: Exception) -> bool:
+        """True for transient failures worth retrying once."""
+        kind = ProviderRouter._classify_error(exc)
+        return kind in (ErrorKind.RATE_LIMIT, ErrorKind.OVERLOADED, ErrorKind.TIMEOUT)
+
+    @staticmethod
+    def _should_fallback(exc: Exception) -> bool:
+        """True if we should immediately try the next provider."""
+        kind = ProviderRouter._classify_error(exc)
+        # Always fallback on these — no point retrying
+        if kind in (ErrorKind.QUOTA_EXHAUSTED, ErrorKind.AUTH, ErrorKind.INVALID_REQUEST):
+            return True
+        # Rate limit: fallback if retry-after is too long
+        if kind == ErrorKind.RATE_LIMIT:
+            retry_after = parse_retry_after(str(exc))
+            if retry_after is not None and retry_after > _MAX_RETRY_WAIT_S:
+                return True
+        return False
+
+    @staticmethod
+    def _rate_limit_delay(exc: Exception) -> float:
+        """Get retry delay: use provider's hint, capped at _MAX_RETRY_WAIT_S."""
+        retry_after = parse_retry_after(str(exc))
+        if retry_after is not None:
+            return min(retry_after, _MAX_RETRY_WAIT_S)
+        # No hint — short wait, not 8 seconds
+        import random
+        return random.uniform(1.0, 3.0)
 
     @property
     def status(self) -> dict:
@@ -253,47 +275,45 @@ class ProviderRouter:
                     return response
                 except Exception as e:
                     last_error = e
+                    kind = self._classify_error(e)
                     metrics.counter(f"provider.fail.{provider_name}", 1)
                     self._invalidate_chain()
                     if span is not None:
-                        span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
-                    # Transient rate limits deserve a bounded retry with
-                    # backoff before we abandon this provider for the chain.
+                        span.record_event("fallback", {
+                            "from": provider_name, "kind": kind.value,
+                            "error": str(e)[:120],
+                        })
+
+                    # Immediately fallback for permanent errors
+                    if self._should_fallback(e):
+                        provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                        logger.info("%s: %s — falling back", provider_name, kind.value)
+                        continue
+
+                    # One retry for transient errors (rate limit / overload / timeout)
                     if self._is_rate_limit(e):
-                        # Notify the provider about the rate limit so its
-                        # cooldown reflects the 429, not a health failure.
                         provider.record_rate_limit()
-                        for retry in range(_RATE_RETRIES):
-                            delay = self._rate_limit_delay(e)
-                            logger.warning(
-                                "Provider %s rate-limited — retry %d/%d in %.0fs",
-                                provider_name, retry + 1, _RATE_RETRIES, delay,
+                        delay = self._rate_limit_delay(e)
+                        logger.info("%s: retrying in %.1fs", provider_name, delay)
+                        await asyncio.sleep(delay)
+                        try:
+                            response = await provider.complete(
+                                messages, system_prompt, max_tokens, temperature, tools_param,
                             )
-                            await asyncio.sleep(delay)
-                            try:
-                                response = await provider.complete(
-                                    messages, system_prompt, max_tokens, temperature, tools_param,
-                                )
-                                if name_map:
-                                    restore_tool_names(response.tool_calls, name_map)
-                                self._last_provider = provider_name
-                                self._last_model = provider.model
-                                metrics.counter(f"provider.ok.{provider_name}", 1)
-                                if span is not None:
-                                    span.set_attribute("provider", provider_name)
-                                    span.set_attribute("attempts", attempts)
-                                    span.set_attribute("latency_ms", response.latency_ms)
-                                    span.set_attribute("tokens", response.tokens_used)
-                                tracer.add_metric("llm.tokens_generated", response.tokens_used)
-                                return response
-                            except Exception as retry_err:
-                                last_error = retry_err
-                                metrics.counter(f"provider.fail.{provider_name}", 1)
-                                if self._is_rate_limit(retry_err):
-                                    provider.record_rate_limit()
-                                else:
-                                    break
-                    logger.warning("Provider %s failed: %s", provider_name, e)
+                            if name_map:
+                                restore_tool_names(response.tool_calls, name_map)
+                            self._last_provider = provider_name
+                            self._last_model = provider.model
+                            metrics.counter(f"provider.ok.{provider_name}", 1)
+                            return response
+                        except Exception as retry_err:
+                            last_error = retry_err
+                            metrics.counter(f"provider.fail.{provider_name}", 1)
+                            provider.record_rate_limit()
+
+                    # Non-retryable failure
+                    provider.record_failure(str(e)[:200])
+                    logger.warning("%s: %s (%s)", provider_name, kind.value, str(e)[:100])
                     continue
             if span is not None:
                 span.set_attribute("attempts", attempts)
@@ -375,24 +395,27 @@ class ProviderRouter:
                             span.set_attribute("model", provider.model)
                         return  # Stream completed successfully
                     except Exception as e:
-                        # A rate-limit before any chunk is safe to retry with
-                        # backoff; mid-stream failures cannot be replayed.
-                        if self._is_rate_limit(e) and first_chunk and retries < _RATE_RETRIES:
-                            retries += 1
-                            delay = self._rate_limit_delay(e)
-                            logger.warning(
-                                "Provider %s stream rate-limited — retry %d/%d in %.0fs",
-                                provider_name, retries, _RATE_RETRIES, delay,
-                            )
-                            await asyncio.sleep(delay)
-                            self._invalidate_chain()
-                            continue
+                        kind = self._classify_error(e)
+                        # Before first token: safe to retry or fallback
+                        if first_chunk:
+                            if self._should_fallback(e):
+                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                break  # try next provider
+                            if self._is_rate_limit(e) and retries < 1:
+                                retries += 1
+                                provider.record_rate_limit()
+                                delay = self._rate_limit_delay(e)
+                                logger.info("%s: stream retry in %.1fs", provider_name, delay)
+                                await asyncio.sleep(delay)
+                                self._invalidate_chain()
+                                continue
+                        # After first token: cannot replay, fall through to next provider
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
                         self._invalidate_chain()
                         if span is not None:
-                            span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
-                        logger.warning("Provider %s stream failed: %s", provider_name, e)
+                            span.record_event("fallback", {"from": provider_name, "kind": kind.value})
+                        logger.warning("%s: stream %s", provider_name, kind.value)
                         break
             if span is not None:
                 span.set_attribute("last_error", str(last_error)[:200])
@@ -493,22 +516,27 @@ class ProviderRouter:
                             span.set_attribute("model", provider.model)
                         return
                     except Exception as e:
-                        if self._is_rate_limit(e) and first_chunk and retries < _RATE_RETRIES:
-                            retries += 1
-                            delay = self._rate_limit_delay(e)
-                            logger.warning(
-                                "Provider %s stream_typed rate-limited — retry %d/%d in %.0fs",
-                                provider_name, retries, _RATE_RETRIES, delay,
-                            )
-                            await asyncio.sleep(delay)
-                            self._invalidate_chain()
-                            continue
+                        kind = self._classify_error(e)
+                        # Before first token: safe to retry or fallback
+                        if first_chunk:
+                            if self._should_fallback(e):
+                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                break  # try next provider
+                            if self._is_rate_limit(e) and retries < 1:
+                                retries += 1
+                                provider.record_rate_limit()
+                                delay = self._rate_limit_delay(e)
+                                logger.info("%s: stream_typed retry in %.1fs", provider_name, delay)
+                                await asyncio.sleep(delay)
+                                self._invalidate_chain()
+                                continue
+                        # After first token or non-retryable: cannot replay, fall through
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
                         self._invalidate_chain()
                         if span is not None:
-                            span.record_event("fallback", {"from": provider_name, "error": str(e)[:120]})
-                        logger.warning("Provider %s stream_typed failed: %s", provider_name, e)
+                            span.record_event("fallback", {"from": provider_name, "kind": kind.value})
+                        logger.warning("%s: stream_typed %s", provider_name, kind.value)
                         break
             if span is not None:
                 span.set_attribute("last_error", str(last_error)[:200])

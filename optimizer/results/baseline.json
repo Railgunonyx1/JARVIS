@@ -1,9 +1,9 @@
 {
   "prompt_version": "baseline",
-  "avg_tool_accuracy": 0.9047619047619048,
-  "avg_penalty_score": 0.9047619047619048,
+  "avg_tool_accuracy": 1.0,
+  "avg_penalty_score": 1.0,
   "forbidden_violations": 0,
-  "total_duration_ms": 182193.86529999974,
+  "total_duration_ms": 277149.92040000105,
   "results": [
     {
       "id": "fs_01",
@@ -15,7 +15,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 14180.951499999537
+      "duration_ms": 29442.982999999003
     },
     {
       "id": "fs_02",
@@ -27,7 +27,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 676.6812999994727
+      "duration_ms": 39081.44540000103
     },
     {
       "id": "fs_03",
@@ -39,7 +39,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1046.3995999998588
+      "duration_ms": 1767.1338000000105
     },
     {
       "id": "fs_04",
@@ -51,7 +51,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 821.3168000002042
+      "duration_ms": 20738.032100000055
     },
     {
       "id": "fs_05",
@@ -63,7 +63,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1623.4065999997256
+      "duration_ms": 20103.487700000187
     },
     {
       "id": "edit_01",
@@ -75,7 +75,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1057.8073000006043
+      "duration_ms": 3654.5638000006875
     },
     {
       "id": "edit_02",
@@ -87,7 +87,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 9460.533999999825
+      "duration_ms": 3139.6597000002657
     },
     {
       "id": "edit_03",
@@ -99,23 +99,19 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 17582.21599999979
+      "duration_ms": 1596.7358999987482
     },
     {
       "id": "search_01",
       "goal": "Find all places where 'sqlite' is imported in this project",
       "category": "search",
-      "tools_called": [
-        "the"
-      ],
+      "tools_called": [],
       "correct_tools": [],
-      "wrong_tools": [
-        "the"
-      ],
+      "wrong_tools": [],
       "forbidden_called": [],
-      "penalty_score": 0.0,
+      "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 2303.3943000000363
+      "duration_ms": 33990.2433999996
     },
     {
       "id": "search_02",
@@ -127,7 +123,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1066.7804000004253
+      "duration_ms": 19006.656100000328
     },
     {
       "id": "multi_01",
@@ -139,7 +135,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1309.576399999969
+      "duration_ms": 19459.916600000724
     },
     {
       "id": "multi_02",
@@ -151,7 +147,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 987.7224000001661
+      "duration_ms": 8583.294300000489
     },
     {
       "id": "sys_01",
@@ -163,7 +159,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 921.3777000004484
+      "duration_ms": 3048.8011999987066
     },
     {
       "id": "edge_01",
@@ -175,23 +171,19 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 7545.527899999797
+      "duration_ms": 1281.4371999993455
     },
     {
       "id": "edge_02",
       "goal": "Tell me a joke",
       "category": "no_tools",
-      "tools_called": [
-        "tools"
-      ],
+      "tools_called": [],
       "correct_tools": [],
-      "wrong_tools": [
-        "tools"
-      ],
+      "wrong_tools": [],
       "forbidden_called": [],
-      "penalty_score": 0.0,
+      "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 10068.745700000363
+      "duration_ms": 2415.6293000014557
     },
     {
       "id": "inspect_01",
@@ -203,7 +195,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 28183.05540000074
+      "duration_ms": 5702.009700000417
     },
     {
       "id": "inspect_02",
@@ -215,7 +207,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 9302.724500000295
+      "duration_ms": 6021.3748999995005
     },
     {
       "id": "git_01",
@@ -227,7 +219,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 18992.119300000013
+      "duration_ms": 4623.225700001058
     },
     {
       "id": "git_02",
@@ -239,7 +231,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 1795.9371000006286
+      "duration_ms": 1051.7218000004505
     },
     {
       "id": "behavior_01",
@@ -251,7 +243,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 27351.312400000097
+      "duration_ms": 1683.966299999156
     },
     {
       "id": "behavior_02",
@@ -263,7 +255,7 @@
       "forbidden_called": [],
       "penalty_score": 1.0,
       "error": "",
-      "duration_ms": 25901.237499999297
+      "duration_ms": 19096.15600000143
     }
   ]
 }
