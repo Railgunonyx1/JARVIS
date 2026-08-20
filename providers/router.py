@@ -512,7 +512,7 @@ class ProviderRouter:
         ``None`` while streaming content; the final marker carries the completed
         :class:`ToolCall` list so the agent loop can stream the answer while
         still executing multi-step tool loops. Providers that cannot capture
-        streamed tool calls (gemini, ollama) fall back to a single non-streaming
+        streamed tool calls (gemini) fall back to a single non-streaming
         chunk, so tool use is never broken on those upstreams.
         """
         from runtime.observability.metrics import get_metrics
