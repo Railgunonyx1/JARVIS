@@ -13,22 +13,31 @@ logger = logging.getLogger("jarvis.providers.ollama")
 
 
 class OllamaProvider(LLMProvider):
+    captures_stream_tool_calls = True
+
     def __init__(self, config: dict):
         super().__init__("ollama", config)
         self.base_url = config.get("base_url", "http://127.0.0.1:11434")
         self._client = None
         self._sdk_package = "ollama"
         self._daemon_ok = False
-        # Intra-provider fallback: try a second model before giving up.
-        # Configured via [ollama.fallback] model = "..."
+        self._last_probe_time: float = 0.0
+        self._probe_interval: float = 30.0
         fallback_cfg = config.get("fallback", {})
         self._fallback_model = fallback_cfg.get("model") if isinstance(fallback_cfg, dict) else None
         self._check_package()
 
+    def _probe_daemon(self) -> bool:
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"{self.base_url}/api/tags")
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
     def _check_package(self) -> bool:
         try:
-            # find_spec is cheap and does NOT execute the SDK — the real
-            # import happens lazily in _get_client() on first request.
             self._package_ok = importlib.util.find_spec("ollama") is not None
             if not self._package_ok:
                 self._package_error = "ollama package not installed"
@@ -37,19 +46,23 @@ class OllamaProvider(LLMProvider):
             self._package_ok = False
             self._package_error = "ollama package not importable"
             return False
-        # Probe daemon availability via /api/tags
-        try:
-            import urllib.request
-            req = urllib.request.Request(f"{self.base_url}/api/tags")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                self._daemon_ok = resp.status == 200
-        except Exception:
-            self._daemon_ok = False
+        self._daemon_ok = self._probe_daemon()
+        self._last_probe_time = time.time()
         return True
+
+    def _ensure_daemon(self) -> bool:
+        now = time.time()
+        if now - self._last_probe_time < self._probe_interval:
+            return self._daemon_ok
+        self._daemon_ok = self._probe_daemon()
+        self._last_probe_time = now
+        return self._daemon_ok
 
     @property
     def is_available(self) -> bool:
-        if not self._package_ok or not self._daemon_ok:
+        if not self._package_ok:
+            return False
+        if not self._ensure_daemon():
             return False
         return self.health.available and self.check_quota()
 
@@ -82,6 +95,20 @@ class OllamaProvider(LLMProvider):
             else:
                 out.append(msg)
         return out
+
+    @staticmethod
+    def _max_tools_for_model(model: str) -> int:
+        if any(tag in model for tag in ('1.5b', '1b')):
+            return 5
+        if '3b' in model:
+            return 10
+        return 20
+
+    def _limit_tools(self, tools: list | None, model: str) -> list | None:
+        if not tools:
+            return tools
+        limit = self._max_tools_for_model(model)
+        return tools[:limit] if len(tools) > limit else tools
 
     async def _chat_once(self, client, model: str, full_messages: list,
                          tools: list | None, max_tokens, temperature) -> LLMResponse:
@@ -128,38 +155,25 @@ class OllamaProvider(LLMProvider):
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        # Ollama handles its own tool format — send raw tools, not
-        # the compressed OpenAI format (which strips descriptions).
-        # Small local models (<=3B params) can only handle a few tools.
         primary_model = self.config.get("model", "qwen2.5:1.5b")
-        # Small models (<=1.5B) can only handle a few tools; larger ones get more.
-        if any(tag in primary_model for tag in ('1.5b', '1b')):
-            _max_tools = 5
-        elif '3b' in primary_model:
-            _max_tools = 10
-        else:
-            _max_tools = 20
-        _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
         try:
             result = await self._chat_once(client, primary_model, full_messages,
-                                          _limited_tools, max_tokens, temperature)
+                                          self._limit_tools(tools, primary_model), max_tokens, temperature)
             self.record_success(result.latency_ms)
             return result
         except Exception as primary_err:
-            # Intra-provider fallback: try the fallback model if configured
             if self._fallback_model and self._fallback_model != primary_model:
                 try:
                     logger.info("Ollama primary model %s failed, trying fallback %s",
                                 primary_model, self._fallback_model)
                     result = await self._chat_once(client, self._fallback_model, full_messages,
-                                                  _limited_tools, max_tokens, temperature)
+                                                  self._limit_tools(tools, self._fallback_model), max_tokens, temperature)
                     self.record_success(result.latency_ms)
                     return result
                 except Exception:
-                    pass  # Fallback also failed — fall through to raise primary_err
-            # Classify and record the primary error
-            error_str = str(primary_err)
+                    pass
             from providers.types import ErrorKind, classify_provider_error
+            error_str = str(primary_err)
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()

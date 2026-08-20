@@ -38,6 +38,11 @@ scratch/
 # Benchmark runtime output
 benchmark/results/
 
+# Test & Lint output dumps
+*_output.txt
+*_results.txt
+audit.log
+
 # IDE
 .kilocode/
 .idea/

@@ -519,6 +519,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_remember(line, loop)
         elif line == "/memory":
             _cmd_memory_list(loop)
+        elif line.startswith("/model"):
+            _cmd_model(line, loop)
         elif line.startswith("/"):
             commands.dispatch(line)
         else:
@@ -685,6 +687,59 @@ def _cmd_memory_list(loop) -> None:
         key = r.get('key', '?')
         val = str(r.get('value', ''))[:60]
         console.print(Text(f"    [{cat}] {key}: {val}", style="jarvis.dim"))
+
+
+def _cmd_model(line: str, loop) -> None:
+    """Switch models: /model [name|auto|status|list]."""
+    from providers.model_registry import ModelRegistry, MODEL_CATALOG
+    from rich.table import Table
+
+    registry = ModelRegistry.instance()
+    parts = line.split(maxsplit=1)
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if arg == "list" or arg == "":
+        # Show available models
+        table = Table(title="Available Models")
+        table.add_column("Model", style="bold")
+        table.add_column("Size")
+        table.add_column("Speed")
+        table.add_column("Strengths")
+        table.add_column("Description", max_width=40)
+        active = registry.active_model or loop.router.get_ollama_model() or ""
+        for m in MODEL_CATALOG:
+            is_active = m.name == active
+            marker = " ●" if is_active else ""
+            style = "jarvis.accent" if is_active else None
+            table.add_row(
+                f"{m.name}{marker}",
+                f"{m.size_gb:.1f} GB",
+                m.speed,
+                ", ".join(s.value for s in m.strengths),
+                m.description,
+                style=style,
+            )
+        console.print(table)
+        mode_str = "auto" if registry.auto_mode else f"locked to {registry.active_model}"
+        console.print(Text(f"  Mode: {mode_str}", style="jarvis.dim"))
+        return
+
+    if arg == "status":
+        status = registry.get_status()
+        console.print(Text(f"  Active: {status['active_model'] or 'auto'}", style="jarvis.accent"))
+        console.print(Text(f"  Auto: {status['auto_mode']}", style="jarvis.dim"))
+        if status["model_usage"]:
+            console.print(Text("  Usage:", style="jarvis.accent"))
+            for model, count in status["model_usage"].items():
+                console.print(Text(f"    {model}: {count}x", style="jarvis.dim"))
+        return
+
+    # Switch to a specific model or auto
+    result = registry.set_model(arg)
+    console.print(Text(f"  {result}", style="jarvis.accent"))
+    # Also swap the router's Ollama model if we locked to a specific one
+    if registry.active_model:
+        loop.router.swap_ollama_model(registry.active_model)
 
 
 def _cmd_history(line: str) -> None:

@@ -228,6 +228,26 @@ class ProviderRouter:
             for name, provider in self._providers.items()
         }
 
+    def swap_ollama_model(self, model_name: str) -> bool:
+        """Swap the active Ollama model at runtime.
+
+        Returns True if the swap succeeded, False if Ollama is not available.
+        """
+        ollama = self._providers.get("ollama")
+        if ollama is None:
+            return False
+        old_model = ollama.config.get("model")
+        ollama.config["model"] = model_name
+        logger.info("Swapped Ollama model: %s → %s", old_model, model_name)
+        return True
+
+    def get_ollama_model(self) -> str | None:
+        """Return the current Ollama model name, or None if Ollama is not configured."""
+        ollama = self._providers.get("ollama")
+        if ollama is None:
+            return None
+        return ollama.config.get("model")
+
     async def complete(
         self,
         messages: list[dict],
@@ -236,8 +256,12 @@ class ProviderRouter:
         temperature: float | None = None,
         tools: list | None = None,
         preferred_provider: str | None = None,
+        preferred_model: str | None = None,
     ) -> LLMResponse:
-        """Send completion request with automatic fallback."""
+        """Send completion request with automatic fallback.
+
+        When ``preferred_model`` is set and the first provider is Ollama,
+        the model is swapped before the request (and restored after)."""
         from runtime.observability.metrics import get_metrics
         from runtime.observability.tracer import get_tracer
 
@@ -246,6 +270,15 @@ class ProviderRouter:
         chain = self._get_available_chain()
         if not chain:
             raise RuntimeError("No LLM providers available. Check API keys and network.")
+
+        # Model swap: temporarily change Ollama's model if requested
+        _restored_model = None
+        if preferred_model and chain and chain[0] == "ollama":
+            ollama = self._providers.get("ollama")
+            if ollama is not None:
+                _restored_model = ollama.config.get("model")
+                ollama.config["model"] = preferred_model
+                logger.info("Router: swapped Ollama to %s for this request", preferred_model)
 
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
@@ -290,6 +323,11 @@ class ProviderRouter:
                         "Success via %s: %d tokens, %.0fms",
                         provider_name, response.tokens_used, response.latency_ms,
                     )
+                    # Restore Ollama model if we swapped it
+                    if _restored_model is not None:
+                        ollama = self._providers.get("ollama")
+                        if ollama is not None:
+                            ollama.config["model"] = _restored_model
                     return response
                 except Exception as e:
                     last_error = e
@@ -343,6 +381,11 @@ class ProviderRouter:
                 span.set_attribute("attempts", attempts)
                 span.set_attribute("last_error", str(last_error)[:200])
 
+        # Restore Ollama model if we swapped it
+        if _restored_model is not None:
+            ollama = self._providers.get("ollama")
+            if ollama is not None:
+                ollama.config["model"] = _restored_model
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
     async def complete_stream(
