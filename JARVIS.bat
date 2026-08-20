@@ -16,24 +16,16 @@ title JARVIS MK-X
 color 0B
 set "MODE=agent"
 
-REM Launch in Windows Terminal if available (first launch only)
-REM Writes a small helper .cmd to TEMP that cd's and runs JARVIS.bat.
-REM This avoids nested-quoting issues with wt.exe + cmd /k.
-set "_helper=%TEMP%\jarvis_wt.cmd"
-set "_lock=%TEMP%\jarvis_wt.lock"
-if not exist "%_lock%" (
+REM Launch in Windows Terminal on first run.
+REM Uses JARVIS_WT=1 env var to prevent infinite loop.
+if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
-        echo. > "%_lock%"
-        > "%_helper%" echo @echo off
-        >> "%_helper%" echo cd /d "%~dp0"
-        >> "%_helper%" echo JARVIS.bat
-        start "" wt.exe cmd /k "%_helper%"
+        set "JARVIS_WT=1"
+        start "" wt.exe -d "%~dp0" cmd /k "set JARVIS_WT=1&& "%~f0""
         exit /b
     )
 )
-del "%_lock%" 2>nul
-del "%_helper%" 2>nul
 
 REM Direct CLI arguments
 if not "%~1"=="" goto argmode

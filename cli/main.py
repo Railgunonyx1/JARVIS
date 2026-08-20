@@ -176,9 +176,10 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     display = LiveTaskDisplay(
         status_getter=(lambda: _status_getter(loop)),
-        enable=not json_output,
+        enable=not json_output and not collapsed,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),
         screen=screen,
+        transient=not collapsed,
     )
 
     def _on_event(name: str, payload: dict) -> None:
