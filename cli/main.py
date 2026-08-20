@@ -147,23 +147,23 @@ def _print_result(result) -> None:
 
 
 def _print_collapsed(result) -> None:
-    """Print result after agent finishes. Uses plain print() to avoid
-    Rich terminal state issues. Always outputs something."""
+    """Print result after agent finishes. Uses console.print to ensure
+    Rich terminal state is correct. Always outputs something."""
+    from cli.renderer import render_markdown
     try:
         if result and result.success and result.response:
-            # Plain print — no Rich, no ANSI state, guaranteed visible
-            sys.stdout.write(result.response + "\n")
-            sys.stdout.flush()
+            # Start on a fresh line so the response doesn't jam against the
+            # Live display's footer prompt (e.g. 'JARVIS [agent] > _').
+            print()  # newline separator
+            console.print(render_markdown(result.response))
+            console.print()
         elif result and not result.success:
             err = getattr(result, 'error', 'unknown error')
-            sys.stdout.write(f"error: {err[:200]}\n")
-            sys.stdout.flush()
+            console.print(Text(f"  error: {err[:200]}", style="jarvis.error"))
         else:
-            sys.stdout.write("(no response)\n")
-            sys.stdout.flush()
+            console.print(Text("  (no response)", style="jarvis.dim"))
     except Exception as e:
-        sys.stdout.write(f"(output error: {e})\n")
-        sys.stdout.flush()
+        console.print(Text(f"  (output error: {e})", style="jarvis.error"))
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -192,8 +192,9 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     # Live display is ALWAYS enabled (except --json pipe mode).
-    # In interactive mode: transient=True shows the Claude-style UI during
-    # execution, then clears it and _print_collapsed shows the final result.
+    # In interactive mode: transient=False shows the Claude-style UI during
+    # execution AND keeps the conversation visible after stop.
+    # The final result is also printed below by _print_collapsed.
     # In one-shot mode: transient=False keeps the full conversation on screen.
     use_live = not json_output
     display = LiveTaskDisplay(
@@ -201,7 +202,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         enable=use_live,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),
         screen=screen,
-        transient=not collapsed,  # True in interactive (clears after stop), False in one-shot
+        transient=False,
     )
 
     def _on_event(name: str, payload: dict) -> None:

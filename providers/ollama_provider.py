@@ -18,6 +18,7 @@ class OllamaProvider(LLMProvider):
         self.base_url = config.get("base_url", "http://127.0.0.1:11434")
         self._client = None
         self._sdk_package = "ollama"
+        self._daemon_ok = False
         self._check_package()
 
     def _check_package(self) -> bool:
@@ -27,11 +28,26 @@ class OllamaProvider(LLMProvider):
             self._package_ok = importlib.util.find_spec("ollama") is not None
             if not self._package_ok:
                 self._package_error = "ollama package not installed"
-            return self._package_ok
+                return False
         except Exception:
             self._package_ok = False
             self._package_error = "ollama package not importable"
             return False
+        # Probe daemon availability via /api/tags
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"{self.base_url}/api/tags")
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                self._daemon_ok = resp.status == 200
+        except Exception:
+            self._daemon_ok = False
+        return True
+
+    @property
+    def is_available(self) -> bool:
+        if not self._package_ok or not self._daemon_ok:
+            return False
+        return self.health.available and self.check_quota()
 
     def _get_client(self):
         if self._client is None:
@@ -114,7 +130,18 @@ class OllamaProvider(LLMProvider):
             self.record_success(latency)
             return result
         except Exception as e:
-            self.record_failure(str(e))
+            error_str = str(e)
+            from providers.types import classify_provider_error, ErrorKind
+            kind = classify_provider_error(error_str)
+            if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
+                self.record_rate_limit()
+            elif kind == ErrorKind.TIMEOUT:
+                self.record_failure(error_str)
+            elif kind in (ErrorKind.AUTH, ErrorKind.INVALID_REQUEST):
+                self.record_failure(error_str)
+            else:
+                # Connection refused, network errors, model not found, etc.
+                self.record_failure(error_str)
             raise
 
     async def complete_stream(
@@ -125,6 +152,15 @@ class OllamaProvider(LLMProvider):
         temperature: float | None = None,
         tools: list | None = None,
     ) -> AsyncIterator[str]:
+        """Stream text chunks from Ollama.
+
+        NOTE: Ollama's streaming responses can contain tool_calls in later
+        chunks, but this implementation only yields text content.  When tools
+        are present, the router detects ``captures_stream_tool_calls = False``
+        and falls back to a single non-streaming ``complete()`` call, which
+        IS reliable for tool execution.  Streaming is only used for pure
+        text generation (no tools).
+        """
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 

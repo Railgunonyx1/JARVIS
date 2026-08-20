@@ -292,30 +292,39 @@ def parse_openai_tool_calls(choice_message) -> list[ToolCall]:
 
 
 def parse_ollama_tool_calls(message) -> list[ToolCall]:
-    """Extract ToolCalls from an Ollama message (dict or Pydantic object)."""
+    """Extract ToolCalls from an Ollama message (dict or Pydantic object).
+
+    Ollama doesn't provide unique tool-call IDs like OpenAI does, so we
+    generate sequential ones (``ollama_0``, ``ollama_1``, ...) to avoid
+    collisions when the model returns multiple calls in one response.
+    """
     calls: list[ToolCall] = []
     # Handle both dict and Pydantic Message objects
     tool_calls = getattr(message, "tool_calls", None)
     if tool_calls is None and isinstance(message, dict):
         tool_calls = message.get("tool_calls") or []
-    for entry in (tool_calls or []):
+    for i, entry in enumerate(tool_calls or []):
         # Handle both dict entries and Pydantic ToolCall objects
         if isinstance(entry, dict):
             fn = entry.get("function", {})
             name = fn.get("name", "")
             args = fn.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (TypeError, ValueError):
+                    args = {}
         else:
             fn = getattr(entry, "function", None)
             name = getattr(fn, "name", "") if fn else ""
             args = getattr(fn, "arguments", {}) if fn else {}
             if isinstance(args, str):
-                import json as _json
                 try:
-                    args = _json.loads(args)
+                    args = json.loads(args)
                 except (TypeError, ValueError):
                     args = {}
         if name:
-            calls.append(ToolCall(name=name, arguments=args or {}, id=name))
+            calls.append(ToolCall(name=name, arguments=args or {}, id=f"ollama_{i}"))
     return calls
 
 
