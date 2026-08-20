@@ -1,8 +1,8 @@
 [router]
 default_provider = "gemini"
 fallback_chain = [
-    "groq",
     "ollama",
+    "groq",
     "gemini",
     "cerebras",
     "deepseek",

@@ -12,6 +12,37 @@ if not defined PY set "PY=python"
 REM Force UTF-8 for Rich output
 set "PYTHONIOENCODING=utf-8"
 
+REM ── Start Ollama if not already running ───────────────────────────────
+set "OLLAMA_EXE="
+if exist "C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe"
+if not defined OLLAMA_EXE where ollama >nul 2>&1 && set "OLLAMA_EXE=ollama"
+
+if defined OLLAMA_EXE (
+    REM Check if Ollama is already running
+    netstat -an 2>nul | findstr ":11434" >nul 2>&1
+    if errorlevel 1 (
+        echo Starting Ollama...
+        start "" "%OLLAMA_EXE%" serve >nul 2>&1
+        REM Wait for Ollama to be ready (up to 8 seconds)
+        set /a _wait=0
+        :wait_ollama
+        if %_wait% GEQ 8 goto ollama_ready
+        timeout /t 1 /nobreak >nul 2>&1
+        netstat -an 2>nul | findstr ":11434" >nul 2>&1
+        if errorlevel 1 (
+            set /a _wait+=1
+            goto wait_ollama
+        )
+        :ollama_ready
+        echo Ollama ready.
+    ) else (
+        echo Ollama already running.
+    )
+) else (
+    echo Ollama not found - using online providers only.
+)
+
+REM ── Launch JARVIS ─────────────────────────────────────────────────────
 REM Direct CLI arguments - go straight to the mode
 if not "%~1"=="" goto argmode
 
