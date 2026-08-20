@@ -201,10 +201,19 @@ class Renderer:
     # Plan panel (stateful snapshot only)
     # ------------------------------------------------------------------
 
-    def render_plan(self) -> RenderableType:
+    def render_plan(self, compact: bool = False) -> RenderableType:
         plan = self.state.plan
         if not plan or not plan.steps:
-            return Text("No active plan", style="jarvis.muted")
+            return Text("", style="jarvis.muted")
+
+        if compact:
+            done = sum(1 for s in plan.steps if s.status == StepStatus.COMPLETED)
+            total = len(plan.steps)
+            active = next((s for s in plan.steps if s.status == StepStatus.ACTIVE), None)
+            parts = [Text(f"Plan {done}/{total}", style="jarvis.muted")]
+            if active:
+                parts.append(Text(f" → {active.description}", style="jarvis.active"))
+            return Text.assemble(*parts)
 
         lines: list[Text] = []
         for step in plan.steps:
@@ -279,7 +288,15 @@ class Renderer:
 
     def render_conversation(self) -> RenderableType:
         if not self.state.messages:
-            return Text("Ready. Type a request or /help.", style="jarvis.muted")
+            return Group(
+                Text("") if True else Text(""),  # spacer
+                Text(""),
+                Text("  JARVIS", style="bold bright_cyan"),
+                Text("") if True else Text(""),  # spacer
+                Text("  What are we building?", style="jarvis.accent"),
+                Text(""),
+                Text("  Describe a task, ask a question, or run /help.", style="jarvis.muted"),
+            )
         blocks: list[RenderableType] = []
         for msg in self.state.messages[-30:]:
             if msg.role == "user":
@@ -567,27 +584,16 @@ class Renderer:
             RiskLevel.HIGH: "jarvis.error",
             RiskLevel.CRITICAL: "bold jarvis.error",
         }.get(req.risk, "jarvis.warning")
-        rev = "YES" if req.reversible else "NO"
-        body = Group(
-            Text(f"  {self.symbols['failed']} JARVIS wants to execute:", style="jarvis.error"),
+        lines: list[RenderableType] = [
+            Text(f"  {self.symbols['failed']} Permission required", style="jarvis.error"),
             Text(""),
+            Text(f"  JARVIS wants to execute:", style="jarvis.muted"),
             Text(f"  {req.operation}", style="bold jarvis.accent"),
+            Text("") if req.risk.value in ("LOW", "MEDIUM") else Text(f"  Risk: {req.risk.value}", style=risk_style),
             Text(""),
-            Text.assemble(Text("  Risk:       ", style="jarvis.muted"), Text(req.risk.value.upper(), style=risk_style)),
-            Text.assemble(Text("  Scope:      ", style="jarvis.muted"), Text(req.scope)),
-            Text.assemble(Text("  Reversible: ", style="jarvis.muted"), Text(rev, style="jarvis.done" if req.reversible else "jarvis.error")),
-            Text(""),
-            Text("  Allow once?      [y]", style="jarvis.dim"),
-            Text("  Allow this run?  [r]", style="jarvis.dim"),
-            Text("  Deny             [n]", style="jarvis.dim"),
-        )
-        return Panel(
-            body,
-            title=f"[bold jarvis.error] {self.symbols['failed']} SECURITY CONFIRMATION [/]",
-            border_style="bright_red",
-            box=BoxStyles.CONFIRMATION,
-            padding=(1, 2),
-        )
+            Text("  [Enter] Allow   [Esc] Deny   [A] Always allow", style="jarvis.dim"),
+        ]
+        return Group(*lines)
 
     def confirm_interactive(self, req: ConfirmationRequest) -> str:
         """

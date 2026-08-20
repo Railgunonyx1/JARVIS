@@ -444,14 +444,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     # Clearing too early (before ready.is_set()) causes the "blank CMD after kernel
     # starts" symptom because the Rich-rendered area gets wiped just as the kernel
     # comes online and tries to update the status bar.
-    from rich.panel import Panel
-    banner = Panel(
-        Text("JARVIS MK-X  ·  Terminal-First Autonomous Agent", style="bold bright_cyan"),
-        subtitle="/help for commands  ·  /cockpit for dashboard",
-        border_style="bright_cyan",
-        padding=(0, 1),
-    )
-    console.print(banner)
+    console.print(Text("  JARVIS", style="bold bright_cyan"))
+    console.print(Text("  Ready.", style="dim"))
 
     # The Event/State Bus owns the engine→UI contract for the whole session.
     bridge = AgentBridge(renderer=Renderer(console=console))
@@ -528,7 +522,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             bridge.attach_loop(loop)
             bridge.pull_status()
             loop.router.warm()
-            console.print(Text("  ✓ kernel ready  ·  type a goal or /help", style="bright_green"))
+            console.print(Text("", style="dim"))
             if profile_startup:
                 _print_startup_report()
         else:

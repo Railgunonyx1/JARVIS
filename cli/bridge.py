@@ -97,7 +97,7 @@ class AgentBridge:
         loop = self.loop
         if loop is None:
             return
-        self.state.mode = Mode(str(loop.permissions.mode).upper())
+        self.state.mode = Mode(str(loop.mode).upper())
         model = getattr(loop.router, "_last_model", None)
         provider = getattr(loop.router, "_last_provider", None)
         if model:

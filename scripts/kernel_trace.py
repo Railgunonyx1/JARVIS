@@ -32,7 +32,7 @@ def _run_one(project_dir):
     lines.insert(2, f"  {'import runtime.kernel':<24} {import_ms:>7.1f} ms")
     lines.append(f"  {'build total':<24} {total_ms:>7.1f} ms")
     print("\n".join(lines))
-    print(f"\nloop: mode={loop.permissions.mode} tools={len(loop.registry.list())} "
+    print(f"\nloop: mode={loop.mode} tools={len(loop.registry.list())} "
           f"project={loop.project.root_path}")
     return total_ms
 

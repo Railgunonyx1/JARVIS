@@ -81,7 +81,7 @@ def _try_ripgrep(pattern: str, target: Path, include: str, max_results: int) -> 
         # Exclude common non-source dirs
         cmd.extend(["--glob", "!venv", "--glob", "!node_modules",
                      "--glob", "!__pycache__", "--glob", "!.git",
-                     "--glob", "!_archive", "--glob", "!_quarantine*"])
+                     "--glob", "!_quarantine*"])
         cmd.append(str(target))
 
         result = subprocess.run(
@@ -118,7 +118,7 @@ def _python_grep(pattern: str, target: Path, include: str, max_results: int) -> 
         return tool_result(False, error=f"Invalid regex: {e}")
 
     matches: list[str] = []
-    skip = {"venv", "node_modules", "__pycache__", ".git", "_archive",
+    skip = {"venv", "node_modules", "__pycache__", ".git",
             "_quarantine", "_quarantine_removed", "web", ".kilo", ".kilocode"}
 
     for dirpath, dirnames, filenames in os.walk(target):
@@ -189,7 +189,7 @@ async def file_find(params: dict) -> ToolResult:
     if not target.exists():
         return tool_result(False, error=f"Path does not exist: {search_path}")
 
-    skip = {"venv", "node_modules", "__pycache__", ".git", "_archive",
+    skip = {"venv", "node_modules", "__pycache__", ".git",
             "_quarantine", "_quarantine_removed"}
 
     try:

@@ -45,7 +45,7 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
         # Skip test files, archive, quarantine
         rel = py_file.relative_to(project_root)
         parts = rel.parts
-        if any(p.startswith("_archive") or p.startswith("_quarantine") for p in parts):
+        if any(p.startswith("_quarantine") for p in parts):
             continue
         if py_file.name in ALLOWLIST:
             continue

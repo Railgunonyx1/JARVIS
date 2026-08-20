@@ -8,7 +8,7 @@ import sys
 results = {}
 
 venv = r"C:\Users\aayan\Desktop\JARVIS\.venv"
-exclude = "venv,_quarantine,_quarantine_removed,research_files,_archive"
+exclude = "venv,_quarantine,research_files"
 
 # 1. pytest - fast
 print("Running pytest...")
