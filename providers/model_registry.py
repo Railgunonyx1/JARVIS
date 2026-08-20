@@ -275,15 +275,29 @@ def select_model(
 
 
 class ModelRegistry:
-    """Singleton model registry with state tracking."""
+    """Singleton model registry with state tracking and cascade routing.
+
+    Three-tier cascade:
+      Tier 1 (router):  qwen2.5:1.5b — ultra-fast, handles greetings/simple tasks
+      Tier 2 (worker):  qwen2.5:3b  — fast, handles coding/tools/reasoning
+      Tier 3 (heavy):   qwen3:4b    — smart, handles complex multi-step tasks
+    """
 
     _instance = None
+
+    # Default cascade configuration
+    CASCADE_ROUTER = "qwen2.5:1.5b"  # Tier 1: always first, ultra-fast
+    CASCADE_WORKER = "qwen2.5:3b"    # Tier 2: default worker for most tasks
+    CASCADE_HEAVY  = "qwen3:4b"      # Tier 3: only for genuinely complex tasks
 
     def __init__(self):
         self._active_model: str | None = None
         self._auto_mode: bool = True  # Auto-select by default
+        self._cascade_mode: bool = True  # Use three-tier cascade by default
         self._task_history: list[TaskType] = []
         self._model_usage: dict[str, int] = {}  # model -> use count
+        self._escalation_count: int = 0
+        self._direct_handle_count: int = 0
 
     @classmethod
     def instance(cls) -> ModelRegistry:
@@ -298,6 +312,10 @@ class ModelRegistry:
     @property
     def auto_mode(self) -> bool:
         return self._auto_mode
+
+    @property
+    def cascade_mode(self) -> bool:
+        return self._cascade_mode
 
     def set_model(self, model_name: str | None) -> str:
         """Manually set the model. Pass None to reset to auto mode.
@@ -331,8 +349,81 @@ class ModelRegistry:
         self._active_model = model_name
         return f"Locked to {model_name} — {profile.description}"
 
+    def set_cascade(self, enabled: bool) -> str:
+        """Enable or disable three-tier cascade routing."""
+        self._cascade_mode = enabled
+        if enabled:
+            return ("Cascade enabled: 1B router → 3B worker → 4B heavy. "
+                    "1B handles simple tasks instantly, escalates as needed.")
+        return "Cascade disabled. Using single-model auto-routing."
+
+    def resolve_cascade(self, prompt: str) -> dict[str, str | None]:
+        """Resolve the three-tier cascade for a prompt.
+
+        Returns:
+            {
+                "router": "qwen2.5:1.5b",   # Always set — used for classification/simple reply
+                "worker": "qwen2.5:3b"|None, # Set if task needs tools/reasoning
+                "heavy":  "qwen3:4b"|None,    # Set only for genuinely complex tasks
+                "task_type": "coding",
+                "needs_tools": True,
+            }
+        """
+        task_type = detect_task_type(prompt)
+        self._task_history.append(task_type)
+        if len(self._task_history) > 100:
+            self._task_history = self._task_history[-50:]
+
+        # Manual lock: skip cascade, use locked model for everything
+        if not self._auto_mode and self._active_model:
+            self._model_usage[self._active_model] = self._model_usage.get(self._active_model, 0) + 1
+            return {
+                "router": self._active_model,
+                "worker": None,
+                "heavy": None,
+                "task_type": task_type.value,
+                "needs_tools": task_type not in (TaskType.QUICK, TaskType.CONVERSATIONAL),
+            }
+
+        # Quick/conversational → 1B handles directly, no escalation needed
+        if task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
+            self._direct_handle_count += 1
+            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": None,
+                "heavy": None,
+                "task_type": task_type.value,
+                "needs_tools": False,
+            }
+
+        # Coding/research/writing/reasoning → 3B worker handles it
+        if task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
+            self._escalation_count += 1
+            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+            self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": self.CASCADE_WORKER,
+                "heavy": None,
+                "task_type": task_type.value,
+                "needs_tools": True,
+            }
+
+        # Heavy / complex multi-step → 4B heavy model
+        self._escalation_count += 1
+        self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+        self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
+        return {
+            "router": self.CASCADE_ROUTER,
+            "worker": self.CASCADE_WORKER,
+            "heavy": self.CASCADE_HEAVY,
+            "task_type": task_type.value,
+            "needs_tools": True,
+        }
+
     def resolve_model(self, prompt: str, available_models: list[str] | None = None) -> str | None:
-        """Resolve which model to use for a prompt.
+        """Resolve which model to use for a prompt (single-model mode).
 
         Returns the model name to pass to the router, or None to use the
         router's default.
@@ -359,6 +450,12 @@ class ModelRegistry:
         return {
             "active_model": self._active_model,
             "auto_mode": self._auto_mode,
+            "cascade_mode": self._cascade_mode,
+            "cascade_router": self.CASCADE_ROUTER if self._cascade_mode else None,
+            "cascade_worker": self.CASCADE_WORKER if self._cascade_mode else None,
+            "cascade_heavy": self.CASCADE_HEAVY if self._cascade_mode else None,
+            "direct_handle_count": self._direct_handle_count,
+            "escalation_count": self._escalation_count,
             "task_counts": {
                 t.value: self._task_history.count(t)
                 for t in TaskType

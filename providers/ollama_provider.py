@@ -199,61 +199,67 @@ class OllamaProvider(LLMProvider):
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        # Ollama handles its own tool format — send raw tools, not
-        # the compressed OpenAI format (which strips descriptions).
-        # Small local models (<=3B params) can only handle a few tools.
-        # Small models (<=1.5B) can only handle a few tools; larger ones get more.
-        _model = self.config.get('model', '')
-        if any(tag in _model for tag in ('1.5b', '1b')):
-            _max_tools = 5
-        elif '3b' in _model:
-            _max_tools = 10
-        else:
-            _max_tools = 20
-        _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
+        primary_model = self.config.get("model", "qwen2.5:1.5b")
         start = time.time()
-        self._stream_tool_calls = {}  # Reset accumulator
+        self._stream_tool_calls = {}
         try:
-            kwargs = {}
-            if _limited_tools:
-                kwargs["tools"] = _limited_tools
-            stream = await client.chat(
-                model=self.config.get("model", "qwen2.5:1.5b"),
-                messages=full_messages,
-                options={
-                    "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
-                    "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
-                    "num_ctx": self.config.get("num_ctx", 4096),
-                },
-                **kwargs,
-                stream=True,
-            )
-            async for chunk in stream:
-                msg = chunk.get("message", {})
-                # Accumulate tool calls from each chunk (Ollama sends
-                # complete tool_calls, not incremental deltas)
-                chunk_tools = msg.get("tool_calls") or []
-                if chunk_tools:
-                    calls = parse_ollama_tool_calls(msg)
-                    for i, call in enumerate(calls):
-                        self._stream_tool_calls[i] = {
-                            "id": call.id,
-                            "name": call.name,
-                            "args": [json.dumps(call.arguments)],
-                        }
-                if "content" in msg and msg["content"]:
-                    yield msg["content"]
+            async for chunk in self._stream_once(client, primary_model, full_messages, tools, max_tokens, temperature):
+                yield chunk
             latency = (time.time() - start) * 1000
             self.record_success(latency)
-        except Exception as e:
-            error_str = str(e)
+        except Exception as primary_err:
+            if self._fallback_model and self._fallback_model != primary_model:
+                try:
+                    logger.info("Ollama streaming primary %s failed, trying fallback %s",
+                                primary_model, self._fallback_model)
+                    self._stream_tool_calls = {}
+                    async for chunk in self._stream_once(client, self._fallback_model, full_messages,
+                                                        tools, max_tokens, temperature):
+                        yield chunk
+                    latency = (time.time() - start) * 1000
+                    self.record_success(latency)
+                    return
+                except Exception:
+                    pass
             from providers.types import ErrorKind, classify_provider_error
+            error_str = str(primary_err)
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
             else:
                 self.record_failure(error_str)
             raise
+
+    async def _stream_once(self, client, model: str, full_messages: list,
+                           tools: list | None, max_tokens, temperature) -> None:
+        kwargs = {}
+        limited = self._limit_tools(tools, model)
+        if limited:
+            kwargs["tools"] = limited
+        stream = await client.chat(
+            model=model,
+            messages=full_messages,
+            options={
+                "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
+                "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
+                "num_ctx": self.config.get("num_ctx", 4096),
+            },
+            **kwargs,
+            stream=True,
+        )
+        async for chunk in stream:
+            msg = chunk.get("message", {})
+            chunk_tools = msg.get("tool_calls") or []
+            if chunk_tools:
+                calls = parse_ollama_tool_calls(msg)
+                for i, call in enumerate(calls):
+                    self._stream_tool_calls[i] = {
+                        "id": call.id,
+                        "name": call.name,
+                        "args": [json.dumps(call.arguments)],
+                    }
+            if "content" in msg and msg["content"]:
+                yield msg["content"]
 
     def _stream_tool_call_results(self) -> list[ToolCall]:
         """Override base class to return accumulated Ollama tool calls.

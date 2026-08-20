@@ -48,6 +48,7 @@ warnings.filterwarnings("ignore", category=FutureWarning,
 
 app = typer.Typer(add_completion=False)
 console = Console(theme=build_rich_theme())
+logger = logging.getLogger("jarvis.cli")
 
 _IMPORT_MS = (time.perf_counter() - _IMPORT_START) * 1000.0
 
@@ -221,6 +222,25 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     loop.observer.on_event = _on_event
     if use_live:
         display.start()
+    # Cascade routing: 1B router → 3B worker → 4B heavy
+    # The 1B model handles simple tasks via the fast bypass in AgentLoop.run().
+    # For tasks needing tools, we swap to the appropriate worker model now.
+    try:
+        from providers.model_registry import ModelRegistry
+        _registry = ModelRegistry.instance()
+        if _registry.cascade_mode:
+            _cascade = _registry.resolve_cascade(goal)
+            _worker = _cascade.get("worker") or _cascade.get("heavy")
+            if _worker and loop.router.get_ollama_model() != _worker:
+                loop.router.swap_ollama_model(_worker)
+                logger.info("Cascade: %s → %s for: %s", _cascade["task_type"], _worker, goal[:60])
+        else:
+            _resolved = _registry.resolve_model(goal)
+            if _resolved and loop.router.get_ollama_model() != _resolved:
+                loop.router.swap_ollama_model(_resolved)
+                logger.info("Auto-routed to %s for: %s", _resolved, goal[:60])
+    except Exception:
+        pass  # Auto-routing is best-effort
     try:
         if bridge is not None:
             async def _on_chunk(delta: str) -> None:
@@ -728,10 +748,27 @@ def _cmd_model(line: str, loop) -> None:
         status = registry.get_status()
         console.print(Text(f"  Active: {status['active_model'] or 'auto'}", style="jarvis.accent"))
         console.print(Text(f"  Auto: {status['auto_mode']}", style="jarvis.dim"))
+        console.print(Text(f"  Cascade: {status['cascade_mode']}", style="jarvis.dim"))
+        if status["cascade_mode"]:
+            console.print(Text(f"    Router: {status['cascade_router']} (ultra-fast, simple tasks)", style="jarvis.dim"))
+            console.print(Text(f"    Worker: {status['cascade_worker']} (coding, tools, reasoning)", style="jarvis.dim"))
+            console.print(Text(f"    Heavy:  {status['cascade_heavy']} (complex multi-step)", style="jarvis.dim"))
+            console.print(Text(f"    Direct (1B handled): {status['direct_handle_count']}x", style="jarvis.dim"))
+            console.print(Text(f"    Escalated (→3B/4B): {status['escalation_count']}x", style="jarvis.dim"))
         if status["model_usage"]:
             console.print(Text("  Usage:", style="jarvis.accent"))
             for model, count in status["model_usage"].items():
                 console.print(Text(f"    {model}: {count}x", style="jarvis.dim"))
+        return
+
+    if arg == "cascade":
+        result = registry.set_cascade(True)
+        console.print(Text(f"  {result}", style="jarvis.accent"))
+        return
+
+    if arg == "single":
+        result = registry.set_cascade(False)
+        console.print(Text(f"  {result}", style="jarvis.accent"))
         return
 
     # Switch to a specific model or auto
@@ -740,6 +777,19 @@ def _cmd_model(line: str, loop) -> None:
     # Also swap the router's Ollama model if we locked to a specific one
     if registry.active_model:
         loop.router.swap_ollama_model(registry.active_model)
+        # Remember preference in memory
+        try:
+            if loop.mem is not None:
+                loop.mem.store("preferred_model", registry.active_model, category="preferences")
+        except Exception:
+            pass
+    else:
+        # Auto mode — remove preference
+        try:
+            if loop.mem is not None:
+                loop.mem.store("preferred_model", "auto", category="preferences")
+        except Exception:
+            pass
 
 
 def _cmd_history(line: str) -> None:

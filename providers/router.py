@@ -37,7 +37,7 @@ _MAX_RETRY_WAIT_S = 5.0
 class ProviderRouter:
     """Routes LLM requests through a fallback chain of providers.
 
-    Order: Groq (fastest) → Gemini (complex) → OpenRouter (free) → Ollama (offline)
+    Fallback chain is configuration-driven (see config/models.toml).
     Falls back automatically on failure, rate limit, or cooldown.
     """
 
