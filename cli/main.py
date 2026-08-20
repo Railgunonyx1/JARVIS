@@ -152,15 +152,18 @@ def _print_collapsed(result) -> None:
     try:
         if result and result.success and result.response:
             # Plain print — no Rich, no ANSI state, guaranteed visible
-            print(result.response)
-            print()
+            sys.stdout.write(result.response + "\n")
+            sys.stdout.flush()
         elif result and not result.success:
             err = getattr(result, 'error', 'unknown error')
-            print(f"error: {err[:200]}")
+            sys.stdout.write(f"error: {err[:200]}\n")
+            sys.stdout.flush()
         else:
-            print("(no response)")
+            sys.stdout.write("(no response)\n")
+            sys.stdout.flush()
     except Exception as e:
-        print(f"(output error: {e})")
+        sys.stdout.write(f"(output error: {e})\n")
+        sys.stdout.flush()
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -198,7 +201,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         enable=use_live,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),
         screen=screen,
-        transient=not collapsed,
+        transient=not collapsed,  # True in interactive (clears after stop), False in one-shot
     )
 
     def _on_event(name: str, payload: dict) -> None:

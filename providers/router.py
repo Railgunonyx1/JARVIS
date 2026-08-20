@@ -250,16 +250,18 @@ class ProviderRouter:
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
-        # Strict OpenAI-compatible upstreams reject dotted tool names; send
-        # sanitized schemas and restore real names on the way back.
-        tools_param, name_map = sanitize_tools(tools)
-
         last_error = None
         attempts = 0
         with tracer.span("router.complete") as span:
             for provider_name in chain:
                 attempts += 1
                 provider = self._providers[provider_name]
+                # Ollama accepts dotted tool names natively; skip sanitization.
+                if provider_name == "ollama":
+                    tools_param, name_map = tools, {}
+                else:
+                    # Strict OpenAI-compatible upstreams reject dotted tool names.
+                    tools_param, name_map = sanitize_tools(tools)
                 # Circuit breaker check — skip if this provider is currently open
                 cb = self._circuit_breakers.get(provider_name)
                 if cb and not cb.is_available(provider_name):
@@ -480,11 +482,15 @@ class ProviderRouter:
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
-        tools_param, name_map = sanitize_tools(tools)
         last_error = None
         with tracer.span("router.stream_typed") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
+                # Ollama accepts dotted tool names natively; skip sanitization.
+                if provider_name == "ollama":
+                    tools_param, name_map = tools, {}
+                else:
+                    tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 first_chunk = True
                 while True:
