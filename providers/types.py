@@ -140,15 +140,6 @@ def parse_retry_after(error_str: str) -> float | None:
     return None
 
 
-# ── Legacy rate-limit detection (kept for backwards compat) ────────────
-
-_RATE_LIMIT_MARKERS = (
-    "rate limit", "429", "too many", "quota", "credits",
-    "tokens per minute", "please try again", "billing",
-    "limit exceeded", "resource_exhausted",
-)
-
-
 def is_rate_limit_error(error_str: str) -> bool:
     """Return True if the error string indicates a transient rate limit."""
     kind = classify_provider_error(error_str)

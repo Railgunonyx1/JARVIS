@@ -178,15 +178,14 @@ class LLMProvider(ABC):
         they must not feed the consecutive-failure counter that disables a
         provider (is_available=False) after 5 failures.
 
+        Rejected requests do NOT increment request counters — a 429 means
+        the request was not processed, so it shouldn't count against
+        JARVIS's own RPM/RPD tracking.
+
         Cooldown uses a fixed base (not consecutive_failures) so that a
         provider with prior health failures doesn't get an excessively long
         cooldown just because it hit a rate limit.
         """
-        self._requests_today += 1
-        self._requests_this_minute += 1
-        # Fixed base cooldown with jitter.  Uses _rate_limit_count (separate
-        # from consecutive_failures) to progressively back off on repeated
-        # rate limits without conflating with health failures.
         self._rate_limit_count += 1
         base = min(60, 5 * (2 ** min(self._rate_limit_count - 1, 4)))
         cooldown = random.uniform(base * 0.5, base)

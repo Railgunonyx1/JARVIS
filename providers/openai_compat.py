@@ -215,11 +215,13 @@ class OpenAICompatibleProvider(LLMProvider):
             except Exception as e:
                 last_error = e
                 error_str = str(e)
-                if self._check_rate_limit(error_str) and self._rotate_key():
+                if self._check_rate_limit(error_str):
                     self.record_rate_limit()
-                    attempts += 1
-                    continue
-                self.record_failure(error_str)
+                    if self._rotate_key():
+                        attempts += 1
+                        continue
+                else:
+                    self.record_failure(error_str)
                 raise
 
         raise ProviderError(self.name, f"all {len(self._keys)} keys exhausted (stream)")

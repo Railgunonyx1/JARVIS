@@ -166,8 +166,7 @@ class CircuitBreaker:
             self._ensure_registered(name)
             return self._circuits[name]["state"] != OPEN
 
-    @property
-    def failures(self, name: str) -> int:
+    def failures_for(self, name: str) -> int:
         """Return the failure count for a named circuit (read-only)."""
         with self._lock:
             self._ensure_registered(name)

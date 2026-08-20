@@ -25,7 +25,7 @@ from core.context.manager import ContextManager
 from core.decision_logger import DecisionLogger, get_decision_logger
 from core.project import ProjectContext
 from providers.router import ProviderRouter
-from providers.types import LLMResponse
+from providers.types import LLMResponse, ProviderError
 from runtime.observability.tracer import get_tracer
 from tools.registry import ToolRegistry
 
@@ -399,7 +399,8 @@ class AgentLoop:
         except Exception as e:
             error = str(e)[:500]
             state.errors.append(error)
-            fc = classify_failure(error)
+            is_provider = isinstance(e, (ProviderError, RuntimeError)) and "provider" in error.lower()
+            fc = classify_failure(error, is_provider=is_provider)
             state.failure_class = pick_worst_failure(state.failure_class, fc)
             self.logger.record(trace_id, events.TASK_FAILED, {"goal": goal[:200], "error": error})
             self._emit("task.failed", {"goal": goal[:200], "error": error, "failure_class": fc.value}, trace_id)

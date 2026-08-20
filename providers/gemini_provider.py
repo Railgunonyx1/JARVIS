@@ -139,7 +139,9 @@ class GeminiProvider(LLMProvider):
             return result
         except Exception as e:
             error_str = str(e)
-            if "rate" in error_str.lower() or "429" in error_str.lower() or "quota" in error_str.lower() or "resource_exhausted" in error_str.lower():
+            from providers.types import classify_provider_error, ErrorKind
+            kind = classify_provider_error(error_str)
+            if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
             else:
                 self.record_failure(error_str)
@@ -202,7 +204,9 @@ class GeminiProvider(LLMProvider):
             self.record_success(latency)
         except Exception as e:
             error_str = str(e)
-            if "rate" in error_str.lower() or "429" in error_str.lower() or "quota" in error_str.lower() or "resource_exhausted" in error_str.lower():
+            from providers.types import classify_provider_error, ErrorKind
+            kind = classify_provider_error(error_str)
+            if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
             else:
                 self.record_failure(error_str)

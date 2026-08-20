@@ -38,6 +38,7 @@ class GroqProvider(OpenAICompatibleProvider):
             self._client = groq.AsyncGroq(
                 api_key=self.api_key,
                 max_retries=0,
+                timeout=self._timeout_seconds,
             )
             self._client_key_index = self._key_index
             logger.info("Groq: using key index %d", self._key_index)
