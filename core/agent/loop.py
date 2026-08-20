@@ -378,6 +378,22 @@ class AgentLoop:
                 for call in response.tool_calls:
                     with tracer.span("tool.execute", {"tool": call.name}):
                         await self._handle_call(messages, call, state, trace_id, session_id)
+
+                # Safety: if the LLM keeps making tool calls without ever producing
+                # a text response, inject a nudge after 5 consecutive tool-only iterations.
+                if iteration >= 5 and not any(
+                    m.get("role") == "assistant" and m.get("content")
+                    for m in messages
+                ):
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "You have been calling tools without producing a text response. "
+                            "Please stop calling tools and give your final answer now. "
+                            "Summarize what you found or did in 2-3 sentences."
+                        ),
+                    })
+
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
         except Exception as e:

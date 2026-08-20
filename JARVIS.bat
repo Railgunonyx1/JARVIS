@@ -12,18 +12,6 @@ if not defined PY set "PY=python"
 REM Force UTF-8 for Rich output
 set "PYTHONIOENCODING=utf-8"
 
-REM Launch in Windows Terminal on first run only.
-set "_mark=%TEMP%\jarvis_wt_launched"
-if not exist "%_mark%" (
-    where wt.exe >nul 2>nul
-    if not errorlevel 1 (
-        echo. > "%_mark%"
-        start "" wt.exe -d "%~dp0" "%~f0"
-        exit /b
-    )
-)
-del "%_mark%" 2>nul
-
 REM Direct CLI arguments - go straight to the mode
 if not "%~1"=="" goto argmode
 

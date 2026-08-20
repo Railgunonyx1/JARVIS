@@ -49,6 +49,7 @@ class LLMProvider(ABC):
         if not getattr(self.__class__, "captures_stream_tool_calls", False):
             self.captures_stream_tool_calls = False
         self._stream_tool_calls: dict[int, dict] = {}
+        self._rate_limit_count = 0
 
     def _check_package(self) -> bool:
         """Override in subclasses to verify the backend package is importable."""
@@ -168,8 +169,7 @@ class LLMProvider(ABC):
         self.health.latency_ms = latency_ms
         self.health.consecutive_failures = 0
         self.health.last_error = None
-        if hasattr(self, "_rate_limit_count"):
-            self._rate_limit_count = 0
+        self._rate_limit_count = 0
 
     def record_rate_limit(self):
         """Record a rate limit/quota hit WITHOUT penalizing provider health.
@@ -184,11 +184,9 @@ class LLMProvider(ABC):
         """
         self._requests_today += 1
         self._requests_this_minute += 1
-        # Fixed base cooldown with jitter.  Uses rate_limit_count (separate
+        # Fixed base cooldown with jitter.  Uses _rate_limit_count (separate
         # from consecutive_failures) to progressively back off on repeated
         # rate limits without conflating with health failures.
-        if not hasattr(self, "_rate_limit_count"):
-            self._rate_limit_count = 0
         self._rate_limit_count += 1
         base = min(60, 5 * (2 ** min(self._rate_limit_count - 1, 4)))
         cooldown = random.uniform(base * 0.5, base)

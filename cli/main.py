@@ -55,11 +55,12 @@ _MODES = ("plan", "controlled", "smart", "agent")
 
 
 def _configure_noise(verbose: bool) -> None:
-    # In interactive mode, never let library loggers write to stderr.
-    # All logging goes to file via setup_logging().
+    # Library loggers: silenced unless verbose mode is on.
+    # All jarvis loggers go to file via setup_logging(); these affect stderr.
+    level = logging.NOTSET if verbose else logging.CRITICAL + 1
     for name, lg in list(logging.root.manager.loggerDict.items()):
         if isinstance(lg, logging.Logger) and not name.startswith("jarvis"):
-            lg.setLevel(logging.CRITICAL + 1)  # effectively silenced
+            lg.setLevel(level)
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -211,6 +212,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     except Exception as exc:
         if bridge is not None:
             bridge.fail_run(str(exc))
+        # Print the error directly — 'raise' skips _print_collapsed below.
+        console.print(Text(f"  error: {str(exc)[:200]}", style="jarvis.error"))
         raise
     finally:
         display.stop()
@@ -242,7 +245,7 @@ def main(
     ctx: typer.Context,
     goal: str | None = typer.Argument(None, help="One-shot goal. Omit for the interactive prompt."),
     mode: str = typer.Option("agent", help="Execution mode: plan | controlled | smart | agent"),
-    max_iterations: int = typer.Option(10, help="Maximum agent loop iterations."),
+    max_iterations: int = typer.Option(20, help="Maximum agent loop iterations."),
     max_tokens: int | None = typer.Option(None, help="Max tokens per LLM call."),
     project_dir: str | None = typer.Option(None, help="Project root for path resolution."),
     verbose: bool = typer.Option(False, help="Enable INFO logging."),
