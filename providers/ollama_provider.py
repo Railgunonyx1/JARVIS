@@ -74,12 +74,13 @@ class OllamaProvider(LLMProvider):
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        tool_param = openai_tools_param(tools)
+        # Ollama handles its own tool format — send raw tools, not
+        # the compressed OpenAI format (which strips descriptions).
         start = time.time()
         try:
             kwargs = {}
-            if tool_param:
-                kwargs["tools"] = tool_param
+            if tools:
+                kwargs["tools"] = tools
             response = await client.chat(
                 model=self.config.get("model", "qwen2.5:1.5b"),
                 messages=full_messages,
@@ -124,12 +125,13 @@ class OllamaProvider(LLMProvider):
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        tool_param = openai_tools_param(tools)
+        # Ollama handles its own tool format — send raw tools, not
+        # the compressed OpenAI format (which strips descriptions).
         start = time.time()
         try:
             kwargs = {}
-            if tool_param:
-                kwargs["tools"] = tool_param
+            if tools:
+                kwargs["tools"] = tools
             stream = await client.chat(
                 model=self.config.get("model", "qwen2.5:1.5b"),
                 messages=full_messages,
