@@ -95,6 +95,7 @@ def test_status_collapse_narrow():
 
 def test_task_screen_uses_responsive_layout():
     from io import StringIO
+
     from rich.console import Console
     out = StringIO()
     console = Console(width=120, force_terminal=True, file=out)

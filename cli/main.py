@@ -43,14 +43,8 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 warnings.filterwarnings("ignore")
-# The deprecated google.generativeai SDK warns via a stacklevel that points at
-# importlib, so module-scoped filters never match — filter on the message text.
 warnings.filterwarnings("ignore", category=FutureWarning,
                         message=r"(?s).*google\.generativeai")
-
-# Heavy modules (config, providers, tools, memory, UI panels) are imported
-# lazily inside the functions that need them so the interactive prompt can
-# appear before the kernel finishes booting.
 
 app = typer.Typer(add_completion=False)
 console = Console(theme=build_rich_theme())
@@ -61,8 +55,6 @@ _MODES = ("plan", "controlled", "smart", "agent")
 
 
 def _configure_noise(verbose: bool) -> None:
-    """Route all non-jarvis logger output to ERROR unless verbose is on."""
-    warnings.filterwarnings("default" if verbose else "ignore")
     level = logging.NOTSET if verbose else logging.ERROR
     for name, logger in list(logging.root.manager.loggerDict.items()):
         if isinstance(logger, logging.Logger) and not name.startswith("jarvis"):
@@ -78,7 +70,6 @@ def _setup_logging(verbose: bool) -> None:
 def _build_router():
     from core.config import Config
     from providers.router import ProviderRouter
-
     config = Config.instance()
     return ProviderRouter(config.get_section("models"), config.api_keys)
 
@@ -111,13 +102,9 @@ def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
             import atexit
             atexit.register(mem.close)
         return AgentLoop(
-            router=router,
-            registry=registry,
-            project=project,
-            mode=mode,
-            max_iterations=max_iterations,
-            max_tokens=max_tokens,
-            mem=mem,
+            router=router, registry=registry, project=project,
+            mode=mode, max_iterations=max_iterations,
+            max_tokens=max_tokens, mem=mem,
             confirmation_handler=confirmation_handler,
         )
     finally:
@@ -132,28 +119,33 @@ def _status_getter(loop) -> dict:
     }
 
 
-
-
 def _print_result(result) -> None:
-    """One-shot result output.  Uses renderer for Markdown, plain for pipes."""
+    """Print agent result. Always outputs something — never silent."""
     from cli.renderer import render_markdown
 
-    if result.success:
-        if sys.stdout.isatty():
-            console.print(render_markdown(result.response))
+    try:
+        if result.success and result.response:
+            if sys.stdout.isatty():
+                console.print(render_markdown(result.response))
+            else:
+                print(result.response)
+        elif not result.success:
+            console.print(Text(f"  error: {result.error[:200]}", style="jarvis.error"))
         else:
-            print(result.response)
-    else:
-        print(f"ERROR: {result.error}", file=sys.stderr)
+            console.print(Text("  (no response)", style="jarvis.dim"))
+    except Exception as e:
+        console.print(Text(f"  (output error: {e})", style="jarvis.error"))
 
-    # Collapsed summary for interactive terminals
     if sys.stdout.isatty():
-        from cli.details import render_summary
-        console.print(Text(f"  {render_summary(result)}", style="dim"))
+        try:
+            from cli.details import render_summary
+            console.print(Text(f"  {render_summary(result)}", style="dim"))
+        except Exception:
+            pass
 
 
 def _print_collapsed(result) -> None:
-    """Same as _print_result for now — both use renderer."""
+    """Print result after Live display stops."""
     _print_result(result)
 
 
@@ -222,6 +214,10 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         display.stop()
         if renderer is not None:
             renderer.detach_live()
+        # Force a clean newline after Live display stops to prevent
+        # transient=True from eating the output.
+        console.line()
+
     loop._last_result = result
     if bridge is not None:
         bridge.finish_run(result)
@@ -274,22 +270,16 @@ def main(
 
 
 # ── execution backend ──────────────────────────────────────────────────
-# The terminal client runs AgentLoop in-process.
-# This avoids a daemon/network hop for the local CLI.
 
 def _resolve_project_dir(project_dir: str | None) -> str:
     return str((Path(project_dir) if project_dir else Path.cwd()).resolve())
 
 
-
-
 def _print_perf_trace(result) -> None:
-    """Render the request performance timeline (opt-in, stderr, no Rich)."""
     trace = (result.perf if hasattr(result, "perf") else result.get("perf")) or {}
     if not trace:
         return
     from runtime.observability.dashboard import render_trace
-
     print(render_trace(trace), file=sys.stderr)
 
 
@@ -304,20 +294,11 @@ def _print_ui_render(display) -> None:
 
 
 def perf_cli(argv) -> int:
-    """`jarvis perf [latest|slowest|summary]` — read persisted performance data.
-
-    Opens its own read-only connection to the performance SQLite database
-    (WAL-safe), written on every request via ``runtime.observability.exporters``.
-    """
     import argparse
-
     from runtime.observability.dashboard import render_summary, render_trace, trace_table
     from runtime.observability.exporters import perf_db_path, read_latest, read_slowest, read_summary
 
-    parser = argparse.ArgumentParser(
-        prog="jarvis perf",
-        description="Show persisted JARVIS performance data.",
-    )
+    parser = argparse.ArgumentParser(prog="jarvis perf", description="Show persisted JARVIS performance data.")
     sub = parser.add_subparsers(dest="action")
     latest = sub.add_parser("latest", help="most recent request traces")
     latest.add_argument("-n", type=int, default=5)
@@ -335,28 +316,21 @@ def perf_cli(argv) -> int:
     if args.action == "slowest":
         traces = read_slowest(path, limit=args.n)
         print(trace_table(traces))
-        print()
         for trace in traces:
             print(render_trace(trace))
-            print()
     elif args.action == "latest":
         traces = read_latest(path, limit=args.n)
         print(trace_table(traces))
-        print()
         for trace in traces:
             print(render_trace(trace))
-            print()
     else:
         print(render_summary(read_summary(path)))
-        print()
         for trace in read_latest(path, limit=3):
             print(render_trace(trace))
-            print()
     return 0
 
 
 def entry() -> None:
-    """Console entry point: route `perf` before typer, else run the app."""
     if len(sys.argv) > 1 and sys.argv[1] == "perf":
         sys.exit(perf_cli(sys.argv[2:]))
     app()
@@ -365,9 +339,7 @@ def entry() -> None:
 # ── interactive command center ──────────────────────────────────────────────
 
 def _print_startup_report() -> None:
-    """Print the startup phase report to stderr (keeps --json stdout clean)."""
     from cli.startup_profile import get_profiler
-
     report = get_profiler().report()
     lines = report.splitlines()
     lines.insert(2, f"  {'import cli.main':<24} {_IMPORT_MS:>7.1f} ms")
@@ -386,20 +358,13 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     from cli.startup_profile import get_profiler
 
     profiler = get_profiler()
-    # DO NOT clear the console here — the initial banner + "starting kernel"
-    # must persist so the user sees something before the kernel finishes booting.
-    # Clearing too early (before ready.is_set()) causes the "blank CMD after kernel
-    # starts" symptom because the Rich-rendered area gets wiped just as the kernel
-    # comes online and tries to update the status bar.
-    console.print(Text("  JARVIS", style="bold bright_cyan"))
-    console.print(Text("  Ready.", style="dim"))
 
-    # The Event/State Bus owns the engine→UI contract for the whole session.
+    # Claude Code-style startup: minimal, clean
+    console.print(Text("JARVIS MK-X", style="bold bright_cyan"))
+    console.print()
+
     bridge = AgentBridge(renderer=Renderer(console=console))
     commands = CommandRegistry(bridge.renderer, bridge=bridge)
-    # Stage A/B split: the banner and prompt appear immediately; the kernel
-    # (config, providers, memory) finishes booting in a background thread so
-    # the user can start typing while heavy SDKs load.
     holder: dict = {}
     ready = threading.Event()
 
@@ -417,13 +382,12 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     profiler.end("kernel.boot")
             finally:
                 profiler.end_trace()
-        except Exception as exc:  # pragma: no cover - startup failure path
+        except Exception as exc:
             holder["error"] = exc
         finally:
             ready.set()
 
     threading.Thread(target=_boot, daemon=True, name="jarvis-kernel-boot").start()
-    console.print(Text("  ⏳ starting kernel…  (providers, memory, tools)", style="bright_cyan"))
 
     notifications: list = []
     _configure_noise(verbose=False)
@@ -433,8 +397,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     reader = InputReader()
     reader.set_history(history.to_list())
 
-    def _read_command(prompt: str = "JARVIS> ") -> str:
-        """Read a line; Ctrl+K opens the command palette and re-prompts."""
+    def _read_command(prompt: str = "> ") -> str:
         while True:
             try:
                 return reader.read_line(prompt)
@@ -455,7 +418,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             history.add(line)
             history.save()
             if not ready.is_set():
-                typer.secho("(waiting for kernel startup…)", dim=True)
+                console.print(Text("  starting...", style="dim"))
                 try:
                     ready.wait()
                 except KeyboardInterrupt:
@@ -463,13 +426,11 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     break
             loop = holder.get("loop")
             if loop is None:
-                typer.secho(f"startup failed: {holder.get('error', 'unknown error')}",
-                            err=True, fg="red")
+                console.print(Text(f"  startup failed: {holder.get('error', 'unknown')}", style="jarvis.error"))
                 break
             bridge.attach_loop(loop)
             bridge.pull_status()
             loop.router.warm()
-            console.print(Text("", style="dim"))
             if profile_startup:
                 _print_startup_report()
         else:
@@ -500,12 +461,12 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             loop._verbose = _verbose
             _configure_noise(_verbose)
             logging.getLogger().setLevel(logging.INFO if _verbose else logging.WARNING)
-            typer.secho(f"backend messages: {'ON' if _verbose else 'OFF'}", fg="green")
+            console.print(Text(f"  backend: {'ON' if _verbose else 'OFF'}", style="jarvis.success"))
         elif line == "/plan":
             loop.set_mode("plan")
             bridge.pull_status()
-            notifications.append(("info", "mode → plan (read-only)"))
-            typer.secho("mode → plan (read-only)", fg="green")
+            notifications.append(("info", "mode -> plan"))
+            console.print(Text("  mode -> plan", style="jarvis.success"))
         elif line == "/tokens" or line == "/compact":
             _print_context(loop)
         elif line == "/tree":
@@ -515,23 +476,21 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
         elif line == "/resume":
             goal = getattr(loop, "_last_goal", None)
             if not goal:
-                typer.secho("no previous goal to resume", err=True, fg="red")
+                console.print(Text("  no previous goal", style="jarvis.error"))
             else:
                 try:
                     asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
                 except Exception as exc:
-                    typer.secho(f"error: {exc}", err=True, fg="red")
+                    console.print(Text(f"  error: {exc}", style="jarvis.error"))
         elif line.startswith("/"):
-            # The v2 command registry owns every other slash command; it talks
-            # to the engine exclusively through the bridge.
             commands.dispatch(line)
         else:
             try:
                 asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
             except KeyboardInterrupt:
-                typer.secho("(interrupted)", dim=True)
+                console.print(Text("  (interrupted)", style="dim"))
             except Exception as exc:
-                typer.secho(f"error: {exc}", err=True, fg="red")
+                console.print(Text(f"  error: {exc}", style="jarvis.error"))
 
     if loop is not None:
         loop.logger.flush()
@@ -540,30 +499,26 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
 def _print_models(loop) -> None:
     from rich.table import Table
-
     table = Table(title="Model status")
     table.add_column("Provider")
     table.add_column("Model")
     table.add_column("Available")
     for name, info in loop.router.status.items():
-        table.add_row(
-            name, info.get("model", ""),
-            "yes" if info.get("available") else "no",
-        )
+        table.add_row(name, info.get("model", ""), "yes" if info.get("available") else "no")
     console.print(table)
 
 
 def _print_context(loop) -> None:
     report = loop.context_manager.last_report
     if report is None:
-        print("no context report yet — run a task first")
+        console.print(Text("  no context yet", style="dim"))
         return
     data = report.to_dict()
-    print(f"[context] {data['total_tokens']}/{data['total_budget']} tokens"
-          + (" [compacted]" if data["compacted"] else ""))
+    console.print(Text(f"  {data['total_tokens']}/{data['total_budget']} tokens"
+                       + (" [compacted]" if data["compacted"] else ""), style="dim"))
     for section in data.get("sections", []):
-        bar = "█" * max(0, int(section["ratio"] * 12)) + "░" * max(0, 12 - int(section["ratio"] * 12))
-        print(f"  {section['section']:<9} {bar} {section['tokens']}/{section['budget']}")
+        bar = "#" * max(0, int(section["ratio"] * 12)) + "-" * max(0, 12 - int(section["ratio"] * 12))
+        console.print(Text(f"    {section['section']:<9} {bar} {section['tokens']}/{section['budget']}", style="dim"))
 
 
 def _print_tree(project, depth: int = 1) -> None:
@@ -572,13 +527,13 @@ def _print_tree(project, depth: int = 1) -> None:
     try:
         children = sorted(root.iterdir())
     except OSError as e:
-        print(f"error listing tree: {e}")
+        console.print(Text(f"  error: {e}", style="jarvis.error"))
         return
     for child in children:
         if child.name.startswith(".") or child.name in skip:
             continue
         if child.is_dir():
-            print(f"[dir] {child.name}/")
+            console.print(Text(f"  {child.name}/", style="jarvis.accent"))
             if depth and child.is_dir():
                 try:
                     subs = sorted(child.iterdir())[:12]
@@ -587,57 +542,51 @@ def _print_tree(project, depth: int = 1) -> None:
                 for sub in subs:
                     if sub.name.startswith(".") or sub.name in skip:
                         continue
-                    print(f"      {sub.name}")
+                    console.print(Text(f"    {sub.name}", style="jarvis.dim"))
         else:
-            print(f"      {child.name}")
+            console.print(Text(f"    {child.name}", style="jarvis.dim"))
 
 
 def _cmd_memory(loop, line: str) -> None:
     if loop.mem is None:
-        typer.secho("memory disabled in this loop", err=True, fg="red")
+        console.print(Text("  memory disabled", style="jarvis.error"))
         return
     parts = line.split(maxsplit=2)
     if len(parts) == 1:
-        print(loop.mem.get_stats())
+        console.print(Text(f"  {loop.mem.get_stats()}", style="dim"))
         return
     action = parts[1]
     if action == "search" and len(parts) == 3:
         for hit in loop.mem.retrieve(parts[2], project=str(loop.project.root_path), top_k=5):
-            print(f"[{hit['source']}:{hit['score']:.2f}] {hit['content'][:160]}")
+            console.print(Text(f"  [{hit['source']}:{hit['score']:.2f}] {hit['content'][:160]}", style="dim"))
     elif action == "add" and len(parts) == 3:
         key, _, value = parts[2].partition("=")
-        print(loop.mem.remember(key.strip() or "note", value.strip(), category="notes"))
+        console.print(Text(f"  {loop.mem.remember(key.strip() or 'note', value.strip(), category='notes')}", style="dim"))
     else:
-        typer.secho("usage: /memory [search <query> | add <key>=<value>]", err=True, fg="red")
+        console.print(Text("  usage: /memory [search <q> | add <k>=<v>]", style="jarvis.error"))
 
 
 def _cmd_audit(line: str, limit_default: int = 12) -> None:
-    """`/audit [trace <id> | <n> | <tool>]` — read the security audit log
-    (stats + recent actions + per-trace replay). Reads the shared
-    ``~/.jarvis/data/audit.db``."""
     from security.audit import get_audit_log
-
     parts = line.split(maxsplit=1)
     args = parts[1].strip() if len(parts) == 2 else ""
     log = get_audit_log()
     stats = log.get_stats()
-    print(f"audit: {stats['total_actions']} actions · "
-          f"{stats['denied']} denied · {stats['failed']} failed")
+    console.print(Text(f"  {stats['total_actions']} actions | {stats['denied']} denied | {stats['failed']} failed", style="dim"))
     if stats["top_tools"]:
         top = ", ".join(f"{k}={v}" for k, v in list(stats["top_tools"].items())[:5])
-        print(f"top tools: {top}")
+        console.print(Text(f"  top: {top}", style="dim"))
     if args.startswith("trace "):
         trace_id = args[6:].strip()
         entries = log.query_trace(trace_id)
         if not entries:
-            typer.secho(f"no audit entries for trace {trace_id}", err=True, fg="red")
+            console.print(Text(f"  no entries for trace {trace_id}", style="jarvis.error"))
             return
         for e in entries:
             ts = datetime.datetime.fromtimestamp(e["timestamp"]).strftime("%H:%M:%S")
             ok = "ok" if e["success"] else "fail"
             flag = "" if e["allowed"] else " DENIED"
-            print(f"{ts} {e['tool'] or e['action']:<28} {ok}{flag} "
-                  f"{e['duration_ms']:.0f}ms {e.get('session_id', '')[:8]}")
+            console.print(Text(f"  {ts} {e['tool'] or e['action']:<28} {ok}{flag} {e['duration_ms']:.0f}ms", style="dim"))
         return
     limit = limit_default
     tool = args or None
@@ -646,14 +595,13 @@ def _cmd_audit(line: str, limit_default: int = 12) -> None:
         tool = None
     entries = log.query(tool=tool, limit=limit)
     if not entries:
-        print("no audit entries yet")
+        console.print(Text("  no audit entries", style="dim"))
         return
     for e in entries:
         ts = datetime.datetime.fromtimestamp(e["timestamp"]).strftime("%H:%M:%S")
         ok = "ok" if e["success"] else "fail"
         flag = "" if e["allowed"] else " DENIED"
-        print(f"{ts} {e['tool'] or e['action']:<28} {ok}{flag} "
-              f"{e['duration_ms']:.0f}ms {e.get('session_id', '')[:8]}")
+        console.print(Text(f"  {ts} {e['tool'] or e['action']:<28} {ok}{flag} {e['duration_ms']:.0f}ms", style="dim"))
 
 
 def _cmd_history(line: str) -> None:
@@ -664,63 +612,16 @@ def _cmd_history(line: str) -> None:
     if task_id:
         events = store.query(trace_id=task_id, limit=200)
         if not events:
-            typer.secho(f"no events for trace {task_id}", err=True, fg="red")
+            console.print(Text(f"  no events for trace {task_id}", style="jarvis.error"))
             return
         for event in events:
             ts = datetime.datetime.fromtimestamp(event.timestamp).strftime("%H:%M:%S")
-            print(f"{ts} {event.name} {json.dumps(event.data, default=str)[:120]}")
+            console.print(Text(f"  {ts} {event.name} {json.dumps(event.data, default=str)[:120]}", style="dim"))
     else:
         traces = store.recent_traces(limit=10)
         if not traces:
-            print("no task history yet")
+            console.print(Text("  no history yet", style="dim"))
             return
         for trace in traces:
             ts = datetime.datetime.fromtimestamp(trace["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{trace['trace_id']}  {ts}")
-
-
-def _print_help() -> None:
-    from rich.panel import Panel
-    from rich.table import Table
-
-    table = Table(show_header=False, box=None, padding=(0, 2))
-    table.add_column(style="bold bright_cyan", width=22)
-    table.add_column(style="dim")
-
-    table.add_row("/help", "show this help")
-    table.add_row("/tools", "list available tools")
-    table.add_row("/mode", "show current mode")
-    table.add_row("/mode <m>", "switch mode (plan|controlled|smart|agent)")
-    table.add_row("/plan", "switch to read-only plan mode")
-    table.add_row("/model", "show last model + provider")
-    table.add_row("/models", "show all providers")
-    table.add_row("/status", "provider, mode, memory stats")
-    table.add_row("/context", "context budget report")
-    table.add_row("/tokens", "context usage + compacted flag")
-    table.add_row("/memory", "show memory stats")
-    table.add_row("/memory search <q>", "semantic memory retrieval")
-    table.add_row("/memory add <k>=<v>", "remember a fact")
-    table.add_row("/history", "list recent tasks")
-    table.add_row("/history <id>", "replay a task timeline")
-    table.add_row("/audit", "security audit log")
-    table.add_row("/audit trace <id>", "replay an audit trace")
-    table.add_row("/tree", "show project tree")
-    table.add_row("/resume", "re-run the last goal")
-    table.add_row("/cockpit", "diagnostic dashboard")
-    table.add_row("/notifications", "rolling event log")
-    table.add_row("/verbose", "toggle backend messages")
-    table.add_row("/clear", "clear screen")
-    table.add_row("/exit", "quit")
-    table.add_row("", "")
-    table.add_row("Enter", "expand last task details (empty line)")
-
-    console.print(Panel(
-        table,
-        title="[bold bright_cyan] JARVIS MK-X Commands [/]",
-        border_style="bright_cyan",
-        padding=(1, 2),
-    ))
-
-
-if __name__ == "__main__":
-    entry()
+            console.print(Text(f"  {trace['trace_id']}  {ts}", style="dim"))

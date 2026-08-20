@@ -1,17 +1,15 @@
 """Renderable helpers for the JARVIS MK-X terminal.
 
-Assistant responses are usually Markdown; the Rich ``Markdown`` renderable adds
-syntax highlighting for code blocks and neat lists. Plain text stays plain, and
-the ``--json`` output path is never routed through here.
+Claude Code-style UI: conversation is the screen. No borders, no panels,
+no permanent sidebars. Clean, minimal, fast.
 
-``Renderer`` is the pure display layer: backend owns state and decisions, this
-class only turns ``AppState`` snapshots into Rich renderables.
+``Renderer`` is the pure display layer: backend owns state and decisions,
+this class only turns ``AppState`` snapshots into Rich renderables.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Sequence
 from contextlib import nullcontext
 from datetime import datetime
@@ -19,7 +17,6 @@ from typing import Any
 
 from rich import box
 from rich.console import Console, Group, RenderableType
-from rich.layout import Layout
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -52,35 +49,22 @@ CODE_THEME = "monokai"
 
 
 def render_markdown(text: str, *, plain: bool = False):
-    """Turn an assistant response into a Rich renderable.
-
-    Args:
-        text: raw assistant output.
-        plain: force plain-text rendering (no Markdown interpretation).
-    """
     if plain or not _looks_like_markdown(text):
         return Text(text)
     return Markdown(text, code_theme=CODE_THEME)
 
 
 def _looks_like_markdown(text: str) -> bool:
-    """Cheap heuristic: only interpret as Markdown when it looks like it.
-
-    Avoids mangling one-line answers or plain prose with stray '#'/'*' that a
-    naive renderer would choke on, and keeps rendering cheap for JSON/plain
-    output.
-    """
     stripped = text.lstrip()
     if not stripped:
         return False
     if "\n" not in text:
-        # Single-line answers: only treat explicit emphasis/links/code as MD.
-        return bool(stripped.startswith(("#", "- ", "* ", "> ", "```")))
+        return bool(stripped.startswith(("# ", "- ", "* ", "> ", "```")))
     return True
 
 
 class Renderer:
-    """Pure display layer. Mutators only accept state that the backend already decided."""
+    """Pure display layer. Claude Code-style: conversation is the UI."""
 
     def __init__(self, console: Console | None = None, unicode: bool = True) -> None:
         self.console = console or Console(highlight=False, emoji=False)
@@ -89,9 +73,7 @@ class Renderer:
         self.state = AppState()
         self._live_display = None
 
-    # ------------------------------------------------------------------
-    # State mutators (called by AgentLoop / event bus only)
-    # ------------------------------------------------------------------
+    # ── State mutators ───────────────────────────────────────────────────
 
     def set_mode(self, mode: Mode | str) -> None:
         if isinstance(mode, str):
@@ -124,15 +106,9 @@ class Renderer:
     def set_confirmation(self, req: ConfirmationRequest | None) -> None:
         self.state.pending_confirmation = req
 
-    def set_code(
-        self,
-        files: Sequence[CodeFile],
-        path: str = "",
-        content: str = "",
-        language: str = "python",
-        loc: int = 0,
-        modified: bool = False,
-    ) -> None:
+    def set_code(self, files: Sequence[CodeFile], path: str = "",
+                 content: str = "", language: str = "python",
+                 loc: int = 0, modified: bool = False) -> None:
         self.state.code_files = list(files)
         self.state.code_path = path
         self.state.code_content = content
@@ -153,9 +129,7 @@ class Renderer:
             if e.type == EventType.TOOL and e.status == EventStatus.RUNNING
         )
 
-    # ------------------------------------------------------------------
-    # Status bar — collapses fields by terminal width
-    # ------------------------------------------------------------------
+    # ── Status bar — compact single line ──────────────────────────────────
 
     def _token_str(self) -> str:
         used, limit = self.state.tokens_used, self.state.tokens_limit
@@ -164,58 +138,42 @@ class Renderer:
         return f"{u}/{l}"
 
     def render_status(self) -> Text:
-        """Full-width status bar (top of screen).
-
-        ≥120: JARVIS · AGENT · model · tokens · N tools · MEMORY · ONLINE · time
-        90–119: JARVIS · AGENT · model · tokens · MEMORY · ONLINE
-        70–89: JARVIS · AGENT · model · tokens
-        <70: AGENT · tokens
-        """
-        import time as _time
-
+        """Compact status: mode · model · tokens · tools · elapsed"""
         width = self.console.size.width
         sep = self.symbols["separator"]
         parts: list[Text] = []
 
-        if width >= 70:
-            parts.append(Text("JARVIS", style="bold jarvis.primary"))
-            parts.append(Text(f" {sep} ", style="jarvis.muted"))
-
+        # Mode
         parts.append(Text(self.state.mode.value.lower(), style="jarvis.accent"))
 
-        if width >= 90:
+        # Model (only if wide enough)
+        if width >= 70 and self.state.model:
             model_display = self.state.model
             if len(model_display) > 25:
                 model_display = model_display[:22] + "..."
             parts += [Text(f" {sep} ", style="jarvis.muted"),
                        Text(model_display, style="jarvis.secondary")]
 
+        # Tokens
         parts += [Text(f" {sep} ", style="jarvis.muted"),
                    Text(self._token_str(), style="jarvis.dim")]
 
-        if width >= 120:
+        # Tools (only if active and wide)
+        if width >= 90:
             tool_count = self.state.tools_active
             if tool_count:
                 parts += [Text(f" {sep} ", style="jarvis.muted"),
                            Text(f"{tool_count} tools", style="jarvis.running")]
 
-            mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
-            parts += [Text(f" {sep} ", style="jarvis.muted"),
-                       Text("MEMORY", style=mem_style)]
-
+        # Connection (only if wide)
+        if width >= 120:
             conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
             parts += [Text(f" {sep} ", style="jarvis.muted"),
                        Text(self.state.connection, style=conn_style)]
 
-            now = datetime.now().strftime("%H:%M")
-            parts += [Text(f" {sep} ", style="jarvis.muted"),
-                       Text(now, style="jarvis.dim")]
-
         return Text.assemble(*parts)
 
-    # ------------------------------------------------------------------
-    # Plan panel (stateful snapshot only)
-    # ------------------------------------------------------------------
+    # ── Plan ──────────────────────────────────────────────────────────────
 
     def render_plan(self, compact: bool = False) -> RenderableType:
         plan = self.state.plan
@@ -228,7 +186,7 @@ class Renderer:
             active = next((s for s in plan.steps if s.status == StepStatus.ACTIVE), None)
             parts = [Text(f"Plan {done}/{total}", style="jarvis.muted")]
             if active:
-                parts.append(Text(f" → {active.description}", style="jarvis.active"))
+                parts.append(Text(f" -> {active.description}", style="jarvis.active"))
             return Text.assemble(*parts)
 
         lines: list[Text] = []
@@ -242,18 +200,16 @@ class Renderer:
             else:
                 sym, style = self.symbols["planned"], "jarvis.muted"
             lines.append(Text.assemble(
-                Text(f"{sym} ", style=style),
+                Text(f"  {sym} ", style=style),
                 Text(step.description, style=style if step.status != StepStatus.PENDING else "jarvis.dim"),
             ))
         return Group(*lines)
 
-    # ------------------------------------------------------------------
-    # Activity = live structured event stream
-    # ------------------------------------------------------------------
+    # ── Activity ──────────────────────────────────────────────────────────
 
     def render_activity(self) -> RenderableType:
         if not self.state.events:
-            return Text("No recent events", style="jarvis.muted")
+            return Text("No events", style="jarvis.muted")
         items = [self._render_event(e) for e in self.state.events[-14:]]
         return Group(*items)
 
@@ -270,49 +226,38 @@ class Renderer:
 
         label = e.tool or e.type.value
         header = Text.assemble(
-            Text(f"{status_sym} ", style=style),
-            Text(label, style="bold jarvis.tool"),
+            Text(f"  {status_sym} ", style=style),
+            Text(label, style="jarvis.tool"),
         )
         parts: list[RenderableType] = [header]
 
         if e.arguments:
-            parts.append(Text(f"  {e.arguments}", style="jarvis.dim"))
+            parts.append(Text(f"    {e.arguments[:120]}", style="jarvis.dim"))
         if e.result:
-            parts.append(Text(f"  {e.result}", style=style))
+            parts.append(Text(f"    {e.result[:200]}", style=style))
         if e.exit_code is not None and e.exit_code != 0:
-            parts.append(Text(f"  Exit code: {e.exit_code}", style="jarvis.error"))
+            parts.append(Text(f"    exit {e.exit_code}", style="jarvis.error"))
         if e.duration_s is not None:
-            parts.append(Text(f"  {e.duration_s:.1f}s", style="jarvis.muted"))
+            parts.append(Text(f"    {e.duration_s:.1f}s", style="jarvis.muted"))
         if e.full_output and e.expanded:
-            # Compress output before truncation for token efficiency
-            compressed = compress_output(
-                e.full_output,
-                format_type="auto",
-                method="gzip",
-                max_size_reduction=0.3,
-            )
+            compressed = compress_output(e.full_output, format_type="auto", method="gzip", max_size_reduction=0.3)
             out = compressed if len(compressed) < len(e.full_output) else e.full_output
             if len(out) > 4000:
-                out = out[:4000] + f"\n{sym['ellipsis']} (truncated)"
-            parts.append(Text(f"  {sym['separator']}{sym['separator']}{sym['separator']} full output {sym['separator']}{sym['separator']}{sym['separator']}", style="jarvis.muted"))
+                out = out[:4000] + f"\n... (truncated)"
+            parts.append(Text(f"    --- full output ---", style="jarvis.muted"))
             parts.append(Text(out, style="jarvis.dim"))
         return Group(*parts)
 
-    # ------------------------------------------------------------------
-    # Conversation
-    # ------------------------------------------------------------------
+    # ── Conversation ──────────────────────────────────────────────────────
 
     def render_conversation(self) -> RenderableType:
-        """Conversation = semantic interaction only.  Tool output, verification,
-        and recovery are separate layout components, not conversation content."""
+        """Conversation = semantic interaction only. No tool output, no
+        verification, no recovery leaking in."""
         if not self.state.messages:
             return Group(
                 Text(""),
-                Text("  JARVIS", style="bold bright_cyan"),
-                Text("") if True else Text(""),
-                Text("  What are we building?", style="jarvis.accent"),
+                Text("What are we building?", style="jarvis.accent"),
                 Text(""),
-                Text("  Describe a task, ask a question, or run /help.", style="jarvis.muted"),
             )
         blocks: list[RenderableType] = []
         for msg in self.state.messages[-30:]:
@@ -326,69 +271,32 @@ class Renderer:
                 blocks.append(self._render_system_event(msg.content))
         return Group(*blocks)
 
-    def render_verification(self) -> RenderableType | None:
-        """Verification as a standalone layout component, not injected into conversation."""
-        if not self.state.verification_steps:
-            return None
-        return self.render_verification_block(self.state.verification_steps)
-
-    def render_recovery(self) -> RenderableType | None:
-        """Recovery as a standalone layout component, not injected into conversation."""
-        if not self.state.recovery_active:
-            return None
-        return self.render_recovery_block(
-            self.state.recovery_error,
-            attempt=self.state.recovery_attempt,
-        )
-
     def _render_user_message(self, content: str) -> RenderableType:
-        """Claude Code-style user message: label + indented content."""
-        sym = self.symbols
         return Group(
-            Text(f"{sym['arrow_right']} You", style="bold bright_white"),
-            Text(f"  {content}", style="jarvis.user"),
+            Text(content, style="jarvis.user"),
             Text(""),
         )
 
     def _render_agent_message(self, content: str) -> RenderableType:
-        """Claude Code-style assistant message: label + markdown content."""
-        sym = self.symbols
         try:
             md = Markdown(content, code_theme="monokai")
         except Exception:
             md = Text(content, style="jarvis.agent")
-        return Group(
-            Text(f"{sym['diamond']} JARVIS", style="bold bright_cyan"),
-            md,
-            Text(""),
-        )
+        return Group(md, Text(""))
 
     def _render_tool_result(self, content: str) -> RenderableType:
-        """Tool result: compact, dim, no label."""
         if len(content) > 300:
-            content = content[:300] + f"\n  {self.symbols['ellipsis']} (truncated)"
-        return Group(
-            Text(f"  {content}", style="jarvis.dim"),
-        )
+            content = content[:300] + f"\n  ... (truncated)"
+        return Group(Text(f"  {content}", style="jarvis.dim"),)
 
     def _render_system_event(self, content: str) -> RenderableType:
-        """System/verification event: muted style."""
-        return Group(
-            Text(f"  {content}", style="jarvis.system"),
-        )
+        return Group(Text(f"  {content}", style="jarvis.system"),)
 
-    # ------------------------------------------------------------------
-    # Tool cards — collapsed by default, expandable
-    # ------------------------------------------------------------------
+    # ── Tool cards ────────────────────────────────────────────────────────
 
     def render_tool_card(self, tool_name: str, arguments: dict,
                          status: str = "running", result: str = "",
                          duration_ms: float = 0.0, expanded: bool = False) -> RenderableType:
-        """A single tool execution card.
-
-        Collapsed:  ✓ filesystem.read src/auth.py  (18ms)
-        Expanded:   full details panel
-        """
         sym = self.symbols
         arg_summary = self._summarize_args(arguments)
 
@@ -406,16 +314,15 @@ class Renderer:
         if not expanded:
             return Text.assemble(
                 Text(f"  {status_sym} ", style=style),
-                Text(tool_name, style="bold jarvis.tool"),
+                Text(tool_name, style="jarvis.tool"),
                 Text(f" {arg_summary}", style="jarvis.dim"),
                 Text(duration_str, style="jarvis.muted"),
             )
 
-        # Expanded view
         lines: list[RenderableType] = [
             Text.assemble(
                 Text(f"  {status_sym} ", style=style),
-                Text(tool_name, style="bold jarvis.tool"),
+                Text(tool_name, style="jarvis.tool"),
                 Text(duration_str, style="jarvis.muted"),
             ),
         ]
@@ -427,14 +334,12 @@ class Renderer:
                 lines.append(Text(f"    {k}: {val}", style="jarvis.dim"))
         if result and status != "running":
             res_preview = result[:200] + ("..." if len(result) > 200 else "")
-            lines.append(Text(f"    result: {res_preview}", style=style))
+            lines.append(Text(f"    {res_preview}", style=style))
         return Group(*lines)
 
     def _summarize_args(self, arguments: dict) -> str:
-        """Create a one-line summary of tool arguments."""
         if not arguments:
             return ""
-        # For filesystem tools, show the path
         if "path" in arguments:
             return str(arguments["path"])
         if "pattern" in arguments:
@@ -444,29 +349,17 @@ class Renderer:
             return cmd[:50] + ("..." if len(cmd) > 50 else "")
         if "query" in arguments:
             return str(arguments["query"])
-        # Generic: first value
         first_val = next(iter(arguments.values()), None)
         if first_val is not None:
             s = str(first_val)
             return s[:40] + ("..." if len(s) > 40 else "")
         return ""
 
-    # ------------------------------------------------------------------
-    # Code workspace
-    # ------------------------------------------------------------------
-    # Verification & Recovery blocks
-    # ------------------------------------------------------------------
+    # ── Verification & Recovery (standalone, not in conversation) ─────────
 
     def render_verification_block(self, steps: list[dict]) -> RenderableType:
-        """Compact verification display:
-
-        Verification
-          ✓ tests (1.2s)
-          ✓ lint (0.3s)
-          ● typecheck...
-        """
         sym = self.symbols
-        lines: list[RenderableType] = [Text("Verification", style="bold jarvis.info")]
+        lines: list[RenderableType] = [Text("  Verification", style="jarvis.info")]
         for step in steps:
             name = step.get("name", "")
             passed = step.get("passed", False)
@@ -479,118 +372,96 @@ class Renderer:
             else:
                 s, style = sym["failed"], "jarvis.failed"
             dur = f" ({duration:.0f}ms)" if duration > 0 else ""
-            lines.append(Text(f"  {s} {name}{dur}", style=style))
+            lines.append(Text(f"    {s} {name}{dur}", style=style))
         return Group(*lines)
 
     def render_recovery_block(self, error: str, attempt: int = 1) -> RenderableType:
-        """Recovery display:
-
-        ↻ RECOVERING (attempt 2)
-          pytest failed: 2 tests failed in test_auth.py
-          Attempting repair...
-        """
         sym = self.symbols
         lines: list[RenderableType] = [
-            Text(f"{sym['arrow_right']} RECOVERING (attempt {attempt})",
-                 style="bold jarvis.warning"),
+            Text(f"  RECOVERING (attempt {attempt})", style="jarvis.warning"),
         ]
         if error:
             preview = error[:200] + ("..." if len(error) > 200 else "")
-            lines.append(Text(f"  {preview}", style="jarvis.dim"))
-        lines.append(Text("  Attempting repair...", style="jarvis.muted"))
+            lines.append(Text(f"    {preview}", style="jarvis.dim"))
         return Group(*lines)
 
-    # ------------------------------------------------------------------
-    # Code workspace
-    # ------------------------------------------------------------------
+    def render_verification(self) -> RenderableType | None:
+        if not self.state.verification_steps:
+            return None
+        return self.render_verification_block(self.state.verification_steps)
+
+    def render_recovery(self) -> RenderableType | None:
+        if not self.state.recovery_active:
+            return None
+        return self.render_recovery_block(
+            self.state.recovery_error,
+            attempt=self.state.recovery_attempt,
+        )
+
+    # ── Code workspace ────────────────────────────────────────────────────
 
     def render_code_files(self) -> RenderableType:
         if not self.state.code_files:
             return Text("No files", style="jarvis.muted")
         lines = []
         for f in self.state.code_files:
-            mark = " ●" if f.modified else ""
+            mark = " *" if f.modified else ""
             style = "jarvis.active" if f.selected else "jarvis.dim"
-            lines.append(Text(f"{f.path}{mark}", style=style))
+            lines.append(Text(f"  {f.path}{mark}", style=style))
         return Group(*lines)
 
     def render_code_buffer(self) -> RenderableType:
         if not self.state.code_content:
             return Text("No file selected", style="jarvis.muted")
         return Syntax(
-            self.state.code_content,
-            self.state.code_language,
-            theme="monokai",
-            line_numbers=True,
-            word_wrap=False,
+            self.state.code_content, self.state.code_language,
+            theme="monokai", line_numbers=True, word_wrap=False,
         )
 
     def render_code_header(self) -> Text:
-        path = self.state.code_path or "—"
+        path = self.state.code_path or "---"
         loc = f"{self.state.code_loc:,} LOC" if self.state.code_loc else ""
-        mod = " · MODIFIED" if self.state.code_modified else ""
-        return Text.assemble(
-            Text("JARVIS", style="bold jarvis.primary"),
-            Text(" · CODE · ", style="jarvis.muted"),
-            Text(path, style="jarvis.accent"),
-            Text(f" · {loc}{mod}" if loc or mod else "", style="jarvis.dim"),
-        )
+        mod = " MODIFIED" if self.state.code_modified else ""
+        return Text(f"  {path} {loc}{mod}", style="jarvis.dim")
 
-    # ------------------------------------------------------------------
-    # Memory workspace
-    # ------------------------------------------------------------------
+    # ── Memory workspace ──────────────────────────────────────────────────
 
     def render_memory(self) -> RenderableType:
         parts: list[RenderableType] = []
         if self.state.memory_query:
-            parts.append(Text("QUERY", style="jarvis.muted"))
-            parts.append(Text(self.state.memory_query, style="jarvis.accent"))
-            parts.append(Text(""))
+            parts.append(Text(f"  query: {self.state.memory_query}", style="jarvis.accent"))
         if not self.state.memory_hits:
-            parts.append(Text("No memories loaded", style="jarvis.muted"))
+            parts.append(Text("  No memories", style="jarvis.muted"))
             return Group(*parts)
-        parts.append(Text("RELEVANT MEMORIES", style="jarvis.muted"))
         for h in self.state.memory_hits:
             parts.append(Text.assemble(
-                Text(f"{h.score:.2f}  ", style="jarvis.success"),
+                Text(f"  {h.score:.2f} ", style="jarvis.success"),
                 Text(h.title, style="jarvis.user"),
             ))
-            parts.append(Text(f"      {h.date}", style="jarvis.dim"))
             if h.snippet:
-                parts.append(Text(f"      {h.snippet}", style="jarvis.dim"))
+                parts.append(Text(f"    {h.snippet[:120]}", style="jarvis.dim"))
         return Group(*parts)
 
-    # ------------------------------------------------------------------
-    # Audit workspace
-    # ------------------------------------------------------------------
+    # ── Audit workspace ───────────────────────────────────────────────────
 
     def render_audit(self) -> RenderableType:
         if not self.state.audit_sections:
-            return Text("No audit data (backend not connected)", style="jarvis.muted")
+            return Text("  No audit data", style="jarvis.muted")
         blocks: list[RenderableType] = []
         for section in self.state.audit_sections:
-            blocks.append(Text(section.title, style="bold jarvis.accent"))
+            blocks.append(Text(f"  {section.title}", style="jarvis.accent"))
             for status_key, label, detail in section.items:
-                sym = self.symbols.get(status_key, "•")
-                style = {
-                    "done": "jarvis.done",
-                    "failed": "jarvis.failed",
-                    "running": "jarvis.running",
-                    "warning": "jarvis.warning",
-                }.get(status_key, "jarvis.dim")
-                line = Text.assemble(
-                    Text(f"{sym} ", style=style),
-                    Text(label, style=style),
-                )
+                sym = self.symbols.get(status_key, "-")
+                style_map = {"done": "jarvis.done", "failed": "jarvis.failed",
+                             "running": "jarvis.running", "warning": "jarvis.warning"}
+                style = style_map.get(status_key, "jarvis.dim")
+                line = Text.assemble(Text(f"    {sym} ", style=style), Text(label, style=style))
                 if detail:
                     line = Text.assemble(line, Text(f"  {detail}", style="jarvis.dim"))
                 blocks.append(line)
-            blocks.append(Text(""))
         return Group(*blocks)
 
-    # ------------------------------------------------------------------
-    # Security confirmation (structured, policy-backed)
-    # ------------------------------------------------------------------
+    # ── Security confirmation ─────────────────────────────────────────────
 
     def render_confirmation(self) -> RenderableType:
         req = self.state.pending_confirmation
@@ -603,24 +474,16 @@ class Renderer:
             RiskLevel.CRITICAL: "bold jarvis.error",
         }.get(req.risk, "jarvis.warning")
         lines: list[RenderableType] = [
-            Text(f"  {self.symbols['failed']} Permission required", style="jarvis.error"),
+            Text(f"  Permission required", style="jarvis.error"),
             Text(""),
-            Text(f"  JARVIS wants to execute:", style="jarvis.muted"),
-            Text(f"  {req.operation}", style="bold jarvis.accent"),
-            Text("") if req.risk.value in ("LOW", "MEDIUM") else Text(f"  Risk: {req.risk.value}", style=risk_style),
+            Text(f"  {req.operation}", style="jarvis.accent"),
             Text(""),
-            Text("  [Enter] Allow   [Esc] Deny   [A] Always allow", style="jarvis.dim"),
+            Text("  [Enter] Allow  [Esc] Deny  [A] Always", style="jarvis.dim"),
         ]
         return Group(*lines)
 
     def confirm_interactive(self, req: ConfirmationRequest) -> str:
-        """
-        Returns: 'once' | 'run' | 'deny'
-        Decision is handed back to the security/policy layer.
-        """
         self.set_confirmation(req)
-        # During a full-screen task run the alternate screen must be suspended
-        # while we block on input, then resumed (hybrid UI).
         pause = getattr(self._live_display, "pause", None)
         cm = pause() if pause is not None else nullcontext()
         with cm:
@@ -638,39 +501,23 @@ class Renderer:
         return "deny"
 
     def attach_live(self, display) -> None:
-        """Give the task display a hook to suspend/resume around blocking I/O."""
         self._live_display = display
 
     def detach_live(self) -> None:
         self._live_display = None
 
-    # ------------------------------------------------------------------
-    # Full-screen task view (hybrid UI) + command palette
-    # ------------------------------------------------------------------
+    # ── Full-screen task view ─────────────────────────────────────────────
 
     def render_task_screen(self) -> RenderableType:
-        """Sole canonical screen.  LayoutManager is the sole composition authority.
+        """Claude Code-style screen: conversation is the UI.
 
-        Layout (top to bottom):
-          Status bar (always visible, top)
-          Content area (plan + conversation + activity — responsive)
-          Verification / Recovery (when active, below conversation)
-          Separator
-          Input prompt (always visible, bottom)
+        No separator lines. No Panel borders. Just clean content.
         """
-        status = self.render_status()
         conversation = self.render_conversation()
         plan = self.render_plan()
         activity = self.render_activity()
         verification = self.render_verification()
         recovery = self.render_recovery()
-        separator = Text("─" * min(self.console.size.width - 2, 80),
-                         style="jarvis.muted")
-        prompt = Text.assemble(
-            Text(f" {self.symbols['prompt']} ", style="jarvis.muted"),
-            Text("JARVIS", style="bold jarvis.primary"),
-            Text(f" [{self.state.mode.value.lower()}]> ", style="jarvis.accent"),
-        )
 
         content = self.layout_mgr.build(
             conversation=conversation,
@@ -683,19 +530,17 @@ class Renderer:
             recovery=recovery,
         )
 
-        elements: list[RenderableType] = [
-            status,
-            separator,
-            content,
-        ]
+        elements: list[RenderableType] = [content]
 
-        # Verification and recovery below conversation, above prompt
         if verification is not None:
             elements += [Text(""), verification]
         if recovery is not None:
             elements += [Text(""), recovery]
 
-        elements += [separator, prompt]
+        # Minimal prompt
+        elements.append(Text.assemble(
+            Text(">", style="jarvis.muted"),
+        ))
 
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
@@ -705,7 +550,7 @@ class Renderer:
     def render_activity_panel(self) -> RenderableType:
         return Panel(
             self.render_activity(),
-            title=f"[jarvis.muted]{self.symbols['arrow_right']} ACTIVITY[/]",
+            title="ACTIVITY",
             title_align="left",
             border_style=COLORS.border,
             box=BoxStyles.ACTIVITY,
@@ -713,32 +558,18 @@ class Renderer:
         )
 
     def render_palette(self, entries: Sequence[tuple[str, str]] | None = None) -> RenderableType:
-        """Command palette (Ctrl+K / /palette). ``entries`` are ``(key, help)``
-        pairs supplied by the command registry — never invented here."""
         if not entries:
             entries = [
-                ("chat", "Conversation (default)"),
-                ("plan", "Plan focus"),
-                ("code", "Code workspace"),
-                ("activity", "Live event stream"),
-                ("memory", "Memory workspace"),
-                ("audit", "Audit / health"),
+                ("chat", "Conversation"), ("plan", "Plan focus"),
+                ("code", "Code workspace"), ("activity", "Event stream"),
+                ("memory", "Memory"), ("audit", "Audit / health"),
             ]
         table = Table(show_header=False, box=None)
         table.add_column(style="bold cyan", width=18)
         table.add_column(style="dim")
         for key, desc in entries:
             table.add_row(key, desc)
-        return Panel(
-            table,
-            title="JARVIS COMMAND PALETTE",
-            border_style=COLORS.border,
-            box=box.ROUNDED,
-        )
-
-    # ------------------------------------------------------------------
-    # Layout assembly
-    # ------------------------------------------------------------------
+        return Panel(table, title="COMMANDS", border_style=COLORS.border, box=box.ROUNDED)
 
     def build_full_layout(self):
         return self.layout_mgr.build(
@@ -751,16 +582,10 @@ class Renderer:
         )
 
     def print_status_bar(self) -> None:
-        self.console.print(Panel(
-            self.render_status(),
-            border_style=COLORS.border_focus,
-            box=BoxStyles.HEADER,
-            padding=(0, 1),
-            height=3,
-        ))
+        self.console.print(self.render_status())
 
     def print_prompt(self) -> str:
-        return f" {self.symbols['prompt']} JARVIS [{self.state.mode.value}]> "
+        return "> "
 
     def clear(self) -> None:
         self.console.clear()
@@ -769,11 +594,11 @@ class Renderer:
         self.console.print(*args, **kwargs)
 
     def print_error(self, title: str, detail: str = "", fallback: str = "") -> None:
-        self.console.print(Text(f"{self.symbols['failed']} {title}", style="jarvis.error"))
+        self.console.print(Text(f"  {title}", style="jarvis.error"))
         if detail:
-            self.console.print(Text(f"  {detail}", style="jarvis.dim"))
+            self.console.print(Text(f"    {detail}", style="jarvis.dim"))
         if fallback:
-            self.console.print(Text(f"  {fallback}", style="jarvis.warning"))
+            self.console.print(Text(f"    {fallback}", style="jarvis.warning"))
 
     def print_success(self, msg: str) -> None:
-        self.console.print(Text(f"{self.symbols['done']} {msg}", style="jarvis.success"))
+        self.console.print(Text(f"  {msg}", style="jarvis.success"))

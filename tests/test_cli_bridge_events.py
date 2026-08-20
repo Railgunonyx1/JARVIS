@@ -193,8 +193,6 @@ class TestConversationWithVerification:
             Message(role="agent", content="Hi there!"),
         ]
         output = _render_to_str(renderer.render_conversation())
-        assert "You" in output
-        assert "JARVIS" in output
         assert "hello" in output
         assert "Hi there!" in output
 
@@ -308,7 +306,6 @@ class TestVerificationRecoveryRenderer:
         assert "RECOVERING" in output
         assert "attempt 2" in output
         assert "pytest failed: 2 tests" in output
-        assert "Attempting repair" in output
 
     def test_recovery_block_first_attempt(self):
         renderer = Renderer()

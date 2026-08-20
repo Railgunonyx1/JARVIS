@@ -190,16 +190,6 @@ def test_status_bar_has_clock():
     assert "time=" in bar
 
 
-def test_status_bar_dict_has_clock(capsys):
-    from rich.text import Text
-
-    from cli.main import _render_status_bar_dict
-
-    bar = _render_status_bar_dict({"mode": "agent", "tools": 4})
-    assert isinstance(bar, Text)
-    assert "time=" in str(bar)
-
-
 # ── /audit read-out ─────────────────────────────────────────────────────────
 
 

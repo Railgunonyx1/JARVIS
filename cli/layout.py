@@ -14,7 +14,7 @@ the content area; they do not permanently pollute the agent view.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from rich.console import Console, RenderableType
 from rich.layout import Layout
@@ -24,7 +24,7 @@ from rich.text import Text
 from .theme import COLORS, PANEL_TITLES, get_symbols
 
 
-class LayoutMode(str, Enum):
+class LayoutMode(StrEnum):
     MINIMAL = "minimal"       # conversation only
     NORMAL = "normal"         # plan + conversation (+ activity if wide)
     FOCUS = "focus"           # conversation maximized
