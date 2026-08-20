@@ -1,6 +1,28 @@
 {
-  "identity": {},
-  "preferences": {},
+  "identity": {
+    "user_name": {
+      "value": "Aayan",
+      "updated": "2026-08-20"
+    },
+    "user_role": {
+      "value": "Software developer",
+      "updated": "2026-08-20"
+    },
+    "project": {
+      "value": "JARVIS MK-X - autonomous engineering agent",
+      "updated": "2026-08-20"
+    }
+  },
+  "preferences": {
+    "ui_style": {
+      "value": "Claude Code style - minimal chrome, conversation-first",
+      "updated": "2026-08-20"
+    },
+    "platform": {
+      "value": "Windows, Windows Terminal preferred",
+      "updated": "2026-08-20"
+    }
+  },
   "projects": {},
   "relationships": {},
   "wishes": {},
@@ -9,6 +31,20 @@
     "smoke_key": {
       "value": "smoke_val",
       "updated": "2026-08-05"
+    }
+  },
+  "priorities": {
+    "priority_1": {
+      "value": "JARVIS must work without API keys using Ollama locally",
+      "updated": "2026-08-20"
+    },
+    "priority_2": {
+      "value": "Clean Claude Code-style terminal UI",
+      "updated": "2026-08-20"
+    },
+    "priority_3": {
+      "value": "Provider fallback chain must always have a working provider",
+      "updated": "2026-08-20"
     }
   }
 }

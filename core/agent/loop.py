@@ -243,7 +243,7 @@ class AgentLoop:
                 final = _SIMPLE_INPUTS[_simple]
             elif _simple.startswith(('what is ', 'whats ', 'how do ', 'how to ', 'who is ', 'who are ', 'where is ', 'where are ')):
                 # Conversational questions — answer directly, no tools needed
-                final = f"That's a great question! As JARVIS, I'm focused on software engineering tasks. For general knowledge, I'd recommend using a search engine. But if you have a coding question, I'm here to help!"
+                final = "That's a great question! As JARVIS, I'm focused on software engineering tasks. For general knowledge, I'd recommend using a search engine. But if you have a coding question, I'm here to help!"
             elif any(_simple.startswith(p) for p in ('my name is ', 'i am ', 'im ', 'call me ')):
                 # Personal introduction — acknowledge, no tools needed
                 name = _simple.split('is ', 1)[-1].strip() if 'is ' in _simple else _simple.split('me ', 1)[-1].strip()
@@ -337,7 +337,7 @@ class AgentLoop:
                             self._complete(messages, system_prompt, tools, on_chunk),
                             timeout=_call_timeout,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # Provider didn't respond in time — treat as provider failure
                         from providers.types import LLMResponse
                         response = LLMResponse(

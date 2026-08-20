@@ -117,7 +117,6 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> LLMResponse:
         full_messages = self._build_messages(messages, system_prompt)
         tool_param = openai_tools_param(tools)
-        last_error: Exception | None = None
         attempts = 0
 
         while attempts < len(self._keys):
