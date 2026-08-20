@@ -152,6 +152,11 @@ class LiveTaskDisplay:
         self.last_render_ms = ms
 
     def _content(self) -> RenderableType:
+        """Renderable source.  Lifecycle-only: delegates entirely to the provider.
+
+        The provider (Renderer.render_task_screen) is the sole presentation
+        authority.  LiveTaskDisplay owns only lifecycle (start/stop/refresh).
+        """
         if self._renderable_provider is not None:
             try:
                 return self._renderable_provider()
@@ -159,63 +164,26 @@ class LiveTaskDisplay:
                 import logging
                 logger = logging.getLogger("jarvis.ux")
                 logger.exception("renderable provider error")
-                return Group(Text(f"[error]render error: {exc}", style="dim"))
-        return self._render()
+                return Group(Text(f"[error] render error: {exc}", style="dim"))
+        # Fallback: minimal status when no provider is wired (tests, pipes)
+        return self._minimal_fallback()
 
-    def _render(self) -> Group:
-        try:
-            summary = self._observer.summary() if self._observer else {}
-        except RuntimeError:
-            summary = {}
-        lines: list = []
-
-        goal = self._goal or summary.get("goal", "")
-        lines.append(Text(f"task {summary.get('task_id', '')} · {goal[:80]}",
-                          style="bold"))
-
-        steps = summary.get("steps", [])
-        if steps:
-            chain = "  ".join(
-                f"{_STATUS_MARK.get(s.get('status'), '?')} {s.get('tool', '')}"
-                + (f" {s.get('duration_ms', 0):.0f}ms" if s.get("duration_ms") else "")
-                for s in steps
-            )
-            lines.append(Text("steps  " + chain))
-        else:
-            lines.append(Text("steps  (awaiting model…)", style="dim"))
-
+    def _minimal_fallback(self) -> Group:
+        """Minimal fallback when no Renderer is attached.  Not a presentation path."""
+        lines: list = [Text(f"JARVIS · {self._goal or '(no goal)'}", style="bold")]
         status: dict[str, Any] = {}
         if self._status_getter is not None:
             try:
                 status = self._status_getter() or {}
             except Exception:
-                status = {}
-
+                pass
         elapsed = time.time() - self._started if self._started else 0.0
-        meta_bits = []
-        meta_bits.append(f"mode={status.get('mode', '?')}")
+        meta = [f"mode={status.get('mode', '?')}" , f"elapsed={int(elapsed)}s"]
         if status.get("provider"):
-            meta_bits.append(f"model={status.get('provider')}/{status.get('model', '')}")
-        if summary.get("tokens_used"):
-            meta_bits.append(f"tokens={summary['tokens_used']}")
-        meta_bits.append(f"elapsed={int(elapsed)}s")
-        lines.append(Text("  ".join(meta_bits), style="dim"))
-
-        usage = summary.get("context_usage") or {}
-        if usage:
-            budget = usage.get("budget") or {}
-            bars = []
-            for field, label in _SECTION_LABELS:
-                tokens = usage.get(field, 0)
-                section_budget = budget.get(field.replace("_tokens", ""), 0)
-                ratio = (tokens / section_budget) if section_budget else 0.0
-                bars.append(Text(f"{label} {tokens} "))
-                bars.append(_bar(ratio))
-            compact = " [compacted]" if usage.get("compacted") else ""
-            bars.append(Text(f"  {usage.get('total_tokens', 0)}/{usage.get('total_budget', 0)} tokens{compact}", style="dim"))
-            lines.append(Group(*bars))
-
+            meta.append(f"model={status.get('provider')}/{status.get('model', '')}")
+        lines.append(Text("  ".join(meta), style="dim"))
         return Group(*lines)
 
     def panel(self) -> Panel:
-        return Panel(self._render(), title="JARVIS MK-X", border_style="cyan")
+        """Legacy panel accessor — prefer LiveTaskDisplay for new code."""
+        return Panel(self._minimal_fallback(), title="JARVIS MK-X", border_style="cyan")

@@ -137,39 +137,53 @@ class TestRecoveryEvents:
 
 
 class TestConversationWithVerification:
-    def test_conversation_includes_verification_block(self):
-        """When verification_steps are populated, the conversation includes them."""
+    def test_verification_renders_as_separate_component(self):
+        """Verification is a standalone layout component, not inside conversation."""
         renderer = Renderer()
-        renderer.state.messages = [
-            Message(role="user", content="run tests"),
-            Message(role="agent", content="Running verification..."),
-        ]
         renderer.state.verification_steps = [
             {"name": "tests", "passed": True, "duration_ms": 1200},
             {"name": "lint", "passed": True, "duration_ms": 300},
         ]
         renderer.state.verification_status = "passed"
 
-        output = _render_to_str(renderer.render_conversation())
+        # render_verification() returns the block separately
+        block = renderer.render_verification()
+        assert block is not None
+        output = _render_to_str(block)
         assert "Verification" in output
         assert "tests" in output
         assert "lint" in output
 
-    def test_conversation_includes_recovery_block(self):
-        """When recovery is active, the conversation includes the recovery block."""
-        renderer = Renderer()
+        # render_conversation() does NOT include verification
         renderer.state.messages = [
             Message(role="user", content="run tests"),
-            Message(role="agent", content="Tests failed, recovering..."),
+            Message(role="agent", content="Running verification..."),
         ]
+        conv_output = _render_to_str(renderer.render_conversation())
+        assert "Verification" not in conv_output
+
+    def test_recovery_renders_as_separate_component(self):
+        """Recovery is a standalone layout component, not inside conversation."""
+        renderer = Renderer()
         renderer.state.recovery_active = True
         renderer.state.recovery_attempt = 2
         renderer.state.recovery_error = "pytest: 2 tests failed"
 
-        output = _render_to_str(renderer.render_conversation())
+        # render_recovery() returns the block separately
+        block = renderer.render_recovery()
+        assert block is not None
+        output = _render_to_str(block)
         assert "RECOVERING" in output
         assert "attempt 2" in output
         assert "pytest: 2 tests failed" in output
+
+        # render_conversation() does NOT include recovery
+        renderer.state.messages = [
+            Message(role="user", content="run tests"),
+            Message(role="agent", content="Tests failed, recovering..."),
+        ]
+        conv_output = _render_to_str(renderer.render_conversation())
+        assert "RECOVERING" not in conv_output
 
     def test_conversation_without_verification_or_recovery(self):
         """Normal conversation without verification/recovery works fine."""
