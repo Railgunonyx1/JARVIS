@@ -76,11 +76,14 @@ class OllamaProvider(LLMProvider):
 
         # Ollama handles its own tool format — send raw tools, not
         # the compressed OpenAI format (which strips descriptions).
+        # Small local models (<=3B params) can only handle a few tools.
+        _max_tools = 5 if '1.5b' in self.config.get('model', '') or '1b' in self.config.get('model', '') else 20
+        _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
         start = time.time()
         try:
             kwargs = {}
-            if tools:
-                kwargs["tools"] = tools
+            if _limited_tools:
+                kwargs["tools"] = _limited_tools
             response = await client.chat(
                 model=self.config.get("model", "qwen2.5:1.5b"),
                 messages=full_messages,
@@ -127,11 +130,14 @@ class OllamaProvider(LLMProvider):
 
         # Ollama handles its own tool format — send raw tools, not
         # the compressed OpenAI format (which strips descriptions).
+        # Small local models (<=3B params) can only handle a few tools.
+        _max_tools = 5 if '1.5b' in self.config.get('model', '') or '1b' in self.config.get('model', '') else 20
+        _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
         start = time.time()
         try:
             kwargs = {}
-            if tools:
-                kwargs["tools"] = tools
+            if _limited_tools:
+                kwargs["tools"] = _limited_tools
             stream = await client.chat(
                 model=self.config.get("model", "qwen2.5:1.5b"),
                 messages=full_messages,
