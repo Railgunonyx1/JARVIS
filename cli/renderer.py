@@ -142,15 +142,17 @@ class Renderer:
         return f"{u}/{l}"
 
     def render_status(self) -> Text:
-        """Compact status: mode · model · tokens · tools · elapsed"""
+        """Compact status: JARVIS · mode · model · tokens · tools · ONLINE"""
         width = self.console.size.width
         sep = self.symbols["separator"]
         parts: list[Text] = []
 
-        # Mode
+        if width >= 120:
+            parts.append(Text("JARVIS", style="jarvis.accent bold"))
+            parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
         parts.append(Text(self.state.mode.value.lower(), style="jarvis.accent"))
 
-        # Model (only if wide enough)
         if width >= 70 and self.state.model:
             model_display = self.state.model
             if len(model_display) > 25:
@@ -158,18 +160,15 @@ class Renderer:
             parts += [Text(f" {sep} ", style="jarvis.muted"),
                        Text(model_display, style="jarvis.secondary")]
 
-        # Tokens
         parts += [Text(f" {sep} ", style="jarvis.muted"),
                    Text(self._token_str(), style="jarvis.dim")]
 
-        # Tools (only if active and wide)
         if width >= 90:
             tool_count = self.state.tools_active
             if tool_count:
                 parts += [Text(f" {sep} ", style="jarvis.muted"),
                            Text(f"{tool_count} tools", style="jarvis.running")]
 
-        # Connection (only if wide)
         if width >= 120:
             conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
             parts += [Text(f" {sep} ", style="jarvis.muted"),

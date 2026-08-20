@@ -78,6 +78,7 @@ def test_status_collapse_smoke():
     assert "agent" in text.plain.lower()
     assert "gemini" in text.plain
     assert "8.2K/32K" in text.plain
+    assert "ONLINE" in text.plain
 
 
 def test_status_collapse_narrow():
@@ -90,6 +91,7 @@ def test_status_collapse_narrow():
     text = r.render_status()
     assert "JARVIS" not in text.plain
     assert "agent" in text.plain.lower()
+    assert "gemini" not in text.plain.lower()
     assert "8.2K/32K" in text.plain
 
 

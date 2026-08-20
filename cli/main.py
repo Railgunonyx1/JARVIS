@@ -147,18 +147,20 @@ def _print_result(result) -> None:
 
 
 def _print_collapsed(result) -> None:
-    """Print result after Live display stops. Always outputs something."""
+    """Print result after agent finishes. Uses plain print() to avoid
+    Rich terminal state issues. Always outputs something."""
     try:
-        _print_result(result)
+        if result and result.success and result.response:
+            # Plain print — no Rich, no ANSI state, guaranteed visible
+            print(result.response)
+            print()
+        elif result and not result.success:
+            err = getattr(result, 'error', 'unknown error')
+            print(f"error: {err[:200]}")
+        else:
+            print("(no response)")
     except Exception as e:
-        console.print(Text(f"  (output error: {e})", style="jarvis.error"))
-    # If result was empty, print a fallback so the user isn't left staring at blank
-    if result and getattr(result, 'response', None):
-        pass  # already printed
-    elif result and not getattr(result, 'success', True):
-        pass  # error already printed
-    else:
-        console.print(Text("  (no response)", style="jarvis.dim"))
+        print(f"(output error: {e})")
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -186,9 +188,13 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     loop._last_goal = goal
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
+    # In collapsed (interactive) mode, skip the Live display entirely.
+    # Live's terminal state management causes invisible output after it stops.
+    # Instead, run the agent directly and print the result plainly.
+    use_live = not json_output and not collapsed
     display = LiveTaskDisplay(
         status_getter=(lambda: _status_getter(loop)),
-        enable=not json_output,
+        enable=use_live,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),
         screen=screen,
         transient=not collapsed,
@@ -198,23 +204,23 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         _capture_notification(name, payload, notifications)
         if bridge is not None:
             bridge.on_event(name, payload)
-        if not json_output:
+        if use_live:
             display._on_event(name, payload)
 
     if bridge is not None:
         bridge.start_run(goal)
-    if not json_output:
+    if use_live:
         display.attach(loop.observer)
         if renderer is not None:
             renderer.attach_live(display)
     loop.observer.on_event = _on_event
-    if not json_output:
+    if use_live:
         display.start()
     try:
         if bridge is not None:
             async def _on_chunk(delta: str) -> None:
                 bridge.stream_delta(delta)
-                if not json_output:
+                if use_live:
                     display.stream_delta(delta)
             result = await loop.run(goal, on_chunk=_on_chunk)
         else:
@@ -222,18 +228,14 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     except Exception as exc:
         if bridge is not None:
             bridge.fail_run(str(exc))
-        # Print the error directly — 'raise' skips _print_collapsed below.
         console.print(Text(f"  error: {str(exc)[:200]}", style="jarvis.error"))
         raise
     finally:
-        display.stop()
-        if renderer is not None:
-            renderer.detach_live()
-        # Force a clean newline after Live display stops to prevent
-        # transient=True from eating the output.
-        console.line()
-        # Flush stderr to ensure provider log noise doesn't leak
-        # between the display and the result.
+        if use_live:
+            display.stop()
+            if renderer is not None:
+                renderer.detach_live()
+            console.line()
         sys.stderr.flush()
 
     loop._last_result = result
