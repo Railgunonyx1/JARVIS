@@ -168,6 +168,8 @@ class LLMProvider(ABC):
         self.health.latency_ms = latency_ms
         self.health.consecutive_failures = 0
         self.health.last_error = None
+        if hasattr(self, "_rate_limit_count"):
+            self._rate_limit_count = 0
 
     def record_rate_limit(self):
         """Record a rate limit/quota hit WITHOUT penalizing provider health.
@@ -175,12 +177,21 @@ class LLMProvider(ABC):
         Rate limits are transient and handled by key rotation / backoff, so
         they must not feed the consecutive-failure counter that disables a
         provider (is_available=False) after 5 failures.
+
+        Cooldown uses a fixed base (not consecutive_failures) so that a
+        provider with prior health failures doesn't get an excessively long
+        cooldown just because it hit a rate limit.
         """
         self._requests_today += 1
         self._requests_this_minute += 1
-        # Full jitter cooldown to prevent synchronized retry bursts across
-        # multiple instances requesting the same provider.
-        cooldown = random.uniform(0, min(120, 10 * (2 ** self.health.consecutive_failures)))
+        # Fixed base cooldown with jitter.  Uses rate_limit_count (separate
+        # from consecutive_failures) to progressively back off on repeated
+        # rate limits without conflating with health failures.
+        if not hasattr(self, "_rate_limit_count"):
+            self._rate_limit_count = 0
+        self._rate_limit_count += 1
+        base = min(60, 5 * (2 ** min(self._rate_limit_count - 1, 4)))
+        cooldown = random.uniform(base * 0.5, base)
         self.health.cooldown_until = time.time() + cooldown
         self.health.last_error = "rate_limited"
 

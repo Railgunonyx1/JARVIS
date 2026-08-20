@@ -260,6 +260,9 @@ class ProviderRouter:
                     # Transient rate limits deserve a bounded retry with
                     # backoff before we abandon this provider for the chain.
                     if self._is_rate_limit(e):
+                        # Notify the provider about the rate limit so its
+                        # cooldown reflects the 429, not a health failure.
+                        provider.record_rate_limit()
                         for retry in range(_RATE_RETRIES):
                             delay = self._rate_limit_delay(e)
                             logger.warning(
@@ -286,7 +289,9 @@ class ProviderRouter:
                             except Exception as retry_err:
                                 last_error = retry_err
                                 metrics.counter(f"provider.fail.{provider_name}", 1)
-                                if not self._is_rate_limit(retry_err):
+                                if self._is_rate_limit(retry_err):
+                                    provider.record_rate_limit()
+                                else:
                                     break
                     logger.warning("Provider %s failed: %s", provider_name, e)
                     continue

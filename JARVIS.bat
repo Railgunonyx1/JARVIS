@@ -16,16 +16,19 @@ title JARVIS MK-X
 color 0B
 set "MODE=agent"
 
-REM Launch in Windows Terminal on first run.
-REM Uses JARVIS_WT=1 env var to prevent infinite loop.
-if not "%JARVIS_WT%"=="1" (
+REM Launch in Windows Terminal on first run only.
+REM Uses a temp marker file to prevent infinite relaunch loop,
+REM because env vars set with 'set' don't survive across 'start'.
+set "_mark=%TEMP%\jarvis_wt_launched"
+if not exist "%_mark%" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
-        set "JARVIS_WT=1"
-        start "" wt.exe -d "%~dp0" cmd /k "set JARVIS_WT=1&& "%~f0""
+        echo. > "%_mark%"
+        start "" wt.exe -d "%~dp0" "%~f0"
         exit /b
     )
 )
+del "%_mark%" 2>nul
 
 REM Direct CLI arguments
 if not "%~1"=="" goto argmode

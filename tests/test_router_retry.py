@@ -39,6 +39,15 @@ class FlakyProvider:
     def _stream_tool_call_results(self):
         return []
 
+    def record_rate_limit(self):
+        pass
+
+    def record_success(self, latency_ms):
+        pass
+
+    def record_failure(self, error):
+        pass
+
 
 def _router_with(provider) -> ProviderRouter:
     router = ProviderRouter(config={}, api_keys={})

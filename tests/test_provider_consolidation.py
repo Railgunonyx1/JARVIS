@@ -56,6 +56,15 @@ class _FakeProvider:
     def _stream_tool_call_results(self):
         return []
 
+    def record_rate_limit(self):
+        pass
+
+    def record_success(self, latency_ms):
+        pass
+
+    def record_failure(self, error):
+        pass
+
 
 def _router_with_providers(providers: dict) -> ProviderRouter:
     router = ProviderRouter(config={}, api_keys={})
