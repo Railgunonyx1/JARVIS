@@ -343,30 +343,30 @@ class TestParseRetryAfter:
 # ── record_rate_limit() does not count rejected requests ────────────────
 
 
+class _StubProvider:
+    """Minimal concrete provider for testing base-class methods."""
+    def __init__(self):
+        from providers.base import LLMProvider, ProviderHealth
+        # Use a concrete subclass to avoid abstract method error
+        class _Concrete(LLMProvider):
+            async def complete(self, *a, **kw): pass
+            async def complete_stream(self, *a, **kw): yield ''
+        self._real = _Concrete('stub', {})
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
 class TestRateLimitAccounting:
     def test_rate_limit_does_not_increment_counters(self):
-        from providers.base import BaseLLMProvider
-        p = BaseLLMProvider.__new__(BaseLLMProvider)
-        p._requests_today = 0
-        p._requests_this_minute = 0
-        p._rate_limit_count = 0
-        import time
-        from types import SimpleNamespace
-        p.health = SimpleNamespace(cooldown_until=0, last_error=None, consecutive_failures=0)
+        p = _StubProvider()
         p.record_rate_limit()
         assert p._requests_today == 0
         assert p._requests_this_minute == 0
         assert p._rate_limit_count == 1
 
     def test_rate_limit_progressive_cooldown(self):
-        from providers.base import BaseLLMProvider
         import time
-        p = BaseLLMProvider.__new__(BaseLLMProvider)
-        p._requests_today = 0
-        p._requests_this_minute = 0
-        p._rate_limit_count = 0
-        from types import SimpleNamespace
-        p.health = SimpleNamespace(cooldown_until=0, last_error=None, consecutive_failures=0)
+        p = _StubProvider()
         now = time.time()
         p.record_rate_limit()
         first_cooldown = p.health.cooldown_until

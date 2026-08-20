@@ -147,8 +147,18 @@ def _print_result(result) -> None:
 
 
 def _print_collapsed(result) -> None:
-    """Print result after Live display stops."""
-    _print_result(result)
+    """Print result after Live display stops. Always outputs something."""
+    try:
+        _print_result(result)
+    except Exception as e:
+        console.print(Text(f"  (output error: {e})", style="jarvis.error"))
+    # If result was empty, print a fallback so the user isn't left staring at blank
+    if result and getattr(result, 'response', None):
+        pass  # already printed
+    elif result and not getattr(result, 'success', True):
+        pass  # error already printed
+    else:
+        console.print(Text("  (no response)", style="jarvis.dim"))
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -178,7 +188,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     display = LiveTaskDisplay(
         status_getter=(lambda: _status_getter(loop)),
-        enable=not json_output and not collapsed,
+        enable=not json_output,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),
         screen=screen,
         transient=not collapsed,
@@ -222,6 +232,9 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         # Force a clean newline after Live display stops to prevent
         # transient=True from eating the output.
         console.line()
+        # Flush stderr to ensure provider log noise doesn't leak
+        # between the display and the result.
+        sys.stderr.flush()
 
     loop._last_result = result
     if bridge is not None:
@@ -232,6 +245,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         print(json.dumps({"goal": goal, **state, **payload}, indent=2, default=str))
     elif collapsed:
         _print_collapsed(result)
+        sys.stdout.flush()
     else:
         _print_result(result)
     if perf:

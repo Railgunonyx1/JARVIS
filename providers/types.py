@@ -91,6 +91,8 @@ def classify_provider_error(error_str: str, status_code: int | None = None) -> E
         return ErrorKind.AUTH
     if status_code == 400 or status_code == 422:
         return ErrorKind.INVALID_REQUEST
+    if status_code == 504:
+        return ErrorKind.TIMEOUT
     if status_code == 503:
         return ErrorKind.OVERLOADED
     if status_code and status_code >= 500:

@@ -37,7 +37,6 @@ from .models import (
     Message,
     Mode,
     Plan,
-    RiskLevel,
     StepStatus,
 )
 from .theme import COLORS, BoxStyles, get_symbols

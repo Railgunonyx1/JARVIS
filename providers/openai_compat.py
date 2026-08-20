@@ -179,7 +179,6 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> AsyncIterator[str]:
         full_messages = self._build_messages(messages, system_prompt)
         tool_param = openai_tools_param(tools)
-        last_error: Exception | None = None
         attempts = 0
 
         while attempts < len(self._keys):
@@ -212,7 +211,6 @@ class OpenAICompatibleProvider(LLMProvider):
                 return
 
             except Exception as e:
-                last_error = e
                 error_str = str(e)
                 if self._check_rate_limit(error_str):
                     self.record_rate_limit()
