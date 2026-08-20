@@ -188,10 +188,11 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     loop._last_goal = goal
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
-    # In collapsed (interactive) mode, skip the Live display entirely.
-    # Live's terminal state management causes invisible output after it stops.
-    # Instead, run the agent directly and print the result plainly.
-    use_live = not json_output and not collapsed
+    # Live display is ALWAYS enabled (except --json pipe mode).
+    # In interactive mode: transient=True shows the Claude-style UI during
+    # execution, then clears it and _print_collapsed shows the final result.
+    # In one-shot mode: transient=False keeps the full conversation on screen.
+    use_live = not json_output
     display = LiveTaskDisplay(
         status_getter=(lambda: _status_getter(loop)),
         enable=use_live,
@@ -235,7 +236,10 @@ async def _run_once(goal: str, loop, json_output: bool = False,
             display.stop()
             if renderer is not None:
                 renderer.detach_live()
-            console.line()
+            # After Live stops: transient=True cleared the screen.
+            # Print the final result so the user sees it.
+            if collapsed and 'result' in dir():
+                pass  # will print below
         sys.stderr.flush()
 
     loop._last_result = result
@@ -246,6 +250,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         state = payload.pop("state", {})
         print(json.dumps({"goal": goal, **state, **payload}, indent=2, default=str))
     elif collapsed:
+        # transient=True cleared the Live display. Print the final result.
         _print_collapsed(result)
         sys.stdout.flush()
     else:

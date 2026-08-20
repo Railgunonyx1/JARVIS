@@ -1,11 +1,23 @@
 [router]
 default_provider = "gemini"
-fallback_chain = ["gemini", "groq", "cerebras", "deepseek", "openrouter", "opencode_zen", "mistral", "nvidia_nim", "huggingface", "omni_route", "ollama"]
+fallback_chain = [
+    "groq",
+    "ollama",
+    "gemini",
+    "cerebras",
+    "deepseek",
+    "openrouter",
+    "opencode_zen",
+    "mistral",
+    "nvidia_nim",
+    "huggingface",
+    "omni_route",
+]
 max_retries = 2
 timeout_seconds = 30
 
 [groq]
-model = "llama-3.3-70b-versatile"
+model = "qwen/qwen3.6-27b"
 max_tokens = 32768
 temperature = 0.7
 requests_per_minute = 60
@@ -151,9 +163,6 @@ model = "auto"
 max_tokens = 4096
 temperature = 0.7
 
-# ─────────────────────────────────────────────────────────────────────
-# Planner / Executor inline model choices (config-driven, no hardcoding).
-# ─────────────────────────────────────────────────────────────────────
 [planner]
 plan_model = "gemini-2.5-flash-lite"
 replan_model = "gemini-2.5-flash"
@@ -165,8 +174,6 @@ analyze_model = "gemini-2.5-flash-lite"
 fix_model = "gemini-2.0-flash"
 decompose_model = "gemini-2.5-flash"
 
-[inference_engine]
-# Query-complexity → (provider, model) routing map for ModelRouter.
 [inference_engine.simple]
 provider = "ollama"
 model = "llama3.2:latest"

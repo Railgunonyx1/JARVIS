@@ -244,15 +244,49 @@ class AgentLoop:
                 if addendum:
                     system_prompt = (system_prompt or "") + addendum
 
+            _run_start = time.time()
+            _HARD_TIMEOUT_S = 90.0  # wall-time safety net
+
             for iteration in range(1, self.max_iterations + 1):
+                # Hard wall-time timeout — prevents infinite tool-call loops
+                elapsed = time.time() - _run_start
+                if elapsed > _HARD_TIMEOUT_S:
+                    self._emit("task.failed", {
+                        "goal": goal[:200],
+                        "error": f"timeout after {elapsed:.0f}s",
+                    }, trace_id)
+                    state.transition(TaskStatus.FAILED)
+                    final = self._extract_final(messages)
+                    self._finish_observation(False, final or "", state, iteration)
+                    return AgentResult(
+                        success=False, response=final, trace_id=trace_id,
+                        state=state, error=f"timeout after {elapsed:.0f}s",
+                        observation=self._result_observation(state),
+                        perf=self._end_perf(tracer, root),
+                    )
                 state.iteration = iteration
                 with tracer.span("context.fit"):
                     messages, report = self.context_manager.fit_for_loop(
                         messages, self._system_tokens(system_prompt, tools),
                     )
                 state.context_usage = report.to_dict()
+                _PER_CALL_TIMEOUT = 30.0  # seconds per provider call
+                remaining = max(5.0, _HARD_TIMEOUT_S - (time.time() - _run_start))
+                _call_timeout = min(_PER_CALL_TIMEOUT, remaining)
                 with tracer.span("provider.complete") as span:
-                    response = await self._complete(messages, system_prompt, tools, on_chunk)
+                    try:
+                        response = await asyncio.wait_for(
+                            self._complete(messages, system_prompt, tools, on_chunk),
+                            timeout=_call_timeout,
+                        )
+                    except asyncio.TimeoutError:
+                        # Provider didn't respond in time — treat as provider failure
+                        from providers.types import ProviderError
+                        response = type('TimeoutResp', (), {
+                            'text': '', 'tool_calls': [], 'has_tool_calls': False,
+                            'provider': 'timeout', 'model': '', 'tokens_used': 0,
+                            'tokens_prompt': 0, 'tokens_completion': 0, 'latency_ms': 0,
+                        })()
                     if span is not None:
                         span.set_attribute("provider", response.provider)
                         span.set_attribute("model", response.model)
