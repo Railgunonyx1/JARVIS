@@ -16,6 +16,7 @@ past this boundary.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -316,6 +317,51 @@ class AgentBridge:
             self._on_verification_failed(payload)
         elif name == "task.recovering":
             self._on_recovery_started(payload)
+        elif name == "provider.rate_limit":
+            self._on_provider_rate_limit(payload)
+        elif name == "provider.switched":
+            self._on_provider_switched(payload)
+        elif name == "provider.notice":
+            self._on_provider_notice(payload)
+
+    def _on_provider_rate_limit(self, payload: dict[str, Any]) -> None:
+        """Show rate-limit notice in the UI instead of dumping a Python WARNING."""
+        provider = payload.get("provider", "unknown")
+        retry_after = payload.get("retry_after")
+        message = "rate limited"
+        if payload.get("switching"):
+            message += " · switching provider"
+        self._set_provider_notice(provider, message, "warning", retry_after)
+
+    def _on_provider_switched(self, payload: dict[str, Any]) -> None:
+        """Show provider switch notice."""
+        from_provider = payload.get("from", "unknown")
+        to_provider = payload.get("to", "unknown")
+        self._set_provider_notice(
+            from_provider, f"unavailable · switching to {to_provider}", "info"
+        )
+
+    def _on_provider_notice(self, payload: dict[str, Any]) -> None:
+        """Generic provider notice — forward to UI."""
+        self._set_provider_notice(
+            payload.get("provider", ""),
+            payload.get("message", ""),
+            payload.get("kind", "info"),
+            payload.get("retry_after"),
+        )
+
+    def _set_provider_notice(self, provider: str, message: str,
+                             kind: str = "warning", retry_after: float | None = None) -> None:
+        """Set a provider notice on the renderer."""
+        if self.renderer is not None and hasattr(self.renderer, 'set_provider_notice'):
+            self.renderer.set_provider_notice(provider, message, kind, retry_after)
+        # Auto-clear after 5 seconds (best-effort, not blocking)
+        def _clear():
+            import time
+            time.sleep(5)
+            if self.renderer is not None and hasattr(self.renderer, 'clear_provider_notice'):
+                self.renderer.clear_provider_notice()
+        threading.Thread(target=_clear, daemon=True, name="provider-notice-clear").start()
 
     def _on_task_started(self, payload: dict[str, Any]) -> None:
         self._active_event = None

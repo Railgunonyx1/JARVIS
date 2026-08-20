@@ -300,6 +300,7 @@ def _print_ui_render(display) -> None:
 
 def perf_cli(argv) -> int:
     import argparse
+
     from runtime.observability.dashboard import render_summary, render_trace, trace_table
     from runtime.observability.exporters import perf_db_path, read_latest, read_slowest, read_summary
 
@@ -433,6 +434,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 break
             bridge.attach_loop(loop)
             bridge.pull_status()
+            # Wire router rate-limit events to the UI via the observer
+            loop.router.on_provider_event = lambda name, payload: (
+                getattr(loop.observer, 'on_event', lambda n, p: None)(name, payload)
+            )
             loop.router.warm()
             if profile_startup:
                 _print_startup_report()

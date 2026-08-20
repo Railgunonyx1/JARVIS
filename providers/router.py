@@ -18,9 +18,13 @@ from providers.omni_route_provider import OmniRouteProvider
 from providers.opencode_zen_provider import OpenCodeZenProvider
 from providers.openrouter_provider import OpenRouterProvider
 from providers.types import (
-    ProviderError, RateLimitError, ErrorKind,
-    classify_provider_error, parse_retry_after,
-    is_rate_limit_error, restore_tool_names, sanitize_tools,
+    ErrorKind,
+    ProviderError,
+    RateLimitError,
+    classify_provider_error,
+    parse_retry_after,
+    restore_tool_names,
+    sanitize_tools,
 )
 from reliability_engine.circuit_breaker import CircuitBreaker
 
@@ -49,7 +53,19 @@ class ProviderRouter:
         self._warmed = False
         self._available_chain: list[str] | None = None
         self._chain_checked_at: float = 0.0
+        # UI notification callback: (event_name, payload) -> None
+        # Set by main.py/bridge so the router can emit semantic events
+        # instead of relying on Python logging for user-facing messages.
+        self.on_provider_event: callable | None = None
         self._init_providers(self._config, api_keys or {})
+
+    def _notify(self, event: str, **payload) -> None:
+        """Emit a semantic event for the UI (non-blocking, best-effort)."""
+        if self.on_provider_event is not None:
+            try:
+                self.on_provider_event(event, payload)
+            except Exception:
+                pass
 
     def _init_providers(self, config: dict, api_keys: dict):
         """Initialize all configured providers."""
@@ -287,6 +303,9 @@ class ProviderRouter:
                     # Immediately fallback for permanent errors
                     if self._should_fallback(e):
                         provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                        self._notify("provider.rate_limit",
+                                     provider=provider_name, message=kind.value,
+                                     kind="warning", switching=True)
                         logger.info("%s: %s — falling back", provider_name, kind.value)
                         continue
 
@@ -294,6 +313,9 @@ class ProviderRouter:
                     if self._is_rate_limit(e):
                         provider.record_rate_limit()
                         delay = self._rate_limit_delay(e)
+                        self._notify("provider.rate_limit",
+                                     provider=provider_name, message="rate limited",
+                                     kind="warning", retry_after=delay)
                         logger.info("%s: retrying in %.1fs", provider_name, delay)
                         await asyncio.sleep(delay)
                         try:
@@ -400,11 +422,17 @@ class ProviderRouter:
                         if first_chunk:
                             if self._should_fallback(e):
                                 provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                self._notify("provider.rate_limit",
+                                             provider=provider_name, message=kind.value,
+                                             kind="warning", switching=True)
                                 break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
+                                self._notify("provider.rate_limit",
+                                             provider=provider_name, message="rate limited",
+                                             kind="warning", retry_after=delay)
                                 logger.info("%s: stream retry in %.1fs", provider_name, delay)
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()
@@ -521,11 +549,17 @@ class ProviderRouter:
                         if first_chunk:
                             if self._should_fallback(e):
                                 provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                self._notify("provider.rate_limit",
+                                             provider=provider_name, message=kind.value,
+                                             kind="warning", switching=True)
                                 break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
+                                self._notify("provider.rate_limit",
+                                             provider=provider_name, message="rate limited",
+                                             kind="warning", retry_after=delay)
                                 logger.info("%s: stream_typed retry in %.1fs", provider_name, delay)
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()

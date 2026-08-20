@@ -23,10 +23,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable
 
 from core.core_events import CoreEvent
 from core.reducers import reduce
@@ -92,8 +91,13 @@ class EventSerializer:
         """JSON string → SessionState snapshot."""
         try:
             from core.types import (
-                FailureClass, Mode, Plan, PlanStep, StepStatus,
-                TaskStatus, VerificationStatus,
+                FailureClass,
+                Mode,
+                Plan,
+                PlanStep,
+                StepStatus,
+                TaskStatus,
+                VerificationStatus,
             )
             d = json.loads(data)
             d["status"] = TaskStatus(d["status"])

@@ -399,7 +399,10 @@ class AgentLoop:
         except Exception as e:
             error = str(e)[:500]
             state.errors.append(error)
-            is_provider = isinstance(e, (ProviderError, RuntimeError)) and "provider" in error.lower()
+            is_provider = isinstance(e, (ProviderError, RuntimeError)) and (
+                "provider" in error.lower() or "429" in error or "rate limit" in error.lower()
+                or "quota" in error.lower() or "overloaded" in error.lower()
+            )
             fc = classify_failure(error, is_provider=is_provider)
             state.failure_class = pick_worst_failure(state.failure_class, fc)
             self.logger.record(trace_id, events.TASK_FAILED, {"goal": goal[:200], "error": error})

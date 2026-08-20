@@ -299,7 +299,4 @@ def compress_context_budget(
     files_reduced = max(0, int(files_tokens * reduction_ratio))
     messages_reduced = max(0, int(messages_tokens * reduction_ratio))
 
-    # Ensure we don't reduce response budget below minimum
-    response_min = getattr(budget, 'response', 1000) if hasattr(budget, '__class__') else 1000
-
     return system_reduced, memory_reduced, files_reduced, messages_reduced

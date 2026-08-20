@@ -1,3 +1,3 @@
-from reliability_engine.circuit_breaker import CircuitBreaker, get_circuit_breaker
-from reliability_engine.graceful_degradation import GracefulDegradation, get_graceful_degradation
-from reliability_engine.health_monitor import HealthMonitor, get_health_monitor
+from reliability_engine.circuit_breaker import CircuitBreaker as CircuitBreaker, get_circuit_breaker as get_circuit_breaker
+from reliability_engine.graceful_degradation import GracefulDegradation as GracefulDegradation, get_graceful_degradation as get_graceful_degradation
+from reliability_engine.health_monitor import HealthMonitor as HealthMonitor, get_health_monitor as get_health_monitor

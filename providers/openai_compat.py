@@ -155,7 +155,6 @@ class OpenAICompatibleProvider(LLMProvider):
                 return result
 
             except Exception as e:
-                last_error = e
                 error_str = str(e)
                 if self._check_rate_limit(error_str):
                     self.record_rate_limit()

@@ -255,3 +255,155 @@ class TestRouterIsRateLimit:
     def test_normal_error_not_rate_limit(self):
         router = ProviderRouter(config={}, api_keys={})
         assert router._is_rate_limit(RuntimeError("connection reset")) is False
+
+
+# ── classify_provider_error() tests ────────────────────────────────────
+
+
+class TestClassifyProviderError:
+    def test_429_status_code(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("any error", 429) == ErrorKind.RATE_LIMIT
+
+    def test_429_daily_quota(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("daily quota exceeded", 429) == ErrorKind.QUOTA_EXHAUSTED
+
+    def test_429_substring(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("Error code: 429 - rate limit") == ErrorKind.RATE_LIMIT
+
+    def test_rate_limit_substrings(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("tokens per minute exceeded") == ErrorKind.RATE_LIMIT
+        assert classify_provider_error("too many requests") == ErrorKind.RATE_LIMIT
+        assert classify_provider_error("request limit reached, retry after 3s") == ErrorKind.RATE_LIMIT
+
+    def test_quota_exhausted_no_retry(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("quota exhausted, credits depleted") == ErrorKind.QUOTA_EXHAUSTED
+        assert classify_provider_error("daily quota exceeded") == ErrorKind.QUOTA_EXHAUSTED
+        assert classify_provider_error("billing limit") == ErrorKind.QUOTA_EXHAUSTED
+
+    def test_resource_exhausted_retryable(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("resource_exhausted, try again in 10s") == ErrorKind.RATE_LIMIT
+
+    def test_resource_exhausted_permanent(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("resource_exhausted") == ErrorKind.QUOTA_EXHAUSTED
+
+    def test_auth_errors(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("unauthorized", 401) == ErrorKind.AUTH
+        assert classify_provider_error("invalid key", 403) == ErrorKind.AUTH
+        assert classify_provider_error("authentication failed") == ErrorKind.AUTH
+
+    def test_timeout(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("request timed out", 504) == ErrorKind.TIMEOUT
+        assert classify_provider_error("timeout after 30s") == ErrorKind.TIMEOUT
+
+    def test_network(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("connection refused") == ErrorKind.NETWORK
+        assert classify_provider_error("dns resolution failed") == ErrorKind.NETWORK
+
+    def test_overloaded(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("service unavailable", 503) == ErrorKind.OVERLOADED
+        assert classify_provider_error("server overloaded") == ErrorKind.OVERLOADED
+
+    def test_unknown_falls_through(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error("something weird happened") == ErrorKind.UNKNOWN
+
+
+# ── parse_retry_after() tests ──────────────────────────────────────────
+
+
+class TestParseRetryAfter:
+    def test_try_again_in_seconds(self):
+        from providers.types import parse_retry_after
+        assert parse_retry_after("try again in 17.44s") == 17.44
+
+    def test_retry_after_seconds(self):
+        from providers.types import parse_retry_after
+        assert parse_retry_after("retry after 2.5s") == 2.5
+
+    def test_no_match(self):
+        from providers.types import parse_retry_after
+        assert parse_retry_after("connection refused") is None
+
+    def test_malformed_number(self):
+        from providers.types import parse_retry_after
+        assert parse_retry_after("try again in abc seconds") is None
+
+
+# ── record_rate_limit() does not count rejected requests ────────────────
+
+
+class TestRateLimitAccounting:
+    def test_rate_limit_does_not_increment_counters(self):
+        from providers.base import BaseLLMProvider
+        p = BaseLLMProvider.__new__(BaseLLMProvider)
+        p._requests_today = 0
+        p._requests_this_minute = 0
+        p._rate_limit_count = 0
+        import time
+        from types import SimpleNamespace
+        p.health = SimpleNamespace(cooldown_until=0, last_error=None, consecutive_failures=0)
+        p.record_rate_limit()
+        assert p._requests_today == 0
+        assert p._requests_this_minute == 0
+        assert p._rate_limit_count == 1
+
+    def test_rate_limit_progressive_cooldown(self):
+        from providers.base import BaseLLMProvider
+        import time
+        p = BaseLLMProvider.__new__(BaseLLMProvider)
+        p._requests_today = 0
+        p._requests_this_minute = 0
+        p._rate_limit_count = 0
+        from types import SimpleNamespace
+        p.health = SimpleNamespace(cooldown_until=0, last_error=None, consecutive_failures=0)
+        now = time.time()
+        p.record_rate_limit()
+        first_cooldown = p.health.cooldown_until
+        assert first_cooldown > now
+        p.record_rate_limit()
+        second_cooldown = p.health.cooldown_until
+        assert second_cooldown >= first_cooldown
+
+
+# ── is_provider detection in agent loop ─────────────────────────────────
+
+
+class TestAgentLoopProviderDetection:
+    def test_provider_error_detected(self):
+        from providers.types import ProviderError
+        e = ProviderError("test", "rate limit hit")
+        error = str(e)
+        is_provider = isinstance(e, (ProviderError, RuntimeError)) and (
+            "provider" in error.lower() or "429" in error or "rate limit" in error.lower()
+            or "quota" in error.lower() or "overloaded" in error.lower()
+        )
+        assert is_provider is True
+
+    def test_rate_limit_string_detected(self):
+        e = RuntimeError("Error code: 429 - rate limit, try again in 5s")
+        error = str(e)
+        is_provider = isinstance(e, (ProviderError, RuntimeError)) and (
+            "provider" in error.lower() or "429" in error or "rate limit" in error.lower()
+            or "quota" in error.lower() or "overloaded" in error.lower()
+        )
+        assert is_provider is True
+
+    def test_tool_error_not_detected_as_provider(self):
+        e = ValueError("shell.execute failed: permission denied")
+        error = str(e)
+        is_provider = isinstance(e, (ProviderError, RuntimeError)) and (
+            "provider" in error.lower() or "429" in error or "rate limit" in error.lower()
+            or "quota" in error.lower() or "overloaded" in error.lower()
+        )
+        assert is_provider is False

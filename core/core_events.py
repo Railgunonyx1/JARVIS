@@ -24,13 +24,8 @@ from core.types import (
     ConfirmationRequest,
     FailureClass,
     Mode,
-    PlanStep,
-    RiskLevel,
     StepStatus,
     TaskStatus,
-    ToolCallRecord,
-    VerificationStatus,
-    VerificationStep,
 )
 
 # ---------------------------------------------------------------------------

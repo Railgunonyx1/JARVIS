@@ -116,10 +116,11 @@ class GeminiProvider(LLMProvider):
                 config=config,
             )
             latency = (time.time() - start) * 1000
-            try:
-                text = response.text or ""
-            except Exception:
-                text = ""
+            text = ""
+            if response.candidates:
+                for part in response.candidates[0].content.parts or []:
+                    if hasattr(part, "text") and part.text:
+                        text += part.text
             tool_calls = parse_gemini_function_calls(response)
             prompt_tokens = (response.usage_metadata.prompt_token_count or 0) if response.usage_metadata else 0
             completion_tokens = (response.usage_metadata.candidates_token_count or 0) if response.usage_metadata else 0
@@ -139,7 +140,7 @@ class GeminiProvider(LLMProvider):
             return result
         except Exception as e:
             error_str = str(e)
-            from providers.types import classify_provider_error, ErrorKind
+            from providers.types import ErrorKind, classify_provider_error
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
@@ -204,7 +205,7 @@ class GeminiProvider(LLMProvider):
             self.record_success(latency)
         except Exception as e:
             error_str = str(e)
-            from providers.types import classify_provider_error, ErrorKind
+            from providers.types import ErrorKind, classify_provider_error
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()

@@ -256,3 +256,6 @@ class AppState:
     recovery_active: bool = False
     recovery_attempt: int = 0
     recovery_error: str = ""
+
+    # Provider notices (rate limits, provider switches — semantic, not logging)
+    provider_notice: tuple[str, str, str, float | None] | None = None  # (provider, message, kind, retry_after)

@@ -16,16 +16,15 @@ calls the matching handler for each event during replay and live append.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
-from core.core_events import CoreEvent, EventCategory
+from core.core_events import CoreEvent
 from core.types import (
     ConfirmationRequest,
     FailureClass,
     Message,
     Mode,
     Plan,
-    PlanStep,
     RiskLevel,
     SessionState,
     StepStatus,
