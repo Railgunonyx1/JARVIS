@@ -159,7 +159,7 @@ class OllamaProvider(LLMProvider):
                     pass  # Fallback also failed — fall through to raise primary_err
             # Classify and record the primary error
             error_str = str(primary_err)
-            from providers.types import classify_provider_error, ErrorKind
+            from providers.types import ErrorKind, classify_provider_error
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
@@ -233,7 +233,7 @@ class OllamaProvider(LLMProvider):
             self.record_success(latency)
         except Exception as e:
             error_str = str(e)
-            from providers.types import classify_provider_error, ErrorKind
+            from providers.types import ErrorKind, classify_provider_error
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
