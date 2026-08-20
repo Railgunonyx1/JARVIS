@@ -356,7 +356,36 @@ def get_mem() -> MemoryAPI:
                     mirror_json=True,
                 )
                 _instance.start_background()
+                # Bootstrap: sync long_term.json → KV store so the LLM
+                # sees user identity, preferences, and priorities on first request.
+                _bootstrap_long_term(_instance)
     return _instance
+
+
+def _bootstrap_long_term(api: MemoryAPI) -> None:
+    """Load long_term.json and sync all entries into the KV store.
+
+    This runs once at startup. After this, format_for_prompt() will
+    include [RECENT MEMORY] with the user's name, role, priorities, etc.
+    """
+    try:
+        from memory.memory_manager import load_memory
+        data = load_memory()
+        if not data or api._kv is None:
+            return
+        count = 0
+        for category, items in data.items():
+            if not isinstance(items, dict):
+                continue
+            for key, entry in items.items():
+                val = entry.get("value") if isinstance(entry, dict) else entry
+                if val and isinstance(val, str) and val.strip():
+                    api._kv.store(key, val, category=category, importance=0.9)
+                    count += 1
+        if count > 0:
+            logger.info("Bootstrapped %d memory entries from long_term.json", count)
+    except Exception as e:
+        logger.warning("Failed to bootstrap long_term.json: %s", e)
 
 
 # Backwards-compatible alias: existing imports of Mem still work.

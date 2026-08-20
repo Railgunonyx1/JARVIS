@@ -124,6 +124,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     sections = [
         ("identity", "Identity"),
         ("preferences", "Preferences"),
+        ("priorities", "Priorities"),
         ("projects", "Active Projects"),
         ("relationships", "People"),
         ("wishes", "Wishes / Plans"),
