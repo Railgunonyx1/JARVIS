@@ -55,10 +55,11 @@ _MODES = ("plan", "controlled", "smart", "agent")
 
 
 def _configure_noise(verbose: bool) -> None:
-    level = logging.NOTSET if verbose else logging.ERROR
-    for name, logger in list(logging.root.manager.loggerDict.items()):
-        if isinstance(logger, logging.Logger) and not name.startswith("jarvis"):
-            logger.setLevel(level)
+    # In interactive mode, never let library loggers write to stderr.
+    # All logging goes to file via setup_logging().
+    for name, lg in list(logging.root.manager.loggerDict.items()):
+        if isinstance(lg, logging.Logger) and not name.startswith("jarvis"):
+            lg.setLevel(logging.CRITICAL + 1)  # effectively silenced
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -359,10 +360,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     from cli.startup_profile import get_profiler
 
     profiler = get_profiler()
-
-    # Claude Code-style startup: minimal, clean
-    console.print(Text("JARVIS MK-X", style="bold bright_cyan"))
-    console.print()
+    # No startup banner — the conversation IS the UI.
 
     bridge = AgentBridge(renderer=Renderer(console=console))
     commands = CommandRegistry(bridge.renderer, bridge=bridge)
@@ -398,7 +396,9 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     reader = InputReader()
     reader.set_history(history.to_list())
 
-    def _read_command(prompt: str = "> ") -> str:
+    def _read_command() -> str:
+        mode = str(loop.mode).lower() if loop else "agent"
+        prompt = f"JARVIS [{mode}] > "
         while True:
             try:
                 return reader.read_line(prompt)
@@ -419,7 +419,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             history.add(line)
             history.save()
             if not ready.is_set():
-                console.print(Text("  starting...", style="dim"))
                 try:
                     ready.wait()
                 except KeyboardInterrupt:

@@ -31,9 +31,9 @@ def setup_logging(level: str = "INFO", log_dir: str | None = None) -> None:
     fh.setFormatter(fmt)
     root.addHandler(fh)
 
-    ch = logging.StreamHandler(sys.stderr)
-    ch.setFormatter(fmt)
-    root.addHandler(ch)
+    # Route ALL logging to file only.  Never add a StreamHandler to stderr
+    # or stdout — that pollutes the interactive conversation viewport.
+    # Use the /verbose command to temporarily enable stderr output.
 
     for noisy in ("httpx", "urllib3", "chromadb", "pypff", "PIL", "sounddevice"):
         logging.getLogger(noisy).setLevel(logging.WARNING)

@@ -511,8 +511,13 @@ class Renderer:
     def render_task_screen(self) -> RenderableType:
         """Claude Code-style screen: conversation is the UI.
 
-        No separator lines. No Panel borders. Just clean content.
+        Layout:
+          Status bar (top, compact)
+          Conversation (fills width)
+          Separator + prompt (anchored bottom)
         """
+        width = self.console.size.width
+        status = self.render_status()
         conversation = self.render_conversation()
         plan = self.render_plan()
         activity = self.render_activity()
@@ -530,17 +535,26 @@ class Renderer:
             recovery=recovery,
         )
 
-        elements: list[RenderableType] = [content]
+        # Separator line
+        sep = Text("─" * (width - 1), style="jarvis.muted")
+
+        # Anchored prompt at bottom
+        prompt = Text.assemble(
+            Text(f"JARVIS [{self.state.mode.value.lower()}] > ", style="jarvis.accent"),
+        )
+
+        elements: list[RenderableType] = [
+            status,
+            sep,
+            content,
+        ]
 
         if verification is not None:
             elements += [Text(""), verification]
         if recovery is not None:
             elements += [Text(""), recovery]
 
-        # Minimal prompt
-        elements.append(Text.assemble(
-            Text(">", style="jarvis.muted"),
-        ))
+        elements += [sep, prompt]
 
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
