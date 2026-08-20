@@ -1,7 +1,6 @@
 [router]
 default_provider = "gemini"
 fallback_chain = [
-    "ollama",
     "groq",
     "gemini",
     "cerebras",
@@ -12,6 +11,7 @@ fallback_chain = [
     "nvidia_nim",
     "huggingface",
     "omni_route",
+    "ollama",
 ]
 max_retries = 2
 timeout_seconds = 30
@@ -101,7 +101,7 @@ max_tokens = 2048
 temperature = 0.7
 
 [ollama]
-model = "qwen2.5:1.5b"
+model = "qwen2.5:3b"
 max_tokens = 2048
 temperature = 0.7
 base_url = "http://127.0.0.1:11434"
@@ -109,7 +109,7 @@ num_ctx = 4096
 priority = 4
 
 [ollama.fallback]
-model = "gemma3:1b"
+model = "qwen2.5:1.5b"
 max_tokens = 2048
 temperature = 0.7
 

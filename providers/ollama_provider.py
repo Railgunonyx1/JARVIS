@@ -7,7 +7,7 @@ import time
 from collections.abc import AsyncIterator
 
 from providers.base import LLMProvider, LLMResponse
-from providers.types import openai_tools_param, parse_ollama_tool_calls
+from providers.types import ToolCall, parse_ollama_tool_calls
 
 logger = logging.getLogger("jarvis.providers.ollama")
 
@@ -19,6 +19,10 @@ class OllamaProvider(LLMProvider):
         self._client = None
         self._sdk_package = "ollama"
         self._daemon_ok = False
+        # Intra-provider fallback: try a second model before giving up.
+        # Configured via [ollama.fallback] model = "..."
+        fallback_cfg = config.get("fallback", {})
+        self._fallback_model = fallback_cfg.get("model") if isinstance(fallback_cfg, dict) else None
         self._check_package()
 
     def _check_package(self) -> bool:
@@ -79,6 +83,40 @@ class OllamaProvider(LLMProvider):
                 out.append(msg)
         return out
 
+    async def _chat_once(self, client, model: str, full_messages: list,
+                         tools: list | None, max_tokens, temperature) -> LLMResponse:
+        """Single Ollama chat() call — factored out for fallback reuse."""
+        kwargs = {}
+        if tools:
+            kwargs["tools"] = tools
+        start = time.time()
+        response = await client.chat(
+            model=model,
+            messages=full_messages,
+            options={
+                "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
+                "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
+                "num_ctx": self.config.get("num_ctx", 4096),
+            },
+            **kwargs,
+        )
+        latency = (time.time() - start) * 1000
+        message = response["message"]
+        text = message.get("content") or ""
+        prompt_tokens = response.get("prompt_eval_count", 0)
+        completion_tokens = response.get("eval_count", 0)
+        return LLMResponse(
+            text=text,
+            model=model,
+            provider="ollama",
+            tokens_prompt=prompt_tokens,
+            tokens_completion=completion_tokens,
+            tokens_used=prompt_tokens + completion_tokens,
+            latency_ms=latency,
+            finish_reason="stop",
+            tool_calls=parse_ollama_tool_calls(message),
+        )
+
     async def complete(
         self,
         messages: list[dict],
@@ -93,54 +131,39 @@ class OllamaProvider(LLMProvider):
         # Ollama handles its own tool format — send raw tools, not
         # the compressed OpenAI format (which strips descriptions).
         # Small local models (<=3B params) can only handle a few tools.
-        _max_tools = 5 if '1.5b' in self.config.get('model', '') or '1b' in self.config.get('model', '') else 20
+        primary_model = self.config.get("model", "qwen2.5:1.5b")
+        # Small models (<=1.5B) can only handle a few tools; larger ones get more.
+        if any(tag in primary_model for tag in ('1.5b', '1b')):
+            _max_tools = 5
+        elif '3b' in primary_model:
+            _max_tools = 10
+        else:
+            _max_tools = 20
         _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
-        start = time.time()
         try:
-            kwargs = {}
-            if _limited_tools:
-                kwargs["tools"] = _limited_tools
-            response = await client.chat(
-                model=self.config.get("model", "qwen2.5:1.5b"),
-                messages=full_messages,
-                options={
-                    "num_predict": max_tokens or self.config.get("max_tokens", 2048),
-                    "temperature": temperature or self.config.get("temperature", 0.7),
-                    "num_ctx": self.config.get("num_ctx", 4096),
-                },
-                **kwargs,
-            )
-            latency = (time.time() - start) * 1000
-            message = response["message"]
-            text = message.get("content") or ""
-            prompt_tokens = response.get("prompt_eval_count", 0)
-            completion_tokens = response.get("eval_count", 0)
-
-            result = LLMResponse(
-                text=text,
-                model=self.config.get("model", "qwen2.5:1.5b"),
-                provider="ollama",
-                tokens_prompt=prompt_tokens,
-                tokens_completion=completion_tokens,
-                tokens_used=prompt_tokens + completion_tokens,
-                latency_ms=latency,
-                finish_reason="stop",
-                tool_calls=parse_ollama_tool_calls(message),
-            )
-            self.record_success(latency)
+            result = await self._chat_once(client, primary_model, full_messages,
+                                          _limited_tools, max_tokens, temperature)
+            self.record_success(result.latency_ms)
             return result
-        except Exception as e:
-            error_str = str(e)
+        except Exception as primary_err:
+            # Intra-provider fallback: try the fallback model if configured
+            if self._fallback_model and self._fallback_model != primary_model:
+                try:
+                    logger.info("Ollama primary model %s failed, trying fallback %s",
+                                primary_model, self._fallback_model)
+                    result = await self._chat_once(client, self._fallback_model, full_messages,
+                                                  _limited_tools, max_tokens, temperature)
+                    self.record_success(result.latency_ms)
+                    return result
+                except Exception:
+                    pass  # Fallback also failed — fall through to raise primary_err
+            # Classify and record the primary error
+            error_str = str(primary_err)
             from providers.types import classify_provider_error, ErrorKind
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
-            elif kind == ErrorKind.TIMEOUT:
-                self.record_failure(error_str)
-            elif kind in (ErrorKind.AUTH, ErrorKind.INVALID_REQUEST):
-                self.record_failure(error_str)
             else:
-                # Connection refused, network errors, model not found, etc.
                 self.record_failure(error_str)
             raise
 
@@ -154,12 +177,10 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncIterator[str]:
         """Stream text chunks from Ollama.
 
-        NOTE: Ollama's streaming responses can contain tool_calls in later
-        chunks, but this implementation only yields text content.  When tools
-        are present, the router detects ``captures_stream_tool_calls = False``
-        and falls back to a single non-streaming ``complete()`` call, which
-        IS reliable for tool execution.  Streaming is only used for pure
-        text generation (no tools).
+        Accumulates tool calls from streamed chunks so the router's
+        ``_stream_tool_call_results()`` can retrieve them when tools
+        are present.  Ollama sends complete tool_calls per chunk (not
+        OpenAI-style deltas), so we overwrite on each chunk.
         """
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
@@ -167,9 +188,17 @@ class OllamaProvider(LLMProvider):
         # Ollama handles its own tool format — send raw tools, not
         # the compressed OpenAI format (which strips descriptions).
         # Small local models (<=3B params) can only handle a few tools.
-        _max_tools = 5 if '1.5b' in self.config.get('model', '') or '1b' in self.config.get('model', '') else 20
+        # Small models (<=1.5B) can only handle a few tools; larger ones get more.
+        _model = self.config.get('model', '')
+        if any(tag in _model for tag in ('1.5b', '1b')):
+            _max_tools = 5
+        elif '3b' in _model:
+            _max_tools = 10
+        else:
+            _max_tools = 20
         _limited_tools = tools[:_max_tools] if tools and len(tools) > _max_tools else tools
         start = time.time()
+        self._stream_tool_calls = {}  # Reset accumulator
         try:
             kwargs = {}
             if _limited_tools:
@@ -178,18 +207,57 @@ class OllamaProvider(LLMProvider):
                 model=self.config.get("model", "qwen2.5:1.5b"),
                 messages=full_messages,
                 options={
-                    "num_predict": max_tokens or self.config.get("max_tokens", 2048),
-                    "temperature": temperature or self.config.get("temperature", 0.7),
+                    "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
+                    "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
                     "num_ctx": self.config.get("num_ctx", 4096),
                 },
                 **kwargs,
                 stream=True,
             )
             async for chunk in stream:
-                if "message" in chunk and "content" in chunk["message"]:
-                    yield chunk["message"]["content"]
+                msg = chunk.get("message", {})
+                # Accumulate tool calls from each chunk (Ollama sends
+                # complete tool_calls, not incremental deltas)
+                chunk_tools = msg.get("tool_calls") or []
+                if chunk_tools:
+                    calls = parse_ollama_tool_calls(msg)
+                    for i, call in enumerate(calls):
+                        self._stream_tool_calls[i] = {
+                            "id": call.id,
+                            "name": call.name,
+                            "args": [json.dumps(call.arguments)],
+                        }
+                if "content" in msg and msg["content"]:
+                    yield msg["content"]
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as e:
-            self.record_failure(str(e))
+            error_str = str(e)
+            from providers.types import classify_provider_error, ErrorKind
+            kind = classify_provider_error(error_str)
+            if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
+                self.record_rate_limit()
+            else:
+                self.record_failure(error_str)
             raise
+
+    def _stream_tool_call_results(self) -> list[ToolCall]:
+        """Override base class to return accumulated Ollama tool calls.
+
+        Ollama sends complete tool_calls per chunk (not OpenAI-style deltas),
+        so we accumulate them in ``_stream_tool_calls`` during streaming.
+        """
+        calls: list[ToolCall] = []
+        for idx in sorted(self._stream_tool_calls):
+            slot = self._stream_tool_calls[idx]
+            name = slot.get("name", "")
+            raw = "".join(slot.get("args", []))
+            try:
+                arguments = json.loads(raw) if raw.strip() else {}
+                if not isinstance(arguments, dict):
+                    arguments = {"value": arguments}
+            except (TypeError, ValueError):
+                arguments = {}
+            if name:
+                calls.append(ToolCall(name=name, arguments=arguments, id=slot.get("id", f"ollama_{idx}")))
+        return calls

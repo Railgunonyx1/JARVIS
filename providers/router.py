@@ -374,13 +374,15 @@ class ProviderRouter:
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
-        # Sanitize tool names for OpenAI-compatible upstreams (same as complete()).
-        tools_param, name_map = sanitize_tools(tools)
-
         last_error = None
         with tracer.span("router.stream") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
+                # Ollama accepts dotted tool names natively; skip sanitization.
+                if provider_name == "ollama":
+                    tools_param, name_map = tools, {}
+                else:
+                    tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 while True:
                     try:
