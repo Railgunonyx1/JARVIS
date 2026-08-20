@@ -113,7 +113,8 @@ class TestErrorTypes:
         # 'quota exceeded' without daily/monthly context is ambiguous — treated as unknown
         assert is_rate_limit_error("quota exceeded") is False
         assert is_rate_limit_error("tokens per minute") is True
-        assert is_rate_limit_error("resource_exhausted") is True
+        # resource_exhausted without retry hint = quota_exhausted (not retryable)
+        assert is_rate_limit_error("resource_exhausted") is False
         assert is_rate_limit_error("connection refused") is False
         # Daily quota is quota_exhausted (not retryable)
         assert is_rate_limit_error("daily quota exceeded") is False
