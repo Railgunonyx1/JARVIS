@@ -637,6 +637,52 @@ def _cmd_audit(line: str, limit_default: int = 12) -> None:
         console.print(Text(f"  {ts} {e['tool'] or e['action']:<28} {ok}{flag} {e['duration_ms']:.0f}ms", style="dim"))
 
 
+def _cmd_remember(line: str, loop) -> None:
+    """Store a memory: /remember key = value [category]"""
+    parts = line.split(None, 1)
+    if len(parts) < 2:
+        console.print(Text("  usage: /remember key = value [category]", style="jarvis.error"))
+        return
+    arg = parts[1].strip()
+    if '=' not in arg:
+        console.print(Text("  usage: /remember key = value [category]", style="jarvis.error"))
+        return
+    key, _, rest = arg.partition('=')
+    key = key.strip()
+    rest = rest.strip()
+    # Split value and optional category
+    tokens = rest.split()
+    category = 'notes'
+    if len(tokens) > 1 and tokens[-1] in ('identity', 'priorities', 'preferences', 'notes', 'project'):
+        category = tokens.pop()
+    value = ' '.join(tokens)
+    if not key or not value:
+        console.print(Text("  usage: /remember key = value [category]", style="jarvis.error"))
+        return
+    if loop.mem is not None:
+        loop.mem.remember(key, value, category=category)
+        console.print(Text(f"  remembered: {category}/{key} = {value}", style="jarvis.success"))
+    else:
+        console.print(Text("  memory disabled", style="jarvis.error"))
+
+
+def _cmd_memory_list(loop) -> None:
+    """Show recent memories."""
+    if loop.mem is None:
+        console.print(Text("  memory disabled", style="jarvis.error"))
+        return
+    recent = loop.mem._kv.recent(limit=12) if hasattr(loop.mem, '_kv') and loop.mem._kv else []
+    if not recent:
+        console.print(Text("  no memories stored", style="jarvis.dim"))
+        return
+    console.print(Text("  Memory:", style="jarvis.accent"))
+    for r in recent:
+        cat = r.get('category', 'general')
+        key = r.get('key', '?')
+        val = str(r.get('value', ''))[:60]
+        console.print(Text(f"    [{cat}] {key}: {val}", style="jarvis.dim"))
+
+
 def _cmd_history(line: str) -> None:
     from core.event_store import get_event_store
     store = get_event_store()
