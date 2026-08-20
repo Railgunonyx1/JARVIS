@@ -164,36 +164,52 @@ class Renderer:
         return f"{u}/{l}"
 
     def render_status(self) -> Text:
-        """Compact single-line status for Claude Code-style view.
+        """Full-width status bar (top of screen).
 
-        Priority collapse:
-          ≥90  full (mode · model · tokens · tools · elapsed)
-          70–89 drop tools + elapsed
-          <70   drop model too
+        ≥120: JARVIS · AGENT · model · tokens · N tools · MEMORY · ONLINE · time
+        90–119: JARVIS · AGENT · model · tokens · MEMORY · ONLINE
+        70–89: JARVIS · AGENT · model · tokens
+        <70: AGENT · tokens
         """
         import time as _time
+
         width = self.console.size.width
-        sym = self.symbols
-        sep = Text(" ", style="jarvis.muted")
-        parts: list[Text] = [
-            Text(self.state.mode.value.lower(), style="jarvis.accent"),
-        ]
+        sep = self.symbols["separator"]
+        parts: list[Text] = []
 
         if width >= 70:
+            parts.append(Text("JARVIS", style="bold jarvis.primary"))
+            parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
+        parts.append(Text(self.state.mode.value.lower(), style="jarvis.accent"))
+
+        if width >= 90:
             model_display = self.state.model
             if len(model_display) > 25:
                 model_display = model_display[:22] + "..."
-            parts += [sep, Text(model_display, style="jarvis.secondary")]
+            parts += [Text(f" {sep} ", style="jarvis.muted"),
+                       Text(model_display, style="jarvis.secondary")]
 
-        parts += [sep, Text(self._token_str(), style="jarvis.dim")]
+        parts += [Text(f" {sep} ", style="jarvis.muted"),
+                   Text(self._token_str(), style="jarvis.dim")]
 
-        if width >= 90:
+        if width >= 120:
             tool_count = self.state.tools_active
             if tool_count:
-                parts += [sep, Text(f"{tool_count} tools", style="jarvis.running")]
-            elapsed_s = _time.time() - self.state.events[0].timestamp if self.state.events else 0
-            if elapsed_s > 0:
-                parts += [sep, Text(f"{elapsed_s:.0f}s", style="jarvis.dim")]
+                parts += [Text(f" {sep} ", style="jarvis.muted"),
+                           Text(f"{tool_count} tools", style="jarvis.running")]
+
+            mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
+            parts += [Text(f" {sep} ", style="jarvis.muted"),
+                       Text("MEMORY", style=mem_style)]
+
+            conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
+            parts += [Text(f" {sep} ", style="jarvis.muted"),
+                       Text(self.state.connection, style=conn_style)]
+
+            now = datetime.now().strftime("%H:%M")
+            parts += [Text(f" {sep} ", style="jarvis.muted"),
+                       Text(now, style="jarvis.dim")]
 
         return Text.assemble(*parts)
 
@@ -287,12 +303,13 @@ class Renderer:
     # ------------------------------------------------------------------
 
     def render_conversation(self) -> RenderableType:
+        """Conversation = semantic interaction only.  Tool output, verification,
+        and recovery are separate layout components, not conversation content."""
         if not self.state.messages:
             return Group(
-                Text("") if True else Text(""),  # spacer
                 Text(""),
                 Text("  JARVIS", style="bold bright_cyan"),
-                Text("") if True else Text(""),  # spacer
+                Text("") if True else Text(""),
                 Text("  What are we building?", style="jarvis.accent"),
                 Text(""),
                 Text("  Describe a task, ask a question, or run /help.", style="jarvis.muted"),
@@ -307,21 +324,22 @@ class Renderer:
                 blocks.append(self._render_tool_result(msg.content))
             else:
                 blocks.append(self._render_system_event(msg.content))
-
-        # Inject verification block if steps exist
-        if self.state.verification_steps:
-            blocks.append(Text(""))
-            blocks.append(self.render_verification_block(self.state.verification_steps))
-
-        # Inject recovery block if active
-        if self.state.recovery_active:
-            blocks.append(Text(""))
-            blocks.append(self.render_recovery_block(
-                self.state.recovery_error,
-                attempt=self.state.recovery_attempt,
-            ))
-
         return Group(*blocks)
+
+    def render_verification(self) -> RenderableType | None:
+        """Verification as a standalone layout component, not injected into conversation."""
+        if not self.state.verification_steps:
+            return None
+        return self.render_verification_block(self.state.verification_steps)
+
+    def render_recovery(self) -> RenderableType | None:
+        """Recovery as a standalone layout component, not injected into conversation."""
+        if not self.state.recovery_active:
+            return None
+        return self.render_recovery_block(
+            self.state.recovery_error,
+            attempt=self.state.recovery_attempt,
+        )
 
     def _render_user_message(self, content: str) -> RenderableType:
         """Claude Code-style user message: label + indented content."""
@@ -631,28 +649,57 @@ class Renderer:
     # ------------------------------------------------------------------
 
     def render_task_screen(self) -> RenderableType:
-        """Claude Code-style conversation-first view.
+        """Sole canonical screen.  LayoutManager is the sole composition authority.
 
-        Layout:
-          conversation (primary — occupies full viewport)
-          ──────────────────────────────────────────────
-          status line (compact, single-line)
-
-        Activity, Plan, Code panels are accessed via slash commands,
-        not shown permanently.
+        Layout (top to bottom):
+          Status bar (always visible, top)
+          Content area (plan + conversation + activity — responsive)
+          Verification / Recovery (when active, below conversation)
+          Separator
+          Input prompt (always visible, bottom)
         """
-        conversation = self.render_conversation()
         status = self.render_status()
+        conversation = self.render_conversation()
+        plan = self.render_plan()
+        activity = self.render_activity()
+        verification = self.render_verification()
+        recovery = self.render_recovery()
         separator = Text("─" * min(self.console.size.width - 2, 80),
                          style="jarvis.muted")
+        prompt = Text.assemble(
+            Text(f" {self.symbols['prompt']} ", style="jarvis.muted"),
+            Text("JARVIS", style="bold jarvis.primary"),
+            Text(f" [{self.state.mode.value.lower()}]> ", style="jarvis.accent"),
+        )
+
+        content = self.layout_mgr.build(
+            conversation=conversation,
+            plan=plan,
+            activity=activity,
+            code=self.render_code_buffer(),
+            memory=self.render_memory(),
+            audit=self.render_audit(),
+            verification=verification,
+            recovery=recovery,
+        )
+
         elements: list[RenderableType] = [
-            conversation,
-            Text("") if self.state.messages else Text(""),
-            separator,
             status,
+            separator,
+            content,
         ]
+
+        # Verification and recovery below conversation, above prompt
+        if verification is not None:
+            elements += [Text(""), verification]
+        if recovery is not None:
+            elements += [Text(""), recovery]
+
+        elements += [separator, prompt]
+
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
+
         return Group(*elements)
 
     def render_activity_panel(self) -> RenderableType:

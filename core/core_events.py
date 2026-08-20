@@ -95,11 +95,12 @@ def task_transitioned(session_id: str, seq: int, from_status: TaskStatus,
     )
 
 
-def task_failed(session_id: str, seq: int, failure_class: FailureClass,
+def task_failed(session_id: str, seq: int, failure_class: FailureClass | str,
                 error: str = "") -> CoreEvent:
+    fc_val = failure_class.value if isinstance(failure_class, FailureClass) else failure_class
     return CoreEvent(
         seq=seq, category=EventCategory.STATE, name="task.failed",
-        payload={"failure_class": failure_class.value, "error": error[:500]},
+        payload={"failure_class": fc_val, "error": error[:500]},
         session_id=session_id,
     )
 
@@ -121,10 +122,11 @@ def plan_created(session_id: str, seq: int, goal: str,
 
 
 def plan_step_updated(session_id: str, seq: int, step_id: str,
-                       status: StepStatus) -> CoreEvent:
+                       status: StepStatus | str) -> CoreEvent:
+    st_val = status.value if isinstance(status, StepStatus) else status
     return CoreEvent(
         seq=seq, category=EventCategory.PLAN, name="plan.step_updated",
-        payload={"step_id": step_id, "status": status.value},
+        payload={"step_id": step_id, "status": st_val},
         session_id=session_id,
     )
 

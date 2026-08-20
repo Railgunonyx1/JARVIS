@@ -132,65 +132,29 @@ def _status_getter(loop) -> dict:
     }
 
 
-def _emit_response(text: str) -> None:
-    """Print an assistant response: Markdown on an interactive terminal, plain
-    otherwise (pipes, tests) so machine-readable output stays byte-exact."""
-    if sys.stdout.isatty():
-        from cli.renderer import render_markdown
-        console.print(render_markdown(text))
-    else:
-        print(text)
 
 
 def _print_result(result) -> None:
-    state = result.state
-    obs = result.observation or {}
-    steps = obs.get("steps", [])
-    if steps:
-        marks = {"ok": "ok", "error": "err", "denied": "deny", "running": "run"}
-        chain = " → ".join(
-            f"{s['tool']}[{marks.get(s['status'], s['status'])} {s['duration_ms']}ms]"
-            for s in steps
-        )
-        print(f"[steps] {chain}")
-    if state.tool_calls:
-        calls = ", ".join(f"{c['name']}({c['duration_ms']}ms)" for c in state.tool_calls)
-        print(f"[tools] {calls}")
-    for call in state.tool_calls:
-        diff = call.get("diff")
-        if diff:
-            print(f"[diff] {call.get('output', '')}")
-            print(diff)
+    """One-shot result output.  Uses renderer for Markdown, plain for pipes."""
+    from cli.renderer import render_markdown
+
     if result.success:
-        _emit_response(result.response)
+        if sys.stdout.isatty():
+            console.print(render_markdown(result.response))
+        else:
+            print(result.response)
     else:
         print(f"ERROR: {result.error}", file=sys.stderr)
-    print(f"[trace {result.trace_id}] provider={state.provider} model={state.model} "
-          f"tokens={state.tokens_used} duration_ms={obs.get('duration_ms', '')}")
-    usage = obs.get("context_usage") or {}
-    if usage:
-        compact = " [compacted]" if usage.get("compacted") else ""
-        print(f"[context] {usage.get('total_tokens', 0)}/{usage.get('total_budget', 0)} "
-              f"tokens system={usage.get('system_tokens', 0)} "
-              f"memory={usage.get('memory_tokens', 0)} files={usage.get('files_tokens', 0)} "
-              f"messages={usage.get('messages_tokens', 0)}{compact}")
+
+    # Collapsed summary for interactive terminals
+    if sys.stdout.isatty():
+        from cli.details import render_summary
+        console.print(Text(f"  {render_summary(result)}", style="dim"))
 
 
 def _print_collapsed(result) -> None:
-    """Conversation-dominant result: answer + one collapsed summary line."""
-    from cli.details import render_summary
-
-    state = result.state
-    if result.success:
-        _emit_response(result.response)
-    else:
-        typer.secho(f"ERROR: {result.error}", err=True, fg="red")
-    for call in state.tool_calls:
-        diff = call.get("diff")
-        if diff:
-            print(f"[diff] {call.get('output', '')}")
-            print(diff)
-    console.print(Text(f"  ▶ {render_summary(result)}  (Enter to expand)", style="dim"))
+    """Same as _print_result for now — both use renderer."""
+    _print_result(result)
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -317,23 +281,6 @@ def _resolve_project_dir(project_dir: str | None) -> str:
     return str((Path(project_dir) if project_dir else Path.cwd()).resolve())
 
 
-def _render_status_bar_dict(status: dict) -> Text:
-    """Status-bar line rendered from an engine status dict."""
-    bits = [Text("JARVIS", style="bold cyan")]
-    bits.append(Text(f"mode={status.get('mode', 'agent')}", style="green"))
-    if status.get("provider"):
-        label = f"{status.get('model')}/{status.get('provider')}"
-        if len(label) > 30:
-            label = label[:28] + "…"
-        bits.append(Text(label, style="magenta"))
-    bits.append(Text(f"tools={status.get('tools', 0)}", style="yellow"))
-    mem = status.get("mem_stats") or {}
-    if mem:
-        bits.append(Text(f"mem={mem.get('decisions', 0)}d/{mem.get('knowledge', 0)}k", style="dim"))
-    if status.get("busy"):
-        bits.append(Text("busy", style="bold red blink"))
-    bits.append(Text(f"time={datetime.datetime.now().strftime('%H:%M:%S')}", style="dim"))
-    return Text("  │  ").join(bits)
 
 
 def _print_perf_trace(result) -> None:

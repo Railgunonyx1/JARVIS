@@ -62,9 +62,15 @@ class LayoutConfig:
 
 
 class LayoutManager:
-    LARGE = 120
-    MEDIUM = 90
-    SMALL = 70
+    """Sole layout authority.  Breakpoints are explicit and deterministic:
+
+    width < 70  → MINIMAL  (conversation only)
+    70–119      → NORMAL   (plan + conversation)
+    ≥ 120       → WIDE     (plan + conversation + activity)
+    """
+    WIDE = 120
+    NORMAL = 70
+    MINIMAL_COLS = 70
 
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
@@ -90,14 +96,15 @@ class LayoutManager:
         return panel.visible
 
     def detect_mode(self) -> LayoutMode:
+        """Deterministic breakpoint detection.  No ambiguity."""
         if self._force_mode is not None:
             return self._force_mode
         width = self.console.size.width
         height = self.console.size.height
-        if width < self.SMALL or height < 16:
+        if width < self.MINIMAL_COLS or height < 16:
             return LayoutMode.MINIMAL
-        if width < self.MEDIUM:
-            return LayoutMode.PLAN if self.config.panels["plan"].visible else LayoutMode.FOCUS
+        if width >= self.WIDE:
+            return LayoutMode.NORMAL  # NORMAL + activity shown via width check in build()
         return LayoutMode.NORMAL
 
     def build(
@@ -109,7 +116,16 @@ class LayoutManager:
         memory: RenderableType | None = None,
         audit: RenderableType | None = None,
         status: RenderableType | None = None,
+        verification: RenderableType | None = None,
+        recovery: RenderableType | None = None,
     ) -> Layout:
+        """Sole composition authority.  All rendering decisions live here.
+
+        Breakpoints (deterministic):
+          < 70 cols  → MINIMAL  (conversation only)
+          70–119     → NORMAL   (plan + conversation)
+          ≥ 120      → WIDE     (plan + conversation + activity)
+        """
         mode = self.detect_mode()
         width = self.console.size.width
         root = Layout(name="root")
@@ -129,13 +145,13 @@ class LayoutManager:
             root.split_column(Layout(conversation, name="conversation"))
             return root
 
+        # Deterministic: 70–119 = plan + conversation, ≥ 120 = plan + conversation + activity
         show_plan = (
-            mode in (LayoutMode.PLAN, LayoutMode.NORMAL, LayoutMode.ACTIVITY)
-            and self.config.panels["plan"].visible
+            self.config.panels["plan"].visible
             and plan is not None
         )
         show_activity = (
-            (mode == LayoutMode.ACTIVITY or (mode == LayoutMode.NORMAL and width >= self.LARGE))
+            width >= self.WIDE
             and self.config.panels["activity"].visible
             and activity is not None
         )

@@ -173,6 +173,7 @@ class VerificationStep:
     stdout: str = ""
     stderr: str = ""
     summary: str = ""
+    error: str = ""
     duration_ms: float = 0.0
 
 

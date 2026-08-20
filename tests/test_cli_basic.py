@@ -67,13 +67,48 @@ def test_renderer_plan_and_events():
 
 
 def test_status_collapse_smoke():
-    r = Renderer()
+    from rich.console import Console
+    console = Console(width=120, force_terminal=True)
+    r = Renderer(console=console)
     r.set_mode(Mode.AGENT)
     r.set_model("gemini")
     r.set_tokens(8200, 32000)
     text = r.render_status()
+    assert "JARVIS" in text.plain
     assert "agent" in text.plain.lower()
     assert "gemini" in text.plain
+    assert "8.2K/32K" in text.plain
+
+
+def test_status_collapse_narrow():
+    from rich.console import Console
+    console = Console(width=60, force_terminal=True)
+    r = Renderer(console=console)
+    r.set_mode(Mode.AGENT)
+    r.set_model("gemini")
+    r.set_tokens(8200, 32000)
+    text = r.render_status()
+    assert "JARVIS" not in text.plain
+    assert "agent" in text.plain.lower()
+    assert "8.2K/32K" in text.plain
+
+
+def test_task_screen_uses_responsive_layout():
+    from io import StringIO
+    from rich.console import Console
+    out = StringIO()
+    console = Console(width=120, force_terminal=True, file=out)
+    r = Renderer(console=console)
+    r.set_model("gemini")
+    r.set_tokens(1000, 32000)
+    r.add_message("user", "fix the tests")
+    r.add_message("agent", "Running pytest now.")
+    r.state.events.append(AgentEvent.tool_start("shell.execute", "pytest"))
+    screen = r.render_task_screen()
+    console.print(screen)
+    captured = out.getvalue()
+    assert "fix the tests" in captured
+    assert "JARVIS" in captured
 
 
 def test_confirmation_model():
