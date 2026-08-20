@@ -108,6 +108,8 @@ def test_rate_limit_helpers():
     router = ProviderRouter(config={}, api_keys={})
     exc = RuntimeError("429 - tokens per minute exceeded, please try again in 17.44s")
     assert router._is_rate_limit(exc) is True
-    assert router._rate_limit_delay(exc) == 17.44
-    assert router._rate_limit_delay(exc, cap=10.0) == 10.0
-    assert router._rate_limit_delay(RuntimeError("network error")) == 8.0
+    # Delay is capped at _MAX_RETRY_WAIT_S (5.0)
+    assert router._rate_limit_delay(exc) == 5.0
+    # Unrecognized error returns short random delay
+    delay = router._rate_limit_delay(RuntimeError("network error"))
+    assert 1.0 <= delay <= 3.0

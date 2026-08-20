@@ -110,10 +110,15 @@ class TestErrorTypes:
 
     def test_is_rate_limit_error_detection(self):
         assert is_rate_limit_error("Error code: 429 - rate limit") is True
-        assert is_rate_limit_error("quota exceeded") is True
+        # 'quota exceeded' without daily/monthly context is ambiguous — treated as unknown
+        assert is_rate_limit_error("quota exceeded") is False
         assert is_rate_limit_error("tokens per minute") is True
         assert is_rate_limit_error("resource_exhausted") is True
         assert is_rate_limit_error("connection refused") is False
+        # Daily quota is quota_exhausted (not retryable)
+        assert is_rate_limit_error("daily quota exceeded") is False
+        # Retry hint makes resource_exhausted retryable
+        assert is_rate_limit_error("resource_exhausted, try again in 10s") is True
 
 
 # ── _extra_headers() hook tests ─────────────────────────────────────────
