@@ -511,6 +511,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
                 except Exception as exc:
                     console.print(Text(f"  error: {exc}", style="jarvis.error"))
+        elif line.startswith("/remember "):
+            _cmd_remember(line, loop)
+        elif line == "/memory":
+            _cmd_memory_list(loop)
         elif line.startswith("/"):
             commands.dispatch(line)
         else:
