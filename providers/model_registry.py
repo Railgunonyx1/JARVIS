@@ -13,13 +13,13 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger("jarvis.model_registry")
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     """Detected task types for model routing."""
     CODING = "coding"
     RESEARCH = "research"

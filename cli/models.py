@@ -11,14 +11,14 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 # ---------------------------------------------------------------------------
 # Execution modes (real policies, not cosmetic labels)
 # ---------------------------------------------------------------------------
 
-class Mode(str, Enum):
+class Mode(StrEnum):
     AGENT = "AGENT"           # full autonomous execution
     PLAN = "PLAN"             # analyze + build/update plan only; no side effects
     CONTROLLED = "CONTROLLED" # ask before any consequential action
@@ -37,7 +37,7 @@ MODE_HELP = {
 # Plan (stateful, owned by backend)
 # ---------------------------------------------------------------------------
 
-class StepStatus(str, Enum):
+class StepStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"
     COMPLETED = "completed"
@@ -94,7 +94,7 @@ class Plan:
 # Activity = live structured agent event stream
 # ---------------------------------------------------------------------------
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     TOOL = "tool"
     PLANNER = "planner"
     SYSTEM = "system"
@@ -103,7 +103,7 @@ class EventType(str, Enum):
     PROVIDER = "provider"
 
 
-class EventStatus(str, Enum):
+class EventStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -170,7 +170,7 @@ class Message:
 # Security confirmation (policy-backed, never bare y/N only)
 # ---------------------------------------------------------------------------
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"

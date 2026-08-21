@@ -434,7 +434,8 @@ class AgentExecutor:
             if not steps:
                 msg = "I couldn't create a valid plan for this task, sir."
                 decision_logger.record(trace_id, "task.failed", {"error": "no plan steps", "goal": goal[:200], "source": "executor"})
-                if speak: speak(msg)
+                if speak:
+                    speak(msg)
                 return msg
 
             success      = True
@@ -444,7 +445,8 @@ class AgentExecutor:
             for step in steps:
                 if cancel_flag and cancel_flag.is_set():
                     decision_logger.record(trace_id, "task.cancelled", {"goal": goal[:200], "source": "executor"})
-                    if speak: speak("Task cancelled, sir.")
+                    if speak:
+                        speak("Task cancelled, sir.")
                     return "Task cancelled."
 
                 step_num = step.get("step", "?")
@@ -524,7 +526,8 @@ class AgentExecutor:
                         elif decision == ErrorDecision.ABORT:
                             msg = f"Task aborted, sir. {recovery.get('reason', '')}"
                             decision_logger.record(trace_id, "task.failed", {"error": "abort", "reason": str(recovery.get('reason', ''))[:200], "goal": goal[:200], "source": "executor"})
-                            if speak: speak(msg)
+                            if speak:
+                    speak(msg)
                             return msg
 
                         else:
@@ -532,7 +535,8 @@ class AgentExecutor:
                             if fix_suggestion and tool != "generated_code":
                                 try:
                                     fixed_step = generate_fix(step, error_msg, fix_suggestion)
-                                    if speak: speak("Trying an alternative approach, sir.")
+                                    if speak:
+                                        speak("Trying an alternative approach, sir.")
                                     res = _call_tool(
                                         fixed_step["tool"],
                                         fixed_step["parameters"],
@@ -570,10 +574,12 @@ class AgentExecutor:
                 decision_logger.record(trace_id, "task.failed", {
                     "error": "max replans exceeded", "goal": goal[:200], "source": "executor",
                 })
-                if speak: speak(msg)
+                if speak:
+                    speak(msg)
                 return msg
 
-            if speak: speak("Adjusting my approach, sir.")
+            if speak:
+                speak("Adjusting my approach, sir.")
 
             replan_attempts += 1
             plan = replan(goal, completed_steps, failed_step, failed_error)

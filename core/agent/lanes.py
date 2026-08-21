@@ -31,7 +31,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger("jarvis.lanes")
@@ -39,13 +39,13 @@ logger = logging.getLogger("jarvis.lanes")
 
 # ── Execution Lane ──────────────────────────────────────────────────────
 
-class ExecutionLane(str, Enum):
+class ExecutionLane(StrEnum):
     """Which execution lane a request belongs to."""
     MAIN = "main"           # Full 3B/4B coding task
     INTERRUPT = "interrupt"  # Lightweight 1B query (memory, status, etc.)
 
 
-class RequestClass(str, Enum):
+class RequestClass(StrEnum):
     """How to classify an incoming request."""
     MAIN_TASK = "main_task"
     LIGHTWEIGHT_INTERRUPT = "lightweight_interrupt"

@@ -57,10 +57,10 @@ class ProviderUnavailableError(ProviderError):
 
 # ── Structured error classification ───────────────────────────────────
 
-import enum
+from enum import StrEnum
 
 
-class ErrorKind(str, enum.Enum):
+class ErrorKind(StrEnum):
     """Classification of provider errors for router decision-making."""
     RATE_LIMIT = "rate_limit"           # 429 / temporary throttling
     QUOTA_EXHAUSTED = "quota_exhausted"  # daily/monthly quota hit
