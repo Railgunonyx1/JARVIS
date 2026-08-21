@@ -26,7 +26,7 @@ def _get_store():
     return _store
 
 
-_EMPTY = {"identity": {}, "preferences": {}, "projects": {}, "relationships": {}, "wishes": {}, "notes": {}}
+_EMPTY = {"identity": {}, "preferences": {}, "priorities": {}, "projects": {}, "relationships": {}, "wishes": {}, "notes": {}}
 
 
 def load_memory() -> dict:

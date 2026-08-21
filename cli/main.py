@@ -189,7 +189,10 @@ async def _run_once(goal: str, loop, json_output: bool = False,
                     perf: bool = False, bridge=None, screen: bool = False) -> None:
     from cli.ux import LiveTaskDisplay
 
+    global _main_task_running
     loop._last_goal = goal
+    loop._last_task_id = f"task_{int(time.time())}"
+    _main_task_running = True
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     # Live display is ALWAYS enabled (except --json pipe mode).
@@ -312,6 +315,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         console.print(Text(f"  error: {str(exc)[:200]}", style="jarvis.error"))
         raise
     finally:
+        _main_task_running = False
         if use_live:
             display.stop()
             if renderer is not None:
@@ -323,6 +327,23 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         sys.stderr.flush()
 
     loop._last_result = result
+    # Record performance for adaptive routing
+    try:
+        from providers.model_registry import ModelRegistry
+        _perf_registry = ModelRegistry.instance()
+        _model_used = result.state.model if result.state else "unknown"
+        _latency = 0.0
+        if result.perf and "spans" in result.perf:
+            for span in result.perf["spans"]:
+                if span.get("name") == "provider.complete":
+                    _latency = span.get("duration_ms", 0.0)
+                    break
+        _perf_registry.record_performance(
+            model=_model_used, success=result.success,
+            latency_ms=_latency,
+        )
+    except Exception:
+        pass  # Performance recording is best-effort
     if bridge is not None:
         bridge.finish_run(result)
     if json_output:
@@ -453,6 +474,12 @@ def _print_startup_report() -> None:
     print("\n".join(lines), file=sys.stderr)
 
 
+# Interrupt executor globals (initialized in _interactive after kernel boots)
+_interrupt_executor = None
+_interrupt_classifier = None
+_main_task_running = False
+
+
 def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
     from cli.bridge import AgentBridge
@@ -540,6 +567,20 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 getattr(loop.observer, 'on_event', lambda n, p: None)(name, payload)
             )
             loop.router.warm()
+            # Initialize interrupt executor for parallel lightweight queries
+            global _interrupt_executor, _interrupt_classifier, _main_task_running
+            try:
+                from core.agent.lanes import InterruptExecutor, RequestClassifier
+                _interrupt_classifier = RequestClassifier()
+                _interrupt_executor = InterruptExecutor(
+                    router=loop.router,
+                    registry=loop.registry,
+                    mem=loop.mem,
+                    project=loop.project,
+                )
+            except Exception:
+                _interrupt_classifier = None
+                _interrupt_executor = None
             if profile_startup:
                 _print_startup_report()
         else:
@@ -600,12 +641,35 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
         elif line.startswith("/"):
             commands.dispatch(line)
         else:
-            try:
-                asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
-            except KeyboardInterrupt:
-                console.print(Text("  (interrupted)", style="dim"))
-            except Exception as exc:
-                console.print(Text(f"  error: {exc}", style="jarvis.error"))
+            # Check if this is an interrupt (lightweight query while main task runs)
+            _is_interrupt = False
+            if _main_task_running and _interrupt_classifier is not None:
+                _classification = _interrupt_classifier.classify(
+                    line,
+                    active_task_id=getattr(loop, '_last_task_id', None),
+                    active_task_status="executing",
+                )
+                if _classification.lane.value == "interrupt":
+                    _is_interrupt = True
+                    try:
+                        _result = asyncio.run(_interrupt_executor.execute(
+                            line, _classification
+                        ))
+                        if _result["success"]:
+                            console.print(Text(f"  {_result['response']}", style="cyan"))
+                            console.print(Text(f"  (interrupt · {_result['latency_ms']:.0f}ms · 1B)", style="dim"))
+                        else:
+                            err = _result.get("error", "no response")
+                            console.print(Text(f"  interrupt error: {err}", style="jarvis.error"))
+                    except Exception as exc:
+                        console.print(Text(f"  interrupt error: {exc}", style="jarvis.error"))
+            if not _is_interrupt:
+                try:
+                    asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
+                except KeyboardInterrupt:
+                    console.print(Text("  (interrupted)", style="dim"))
+                except Exception as exc:
+                    console.print(Text(f"  error: {exc}", style="jarvis.error"))
 
     if loop is not None:
         loop.logger.flush()

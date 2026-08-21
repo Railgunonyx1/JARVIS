@@ -324,6 +324,56 @@ def select_model(
     return scored[0][1]
 
 
+@dataclass
+class _TierPerf:
+    """Per-model-tier performance tracking for adaptive routing."""
+    name: str
+    requests: int = 0
+    successes: int = 0
+    failures: int = 0
+    total_ms: float = 0.0
+    ttft_sum_ms: float = 0.0      # time-to-first-token sum
+    ttft_count: int = 0
+
+    @property
+    def success_rate(self) -> float:
+        if self.requests == 0:
+            return 1.0  # Assume success until we have data
+        return self.successes / self.requests
+
+    @property
+    def avg_ttft_ms(self) -> float:
+        if self.ttft_count == 0:
+            return 0.0
+        return self.ttft_sum_ms / self.ttft_count
+
+    @property
+    def avg_ms(self) -> float:
+        if self.requests == 0:
+            return 0.0
+        return self.total_ms / self.requests
+
+    def record(self, success: bool, latency_ms: float, ttft_ms: float = 0.0) -> None:
+        self.requests += 1
+        if success:
+            self.successes += 1
+        else:
+            self.failures += 1
+        self.total_ms += latency_ms
+        if ttft_ms > 0:
+            self.ttft_sum_ms += ttft_ms
+            self.ttft_count += 1
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "requests": self.requests,
+            "success_rate": round(self.success_rate, 3),
+            "avg_ttft_ms": round(self.avg_ttft_ms, 1),
+            "avg_ms": round(self.avg_ms, 1),
+        }
+
+
 class ModelRegistry:
     """Singleton model registry with state tracking and cascade routing.
 
@@ -350,6 +400,11 @@ class ModelRegistry:
         self._direct_handle_count: int = 0
         self._draft_verify_count: int = 0
         self._deterministic_count: int = 0
+        # Adaptive performance tracking per tier
+        self._perf: dict[str, _TierPerf] = {
+            tier: _TierPerf(name=tier)
+            for tier in (self.CASCADE_ROUTER, self.CASCADE_WORKER, self.CASCADE_HEAVY)
+        }
 
     @classmethod
     def instance(cls) -> ModelRegistry:
@@ -409,26 +464,82 @@ class ModelRegistry:
                     "1B handles simple tasks instantly, escalates as needed.")
         return "Cascade disabled. Using single-model auto-routing."
 
-    def resolve_cascade(self, prompt: str) -> dict[str, str | None]:
-        """Resolve the three-tier cascade using confidence-based routing.
+    def record_performance(self, model: str, success: bool,
+                           latency_ms: float = 0.0, ttft_ms: float = 0.0) -> None:
+        """Record performance data for a model tier. Used for adaptive routing.
 
-        Strategy:
-          1. Deterministic commands (/help, /status, etc.) bypass LLM entirely.
-          2. High-confidence simple tasks → 1B handles directly.
-          3. High-confidence tool tasks → 3B worker (skip 1B draft).
-          4. Medium-confidence tasks → 1B drafts, 3B verifies (draft-then-verify).
-          5. Low-confidence or heavy → 4B with full context.
+        Called by the agent loop after each request completes.
+        """
+        tier = self._perf.get(model)
+        if tier is None:
+            # Create a tracking entry for models not in the default tiers
+            tier = _TierPerf(name=model)
+            self._perf[model] = tier
+        tier.record(success, latency_ms, ttft_ms)
+        logger.info("Perf recorded: %s success=%s latency=%.0fms ttft=%.0fms",
+                     model, success, latency_ms, ttft_ms)
+
+    def _get_adaptive_threshold(self) -> dict[str, Any]:
+        """Compute adaptive routing thresholds from actual performance data.
+
+        Returns settings that modify resolve_cascade() behavior:
+        - draft_enabled: whether draft-then-verify is worth the extra latency
+        - escalate_threshold: confidence below which we jump to 4B
+        """
+        router_perf = self._perf.get(self.CASCADE_ROUTER)
+        worker_perf = self._perf.get(self.CASCADE_WORKER)
+
+        # Default: draft-verify enabled, escalate at confidence < 0.45
+        result = {
+            "draft_enabled": True,
+            "escalate_threshold": 0.45,
+        }
+
+        # If 1.5B has < 70% success rate after 5+ requests, disable draft
+        if router_perf and router_perf.requests >= 5 and router_perf.success_rate < 0.70:
+            result["draft_enabled"] = False
+            logger.info("Adaptive: disabling draft-verify (1.5B success rate: %.0f%%)",
+                        router_perf.success_rate * 100)
+
+        # If 3B has < 80% success rate after 5+ requests, escalate earlier
+        if worker_perf and worker_perf.requests >= 5 and worker_perf.success_rate < 0.80:
+            result["escalate_threshold"] = 0.65  # More aggressively use 4B
+            logger.info("Adaptive: raising escalate threshold (3B success rate: %.0f%%)",
+                        worker_perf.success_rate * 100)
+
+        # If 1.5B avg latency > 3s, it's not worth using even for simple tasks
+        if router_perf and router_perf.requests >= 3 and router_perf.avg_ttft_ms > 3000:
+            result["draft_enabled"] = False
+            logger.info("Adaptive: disabling draft-verify (1.5B TTFT: %.0fms)",
+                        router_perf.avg_ttft_ms)
+
+        return result
+
+    def get_perf_stats(self) -> dict[str, dict]:
+        """Return performance stats for all tracked tiers."""
+        return {name: tier.to_dict() for name, tier in self._perf.items() if tier.requests > 0}
+
+    def resolve_cascade(self, prompt: str) -> dict[str, str | None]:
+        """Resolve model routing using confidence + adaptive performance data.
+
+        Strategy (updated — 1.5B is NOT the first stop for tool tasks):
+          1. Deterministic commands → skip LLM entirely.
+          2. QUICK/CONVERSATIONAL with high confidence → 1.5B handles directly.
+          3. CODING/RESEARCH/WRITING/REASONING → go straight to 3B worker.
+          4. Low confidence or ambiguous → 4B heavy model.
+          5. Adapt escalation threshold based on actual performance metrics.
 
         Returns:
             {
-                "router": "qwen2.5:1.5b",          # Always set
+                "router": "qwen2.5:1.5b",          # Always set (for reference)
                 "worker": "qwen2.5:3b"|None,       # Set if escalated
                 "heavy":  "qwen3:4b"|None,          # Set only for complex tasks
                 "task_type": "coding",
                 "confidence": 0.85,                  # 0.0–1.0
                 "needs_tools": True,
-                "draft_first": False,                 # 1B drafts, then 3B verifies
+                "draft_first": False,                 # 1.5B drafts, then 3B verifies
                 "deterministic": False,               # Bypass LLM entirely
+                "selected_model": "qwen2.5:3b",      # The actual model to use
             }
         """
         task_type, confidence = detect_task_type_with_confidence(prompt)
@@ -437,9 +548,9 @@ class ModelRegistry:
             self._task_history = self._task_history[-50:]
 
         lower = prompt.strip()
+        needs_tools = task_type not in (TaskType.QUICK, TaskType.CONVERSATIONAL)
 
         # ── Deterministic command bypass ──
-        # These never need an LLM — handle instantly in the agent loop.
         deterministic = lower.startswith("/") or _is_deterministic_command(lower)
         if deterministic:
             self._deterministic_count += 1
@@ -452,6 +563,7 @@ class ModelRegistry:
                 "needs_tools": False,
                 "draft_first": False,
                 "deterministic": True,
+                "selected_model": self.CASCADE_ROUTER,
             }
 
         # Manual lock: skip cascade, use locked model for everything
@@ -463,15 +575,20 @@ class ModelRegistry:
                 "heavy": None,
                 "task_type": task_type.value,
                 "confidence": confidence,
-                "needs_tools": task_type not in (TaskType.QUICK, TaskType.CONVERSATIONAL),
+                "needs_tools": needs_tools,
                 "draft_first": False,
                 "deterministic": False,
+                "selected_model": self._active_model,
             }
+
+        # ── Adaptive performance threshold ──
+        # If 1.5B has poor success rate on tool tasks, skip it entirely.
+        _adaptive_threshold = self._get_adaptive_threshold()
 
         # ── Confidence-based routing ──
 
-        # HIGH confidence + simple → 1B handles directly (no LLM call needed)
-        if confidence >= 0.8 and task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
+        # QUICK/CONVERSATIONAL → 1.5B handles directly (no tools needed)
+        if task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
             self._direct_handle_count += 1
             self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
             return {
@@ -483,78 +600,41 @@ class ModelRegistry:
                 "needs_tools": False,
                 "draft_first": False,
                 "deterministic": False,
+                "selected_model": self.CASCADE_ROUTER,
             }
 
-        # HIGH confidence + tool task → 3B worker directly (no draft needed)
-        if confidence >= 0.8 and task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
+        # HEAVY task → 4B directly (don't waste time on smaller models)
+        if task_type == TaskType.HEAVY or confidence < 0.45:
             self._escalation_count += 1
-            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
-            self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
-            return {
-                "router": self.CASCADE_ROUTER,
-                "worker": self.CASCADE_WORKER,
-                "heavy": None,
-                "task_type": task_type.value,
-                "confidence": confidence,
-                "needs_tools": True,
-                "draft_first": False,
-                "deterministic": False,
-            }
-
-        # MEDIUM confidence + tool task → draft-then-verify
-        # 1B generates a draft response, 3B verifies/fixes it
-        if 0.45 <= confidence < 0.8 and task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
-            self._escalation_count += 1
-            self._draft_verify_count += 1
-            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
-            self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
-            return {
-                "router": self.CASCADE_ROUTER,
-                "worker": self.CASCADE_WORKER,
-                "heavy": None,
-                "task_type": task_type.value,
-                "confidence": confidence,
-                "needs_tools": True,
-                "draft_first": True,   # 1B drafts, 3B verifies
-                "deterministic": False,
-            }
-
-        # LOW confidence → escalate to 4B heavy model
-        if confidence < 0.45:
-            self._escalation_count += 1
-            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
             self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
             return {
                 "router": self.CASCADE_ROUTER,
-                "worker": self.CASCADE_WORKER,
+                "worker": self.CASCADE_HEAVY,
                 "heavy": self.CASCADE_HEAVY,
                 "task_type": task_type.value,
                 "confidence": confidence,
                 "needs_tools": True,
                 "draft_first": False,
                 "deterministic": False,
+                "selected_model": self.CASCADE_HEAVY,
             }
 
-        # HEAVY task → 4B heavy model (even with decent confidence)
-        if task_type == TaskType.HEAVY:
-            self._escalation_count += 1
-            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
-            self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
-            return {
-                "router": self.CASCADE_ROUTER,
-                "worker": self.CASCADE_WORKER,
-                "heavy": self.CASCADE_HEAVY,
-                "task_type": task_type.value,
-                "confidence": confidence,
-                "needs_tools": True,
-                "draft_first": False,
-                "deterministic": False,
-            }
-
-        # Default: 3B worker (medium-confidence catch-all)
+        # CODING/RESEARCH/WRITING/REASONING → go straight to 3B worker
+        # 1.5B does NOT get a chance to attempt tool tasks — it adds latency
+        # for no benefit. The 3B model is the minimum viable model for tools.
         self._escalation_count += 1
-        self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
         self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
+
+        # Adaptive: if 1.5B success rate is poor AND confidence is low,
+        # skip draft-verify and go straight to 3B.
+        use_draft = (
+            _adaptive_threshold.get("draft_enabled", True)
+            and 0.5 <= confidence < 0.8
+        )
+
+        if use_draft:
+            self._draft_verify_count += 1
+
         return {
             "router": self.CASCADE_ROUTER,
             "worker": self.CASCADE_WORKER,
@@ -562,8 +642,9 @@ class ModelRegistry:
             "task_type": task_type.value,
             "confidence": confidence,
             "needs_tools": True,
-            "draft_first": False,
+            "draft_first": use_draft,
             "deterministic": False,
+            "selected_model": self.CASCADE_WORKER,
         }
 
     def resolve_model(self, prompt: str, available_models: list[str] | None = None) -> str | None:
@@ -609,6 +690,7 @@ class ModelRegistry:
             "model_usage": dict(sorted(
                 self._model_usage.items(), key=lambda x: x[1], reverse=True
             )),
+            "perf_stats": self.get_perf_stats(),
         }
 
     def list_models(self) -> list[dict[str, Any]]:

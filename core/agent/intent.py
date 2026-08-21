@@ -206,6 +206,21 @@ class IntentClassifier:
                     return ClassifiedIntent(Intent.INSTANT, 1.0, response=f"__{cmd_type.upper()}__", context_level="instant")
                 return ClassifiedIntent(Intent.INSTANT, 1.0, response=response, context_level="instant")
 
+        # Identity/memory questions — route to LLM where memory is in the system prompt.
+        # These must come BEFORE _COMMANDS to avoid matching 'what is' → web.search.
+        _IDENTITY_RE = re.compile(
+            r"^(what(s|'s|\s+is|\s+are)\s+(my|the|your)\s+(name|role|project|preferences?|priorities?)"
+            r"|who\s+(am\s+I|are\s+you|is\s+this)"
+            r"|my\s+name\s+is\s+"
+            r"|i('m|\s+am)\s+"
+            r"|call\s+me\s+"
+            r"|remember\s+that\s+"
+            r"|do\s+you\s+know\s+(who\s+)?(I|my))",
+            re.IGNORECASE,
+        )
+        if _IDENTITY_RE.match(tl):
+            return ClassifiedIntent(Intent.SIMPLE, 0.9, context_level="deep")
+
         for pattern, tool_name, fixed_args in _COMMANDS:
             m = pattern.match(tl)
             if m:

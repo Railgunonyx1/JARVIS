@@ -197,13 +197,25 @@ class MemoryStore:
         """Force immediate flush (called on shutdown)."""
         self._flush_conversations()
 
-    def recent(self, limit: int = 10) -> list[dict]:
-        """Most recently updated memories — used for prompt injection."""
+    def recent(self, limit: int = 10, category: str | None = None) -> list[dict]:
+        """Most recently updated memories — used for prompt injection.
+
+        Args:
+            limit: Max entries to return.
+            category: If set, filter to this category (e.g., 'identity', 'preferences').
+        """
         with self._lock:
-            rows = [dict(r) for r in self._conn.execute(
-                "SELECT key, value, category, importance FROM memories "
-                "ORDER BY updated_at DESC LIMIT ?", (limit,),
-            ).fetchall()]
+            if category:
+                rows = [dict(r) for r in self._conn.execute(
+                    "SELECT key, value, category, importance FROM memories "
+                    "WHERE category = ? ORDER BY updated_at DESC LIMIT ?",
+                    (category, limit),
+                ).fetchall()]
+            else:
+                rows = [dict(r) for r in self._conn.execute(
+                    "SELECT key, value, category, importance FROM memories "
+                    "ORDER BY updated_at DESC LIMIT ?", (limit,),
+                ).fetchall()]
         return rows
 
     def get_conversation_history(self, session_id: str, limit: int = 50) -> list[dict]:
