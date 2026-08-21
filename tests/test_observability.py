@@ -179,7 +179,7 @@ class _FakeStreamProvider(LLMProvider):
         super().__init__("fake", {"model": "fake-model"})
 
     async def complete(self, messages, system_prompt=None, max_tokens=None,
-                       temperature=None, tools=None):
+                       temperature=None, tools=None, model=None):
         from providers.types import LLMResponse
 
         return LLMResponse(text="hi", model="fake-model", provider="fake", tokens_used=1)

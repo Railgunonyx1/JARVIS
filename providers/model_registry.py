@@ -435,8 +435,7 @@ class ModelRegistry:
             return "Switched to auto mode — JARVIS will pick the best model per task."
 
         # Normalize: add :latest tag if missing
-        if ":" not in model_name:
-            model_name = model_name  # Keep as-is, Ollama resolves
+        # model_name kept as-is if no tag — Ollama resolves it
 
         # Validate against catalog
         profile = _MODEL_BY_NAME.get(model_name)

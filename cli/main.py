@@ -563,9 +563,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             bridge.attach_loop(loop)
             bridge.pull_status()
             # Wire router rate-limit events to the UI via the observer
-            loop.router.on_provider_event = lambda name, payload: (
-                getattr(loop.observer, 'on_event', lambda n, p: None)(name, payload)
-            )
+            def _forward_provider_event(name, payload):
+                if hasattr(loop.observer, 'on_event'):
+                    loop.observer.on_event(name, payload)
+            loop.router.on_provider_event = _forward_provider_event
             loop.router.warm()
             # Initialize interrupt executor for parallel lightweight queries
             global _interrupt_executor, _interrupt_classifier, _main_task_running

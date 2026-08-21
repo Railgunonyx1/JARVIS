@@ -511,6 +511,9 @@ class ProviderRouter:
         if not chain:
             raise RuntimeError("No LLM providers available.")
 
+        # Request-scoped model
+        _request_model = preferred_model
+
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 

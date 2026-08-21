@@ -190,7 +190,7 @@ def _parse_format(text: str, format_type: str) -> Any:
             reader = csv.reader(io.StringIO(text))
             rows = list(reader)
             if len(rows) == 1 and len(rows[0]) > 1:
-                return [dict(zip(rows[0], rows[1:]))] if len(rows) > 1 else rows[0]
+                return [dict(zip(rows[0], rows[1:], strict=False))] if len(rows) > 1 else rows[0]
             return rows
         except Exception:
             return text

@@ -57,6 +57,7 @@ def run_pytest(path: str = ".") -> dict[str, Any]:
             text=True,
             cwd=Path(path).parent.parent,  # Run from project root
             timeout=60,
+            check=False,
         )
         return {
             "status": "complete",
@@ -79,6 +80,7 @@ def run_ruff(path: str = ".") -> dict[str, Any]:
             text=True,
             cwd=Path(path).parent.parent,
             timeout=30,
+            check=False,
         )
         return {
             "status": "complete",
