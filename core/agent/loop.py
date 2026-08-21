@@ -278,6 +278,7 @@ class AgentLoop:
                 profile = self._model_gateway.select(
                     requirements=requirements or None,
                     session_id=session_id or None,
+                    confidence=classified.confidence,
                 )
                 if profile is not None:
                     state.provider = profile.provider
@@ -351,6 +352,11 @@ class AgentLoop:
                         messages, self._system_tokens(system_prompt, tools),
                     )
                 state.context_usage = report.to_dict()
+                if report.compacted:
+                    self._emit("context.compacted", {
+                        "messages_tokens": report.messages_tokens,
+                        "budget": report.budget.messages,
+                    }, trace_id)
                 remaining = max(3.0, _budgets["total"] - (time.time() - _run_start))
                 _call_timeout = min(_budgets["llm_call"], remaining)
                 with tracer.span("provider.complete") as span:

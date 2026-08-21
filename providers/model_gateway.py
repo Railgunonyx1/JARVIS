@@ -154,13 +154,20 @@ class ModelGateway:
         session_id: str | None = None,
         combo_name: str | None = None,
         exclude_providers: set[str] | None = None,
+        confidence: float | None = None,
     ) -> ModelProfile | None:
         """Select the best model given requirements and current health.
 
         Priority:
         1. Session affinity (if model is still healthy)
         2. Combo (if specified)
-        3. Capability matching + health scoring
+        3. Confidence-based stepping (if confidence is provided)
+        4. Capability matching + health scoring
+
+        When ``confidence`` is provided:
+          - >= 0.8: prefer FAST + CHEAP models (simple task, small model)
+          - 0.4-0.8: prefer balanced models
+          - < 0.4: prefer REASONING models (complex task, strong model)
         """
         exclude = exclude_providers or set()
 
@@ -191,7 +198,31 @@ class ModelGateway:
                         self._session_affinity[session_id] = f"{prof.provider}/{prof.name}"
                     return prof
 
-        # 3. Score all models
+        # 3. Confidence-based model stepping
+        if confidence is not None:
+            if confidence >= 0.8:
+                prefer_caps = {Capability.FAST, Capability.CHEAP}
+            elif confidence >= 0.4:
+                prefer_caps = set()
+            else:
+                prefer_caps = {Capability.REASONING}
+            candidates_conf = []
+            for key, prof in self._models.items():
+                h = self.get_health(prof.provider)
+                if not h.healthy or h.is_in_cooldown or prof.provider in exclude:
+                    continue
+                if prefer_caps and not self._matches(prof, prefer_caps):
+                    continue
+                score = self._score(prof, h, prefer_caps or requirements)
+                candidates_conf.append((score, prof))
+            if candidates_conf:
+                candidates_conf.sort(key=lambda x: x[0], reverse=True)
+                best_conf = candidates_conf[0][1]
+                if session_id:
+                    self._session_affinity[session_id] = f"{best_conf.provider}/{best_conf.name}"
+                return best_conf
+
+        # 4. Score all models
         candidates = []
         for key, prof in self._models.items():
             h = self.get_health(prof.provider)

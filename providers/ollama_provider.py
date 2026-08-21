@@ -73,7 +73,8 @@ class OllamaProvider(LLMProvider):
     def prewarm(self, model: str | None = None) -> bool:
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
-            import urllib.request, json as _json
+            import json as _json
+            import urllib.request
             data = _json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
             req = urllib.request.Request(
                 f"{self.base_url}/api/generate",
@@ -91,7 +92,8 @@ class OllamaProvider(LLMProvider):
 
     def get_loaded_models(self) -> list[dict]:
         try:
-            import urllib.request, json as _json
+            import json as _json
+            import urllib.request
             req = urllib.request.Request(f"{self.base_url}/api/ps")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = _json.loads(resp.read())
@@ -102,7 +104,8 @@ class OllamaProvider(LLMProvider):
     def unload_model(self, model: str | None = None) -> bool:
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
-            import urllib.request, json as _json
+            import json as _json
+            import urllib.request
             data = _json.dumps({"model": m, "keep_alive": 0}).encode()
             req = urllib.request.Request(
                 f"{self.base_url}/api/generate",
@@ -118,6 +121,7 @@ class OllamaProvider(LLMProvider):
             return False
 
     def _warm(self) -> None:
+        super()._warm()
         if self._prewarm_on_start and self._daemon_ok:
             primary = self.config.get("model", "qwen2.5:1.5b")
             try:
