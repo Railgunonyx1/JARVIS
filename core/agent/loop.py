@@ -218,13 +218,19 @@ class AgentLoop:
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
 
-            # Fast path: intent classifier checks rules before hitting the LLM
+            # Pipeline latency tracker
+            _latency_log: list[tuple[str, float]] = []
+
+            # ── Stage 1: Intent classification ──
+            _t0 = time.time()
             classified = self.intent_classifier.classify(goal)
+            _latency_log.append(("intent", (time.time() - _t0) * 1000))
             self.logger.record(trace_id, "intent.classified", {
                 "goal": goal[:200],
                 "intent": classified.intent.value,
                 "confidence": classified.confidence,
                 "tool": classified.tool_name,
+                "latency_ms": _latency_log[-1][1],
             })
 
             # INSTANT: response-only (greetings, questions) — return immediately
@@ -267,6 +273,7 @@ class AgentLoop:
 
             # Model Gateway: select model based on harness requirements
             if self._model_gateway is not None:
+                _t_ms = time.time()
                 requirements = set()
                 if self._harness is not None:
                     for pref in self._harness.config.model_preference:
@@ -280,6 +287,7 @@ class AgentLoop:
                     session_id=session_id or None,
                     confidence=classified.confidence,
                 )
+                _latency_log.append(("model_select", (time.time() - _t_ms) * 1000))
                 if profile is not None:
                     state.provider = profile.provider
                     state.model = profile.name
