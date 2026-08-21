@@ -138,13 +138,124 @@ async def git_restore(params: dict) -> ToolResult:
     """
     path = params.get("path", ".")
     args = ["checkout"]
-    if params.get("staged"):
-        args.append("--")
-        args.append(path)
-    else:
-        args.append("--")
-        args.append(path)
+    args.extend(["--", path])
     code, out, err = _git(args)
     if code != 0:
         return tool_result(False, error=err or f"git restore {path} failed")
     return tool_result(True, output=f"Restored: {path}")
+
+
+async def git_blame(params: dict) -> ToolResult:
+    """Show who last modified each line of a file.
+
+    Parameters
+    ----------
+    path : str
+        File to blame.
+    """
+    path = params.get("path")
+    if not path:
+        return tool_result(False, error="path is required")
+    code, out, err = _git(["blame", "--line-porcelain", path])
+    if code != 0:
+        return tool_result(False, error=err or f"git blame {path} failed")
+    # Parse porcelain output into readable format
+    lines = out.splitlines()
+    results = []
+    current = {}
+    for line in lines:
+        if line.startswith("author "):
+            current["author"] = line[7:]
+        elif line.startswith("author-time "):
+            import datetime
+            ts = int(line[12:])
+            current["date"] = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+        elif line.startswith("\t"):
+            current["line"] = line[1:]
+            if current.get("author") and current.get("line"):
+                results.append(f"{current.get('date', '?')} {current['author']}: {current['line'][:80]}")
+            current = {}
+    if not results:
+        # Fallback to simple blame
+        code2, out2, err2 = _git(["blame", "--short", path])
+        if code2 == 0 and out2:
+            return tool_result(True, output=truncate(out2, _MAX_OUTPUT))
+        return tool_result(False, error=err or "git blame failed")
+    output = "\n".join(results[:50])
+    return tool_result(True, output=truncate(output, _MAX_OUTPUT))
+
+
+async def git_create_branch(params: dict) -> ToolResult:
+    """Create a new branch and optionally check it out.
+
+    Parameters
+    ----------
+    name : str
+        Branch name.
+    checkout : bool
+        Switch to the new branch. Default true.
+    """
+    name = params.get("name")
+    if not name:
+        return tool_result(False, error="name is required")
+    args = ["branch", name]
+    code, out, err = _git(args)
+    if code != 0:
+        return tool_result(False, error=err or f"git branch {name} failed")
+    if params.get("checkout", True):
+        code2, out2, err2 = _git(["checkout", name])
+        if code2 != 0:
+            return tool_result(True, output=f"Branch '{name}' created but checkout failed: {err2}")
+    return tool_result(True, output=f"Created branch '{name}'")
+
+
+async def git_stash(params: dict) -> ToolResult:
+    """Stash uncommitted changes.
+
+    Parameters
+    ----------
+    action : str
+        'save', 'pop', 'list', or 'drop'. Default 'save'.
+    message : str
+        Stash message (for save only).
+    """
+    action = params.get("action", "save")
+    if action == "list":
+        code, out, err = _git(["stash", "list"])
+        if code != 0:
+            return tool_result(False, error=err or "git stash list failed")
+        return tool_result(True, output=out or "No stashes.")
+    elif action == "pop":
+        code, out, err = _git(["stash", "pop"])
+        if code != 0:
+            return tool_result(False, error=err or "git stash pop failed")
+        return tool_result(True, output=out or "Stash popped.")
+    elif action == "drop":
+        code, out, err = _git(["stash", "drop"])
+        if code != 0:
+            return tool_result(False, error=err or "git stash drop failed")
+        return tool_result(True, output=out or "Stash dropped.")
+    else:  # save
+        args = ["stash", "save"]
+        msg = params.get("message")
+        if msg:
+            args.append(msg)
+        code, out, err = _git(args)
+        if code != 0:
+            return tool_result(False, error=err or "git stash save failed")
+        return tool_result(True, output=out or "Changes stashed.")
+
+
+async def git_show(params: dict) -> ToolResult:
+    """Show a specific commit.
+
+    Parameters
+    ----------
+    ref : str
+        Commit ref (hash, branch, HEAD). Default HEAD.
+    """
+    ref = params.get("ref", "HEAD")
+    code, out, err = _git(["show", "--stat", ref])
+    if code != 0:
+        return tool_result(False, error=err or f"git show {ref} failed")
+    return tool_result(True, output=truncate(out, _MAX_OUTPUT))

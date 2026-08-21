@@ -20,21 +20,29 @@ def build_default_registry() -> ToolRegistry:
         browser_status,
         browser_type,
     )
+    from tools.code_intelligence import code_imports, code_references, code_symbol, code_typecheck
     from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
     from tools.git_tools import (
         git_add,
+        git_blame,
         git_branch,
         git_commit,
+        git_create_branch,
         git_diff,
         git_log,
         git_restore,
+        git_show,
+        git_stash,
         git_status,
     )
     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.patch import patch_delete, patch_insert, patch_replace
+    from tools.runtime_tools import runtime_status
     from tools.search import code_search, file_find
+    from tools.security import security_check_permissions, security_scan_secrets
     from tools.shell import shell_execute
     from tools.system_monitor import system_status
+    from tools.test_tools import test_coverage, test_discover, test_failed, test_run_target
     from tools.web_search import web_search
     from tools.world_monitor import (
         world_monitor_get_alerts,
@@ -635,6 +643,223 @@ def build_default_registry() -> ToolRegistry:
             permission="memory.stats",
             handler=memory_stats,
             category="memory",
+        ),
+        # ── Git (extended) ──────────────────────────────────────
+        Tool(
+            name="git.blame",
+            description="Show who last modified each line of a file (git blame).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File to blame."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=git_blame,
+            category="git",
+        ),
+        Tool(
+            name="git.create_branch",
+            description="Create a new branch and optionally check it out.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Branch name."},
+                    "checkout": {"type": "boolean", "description": "Switch to new branch. Default true."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.write",
+            handler=git_create_branch,
+            category="git",
+        ),
+        Tool(
+            name="git.stash",
+            description="Stash uncommitted changes (save/pop/list/drop).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "save, pop, list, or drop. Default save."},
+                    "message": {"type": "string", "description": "Stash message (save only)."},
+                },
+                "required": [],
+            },
+            permission="filesystem.write",
+            handler=git_stash,
+            category="git",
+        ),
+        Tool(
+            name="git.show",
+            description="Show a specific commit (hash, branch, or HEAD).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "ref": {"type": "string", "description": "Commit ref. Default HEAD."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=git_show,
+            category="git",
+        ),
+        # ── Code intelligence ───────────────────────────────────
+        Tool(
+            name="code.symbol",
+            description="Find symbol definitions (classes, functions, variables) by name.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Symbol name to search for."},
+                    "path": {"type": "string", "description": "Directory to search in."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.read",
+            handler=code_symbol,
+            category="code",
+        ),
+        Tool(
+            name="code.references",
+            description="Find all references/usages of a symbol across the codebase.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Symbol name."},
+                    "path": {"type": "string", "description": "Directory to search in."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.read",
+            handler=code_references,
+            category="code",
+        ),
+        Tool(
+            name="code.imports",
+            description="Show all imports in a Python file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Python file to analyze."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=code_imports,
+            category="code",
+        ),
+        Tool(
+            name="code.typecheck",
+            description="Run Python type checking (mypy or py_compile) on a file or directory.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File or directory to check."},
+                },
+                "required": [],
+            },
+            permission="shell.execute",
+            handler=code_typecheck,
+            category="code",
+        ),
+        # ── Test tools ──────────────────────────────────────────
+        Tool(
+            name="test.discover",
+            description="Discover test files and count tests in the project.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to search."},
+                    "pattern": {"type": "string", "description": "File glob pattern. Default test_*.py."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=test_discover,
+            category="testing",
+        ),
+        Tool(
+            name="test.run_target",
+            description="Run specific test files or test functions with pytest.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Test file, dir, or specific test (e.g. tests/test_foo.py::test_bar)."},
+                    "args": {"type": "string", "description": "Extra pytest args. Default '-v --tb=short'."},
+                    "timeout": {"type": "integer", "description": "Timeout in seconds. Default 120."},
+                },
+                "required": ["target"],
+            },
+            permission="shell.execute",
+            handler=test_run_target,
+            category="testing",
+        ),
+        Tool(
+            name="test.failed",
+            description="Show only failed tests from a test run.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Test file or directory."},
+                },
+                "required": [],
+            },
+            permission="shell.execute",
+            handler=test_failed,
+            category="testing",
+        ),
+        Tool(
+            name="test.coverage",
+            description="Run tests with coverage reporting.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Test file or directory."},
+                    "source": {"type": "string", "description": "Source directory to measure."},
+                },
+                "required": [],
+            },
+            permission="shell.execute",
+            handler=test_coverage,
+            category="testing",
+        ),
+        # ── Runtime diagnostics ─────────────────────────────────
+        Tool(
+            name="runtime.status",
+            description="Report JARVIS runtime health: providers, memory, tools, Ollama.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="system.query",
+            handler=runtime_status,
+            category="runtime",
+        ),
+        # ── Security ────────────────────────────────────────────
+        Tool(
+            name="security.scan_secrets",
+            description="Scan the project for hardcoded secrets and sensitive data.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to scan."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=security_scan_secrets,
+            category="security",
+        ),
+        Tool(
+            name="security.check_permissions",
+            description="Check file permissions and sensitive file exposure.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to check."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=security_check_permissions,
+            category="security",
         ),
     ])
     return registry
