@@ -1,0 +1,10 @@
+{
+  "name": "implement_feature",
+  "description": "Understand requirements, plan implementation, code, test, review, verify",
+  "tools": ["filesystem.read", "filesystem.write", "patch.replace", "patch.insert", "search.code", "code.symbol", "code.references", "test.run_target", "test.discover", "git.diff", "git.add", "git.commit"],
+  "tags": ["workflow", "coding", "implementation"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "medium",
+  "timeout": 600,
+  "version": "1.0.0"
+}

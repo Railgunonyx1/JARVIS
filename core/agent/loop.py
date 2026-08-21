@@ -324,22 +324,19 @@ class AgentLoop:
             with tracer.span("context.build", {
                 "project": str(self.project.root_path), "level": context_level,
             }):
-                if context_level == "instant":
-                    messages = [{"role": "user", "content": goal}]
-                    system_prompt = "You are JARVIS, an engineering assistant. Be concise."
-                elif context_level == "session":
-                    messages = [{"role": "user", "content": goal}]
-                    system_prompt = "You are JARVIS, an engineering assistant."
+                # Select tools FIRST, then build context with token-optimized prompt
+                _all_tools = self.registry.to_openai_tools()
+                if classified.intent in (Intent.SIMPLE, Intent.COMPLEX):
+                    tools = self.intent_classifier.select_tools(goal, _all_tools)
                 else:
-                    messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
+                    tools = _all_tools
+                # context_level controls prompt size: instant=~50 tokens, session=~150, deep=~500
+                messages, system_prompt = self.context_builder.build(
+                    goal, self.project, self.mem, tools=tools, context_level=context_level,
+                )
             _latency_log.append(("context_build", (time.time() - _t_ctx) * 1000))
-            tools = self.registry.to_openai_tools()
-
-            # Semantic tool selection: for LLM-bound requests, only expose
-            # tools relevant to the user's intent. Reduces prompt tokens,
-            # model confusion, and inference time.
-            if classified.intent in (Intent.SIMPLE, Intent.COMPLEX):
-                tools = self.intent_classifier.select_tools(goal, tools)
+            if not tools:
+                tools = self.registry.to_openai_tools()
 
             # Adaptive context budgets: scale context window to task complexity
             _context_budget_multiplier = {

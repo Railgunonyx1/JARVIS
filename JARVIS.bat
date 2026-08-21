@@ -26,11 +26,23 @@ if errorlevel 1 (
     if exist "C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe"
     if not defined OLLAMA_EXE where ollama >nul 2>&1 && set "OLLAMA_EXE=ollama"
     if defined OLLAMA_EXE (
-        echo Starting Ollama...
+        echo Starting Ollama server...
         start "" "%OLLAMA_EXE%" serve
-        ping -n 3 127.0.0.1 >nul 2>&1
+        REM Wait for Ollama to be ready (check port)
+        set /a _tries=0
+        :wait_ollama
+        netstat -an 2>nul | findstr ":11434" >nul 2>&1
+        if not errorlevel 1 goto ollama_ready
+        set /a _tries+=1
+        if %_tries% GEQ 20 goto ollama_ready
+        ping -n 2 127.0.0.1 >nul 2>&1
+        goto wait_ollama
+        :ollama_ready
+        echo Ollama ready.
     )
 )
+REM ── Preload models in background (eliminates first-request latency) �r
+start /B "" curl -s http://127.0.0.1:11434/api/generate -d "{\"model\":\"qwen2.5:1.5b\",\"prompt\":\"hi\",\"options\":{\"num_predict\":1}}" >nul 2>&1
 
 REM ── Launch JARVIS ─────────────────────────────────────────────────────
 if not "%~1"=="" goto argmode

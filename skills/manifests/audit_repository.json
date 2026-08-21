@@ -1,0 +1,10 @@
+{
+  "name": "audit_repository",
+  "description": "Architecture + dependencies + security + tests + lint + dead code + performance audit",
+  "tools": ["code.ast", "code.imports", "code.references", "security.scan_secrets", "security.scan_code", "security.check_permissions", "test.discover", "test.run", "test.coverage", "filesystem.read", "filesystem.tree", "runtime.status"],
+  "tags": ["workflow", "audit", "analysis"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "low",
+  "timeout": 300,
+  "version": "1.0.0"
+}

@@ -1,4 +1,11 @@
-"""AgentContextBuilder — builds the system prompt and message history."""
+"""AgentContextBuilder — builds the system prompt and message history.
+
+Optimized for minimal token usage:
+  - INSTANT queries: ~50 tokens (identity-only prompt)
+  - SIMPLE queries: ~150 tokens (brief + memory)
+  - COMPLEX queries: ~500 tokens (full instructions + memory)
+  - Tool descriptions passed via API, not system prompt (saves ~1900 tokens)
+"""
 
 from __future__ import annotations
 
@@ -6,83 +13,126 @@ from typing import Any
 
 from tools.registry import ToolRegistry
 
+# ── Pre-built prompt fragments (avoid per-request string building) ────────
+
+_IDENTITY = "You are JARVIS MK-X, an autonomous engineering agent."
+
+_BRIEF = (
+    f"{_IDENTITY} Answer simple questions directly in 1-3 sentences. "
+    "Do NOT call tools unless the task requires file/system operations."
+)
+
+_FULL = (
+    f"{_IDENTITY} running on a Windows PC.\n"
+    "\n"
+    "For simple questions, greetings, opinions, math, jokes, answer directly "
+    "in 1-3 sentences. Do NOT call tools for things you can answer from knowledge.\n"
+    "\n"
+    "For tasks requiring code changes, file operations, or system commands:\n"
+    "1. UNDERSTAND: Parse the user's goal.\n"
+    "2. EXPLORE: Read relevant files first.\n"
+    "3. PLAN: State your approach in 1-2 sentences.\n"
+    "4. EXECUTE: Make precise, minimal changes.\n"
+    "5. VERIFY: Confirm the result is correct.\n"
+    "\n"
+    "Tool rules:\n"
+    "- filesystem.read to read files (NOT cat/type)\n"
+    "- filesystem.list to list dirs (NOT dir/ls)\n"
+    "- search.code to search contents (NOT grep)\n"
+    "- patch.replace/insert/delete for edits\n"
+    "- filesystem.write ONLY for new files\n"
+    "- shell.execute ONLY when no other tool works\n"
+    "- Inspect before acting: read before modifying\n"
+    "- On tool error, adapt and retry with corrected call\n"
+    "- Never fabricate results. Report what happened.\n"
+    "- Stop when goal is complete. Summarize in 2-3 sentences."
+)
+
+# Cache: project context string (changes rarely)
+_project_cache: dict[str, str] = {}
+
 
 class AgentContextBuilder:
-    """Composes the system prompt from the tool registry + project context."""
+    """Composes the system prompt with tiered token budgets."""
 
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
+        self._memory_cache: dict[str, tuple[str, float]] = {}
+        self._memory_cache_ttl = 5.0  # seconds
 
-    def build(self, goal: str, project, mem=None) -> tuple[list[dict[str, Any]], str]:
-        """Return (messages, system_prompt) for the first loop iteration."""
-        return [{"role": "user", "content": goal}], self._system_prompt(project, mem)
+    def build(
+        self,
+        goal: str,
+        project,
+        mem=None,
+        tools: list | None = None,
+        context_level: str = "deep",
+    ) -> tuple[list[dict[str, Any]], str]:
+        """Return (messages, system_prompt) with token-optimized prompt.
 
-    def _system_prompt(self, project, mem=None) -> str:
-        tools = self.registry.to_openai_tools()
-        lines = [
-            "You are JARVIS MK-X, an autonomous engineering agent running on a Windows PC.",
-            "",
-            "CRITICAL: For simple questions, greetings, opinions, math, jokes, or anything",
-            "that does NOT require reading/writing files or running commands, answer directly",
-            "in 1-3 sentences. Do NOT call tools for things you can answer from knowledge.",
-            "Examples of DIRECT answers (no tools needed):",
-            "  - 'hello' -> 'Hello! How can I help you today?'",
-            "  - 'what is 2+2' -> '4'",
-            "  - 'tell me a joke' -> tell a joke",
-            "  - 'what time is it' -> give the time",
-            "",
-            "For tasks that require code changes, file operations, or system commands:",
-            "",
-            "Methodology (follow this order):",
-            "1. UNDERSTAND: Parse the user's goal. Identify what information or changes are needed.",
-            "2. EXPLORE: Before making changes, read relevant files first.",
-            "3. PLAN: State your approach in 1-2 sentences before acting.",
-            "4. EXECUTE: Make precise, minimal changes.",
-            "5. VERIFY: After changes, confirm the result is correct.",
-            "",
-            "Tool Selection Rules:",
-            "- Use filesystem.read to read file contents (NOT shell.execute with cat/type)",
-            "- Use filesystem.list to list directories (NOT shell.execute with dir/ls)",
-            "- Use search.code to search file contents (NOT shell.execute with grep)",
-            "- Use search.find to find files by name pattern (NOT shell.execute with find/where)",
-            "- Use git.status / git.diff / git.log for git operations (NOT shell.execute)",
-            "- Use patch.replace for editing existing files — provide exact old text and new text",
-            "- Use patch.insert to add code at a specific line",
-            "- Use patch.delete to remove lines from a file",
-            "- Use filesystem.write ONLY for creating new files",
-            "- Use shell.execute ONLY when no other tool can accomplish the task",
-            "",
-            "Rules:",
-            "- Inspect before acting: always read a file before modifying it.",
-            "- Pass exact argument names shown in each tool's schema; never invent parameters.",
-            "- On a tool error, read it, adapt, and retry with a corrected call.",
-            "- Never fabricate tool results. Report what actually happened.",
-            "- If a tool is denied or fails, do NOT retry the same call — adapt or explain.",
-            "- Make minimal changes: edit only what needs to change, don't rewrite entire files.",
-            "- Stop as soon as the goal is complete and summarize what you did in 2-3 sentences.",
-            "- Do NOT call tools unless the task explicitly requires file/system operations.",
-        ]
-        if project:
-            lines.append("Project context:")
-            lines.append(f"- root: {project.root_path}")
-            if getattr(project, "language", ""):
-                lines.append(f"- language: {project.language}")
-            if getattr(project, "framework", ""):
-                lines.append(f"- framework: {project.framework}")
-            if getattr(project, "git_root", None):
-                lines.append(f"- git root: {project.git_root}")
-        lines.append(f"Available tools ({len(tools)}):")
-        for tool in tools:
-            fn = tool["function"]
-            desc = fn["description"]
-            if len(desc) > 60:
-                desc = desc[:57].rstrip() + "..."
-            lines.append(f"- {fn['name']}: {desc}")
+        context_level:
+          - 'instant': ~50 tokens (identity only, no memory)
+          - 'session': ~150 tokens (brief + memory)
+          - 'deep':    ~500 tokens (full instructions + memory)
+        """
+        if context_level == "instant":
+            return [{"role": "user", "content": goal}], _IDENTITY
+        if context_level == "session":
+            prompt = _BRIEF
+            if mem is not None:
+                mem_text = self._cached_memory(mem, project)
+                if mem_text:
+                    prompt = f"{prompt}\n{mem_text}"
+            return [{"role": "user", "content": goal}], prompt
+
+        # deep context
+        lines = [_FULL]
+        proj_ctx = self._project_context(project)
+        if proj_ctx:
+            lines.append(proj_ctx)
         if mem is not None:
-            project_root = getattr(project, "root_path", None)
-            mem_text = mem.format_for_prompt(
-                str(project_root) if project_root else "", max_tokens=800,
-            )
+            mem_text = self._cached_memory(mem, project)
             if mem_text:
                 lines.append(mem_text)
-        return "\n".join(lines)
+        return [{"role": "user", "content": goal}], "\n".join(lines)
+
+    def _project_context(self, project) -> str:
+        """Cache project context (rarely changes)."""
+        if project is None:
+            return ""
+        key = str(getattr(project, "root_path", ""))
+        if key in _project_cache:
+            return _project_cache[key]
+
+        parts = [f"Project: {project.root_path}"]
+        lang = getattr(project, "language", "")
+        if lang:
+            parts.append(f"Language: {lang}")
+        fw = getattr(project, "framework", "")
+        if fw:
+            parts.append(f"Framework: {fw}")
+        git = getattr(project, "git_root", None)
+        if git:
+            parts.append(f"Git: {git}")
+        result = "\n".join(parts)
+        _project_cache[key] = result
+        return result
+
+    def _cached_memory(self, mem, project) -> str:
+        """Cache memory format (expensive DB query)."""
+        import time
+        now = time.time()
+        project_root = str(getattr(project, "root_path", "")) if project else ""
+
+        cache_key = project_root
+        if cache_key in self._memory_cache:
+            text, ts = self._memory_cache[cache_key]
+            if now - ts < self._memory_cache_ttl:
+                return text
+
+        try:
+            text = mem.format_for_prompt(project_root, max_tokens=800)
+        except Exception:
+            text = ""
+        self._memory_cache[cache_key] = (text, now)
+        return text

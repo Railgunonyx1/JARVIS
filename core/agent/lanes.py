@@ -56,12 +56,13 @@ class RequestClass(StrEnum):
 # ── Interrupt Capabilities ──────────────────────────────────────────────
 
 # Tools that the 1B interrupt lane is ALLOWED to use.
-# Read-only, non-destructive, fast.
+# Mostly read-only; memory.remember is a safe write for identity/preferences.
 _INTERRUPT_ALLOWED_TOOLS: frozenset[str] = frozenset({
     "memory.retrieve",
     "memory.search",
     "memory.recent",
     "memory.stats",
+    "memory.remember",  # Safe: identity/preference updates only
     "context.lookup",
     "system.status",
     "git.status",

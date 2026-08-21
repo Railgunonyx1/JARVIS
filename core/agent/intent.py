@@ -83,7 +83,7 @@ _MODE_COMMANDS: list[tuple[re.Pattern, str, str]] = [
 ]
 
 _COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None]] = [
-    (re.compile(r"^(what time|what's the time|current time|time is it|tell me the time|what('s| is) the date)$",
+    (re.compile(r"^(what time|what('s| is) the time|current time|time is it|tell me the time|what('s| is) the date)",
                 re.IGNORECASE), "system.status", None),
     (re.compile(r"^(system status|how('s| is) (my |the )?(computer|pc|system|machine)|cpu|ram|memory usage)$",
                 re.IGNORECASE), "system.status", None),
@@ -235,12 +235,12 @@ class IntentClassifier:
             r"|my\s+name\s+is\s+"
             r"|i('m|\s+am)\s+"
             r"|call\s+me\s+"
-            r"|remember\s+that\s+"
+            r"|remember\s+(my\s+name\s+is|that)\s+"
             r"|do\s+you\s+know\s+(who\s+)?(I|my))",
             re.IGNORECASE,
         )
         if _IDENTITY_RE.match(tl):
-            return ClassifiedIntent(Intent.SIMPLE, 0.9, context_level="deep")
+            return ClassifiedIntent(Intent.SIMPLE, 0.9, context_level="session")
 
         for pattern, tool_name, fixed_args in _COMMANDS:
             m = pattern.match(tl)

@@ -143,7 +143,11 @@ async def test_coverage(params: dict) -> ToolResult:
     code, out, err = _run_test_cmd(args, timeout=180)
     # Extract coverage summary
     lines = (out + "\n" + err).splitlines()
-    coverage_lines = [line for line in lines if "TOTAL" in line or "Name" in line or "coverage" in line.lower() or line.strip().endswith("%")]
+    coverage_lines = [
+        line for line in lines
+        if "TOTAL" in line or "Name" in line
+        or "coverage" in line.lower() or line.strip().endswith("%")
+    ]
     if coverage_lines:
         output = "\n".join(coverage_lines[:15])
     else:

@@ -1,0 +1,10 @@
+{
+  "name": "tool_auditor",
+  "description": "Audit tool registration, permission schemas, handler integrity, and execution boundary compliance",
+  "tools": ["filesystem.read", "code.ast", "code.imports", "code.references", "security.scan_code"],
+  "tags": ["audit", "tools", "permissions", "jarvis"],
+  "preferred_models": ["qwen2.5:3b", "qwen2.5:4b"],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0"
+}

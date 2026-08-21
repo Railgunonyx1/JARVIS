@@ -1,0 +1,10 @@
+{
+  "name": "review_change",
+  "description": "Review git diff for correctness, security, architecture, and test coverage",
+  "tools": ["git.diff", "git.log", "git.blame", "filesystem.read", "code.references", "code.callers", "test.run_target", "security.scan_code"],
+  "tags": ["workflow", "review", "code-quality"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

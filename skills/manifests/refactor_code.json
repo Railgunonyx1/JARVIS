@@ -1,0 +1,10 @@
+{
+  "name": "refactor_code",
+  "description": "Analyze dependencies, snapshot, modify, test, compare behavior, verify",
+  "tools": ["code.symbol", "code.references", "code.callers", "code.callees", "code.ast", "filesystem.read", "filesystem.write", "filesystem.copy", "filesystem.diff", "patch.replace", "test.run_target", "git.diff"],
+  "tags": ["workflow", "refactoring", "coding"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "medium",
+  "timeout": 300,
+  "version": "1.0.0"
+}

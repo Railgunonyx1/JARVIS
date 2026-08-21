@@ -70,6 +70,22 @@ class OllamaProvider(LLMProvider):
             return False
         return self.health.available and self.check_quota()
 
+    def _build_options(self, max_tokens: int | None, temperature: float | None) -> dict:
+        """Build Ollama options with aggressive performance tuning."""
+        return {
+            "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 1024),
+            "temperature": temperature if temperature is not None else self.config.get("temperature", 0.4),
+            "num_ctx": self.config.get("num_ctx", 2048),
+            "num_thread": self.config.get("num_thread", 8),
+            "top_k": self.config.get("top_k", 20),
+            "top_p": self.config.get("top_p", 0.8),
+            "repeat_penalty": 1.0,
+            "mirostat": 2,           # Adaptive sampling — better quality/speed ratio
+            "mirostat_tau": 5.0,     # Target entropy
+            "mirostat_eta": 0.1,     # Learning rate
+            "num_gpu": 999,          # Offload all layers to GPU if available
+        }
+
     def prewarm(self, model: str | None = None) -> bool:
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
@@ -184,15 +200,7 @@ class OllamaProvider(LLMProvider):
         response = await client.chat(
             model=model,
             messages=full_messages,
-            options={
-                "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
-                "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
-                "num_ctx": self.config.get("num_ctx", 2048),
-                "num_thread": self.config.get("num_thread", 8),
-                "top_k": self.config.get("top_k", 30),
-                "top_p": self.config.get("top_p", 0.9),
-                "repeat_penalty": 1.0,
-            },
+            options=self._build_options(max_tokens, temperature),
             **kwargs,
         )
         latency = (time.time() - start) * 1000
@@ -312,15 +320,7 @@ class OllamaProvider(LLMProvider):
         stream = await client.chat(
             model=model,
             messages=full_messages,
-            options={
-                "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
-                "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
-                "num_ctx": self.config.get("num_ctx", 2048),
-                "num_thread": self.config.get("num_thread", 8),
-                "top_k": self.config.get("top_k", 30),
-                "top_p": self.config.get("top_p", 0.9),
-                "repeat_penalty": 1.0,
-            },
+            options=self._build_options(max_tokens, temperature),
             **kwargs,
             stream=True,
         )

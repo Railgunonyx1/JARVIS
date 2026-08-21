@@ -1,0 +1,10 @@
+{
+  "name": "debug_failure",
+  "description": "Reproduce error, isolate cause, inspect context, hypothesize, patch, regression test",
+  "tools": ["search.code", "filesystem.read", "filesystem.write", "patch.replace", "test.run_target", "test.failed", "code.symbol", "code.references", "code.callers"],
+  "tags": ["workflow", "debugging", "analysis"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "medium",
+  "timeout": 300,
+  "version": "1.0.0"
+}

@@ -1,22 +1,13 @@
 """Provider Router - Intelligent fallback chain with quota management."""
 
 import asyncio
+import importlib
 import logging
 import time
 from collections.abc import AsyncIterator
+from typing import Any
 
 from providers.base import LLMProvider, LLMResponse
-from providers.cerebras_provider import CerebrasProvider
-from providers.deepseek_provider import DeepSeekProvider
-from providers.gemini_provider import GeminiProvider
-from providers.groq_provider import GroqProvider
-from providers.huggingface_provider import HuggingFaceProvider
-from providers.mistral_provider import MistralProvider
-from providers.nvidia_nim_provider import NVIDIAProvider
-from providers.ollama_provider import OllamaProvider
-from providers.omni_route_provider import OmniRouteProvider
-from providers.opencode_zen_provider import OpenCodeZenProvider
-from providers.openrouter_provider import OpenRouterProvider
 from providers.types import (
     ErrorKind,
     ProviderError,
@@ -29,6 +20,30 @@ from providers.types import (
 from reliability_engine.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger("jarvis.providers.router")
+
+# Lazy provider class loader — avoids importing all 10 provider modules at startup.
+_PROVIDER_CLASSES: dict[str, tuple[str, str]] = {
+    "groq": ("providers.groq_provider", "GroqProvider"),
+    "gemini": ("providers.gemini_provider", "GeminiProvider"),
+    "openrouter": ("providers.openrouter_provider", "OpenRouterProvider"),
+    "opencode_zen": ("providers.opencode_zen_provider", "OpenCodeZenProvider"),
+    "mistral": ("providers.mistral_provider", "MistralProvider"),
+    "nvidia_nim": ("providers.nvidia_nim_provider", "NVIDIAProvider"),
+    "omni_route": ("providers.omni_route_provider", "OmniRouteProvider"),
+    "ollama": ("providers.ollama_provider", "OllamaProvider"),
+    "cerebras": ("providers.cerebras_provider", "CerebrasProvider"),
+    "deepseek": ("providers.deepseek_provider", "DeepSeekProvider"),
+    "huggingface": ("providers.huggingface_provider", "HuggingFaceProvider"),
+}
+
+
+def _lazy_import_provider(name: str) -> type:
+    """Import a provider class on demand (avoids importing all at startup)."""
+    if name not in _PROVIDER_CLASSES:
+        raise ValueError(f"Unknown provider: {name}")
+    module_path, class_name = _PROVIDER_CLASSES[name]
+    mod = importlib.import_module(module_path)
+    return getattr(mod, class_name)
 
 # Maximum retry-after delay before we fallback instead of waiting.
 _MAX_RETRY_WAIT_S = 5.0
@@ -89,41 +104,37 @@ class ProviderRouter:
         for _name, _breaker in self._circuit_breakers.items():
             _breaker.register(_name)
 
-        if "groq" in config and api_keys.get("groq"):
-            extra_groq = [k for k in api_keys.get("groq_extra", []) if k]
-            self._providers["groq"] = GroqProvider(config["groq"], api_keys["groq"], extra_keys=extra_groq)
-        if "gemini" in config and api_keys.get("gemini"):
-            self._providers["gemini"] = GeminiProvider(config["gemini"], api_keys["gemini"])
-        if "openrouter" in config and api_keys.get("openrouter"):
-            extra = [k for k in api_keys.get("openrouter_extra", []) if k]
-            self._providers["openrouter"] = OpenRouterProvider(
-                config["openrouter"], api_keys["openrouter"], extra_keys=extra,
-            )
-        if "opencode_zen" in config and api_keys.get("opencode_zen"):
-            self._providers["opencode_zen"] = OpenCodeZenProvider(
-                config["opencode_zen"], api_keys["opencode_zen"],
-            )
-        if "mistral" in config and api_keys.get("mistral"):
-            extra_mistral = [k for k in api_keys.get("mistral_extra", []) if k]
-            self._providers["mistral"] = MistralProvider(
-                config["mistral"], api_keys["mistral"], extra_keys=extra_mistral,
-            )
-        if "nvidia_nim" in config and api_keys.get("nvidia_nim"):
-            self._providers["nvidia_nim"] = NVIDIAProvider(
-                config["nvidia_nim"], api_keys["nvidia_nim"],
-            )
-        if "omni_route" in config:
-            self._providers["omni_route"] = OmniRouteProvider(
-                config["omni_route"], api_keys.get("omni_route", "omni-route"),
-            )
-        if "ollama" in config:
-            self._providers["ollama"] = OllamaProvider(config["ollama"])
-        if "cerebras" in config and api_keys.get("cerebras"):
-            self._providers["cerebras"] = CerebrasProvider(config["cerebras"], api_keys["cerebras"])
-        if "deepseek" in config and api_keys.get("deepseek"):
-            self._providers["deepseek"] = DeepSeekProvider(config["deepseek"], api_keys["deepseek"])
-        if "huggingface" in config and api_keys.get("huggingface"):
-            self._providers["huggingface"] = HuggingFaceProvider(config["huggingface"], api_keys["huggingface"])
+        # Provider constructor kwargs (only loaded when config has the key)
+        _PROVIDER_KWARGS: dict[str, dict[str, Any]] = {
+            "groq": {"extra_keys": lambda: [k for k in api_keys.get("groq_extra", []) if k]},
+            "openrouter": {"extra_keys": lambda: [k for k in api_keys.get("openrouter_extra", []) if k]},
+            "mistral": {"extra_keys": lambda: [k for k in api_keys.get("mistral_extra", []) if k]},
+        }
+
+        for name in list(config.keys()):
+            if name == "router":
+                continue
+            provider_key = api_keys.get(name)
+            # Ollama and omni_route don't need API keys
+            if name not in ("ollama", "omni_route") and not provider_key:
+                continue
+            if name not in _PROVIDER_CLASSES:
+                continue
+            try:
+                cls = _lazy_import_provider(name)
+                extra = {}
+                if name in _PROVIDER_KWARGS:
+                    for kw, fn in _PROVIDER_KWARGS[name].items():
+                        extra[kw] = fn()
+                # Ollama and omni_route have simpler constructors
+                if name == "ollama":
+                    self._providers[name] = cls(config[name])
+                elif name == "omni_route":
+                    self._providers[name] = cls(config[name], provider_key or "omni-route")
+                else:
+                    self._providers[name] = cls(config[name], provider_key, **extra)
+            except Exception as e:
+                logger.warning("Failed to init provider %s: %s", name, e)
 
         available = [name for name in self._chain if name in self._providers]
         logger.info("Router initialized: %s", " → ".join(available))

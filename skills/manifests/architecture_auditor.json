@@ -1,0 +1,10 @@
+{
+  "name": "architecture_auditor",
+  "description": "Audit JARVIS architecture against frozen invariants: single tool boundary, harness!=model, BusEvent schema, verification post-gate, deterministic failure classification",
+  "tools": ["code.symbol", "code.references", "code.callers", "code.callees", "code.ast", "filesystem.read", "search.code", "security.scan_code"],
+  "tags": ["audit", "architecture", "jarvis", "self-maintenance"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0"
+}

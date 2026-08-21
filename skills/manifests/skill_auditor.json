@@ -1,0 +1,10 @@
+{
+  "name": "skill_auditor",
+  "description": "Audit skill discovery, activation, manifest integrity, and tool dependency resolution",
+  "tools": ["filesystem.read", "filesystem.list", "search.code", "code.ast", "code.imports"],
+  "tags": ["audit", "skills", "jarvis"],
+  "preferred_models": ["qwen2.5:3b"],
+  "risk": "low",
+  "timeout": 60,
+  "version": "1.0.0"
+}

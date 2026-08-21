@@ -1,0 +1,10 @@
+{
+  "name": "context_auditor",
+  "description": "Audit context injection quality, compression effectiveness, budget adherence, and information loss",
+  "tools": ["filesystem.read", "search.code", "code.ast", "runtime.status", "runtime.latency"],
+  "tags": ["audit", "context", "compression", "jarvis"],
+  "preferred_models": ["qwen2.5:3b", "qwen2.5:4b"],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0"
+}

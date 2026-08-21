@@ -1,0 +1,10 @@
+{
+  "name": "model_router_auditor",
+  "description": "Audit model routing decisions: confidence-based stepping, fallback chains, health tracking, session affinity",
+  "tools": ["runtime.status", "runtime.latency", "runtime.models", "filesystem.read", "search.code"],
+  "tags": ["audit", "routing", "models", "jarvis"],
+  "preferred_models": ["qwen2.5:3b", "qwen2.5:4b"],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0"
+}

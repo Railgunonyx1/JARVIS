@@ -163,7 +163,9 @@ async def runtime_latency(params: dict) -> ToolResult:
     lines = []
     if stats:
         lines.append("LIVE LATENCY (LatencyAwareRouter):")
-        lines.append(f"  {'model':<26} {'calls':>6} {'succ%':>7} {'ttft avg':>9} {'ttft min':>9} {'ttft max':>9} {'lat avg':>9}")
+        hdr = (f"  {'model':<26} {'calls':>6} {'succ%':>7}"
+               f" {'ttft avg':>9} {'ttft min':>9} {'ttft max':>9} {'lat avg':>9}")
+        lines.append(hdr)
         for name in sorted(stats):
             s = stats[name]
             lines.append(
@@ -173,7 +175,9 @@ async def runtime_latency(params: dict) -> ToolResult:
             )
     if metrics:
         lines.append("LEARNED METRICS (PerfTracker):")
-        lines.append(f"  {'model':<26} {'calls':>6} {'succ%':>7} {'tool%':>7} {'p50 ttft':>9} {'p95 ttft':>9} {'lat avg':>9}")
+        hdr2 = (f"  {'model':<26} {'calls':>6} {'succ%':>7}"
+                f" {'tool%':>7} {'p50 ttft':>9} {'p95 ttft':>9} {'lat avg':>9}")
+        lines.append(hdr2)
         for name in sorted(metrics):
             m = metrics[name]
             lines.append(

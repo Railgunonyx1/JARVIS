@@ -1,0 +1,10 @@
+{
+  "name": "ui_auditor",
+  "description": "Audit terminal UI rendering, responsive layouts, theme consistency, and style correctness",
+  "tools": ["filesystem.read", "search.code", "code.ast", "code.references"],
+  "tags": ["audit", "ui", "terminal", "jarvis"],
+  "preferred_models": ["qwen2.5:3b"],
+  "risk": "low",
+  "timeout": 60,
+  "version": "1.0.0"
+}

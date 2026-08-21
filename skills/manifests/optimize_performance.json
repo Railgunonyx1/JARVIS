@@ -1,0 +1,10 @@
+{
+  "name": "optimize_performance",
+  "description": "Benchmark, profile, identify bottleneck, modify, benchmark again, compare",
+  "tools": ["test.benchmark", "test.run", "filesystem.read", "filesystem.write", "patch.replace", "code.ast", "code.callees", "runtime.latency"],
+  "tags": ["workflow", "performance", "optimization"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "medium",
+  "timeout": 300,
+  "version": "1.0.0"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "fix_bug",
+  "description": "Reproduce error, investigate root cause, patch, test, verify fix",
+  "tools": ["search.code", "filesystem.read", "filesystem.write", "patch.replace", "test.run_target", "test.failed", "git.diff"],
+  "tags": ["workflow", "debugging", "coding"],
+  "preferred_models": ["qwen2.5:4b", "qwen2.5:7b"],
+  "risk": "medium",
+  "timeout": 300,
+  "version": "1.0.0"
+}

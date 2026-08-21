@@ -1,0 +1,10 @@
+{
+  "name": "memory_auditor",
+  "description": "Audit memory retrieval quality, persistence integrity, ranking accuracy, and contamination detection",
+  "tools": ["memory.retrieve", "memory.stats", "memory.remember", "memory.forget", "filesystem.read", "search.code"],
+  "tags": ["audit", "memory", "jarvis", "self-maintenance"],
+  "preferred_models": ["qwen2.5:3b"],
+  "risk": "low",
+  "timeout": 60,
+  "version": "1.0.0"
+}
