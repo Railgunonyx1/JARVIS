@@ -228,6 +228,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     _cascade = None
     _draft_first = False
     try:
+        from core.agent.loop import AgentResult
         from providers.model_registry import ModelRegistry
         _registry = ModelRegistry.instance()
         if _registry.cascade_mode:
@@ -259,14 +260,52 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     except Exception:
         pass  # Auto-routing is best-effort
     try:
-        if bridge is not None:
-            async def _on_chunk(delta: str) -> None:
-                bridge.stream_delta(delta)
-                if use_live:
-                    display.stream_delta(delta)
-            result = await loop.run(goal, on_chunk=_on_chunk)
+        if _draft_first:
+            # Draft-then-verify: 1B generates draft, 3B verifies/fixes
+            # First run with 1B router to get a draft
+            _router_model = _cascade.get("router") or loop.router.get_ollama_model()
+            if _router_model and loop.router.get_ollama_model() != _router_model:
+                loop.router.swap_ollama_model(_router_model)
+                logger.info("Draft phase: using %s for initial draft", _router_model)
+            if bridge is not None:
+                async def _on_chunk_draft(delta: str) -> None:
+                    bridge.stream_delta(delta)
+                    if use_live:
+                        display.stream_delta(delta)
+                draft_result = await loop.run(goal, on_chunk=_on_chunk_draft)
+            else:
+                draft_result = await loop.run(goal)
+            # If 1B produced a text response, pass it to 3B for verification
+            if draft_result.success and draft_result.response:
+                _verify_model = _cascade.get("worker")
+                if _verify_model and loop.router.get_ollama_model() != _verify_model:
+                    loop.router.swap_ollama_model(_verify_model)
+                    logger.info("Verify phase: using %s to check draft", _verify_model)
+                verify_goal = (
+                    f"Here is a draft response to the user's request. "
+                    f"Verify it is correct, fix any issues, and return the improved version.\n\n"
+                    f"User request: {goal}\n\nDraft response:\n{draft_result.response}\n\n"
+                    f"Please verify and return the corrected response."
+                )
+                if bridge is not None:
+                    async def _on_chunk_verify(delta: str) -> None:
+                        bridge.stream_delta(delta)
+                        if use_live:
+                            display.stream_delta(delta)
+                    result = await loop.run(verify_goal, on_chunk=_on_chunk_verify)
+                else:
+                    result = await loop.run(verify_goal)
+            else:
+                result = draft_result
         else:
-            result = await loop.run(goal)
+            if bridge is not None:
+                async def _on_chunk(delta: str) -> None:
+                    bridge.stream_delta(delta)
+                    if use_live:
+                        display.stream_delta(delta)
+                result = await loop.run(goal, on_chunk=_on_chunk)
+            else:
+                result = await loop.run(goal)
     except Exception as exc:
         if bridge is not None:
             bridge.fail_run(str(exc))
@@ -772,6 +811,8 @@ def _cmd_model(line: str, loop) -> None:
             console.print(Text(f"    Heavy:  {status['cascade_heavy']} (complex multi-step)", style="jarvis.dim"))
             console.print(Text(f"    Direct (1B handled): {status['direct_handle_count']}x", style="jarvis.dim"))
             console.print(Text(f"    Escalated (→3B/4B): {status['escalation_count']}x", style="jarvis.dim"))
+            console.print(Text(f"    Draft-then-verify:  {status.get('draft_verify_count', 0)}x", style="jarvis.dim"))
+            console.print(Text(f"    Deterministic (no LLM): {status.get('deterministic_count', 0)}x", style="jarvis.dim"))
         if status["model_usage"]:
             console.print(Text("  Usage:", style="jarvis.accent"))
             for model, count in status["model_usage"].items():
