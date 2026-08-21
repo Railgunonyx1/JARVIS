@@ -27,7 +27,7 @@ from core.context.manager import ContextManager
 from core.decision_logger import DecisionLogger, get_decision_logger
 from core.project import ProjectContext
 from providers.router import ProviderRouter
-from providers.types import LLMResponse, ProviderError
+from providers.types import LLMResponse, ProviderError, ToolCall
 from runtime.observability.tracer import get_tracer
 from tools.registry import ToolRegistry
 
@@ -249,9 +249,13 @@ class AgentLoop:
 
             # INSTANT: tool dispatch — execute directly without LLM
             if classified.intent == Intent.INSTANT and classified.tool_name:
-                tool_result = await self._tool_service.execute(
-                    classified.tool_name,
-                    classified.tool_args or {},
+                _instant_call = ToolCall(
+                    name=classified.tool_name,
+                    arguments=classified.tool_args or {},
+                    id=self._next_tool_id(),
+                )
+                tool_result = await self._tool_service.execute_tool(
+                    _instant_call,
                     trace_id=trace_id,
                 )
                 final = tool_result.output if tool_result.success else f"Tool error: {tool_result.error}"
@@ -301,6 +305,7 @@ class AgentLoop:
 
             # Context levels: instant (just the goal), session (minimal), deep (full)
             context_level = classified.context_level
+            _t_ctx = time.time()
             with tracer.span("context.build", {
                 "project": str(self.project.root_path), "level": context_level,
             }):
@@ -312,6 +317,7 @@ class AgentLoop:
                     system_prompt = "You are JARVIS, an engineering assistant."
                 else:
                     messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
+            _latency_log.append(("context_build", (time.time() - _t_ctx) * 1000))
             tools = self.registry.to_openai_tools()
 
             # Harness: filter tools and append system prompt addendum
@@ -355,10 +361,12 @@ class AgentLoop:
                         perf=self._end_perf(tracer, root),
                     )
                 state.iteration = iteration
+                _t_compress = time.time()
                 with tracer.span("context.fit"):
                     messages, report = self.context_manager.fit_for_loop(
                         messages, self._system_tokens(system_prompt, tools),
                     )
+                _latency_log.append(("context_compress", (time.time() - _t_compress) * 1000))
                 state.context_usage = report.to_dict()
                 if report.compacted:
                     self._emit("context.compacted", {
@@ -367,6 +375,7 @@ class AgentLoop:
                     }, trace_id)
                 remaining = max(3.0, _budgets["total"] - (time.time() - _run_start))
                 _call_timeout = min(_budgets["llm_call"], remaining)
+                _t_llm = time.time()
                 with tracer.span("provider.complete") as span:
                     try:
                         response = await asyncio.wait_for(
@@ -385,6 +394,7 @@ class AgentLoop:
                         span.set_attribute("model", response.model)
                         span.set_attribute("latency_ms", response.latency_ms)
                         span.set_attribute("tokens", response.tokens_used)
+                _latency_log.append(("llm_call", (time.time() - _t_llm) * 1000))
                 state.add_tokens(response.tokens_prompt, response.tokens_completion)
                 state.provider = response.provider
                 state.model = response.model
@@ -466,10 +476,13 @@ class AgentLoop:
                             }, trace_id)
 
                         state.transition(TaskStatus.COMPLETED)
+                        _total_latency = (time.time() - _run_start) * 1000
                         self._emit("task.completed", {
                             "goal": goal[:200], "iterations": iteration,
                             "tokens": state.tokens_used, "provider": response.provider,
                             "response": final[:500],
+                            "latency_profile": dict(_latency_log),
+                            "total_latency_ms": _total_latency,
                         }, trace_id)
                         self._finish_observation(True, final, state, iteration)
                         return AgentResult(
@@ -504,7 +517,9 @@ class AgentLoop:
 
                 for call in response.tool_calls:
                     with tracer.span("tool.execute", {"tool": call.name}):
+                        _t_tool = time.time()
                         await self._handle_call(messages, call, state, trace_id, session_id)
+                        _latency_log.append(("tool", (time.time() - _t_tool) * 1000))
 
                 # Safety: if the LLM keeps making tool calls without ever producing
                 # a text response, inject a nudge after 5 consecutive tool-only iterations.
