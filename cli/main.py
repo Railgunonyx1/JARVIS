@@ -222,18 +222,35 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     loop.observer.on_event = _on_event
     if use_live:
         display.start()
-    # Cascade routing: 1B router → 3B worker → 4B heavy
-    # The 1B model handles simple tasks via the fast bypass in AgentLoop.run().
-    # For tasks needing tools, we swap to the appropriate worker model now.
+    # Cascade routing: confidence-based with draft-then-verify
+    # 1B handles simple tasks directly, 3B handles tools, 4B for complex.
+    # Medium-confidence tasks: 1B drafts, then 3B verifies.
+    _cascade = None
+    _draft_first = False
     try:
         from providers.model_registry import ModelRegistry
         _registry = ModelRegistry.instance()
         if _registry.cascade_mode:
             _cascade = _registry.resolve_cascade(goal)
+            _draft_first = _cascade.get("draft_first", False)
+            if _cascade.get("deterministic"):
+                # Deterministic command — skip LLM, handle inline
+                logger.info("Deterministic command: %s", goal[:60])
+                result = AgentResult(
+                    success=True, response="", trace_id="", state=None,
+                    error="deterministic_command",
+                )
+                if use_live:
+                    display.stop()
+                _print_collapsed(result)
+                sys.stdout.flush()
+                return
             _worker = _cascade.get("worker") or _cascade.get("heavy")
             if _worker and loop.router.get_ollama_model() != _worker:
                 loop.router.swap_ollama_model(_worker)
-                logger.info("Cascade: %s → %s for: %s", _cascade["task_type"], _worker, goal[:60])
+                logger.info("Cascade: %s (conf=%.2f) → %s for: %s",
+                            _cascade["task_type"], _cascade["confidence"],
+                            _worker, goal[:60])
         else:
             _resolved = _registry.resolve_model(goal)
             if _resolved and loop.router.get_ollama_model() != _resolved:

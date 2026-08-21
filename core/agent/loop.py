@@ -376,10 +376,14 @@ class AgentLoop:
                     )
                 state.iteration = iteration
                 _t_compress = time.time()
+                # Adaptive context budget: scale to task complexity
+                _orig_budget = self.context_manager.budget.messages
+                self.context_manager.budget.messages = int(_orig_budget * _ctx_mult)
                 with tracer.span("context.fit"):
                     messages, report = self.context_manager.fit_for_loop(
                         messages, self._system_tokens(system_prompt, tools),
                     )
+                self.context_manager.budget.messages = _orig_budget
                 _latency_log.append(("context_compress", (time.time() - _t_compress) * 1000))
                 state.context_usage = report.to_dict()
                 if report.compacted:

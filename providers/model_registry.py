@@ -348,6 +348,8 @@ class ModelRegistry:
         self._model_usage: dict[str, int] = {}  # model -> use count
         self._escalation_count: int = 0
         self._direct_handle_count: int = 0
+        self._draft_verify_count: int = 0
+        self._deterministic_count: int = 0
 
     @classmethod
     def instance(cls) -> ModelRegistry:
@@ -440,7 +442,7 @@ class ModelRegistry:
         # These never need an LLM — handle instantly in the agent loop.
         deterministic = lower.startswith("/") or _is_deterministic_command(lower)
         if deterministic:
-            self._direct_handle_count += 1
+            self._deterministic_count += 1
             return {
                 "router": self.CASCADE_ROUTER,
                 "worker": None,
@@ -503,6 +505,7 @@ class ModelRegistry:
         # 1B generates a draft response, 3B verifies/fixes it
         if 0.45 <= confidence < 0.8 and task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
             self._escalation_count += 1
+            self._draft_verify_count += 1
             self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
             self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
             return {
@@ -597,6 +600,8 @@ class ModelRegistry:
             "cascade_heavy": self.CASCADE_HEAVY if self._cascade_mode else None,
             "direct_handle_count": self._direct_handle_count,
             "escalation_count": self._escalation_count,
+            "draft_verify_count": self._draft_verify_count,
+            "deterministic_count": self._deterministic_count,
             "task_counts": {
                 t.value: self._task_history.count(t)
                 for t in TaskType
