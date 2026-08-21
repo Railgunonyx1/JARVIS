@@ -228,9 +228,9 @@ class IntentClassifier:
                 )
 
         # Identity/memory questions — route to LLM where memory is in the system prompt.
-        # These must come BEFORE _COMMANDS to avoid matching 'what is' → web.search.
+        # These MUST come BEFORE _COMMANDS to avoid matching 'what is' → web.search.
         _IDENTITY_RE = re.compile(
-            r"^(what(s|'s|\s+is|\s+are)\s+(my|the|your)\s+(name|role|project|preferences?|priorities?)"
+            r"^(what(s|'s|\s+is|\s+are|s\s+)\s*(my|the|your)\s+(name|role|project|preferences?|priorities?)"
             r"|who\s+(am\s+I|are\s+you|is\s+this)"
             r"|my\s+name\s+is\s+"
             r"|i('m|\s+am)\s+"

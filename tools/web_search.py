@@ -121,10 +121,15 @@ def web_search(args: dict[str, Any]) -> ToolResult:
                 logger.warning("Gemini news failed (%s) — DDG fallback", e)
         if not results:
             results = _ddg_news(q, max_results=limit)
+        if not results:
+            return ToolResult(
+                success=False,
+                error=f"No news results found for '{q}'.",
+            )
         return ToolResult(
-            success=bool(results),
+            success=True,
             output=truncate(_fmt_news(q, results), MAX_OUTPUT),
-            metadata={"count": len(results), "source": "gemini" if results and api_key else "duckduckgo"},
+            metadata={"count": len(results), "source": "gemini" if api_key else "duckduckgo"},
         )
 
     if api_key:
@@ -134,8 +139,14 @@ def web_search(args: dict[str, Any]) -> ToolResult:
             logger.warning("Gemini search failed (%s) — DDG fallback", e)
     if not results:
         results = _ddg_search(query, max_results=limit)
+    if not results:
+        return ToolResult(
+            success=False,
+            error=f"No search results found for '{query}'.",
+            output="",
+        )
     return ToolResult(
-        success=bool(results),
+        success=True,
         output=truncate(_fmt_results(query, results), MAX_OUTPUT),
         metadata={"count": len(results), "source": "gemini" if results and api_key else "duckduckgo"},
     )

@@ -259,3 +259,218 @@ async def git_show(params: dict) -> ToolResult:
     if code != 0:
         return tool_result(False, error=err or f"git show {ref} failed")
     return tool_result(True, output=truncate(out, _MAX_OUTPUT))
+
+
+async def git_merge(params: dict) -> ToolResult:
+    """Merge a branch into the current branch.
+
+    Parameters
+    ----------
+    branch : str
+        Branch to merge.
+    """
+    branch = params.get("branch")
+    if not branch:
+        return tool_result(False, error="branch is required")
+    code, out, err = _git(["merge", branch])
+    if code != 0:
+        return tool_result(False, error=err or f"git merge {branch} failed")
+    return tool_result(True, output=truncate(out or f"Merged '{branch}'.", _MAX_OUTPUT))
+
+
+async def git_rebase(params: dict) -> ToolResult:
+    """Rebase the current branch onto another branch.
+
+    Parameters
+    ----------
+    onto : str
+        Branch to rebase onto.
+    """
+    onto = params.get("onto")
+    if not onto:
+        return tool_result(False, error="onto is required")
+    code, out, err = _git(["rebase", onto])
+    if code != 0:
+        return tool_result(False, error=err or f"git rebase {onto} failed")
+    return tool_result(True, output=out or f"Rebased onto '{onto}'.")
+
+
+async def git_tag(params: dict) -> ToolResult:
+    """Create an annotated tag or list existing tags.
+
+    Parameters
+    ----------
+    action : str
+        'create' or 'list'. Default 'create'.
+    name : str
+        Tag name (required for create).
+    message : str, optional
+        Tag message (for create).
+    """
+    action = params.get("action", "create")
+    if action == "list":
+        code, out, err = _git(["tag"])
+        if code != 0:
+            return tool_result(False, error=err or "git tag list failed")
+        return tool_result(True, output=out or "No tags.")
+    name = params.get("name")
+    if not name:
+        return tool_result(False, error="name is required for tag creation")
+    message = params.get("message") or name
+    code, out, err = _git(["tag", "-a", name, "-m", message])
+    if code != 0:
+        return tool_result(False, error=err or f"git tag {name} failed")
+    return tool_result(True, output=f"Created tag '{name}'")
+
+
+async def git_fetch(params: dict) -> ToolResult:
+    """Fetch from a remote.
+
+    Parameters
+    ----------
+    remote : str
+        Remote name. Default 'origin'.
+    """
+    remote = params.get("remote", "origin")
+    code, out, err = _git(["fetch", remote])
+    if code != 0:
+        return tool_result(False, error=err or f"git fetch {remote} failed")
+    return tool_result(True, output=out or f"Fetched from '{remote}'.")
+
+
+async def git_pull(params: dict) -> ToolResult:
+    """Pull from a remote branch.
+
+    Parameters
+    ----------
+    remote : str, optional
+        Remote name. Default 'origin'.
+    branch : str, optional
+        Branch to pull.
+    """
+    args = ["pull"]
+    remote = params.get("remote", "origin")
+    args.append(remote)
+    branch = params.get("branch")
+    if branch:
+        args.append(branch)
+    code, out, err = _git(args)
+    if code != 0:
+        return tool_result(False, error=err or "git pull failed")
+    return tool_result(True, output=truncate(out or "Already up to date.", _MAX_OUTPUT))
+
+
+async def git_push(params: dict) -> ToolResult:
+    """Push commits to a remote branch.
+
+    Parameters
+    ----------
+    remote : str, optional
+        Remote name. Default 'origin'.
+    branch : str, optional
+        Branch to push.
+    """
+    args = ["push"]
+    remote = params.get("remote", "origin")
+    args.append(remote)
+    branch = params.get("branch")
+    if branch:
+        args.append(branch)
+    code, out, err = _git(args)
+    if code != 0:
+        return tool_result(False, error=err or "git push failed")
+    return tool_result(True, output=out or "Pushed.")
+
+
+async def git_revert(params: dict) -> ToolResult:
+    """Revert a commit by creating a new commit.
+
+    Parameters
+    ----------
+    ref : str
+        Commit ref to revert.
+    """
+    ref = params.get("ref")
+    if not ref:
+        return tool_result(False, error="ref is required")
+    code, out, err = _git(["revert", "--no-edit", ref])
+    if code != 0:
+        return tool_result(False, error=err or f"git revert {ref} failed")
+    return tool_result(True, output=out or f"Reverted {ref}.")
+
+
+async def git_cherry_pick(params: dict) -> ToolResult:
+    """Apply the changes from an existing commit.
+
+    Parameters
+    ----------
+    ref : str
+        Commit ref to cherry-pick.
+    """
+    ref = params.get("ref")
+    if not ref:
+        return tool_result(False, error="ref is required")
+    code, out, err = _git(["cherry-pick", ref])
+    if code != 0:
+        return tool_result(False, error=err or f"git cherry-pick {ref} failed")
+    return tool_result(True, output=out or f"Cherry-picked {ref}.")
+
+
+async def git_reset(params: dict) -> ToolResult:
+    """Reset the current HEAD to a specified state.
+
+    Parameters
+    ----------
+    ref : str
+        Commit ref to reset to.
+    mode : str
+        'soft', 'mixed', or 'hard'. Default 'mixed'.
+    """
+    ref = params.get("ref")
+    if not ref:
+        return tool_result(False, error="ref is required")
+    mode = params.get("mode", "mixed")
+    if mode not in ("soft", "mixed", "hard"):
+        return tool_result(False, error=f"invalid mode '{mode}', must be soft, mixed, or hard")
+    code, out, err = _git(["reset", f"--{mode}", ref])
+    if code != 0:
+        return tool_result(False, error=err or f"git reset --{mode} {ref} failed")
+    return tool_result(True, output=f"Reset to {ref} ({mode}).")
+
+
+async def git_worktree(params: dict) -> ToolResult:
+    """Manage multiple working trees.
+
+    Parameters
+    ----------
+    action : str
+        'add', 'list', or 'remove'.
+    path : str
+        Worktree path (required for add/remove).
+    branch : str, optional
+        Branch to check out in the new worktree (for add).
+    """
+    action = params.get("action", "list")
+    if action == "list":
+        code, out, err = _git(["worktree", "list"])
+        if code != 0:
+            return tool_result(False, error=err or "git worktree list failed")
+        return tool_result(True, output=out or "No worktrees.")
+    path = params.get("path")
+    if not path:
+        return tool_result(False, error="path is required for add/remove")
+    if action == "add":
+        args = ["worktree", "add", path]
+        branch = params.get("branch")
+        if branch:
+            args.append(branch)
+        code, out, err = _git(args)
+        if code != 0:
+            return tool_result(False, error=err or f"git worktree add {path} failed")
+        return tool_result(True, output=out or f"Worktree added at '{path}'.")
+    if action == "remove":
+        code, out, err = _git(["worktree", "remove", path])
+        if code != 0:
+            return tool_result(False, error=err or f"git worktree remove {path} failed")
+        return tool_result(True, output=out or f"Worktree '{path}' removed.")
+    return tool_result(False, error=f"unknown action '{action}', must be add, list, or remove")
