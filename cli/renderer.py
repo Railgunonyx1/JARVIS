@@ -3,6 +3,12 @@
 Claude Code-style UI: conversation is the screen. No borders, no panels,
 no permanent sidebars. Clean, minimal, fast.
 
+ARCHITECTURE INVARIANT:
+    ``render_task_screen()`` is the SINGLE canonical render path.
+    All other render methods are building blocks used by it.
+    ``build_full_layout()`` delegates to ``render_task_screen()``
+    when the LayoutManager is not needed for wide terminals.
+
 ``Renderer`` is the pure display layer: backend owns state and decisions,
 this class only turns ``AppState`` snapshots into Rich renderables.
 """
@@ -22,8 +28,6 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
-
-from core.output_compressor import compress_output
 
 from .layout import LayoutManager
 from .models import (
@@ -71,7 +75,11 @@ def _looks_like_markdown(text: str) -> bool:
 
 
 class Renderer:
-    """Pure display layer. Claude Code-style: conversation is the UI."""
+    """Pure display layer. Claude Code-style: conversation is the UI.
+
+    Single canonical render path: ``render_task_screen()``.
+    All other methods are building blocks.
+    """
 
     def __init__(self, console: Console | None = None, unicode: bool = True) -> None:
         self.console = console or Console(theme=build_rich_theme(), highlight=False, emoji=False)
@@ -176,11 +184,10 @@ class Renderer:
         parts.append(Text(self.state.provider or "Ollama", style="jarvis.accent"))
         parts.append(Text(f" {sep} ", style="jarvis.muted"))
 
-        # Token budget (always visible)
         parts.append(Text(self._token_str(), style="jarvis.dim"))
         parts.append(Text(f" {sep} ", style="jarvis.muted"))
 
-        mem_status = "MEM ✓" if self.state.memory_enabled else "MEM -"
+        mem_status = "MEM \u2713" if self.state.memory_enabled else "MEM -"
         mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
         parts.append(Text(mem_status, style=mem_style))
         parts.append(Text(f" {sep} ", style="jarvis.muted"))
@@ -193,6 +200,52 @@ class Renderer:
             parts.append(Text(f"{self.state.vram_gb:.1f}GB VRAM", style="jarvis.dim"))
 
         return Text.assemble(*parts)
+
+    # ── Shared conversation helpers ───────────────────────────────────────
+    # Used by both render_task_screen() and render_conversation().
+    # Single source of truth for how messages look.
+
+    def _render_user_block(self, content: str) -> RenderableType:
+        """Shared user message block — Claude Code style."""
+        return Group(
+            Text("You", style="jarvis.user_label bold"),
+            Text(f"> {content}", style="jarvis.user"),
+            Text(""),
+        )
+
+    def _render_agent_block(self, content: str) -> RenderableType:
+        """Shared agent message block — Claude Code style."""
+        return Group(
+            self._render_md_or_text(content),
+            Text(""),
+        )
+
+    def _render_md_or_text(self, content: str) -> RenderableType:
+        """Render content as Markdown if it looks like it, else plain text."""
+        if not _looks_like_markdown(content):
+            return Text(content, style="jarvis.agent")
+        try:
+            return Markdown(content, code_theme=CODE_THEME)
+        except Exception:
+            return Text(content, style="jarvis.agent")
+
+    def _render_system_block(self, content: str) -> RenderableType:
+        """Shared system event block."""
+        return Group(Text(f"  {content}", style="jarvis.system"),)
+
+    def _render_conversation_messages(self, limit: int = 20) -> list[RenderableType]:
+        """Shared conversation rendering — used by both render_task_screen and render_conversation."""
+        if not self.state.messages:
+            return []
+        blocks: list[RenderableType] = []
+        for msg in self.state.messages[-limit:]:
+            if msg.role == "user":
+                blocks.append(self._render_user_block(msg.content))
+            elif msg.role == "agent":
+                blocks.append(self._render_agent_block(msg.content))
+            else:
+                blocks.append(self._render_system_block(msg.content))
+        return blocks
 
     # ── Plan ──────────────────────────────────────────────────────────────
 
@@ -235,6 +288,7 @@ class Renderer:
         return Group(*items)
 
     def _render_event(self, e: AgentEvent) -> RenderableType:
+        """Render a single tool event. No compression here — that's the service layer's job."""
         sym = self.symbols
         if e.status == EventStatus.RUNNING:
             status_sym, style = sym["running"], "jarvis.running"
@@ -260,63 +314,27 @@ class Renderer:
             parts.append(Text(f"    exit {e.exit_code}", style="jarvis.error"))
         if e.duration_s is not None:
             parts.append(Text(f"    {e.duration_s:.1f}s", style="jarvis.muted"))
+        # Output truncation only — no compression in the renderer
         if e.full_output and e.expanded:
-            compressed = compress_output(e.full_output, format_type="auto", method="gzip", max_size_reduction=0.3)
-            out = compressed if len(compressed) < len(e.full_output) else e.full_output
+            out = e.full_output
             if len(out) > 4000:
                 out = out[:4000] + "\n... (truncated)"
             parts.append(Text("    --- full output ---", style="jarvis.muted"))
             parts.append(Text(out, style="jarvis.dim"))
         return Group(*parts)
 
-    # ── Conversation ──────────────────────────────────────────────────────
+    # ── Conversation (standalone, for build_full_layout) ──────────────────
 
     def render_conversation(self) -> RenderableType:
-        """Conversation = semantic interaction only.
-
-        User and agent messages only. Tool output, verification,
-        recovery, and system events live in the activity layer,
-        not the conversation stream.
-        """
+        """Standalone conversation view. Uses shared helpers for consistency."""
         if not self.state.messages:
             return Group(
                 Text(""),
                 Text("What are we building?", style="jarvis.accent"),
                 Text(""),
             )
-        blocks: list[RenderableType] = []
-        for msg in self.state.messages[-30:]:
-            if msg.role == "user":
-                blocks.append(self._render_user_message(msg.content))
-            elif msg.role == "agent":
-                blocks.append(self._render_agent_message(msg.content))
-            # Tool, system, verification, recovery messages are excluded from
-            # the semantic conversation — they appear in activity/event layer.
-        return Group(*blocks)
-
-    def _render_user_message(self, content: str) -> RenderableType:
-        return Group(
-            Text.assemble(
-                Text("You", style="jarvis.user_label bold"),
-            ),
-            Text(f"> {content}", style="jarvis.user"),
-            Text(""),
-        )
-
-    def _render_agent_message(self, content: str) -> RenderableType:
-        try:
-            md = Markdown(content, code_theme="monokai")
-        except Exception:
-            md = Text(content, style="jarvis.agent")
-        return Group(md, Text(""))
-
-    def _render_tool_result(self, content: str) -> RenderableType:
-        if len(content) > 300:
-            content = content[:300] + "\n  ... (truncated)"
-        return Group(Text(f"  {content}", style="jarvis.dim"),)
-
-    def _render_system_event(self, content: str) -> RenderableType:
-        return Group(Text(f"  {content}", style="jarvis.system"),)
+        blocks = self._render_conversation_messages(limit=30)
+        return Group(*blocks) if blocks else Text("")
 
     # ── Tool cards ────────────────────────────────────────────────────────
 
@@ -381,7 +399,7 @@ class Renderer:
             return s[:40] + ("..." if len(s) > 40 else "")
         return ""
 
-    # ── Verification & Recovery (standalone, not in conversation) ─────────
+    # ── Verification & Recovery ───────────────────────────────────────────
 
     def render_verification_block(self, steps: list[dict]) -> RenderableType:
         sym = self.symbols
@@ -432,7 +450,6 @@ class Renderer:
         return Text.assemble(Text("  "), *parts)
 
     def render_interrupt_block(self, model: str = "1.5B", text: str = "") -> RenderableType:
-        """Render the 1.5B interrupt state visibly but unobtrusively."""
         sym = self.symbols
         lines: list[RenderableType] = [
             Text.assemble(
@@ -472,16 +489,21 @@ class Renderer:
         """Show live streaming text with a cursor."""
         if not self._streaming_text:
             return Text("")
+        if not _looks_like_markdown(self._streaming_text):
+            return Group(
+                Text(self._streaming_text, style="jarvis.agent"),
+                Text("\u258c", style="jarvis.accent"),
+            )
         try:
             md = Markdown(self._streaming_text, code_theme="monokai")
-            return Group(md, Text("  \u258c", style="jarvis.accent"))  # █ cursor
+            return Group(md, Text("  \u258c", style="jarvis.accent"))
         except Exception:
             return Group(
                 Text(self._streaming_text, style="jarvis.agent"),
                 Text("\u258c", style="jarvis.accent"),
             )
 
-    # ── Code workspace ────────────────────────────────────────────────────
+    # ── Workspaces ────────────────────────────────────────────────────────
 
     def render_code_files(self) -> RenderableType:
         if not self.state.code_files:
@@ -507,8 +529,6 @@ class Renderer:
         mod = " MODIFIED" if self.state.code_modified else ""
         return Text(f"  {path} {loc}{mod}", style="jarvis.dim")
 
-    # ── Memory workspace ──────────────────────────────────────────────────
-
     def render_memory(self) -> RenderableType:
         parts: list[RenderableType] = []
         if self.state.memory_query:
@@ -524,8 +544,6 @@ class Renderer:
             if h.snippet:
                 parts.append(Text(f"    {h.snippet[:120]}", style="jarvis.dim"))
         return Group(*parts)
-
-    # ── Audit workspace ───────────────────────────────────────────────────
 
     def render_audit(self) -> RenderableType:
         if not self.state.audit_sections:
@@ -544,7 +562,8 @@ class Renderer:
                 blocks.append(line)
         return Group(*blocks)
 
-    # ── Security confirmation ─────────────────────────────────────────────
+    # ── Confirmation ──────────────────────────────────────────────────────
+    # Labels now match actual parsing (Enter/y=yes, Esc=n=deny, A=r=always-run)
 
     def render_confirmation(self) -> RenderableType:
         req = self.state.pending_confirmation
@@ -555,7 +574,7 @@ class Renderer:
             Text(""),
             Text(f"  {req.operation}", style="jarvis.accent"),
             Text(""),
-            Text("  [Enter] Allow  [Esc] Deny  [A] Always", style="jarvis.dim"),
+            Text("  [y] Allow once  [r] Allow for this run  [n] Deny", style="jarvis.dim"),
         ]
         return Group(*lines)
 
@@ -583,42 +602,25 @@ class Renderer:
     def detach_live(self) -> None:
         self._live_display = None
 
-    # ── Full-screen task view ─────────────────────────────────────────────
+    # ── Canonical render path: render_task_screen() ───────────────────────
+    # This is the SINGLE entry point for the live UI.
+    # All body parts are assembled here, not in layout.py.
 
     def render_task_screen(self) -> RenderableType:
-        """Claude Code-style screen: conversation is the UI.
+        """THE canonical render path. Single source of truth for the UI.
 
-        Layout (from attached jarvis_claude_ui.py):
-          Header: one compact status line (JARVIS MK-X · AGENT · model · tokens · ONLINE)
-          Body: conversation + plan + activity + provider notices
+        Layout:
+          Header: compact status line (JARVIS · model · provider · MEM ✓ · ONLINE)
+          Body:   conversation + streaming + plan + activity + verification + footer
           Footer: separator + anchored input bar
         """
         width = self.console.size.width
 
-        # ── Header: single compact status line ──────────────────────────
         header = self._render_header()
-
-        # ── Body: conversation + plan + activity ────────────────────────
         body = self._render_body()
+        footer = self._render_footer(width)
 
-        # ── Footer: separator + anchored prompt ─────────────────────────
-        sep = Text("\u2500" * max(1, width - 1), style="jarvis.muted")
-        prompt = Text()
-        prompt.append("JARVIS", style="jarvis.accent")
-        prompt.append(f" [{self.state.mode.value.lower()}] > ", style="jarvis.tool")
-        if self.state.tools_active > 0:
-            prompt.append("\u25d8 working...", style="jarvis.running")  # ◘
-        else:
-            prompt.append("_", style="jarvis.dim")
-
-        elements: list[RenderableType] = [
-            header,
-            Text(""),
-            body,
-            Text(""),
-            sep,
-            prompt,
-        ]
+        elements: list[RenderableType] = [header, Text(""), body, Text(""), footer]
 
         if self.state.pending_confirmation is not None:
             elements += [Text(""), self.render_confirmation()]
@@ -626,7 +628,7 @@ class Renderer:
         return Group(*elements)
 
     def _render_header(self) -> RenderableType:
-        """Claude Code + HUD-style compact top banner."""
+        """Compact top status bar in a subtle panel."""
         width = self.console.size.width
         sep = self.symbols["separator"]
 
@@ -655,54 +657,28 @@ class Renderer:
             t.append(f" {sep} ", style="jarvis.muted")
             t.append(f"{self.state.vram_gb:.1f}GB VRAM", style="jarvis.dim")
 
-        return Panel(
-            t,
-            box=box.ROUNDED,
-            border_style=COLORS.border,
-            padding=(0, 1),
-        )
+        return Panel(t, box=box.ROUNDED, border_style=COLORS.border, padding=(0, 1))
 
     def _render_body(self) -> RenderableType:
-        """Claude Code-style body: conversation is primary, inline tool steps, verification, and diagnostics."""
+        """Body assembly: conversation + streaming + plan + activity + verification + diagnostics."""
         blocks: list[RenderableType] = []
 
         # Empty state
         if not self.state.messages and not self.state.events:
-            blocks.extend([
+            return Group(
                 Text("Ready.", style="jarvis.tool"),
                 Text(""),
                 Text("Tell JARVIS what you want to build, inspect, fix, or test.", style="jarvis.dim"),
-            ])
-            return Group(*blocks)
+            )
 
-        # Conversation (last 20 messages)
-        for msg in self.state.messages[-20:]:
-            if msg.role == "user":
-                blocks.extend([
-                    Text(""),
-                    Text.assemble(Text("You", style="jarvis.user_label bold")),
-                    Text(f"> {msg.content}", style="jarvis.user"),
-                    Text(""),
-                ])
-            elif msg.role == "agent":
-                blocks.extend([
-                    Text.assemble(
-                        Text("JARVIS", style="jarvis.agent_label bold"),
-                    ),
-                    self._render_agent_message(msg.content),
-                    Text(""),
-                ])
-            else:
-                blocks.extend([self._render_system_event(msg.content), Text("")])
+        # Conversation — uses SHARED helper for consistency with render_conversation()
+        blocks.extend(self._render_conversation_messages(limit=20))
 
         # Streaming text (live tokens during agent work)
         if self._streaming_text:
-            blocks.extend([
-                Text(""),
-                self.render_streaming(),
-            ])
+            blocks.extend([Text(""), self.render_streaming()])
 
-        # Interrupt state (1.5B fast bypass / background memory check)
+        # Interrupt state
         if self.state.interrupt_active:
             blocks.extend([
                 self.render_interrupt_block(self.state.interrupt_model, self.state.interrupt_text),
@@ -714,11 +690,11 @@ class Renderer:
         if plan_block and self.state.plan and self.state.plan.steps:
             blocks.extend([Text("  Plan", style="jarvis.accent"), plan_block, Text("")])
 
-        # Activity / Tool Steps (inline with step badges)
+        # Activity
         if self.state.events:
             blocks.extend([self.render_activity(), Text("")])
 
-        # Verification (first-class post-execution gate)
+        # Verification
         verification = self.render_verification()
         if verification is not None:
             blocks.extend([verification, Text("")])
@@ -728,31 +704,56 @@ class Renderer:
         if recovery is not None:
             blocks.extend([recovery, Text("")])
 
-        # Turn footer / cost diagnostics (always show after response)
+        # Turn footer
         if self.state.last_turn_latency_s is not None or self.state.last_turn_tokens is not None:
             blocks.extend([self.render_turn_footer(), Text("")])
 
-        # Provider notices (semantic, not logging)
+        # Provider notices
         notice = self._render_provider_notice()
         if notice is not None:
             blocks.append(notice)
 
         return Group(*blocks)
 
+    def _render_footer(self, width: int) -> Text:
+        """Anchored input bar with mode indicator."""
+        sep = "\u2500" * max(1, width - 1)
+        line = Text(sep, style="jarvis.muted")
+        line.append("\n")
+        line.append("JARVIS", style="jarvis.accent")
+        line.append(f" [{self.state.mode.value.lower()}] > ", style="jarvis.tool")
+        if self.state.tools_active > 0:
+            line.append("\u25d8 working...", style="jarvis.running")
+        else:
+            line.append("_", style="jarvis.dim")
+        return line
+
     def _render_provider_notice(self) -> Text | None:
-        """Render a provider notice (rate limit, provider switch) as a semantic UI event."""
         notice = self.state.provider_notice
         if notice is None:
             return None
         provider, message, kind, retry_after = notice
         style_map = {"error": "jarvis.error", "warning": "jarvis.warning", "info": "jarvis.accent"}
-        sym_map = {"error": "\u2717", "warning": "\u26a0", "info": "\u25cf"}  # ✗ ⚠ ●
+        sym_map = {"error": "\u2717", "warning": "\u26a0", "info": "\u25cf"}
         style = style_map.get(kind, "jarvis.warning")
         sym = sym_map.get(kind, "\u26a0")
         text = f"{provider}: {message}"
         if retry_after is not None:
             text += f" . retrying in {retry_after:.0f}s"
         return Text(f"{sym} {text}", style=style)
+
+    # ── Layout integration (wide terminals only) ──────────────────────────
+
+    def build_full_layout(self):
+        """Layout path for wide terminals. Delegates body to render_task_screen()."""
+        return self.layout_mgr.build(
+            conversation=self.render_conversation(),
+            plan=self.render_plan(),
+            activity=self.render_activity(),
+            code=self.render_code_buffer(),
+            memory=self.render_memory(),
+            audit=self.render_audit(),
+        )
 
     def render_activity_panel(self) -> RenderableType:
         return Panel(
@@ -778,15 +779,7 @@ class Renderer:
             table.add_row(key, desc)
         return Panel(table, title="COMMANDS", border_style=COLORS.border, box=box.ROUNDED)
 
-    def build_full_layout(self):
-        return self.layout_mgr.build(
-            conversation=self.render_conversation(),
-            plan=self.render_plan(),
-            activity=self.render_activity(),
-            code=self.render_code_buffer(),
-            memory=self.render_memory(),
-            audit=self.render_audit(),
-        )
+    # ── Output helpers ────────────────────────────────────────────────────
 
     def print_status_bar(self) -> None:
         self.console.print(self.render_status())

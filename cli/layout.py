@@ -140,6 +140,9 @@ class LayoutManager:
             workspace_content = audit
 
         if workspace_content is not None:
+            # Workspaces replace the content area but preserve the root structure
+            # (status + content + input pattern). The status bar and input prompt
+            # are rendered by the caller (render_task_screen) outside this layout.
             root.split_column(Layout(workspace_content, name="workspace"))
             return root
 
