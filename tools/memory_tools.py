@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tools.schema import ToolResult, tool_result
+from tools.schema import ToolResult
 
 logger = logging.getLogger("jarvis.tools.memory")
 

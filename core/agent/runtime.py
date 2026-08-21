@@ -19,9 +19,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-import time
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 logger = logging.getLogger("jarvis.runtime")
 
@@ -124,7 +124,7 @@ class PersistentRuntime:
         try:
             result = await asyncio.wait_for(self._interrupt_task, timeout=timeout)
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Interrupt %s timed out after %.0fs", task_id, timeout)
             self._interrupt_task.cancel()
             try:

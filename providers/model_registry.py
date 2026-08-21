@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -386,7 +386,7 @@ class ModelRegistry:
     _instance = None
 
     # Default cascade configuration
-    CASCADE_ROUTER = "qwen2.5:1.5b"  # Tier 1: always first, ultra-fast
+    CASCADE_ROUTER = "qwen2.5:1.5b"  # Tier 1: handles QUICK/CONVERSATIONAL directly
     CASCADE_WORKER = "qwen2.5:3b"    # Tier 2: default worker for most tasks
     CASCADE_HEAVY  = "qwen3:4b"      # Tier 3: only for genuinely complex tasks
 

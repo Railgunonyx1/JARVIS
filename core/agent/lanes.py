@@ -29,9 +29,10 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 logger = logging.getLogger("jarvis.lanes")
 
@@ -379,7 +380,7 @@ class InterruptExecutor:
             )
             return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             latency_ms = (time.time() - start) * 1000
             result = {
                 "success": False,

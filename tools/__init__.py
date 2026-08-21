@@ -30,12 +30,12 @@ def build_default_registry() -> ToolRegistry:
         git_restore,
         git_status,
     )
+    from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.patch import patch_delete, patch_insert, patch_replace
     from tools.search import code_search, file_find
     from tools.shell import shell_execute
     from tools.system_monitor import system_status
     from tools.web_search import web_search
-    from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.world_monitor import (
         world_monitor_get_alerts,
         world_monitor_get_event,

@@ -80,8 +80,12 @@ class QualityEvaluator:
             signals.append("detailed")
 
         if question:
-            q_words = set(question.lower().split()) - {"the", "a", "an", "is", "are", "what", "how", "why", "do", "does", "can", "could"}
-            a_words = set(answer.lower().split()) - {"the", "a", "an", "is", "are", "it", "to", "and", "of", "in", "for"}
+            stop_q = {"the", "a", "an", "is", "are", "what", "how", "why",
+                      "do", "does", "can", "could"}
+            stop_a = {"the", "a", "an", "is", "are", "it", "to", "and",
+                      "of", "in", "for"}
+            q_words = set(question.lower().split()) - stop_q
+            a_words = set(answer.lower().split()) - stop_a
             overlap = len(q_words & a_words)
             if overlap > 0:
                 signals.append(f"keyword_overlap_{overlap}")

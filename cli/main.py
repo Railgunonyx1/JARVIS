@@ -828,7 +828,7 @@ def _cmd_providers(loop) -> None:
     table.add_column("Model")
     table.add_column("Status")
     table.add_column("Latency")
-    table.add_column("Errors")
+    table.add_column("Errors")
     for name, info in loop.router.status.items():
         available = info.get("available", False)
         status_style = "green" if available else "red"
@@ -941,8 +941,9 @@ def _cmd_memory_list(loop) -> None:
 
 def _cmd_model(line: str, loop) -> None:
     """Switch models: /model [name|auto|status|list]."""
-    from providers.model_registry import ModelRegistry, MODEL_CATALOG
     from rich.table import Table
+
+    from providers.model_registry import MODEL_CATALOG, ModelRegistry
 
     registry = ModelRegistry.instance()
     parts = line.split(maxsplit=1)
