@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import time
-from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from providers.ollama_provider import OllamaProvider
-from providers.types import ToolCall, classify_provider_error, parse_ollama_tool_calls
-
+from providers.types import classify_provider_error, parse_ollama_tool_calls
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -162,13 +158,26 @@ class TestMessageConversion:
         result = p._convert_messages(messages)
         assert result[0]["tool_calls"][0]["function"]["arguments"] == {"a": 1}
 
-    def test_tool_call_arguments_non_dict_passthrough(self):
+    def test_tool_call_arguments_invalid_json_falls_back_to_empty(self):
         p = _make_provider()
         messages = [
             {
                 "role": "assistant",
                 "tool_calls": [
                     {"function": {"name": "test", "arguments": "hello"}}
+                ],
+            }
+        ]
+        result = p._convert_messages(messages)
+        assert result[0]["tool_calls"][0]["function"]["arguments"] == {}
+
+    def test_tool_call_arguments_json_string_non_dict_wrapped(self):
+        p = _make_provider()
+        messages = [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"function": {"name": "test", "arguments": '"hello"'}}
                 ],
             }
         ]

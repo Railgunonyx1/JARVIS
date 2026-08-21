@@ -166,8 +166,10 @@ class OllamaProvider(LLMProvider):
                 try:
                     logger.info("Ollama primary model %s failed, trying fallback %s",
                                 primary_model, self._fallback_model)
-                    result = await self._chat_once(client, self._fallback_model, full_messages,
-                                                  self._limit_tools(tools, self._fallback_model), max_tokens, temperature)
+                    result = await self._chat_once(
+                        client, self._fallback_model, full_messages,
+                        self._limit_tools(tools, self._fallback_model),
+                        max_tokens, temperature)
                     self.record_success(result.latency_ms)
                     return result
                 except Exception:
