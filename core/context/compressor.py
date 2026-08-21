@@ -397,9 +397,6 @@ def _pair_aware_remove(messages: list[dict[str, Any]], target_idx: int) -> list[
     if target.get("role") != "tool":
         return messages[:target_idx] + messages[target_idx + 1:]
 
-    # Find tool_call_id from the tool message
-    tool_call_id = target.get("tool_call_id") or target.get("name")
-
     # Scan backwards to find the parent assistant message
     parent_idx = None
     for i in range(target_idx - 1, -1, -1):

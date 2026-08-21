@@ -12,6 +12,13 @@ if not defined PY set "PY=python"
 REM Force UTF-8 for Rich output
 set "PYTHONIOENCODING=utf-8"
 
+REM ── Ollama performance settings ──────────────────────────────────────
+set "OLLAMA_FLASH_ATTENTION=1"
+set "OLLAMA_NUM_PARALLEL=2"
+set "OLLAMA_MAX_LOADED_MODELS=1"
+set "OLLAMA_KEEP_ALIVE=10m"
+set "OLLAMA_HOST=127.0.0.1:11434"
+
 REM ── Start Ollama if not running ───────────────────────────────────────
 netstat -an 2>nul | findstr ":11434" >nul 2>&1
 if errorlevel 1 (
@@ -21,7 +28,7 @@ if errorlevel 1 (
     if defined OLLAMA_EXE (
         echo Starting Ollama...
         start "" "%OLLAMA_EXE%" serve
-        ping -n 4 127.0.0.1 >nul 2>&1
+        ping -n 3 127.0.0.1 >nul 2>&1
     )
 )
 

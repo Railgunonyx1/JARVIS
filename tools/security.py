@@ -97,7 +97,6 @@ async def security_check_permissions(params: dict) -> ToolResult:
     path : str
         Directory to check. Default project root.
     """
-    import os
     check_path = Path(params.get("path", "."))
     if not check_path.is_absolute():
         check_path = Path.cwd() / check_path

@@ -187,7 +187,11 @@ class OllamaProvider(LLMProvider):
             options={
                 "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
                 "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
-                "num_ctx": self.config.get("num_ctx", 4096),
+                "num_ctx": self.config.get("num_ctx", 2048),
+                "num_thread": self.config.get("num_thread", 8),
+                "top_k": self.config.get("top_k", 30),
+                "top_p": self.config.get("top_p", 0.9),
+                "repeat_penalty": 1.0,
             },
             **kwargs,
         )
@@ -311,7 +315,11 @@ class OllamaProvider(LLMProvider):
             options={
                 "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 2048),
                 "temperature": temperature if temperature is not None else self.config.get("temperature", 0.7),
-                "num_ctx": self.config.get("num_ctx", 4096),
+                "num_ctx": self.config.get("num_ctx", 2048),
+                "num_thread": self.config.get("num_thread", 8),
+                "top_k": self.config.get("top_k", 30),
+                "top_p": self.config.get("top_p", 0.9),
+                "repeat_penalty": 1.0,
             },
             **kwargs,
             stream=True,

@@ -143,9 +143,38 @@ async def test_coverage(params: dict) -> ToolResult:
     code, out, err = _run_test_cmd(args, timeout=180)
     # Extract coverage summary
     lines = (out + "\n" + err).splitlines()
-    coverage_lines = [l for l in lines if "TOTAL" in l or "Name" in l or "coverage" in l.lower() or l.strip().endswith("%")]
+    coverage_lines = [line for line in lines if "TOTAL" in line or "Name" in line or "coverage" in line.lower() or line.strip().endswith("%")]
     if coverage_lines:
         output = "\n".join(coverage_lines[:15])
     else:
         output = out or err or "(no coverage output)"
+    return tool_result(code == 0, output=truncate(output, _MAX_OUTPUT))
+
+
+async def test_run(params: dict) -> ToolResult:
+    target = params.get("path", ".")
+    markers = params.get("markers", "")
+    verbose = params.get("verbose", False)
+    args = ["pytest", target, "--tb=short", "--no-header", "-q"]
+    if markers:
+        args.extend(["-m", markers])
+    if verbose:
+        args.append("-v")
+    code, out, err = _run_test_cmd(args, timeout=300)
+    lines = (out or err or "(no output)").splitlines()
+    summary = [line for line in lines if "passed" in line or "failed" in line or "error" in line or "warning" in line]
+    output = "\n".join(summary[-5:]) if summary else (out or err or "(no output)")
+    return tool_result(code == 0, output=truncate(output, _MAX_OUTPUT))
+
+
+async def test_benchmark(params: dict) -> ToolResult:
+    target = params.get("path", ".")
+    code, out, err = _run_test_cmd(
+        ["pytest", target, "--benchmark-only", "-q"], timeout=120,
+    )
+    if code != 0 and ("unknown option" in (err or "") or "benchmark" in (err or "")):
+        code, out, err = _run_test_cmd(
+            ["pytest", target, "-q", "--durations=10"], timeout=120,
+        )
+    output = out or err or "(no benchmark output)"
     return tool_result(code == 0, output=truncate(output, _MAX_OUTPUT))

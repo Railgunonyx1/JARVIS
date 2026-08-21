@@ -20,29 +20,67 @@ def build_default_registry() -> ToolRegistry:
         browser_status,
         browser_type,
     )
-    from tools.code_intelligence import code_imports, code_references, code_symbol, code_typecheck
-    from tools.filesystem import filesystem_list, filesystem_read, filesystem_write
+    from tools.code_intelligence import (
+        code_ast,
+        code_callees,
+        code_callers,
+        code_definition,
+        code_imports,
+        code_references,
+        code_symbol,
+        code_typecheck,
+    )
+    from tools.filesystem import (
+        filesystem_copy,
+        filesystem_delete,
+        filesystem_diff,
+        filesystem_list,
+        filesystem_move,
+        filesystem_read,
+        filesystem_tree,
+        filesystem_write,
+    )
     from tools.git_tools import (
         git_add,
         git_blame,
         git_branch,
+        git_cherry_pick,
         git_commit,
         git_create_branch,
         git_diff,
+        git_fetch,
         git_log,
+        git_merge,
+        git_pull,
+        git_push,
+        git_rebase,
+        git_reset,
         git_restore,
+        git_revert,
         git_show,
         git_stash,
         git_status,
+        git_tag,
+        git_worktree,
     )
     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.patch import patch_delete, patch_insert, patch_replace
-    from tools.runtime_tools import runtime_status
+    from tools.runtime_tools import (
+        runtime_errors,
+        runtime_events,
+        runtime_latency,
+        runtime_models,
+        runtime_status,
+    )
     from tools.search import code_search, file_find
-    from tools.security import security_check_permissions, security_scan_secrets
+    from tools.security import (
+        security_check_permissions,
+        security_scan_code,
+        security_scan_secrets,
+    )
     from tools.shell import shell_execute
     from tools.system_monitor import system_status
-    from tools.test_tools import test_coverage, test_discover, test_failed, test_run_target
+    from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
     from tools.web_search import web_search
     from tools.world_monitor import (
         world_monitor_get_alerts,
@@ -101,6 +139,81 @@ def build_default_registry() -> ToolRegistry:
             },
             permission="filesystem.list",
             handler=filesystem_list,
+            category="filesystem",
+        ),
+        Tool(
+            name="filesystem.delete",
+            description="Delete a file or empty directory. Cannot delete non-empty directories.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File or empty directory to delete."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.write",
+            handler=filesystem_delete,
+            category="filesystem",
+        ),
+        Tool(
+            name="filesystem.copy",
+            description="Copy a file to a new location (preserves metadata).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Source file path."},
+                    "dest": {"type": "string", "description": "Destination path."},
+                },
+                "required": ["source", "dest"],
+            },
+            permission="filesystem.write",
+            handler=filesystem_copy,
+            category="filesystem",
+        ),
+        Tool(
+            name="filesystem.move",
+            description="Move or rename a file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Source file path."},
+                    "dest": {"type": "string", "description": "Destination path."},
+                },
+                "required": ["source", "dest"],
+            },
+            permission="filesystem.write",
+            handler=filesystem_move,
+            category="filesystem",
+        ),
+        Tool(
+            name="filesystem.diff",
+            description="Compare two files line-by-line and show differences.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "file_a": {"type": "string", "description": "First file path."},
+                    "file_b": {"type": "string", "description": "Second file path."},
+                },
+                "required": ["file_a", "file_b"],
+            },
+            permission="filesystem.read",
+            handler=filesystem_diff,
+            category="filesystem",
+        ),
+        Tool(
+            name="filesystem.tree",
+            description="Show directory tree structure.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory path. Default project root."},
+                    "max_depth": {"type": "integer", "description": "Max recursion depth. Default 3."},
+                    "max_entries": {"type": "integer", "description": "Max entries to show. Default 200."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=filesystem_tree,
             category="filesystem",
         ),
         Tool(
@@ -703,6 +816,153 @@ def build_default_registry() -> ToolRegistry:
             handler=git_show,
             category="git",
         ),
+        Tool(
+            name="git.merge",
+            description="Merge a branch into the current branch.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "branch": {"type": "string", "description": "Branch to merge."},
+                },
+                "required": ["branch"],
+            },
+            permission="filesystem.write",
+            handler=git_merge,
+            category="git",
+        ),
+        Tool(
+            name="git.rebase",
+            description="Rebase current branch onto another branch.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "onto": {"type": "string", "description": "Branch to rebase onto."},
+                },
+                "required": ["onto"],
+            },
+            permission="filesystem.write",
+            handler=git_rebase,
+            category="git",
+        ),
+        Tool(
+            name="git.tag",
+            description="Create or list git tags.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "create or list. Default create."},
+                    "name": {"type": "string", "description": "Tag name (for create)."},
+                    "message": {"type": "string", "description": "Tag message (for create)."},
+                },
+                "required": [],
+            },
+            permission="filesystem.write",
+            handler=git_tag,
+            category="git",
+        ),
+        Tool(
+            name="git.fetch",
+            description="Fetch from a remote repository.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "remote": {"type": "string", "description": "Remote name. Default origin."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=git_fetch,
+            category="git",
+        ),
+        Tool(
+            name="git.pull",
+            description="Pull changes from a remote repository.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "remote": {"type": "string", "description": "Remote name."},
+                    "branch": {"type": "string", "description": "Branch name."},
+                },
+                "required": [],
+            },
+            permission="filesystem.write",
+            handler=git_pull,
+            category="git",
+        ),
+        Tool(
+            name="git.push",
+            description="Push commits to a remote repository.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "remote": {"type": "string", "description": "Remote name."},
+                    "branch": {"type": "string", "description": "Branch name."},
+                },
+                "required": [],
+            },
+            permission="filesystem.write",
+            handler=git_push,
+            category="git",
+        ),
+        Tool(
+            name="git.revert",
+            description="Revert a commit by creating a new commit that undoes it.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "ref": {"type": "string", "description": "Commit ref to revert."},
+                },
+                "required": ["ref"],
+            },
+            permission="filesystem.write",
+            handler=git_revert,
+            category="git",
+        ),
+        Tool(
+            name="git.cherry_pick",
+            description="Cherry-pick a commit from another branch.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "ref": {"type": "string", "description": "Commit ref to cherry-pick."},
+                },
+                "required": ["ref"],
+            },
+            permission="filesystem.write",
+            handler=git_cherry_pick,
+            category="git",
+        ),
+        Tool(
+            name="git.reset",
+            description="Reset to a specific commit (soft/mixed/hard).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "ref": {"type": "string", "description": "Commit ref to reset to."},
+                    "mode": {"type": "string", "description": "soft, mixed, or hard. Default mixed."},
+                },
+                "required": ["ref"],
+            },
+            permission="filesystem.write",
+            handler=git_reset,
+            category="git",
+        ),
+        Tool(
+            name="git.worktree",
+            description="Manage git worktrees (add/list/remove).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "description": "add, list, or remove."},
+                    "path": {"type": "string", "description": "Worktree path (for add/remove)."},
+                    "branch": {"type": "string", "description": "Branch name (for add)."},
+                },
+                "required": ["action"],
+            },
+            permission="filesystem.write",
+            handler=git_worktree,
+            category="git",
+        ),
         # ── Code intelligence ───────────────────────────────────
         Tool(
             name="code.symbol",
@@ -762,6 +1022,65 @@ def build_default_registry() -> ToolRegistry:
             handler=code_typecheck,
             category="code",
         ),
+        Tool(
+            name="code.definition",
+            description="Find where a symbol is defined (class, function, variable).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Symbol name."},
+                    "path": {"type": "string", "description": "Directory to search."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.read",
+            handler=code_definition,
+            category="code",
+        ),
+        Tool(
+            name="code.callers",
+            description="Find all call sites of a function or method.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Function/method name."},
+                    "path": {"type": "string", "description": "Directory to search."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.read",
+            handler=code_callers,
+            category="code",
+        ),
+        Tool(
+            name="code.callees",
+            description="Find what functions a given function calls (call graph).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Python file."},
+                    "function_name": {"type": "string", "description": "Function to analyze."},
+                },
+                "required": ["file_path", "function_name"],
+            },
+            permission="filesystem.read",
+            handler=code_callees,
+            category="code",
+        ),
+        Tool(
+            name="code.ast",
+            description="Parse a Python file and show its AST structure (classes, functions, imports).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Python file to analyze."},
+                },
+                "required": ["file_path"],
+            },
+            permission="filesystem.read",
+            handler=code_ast,
+            category="code",
+        ),
         # ── Test tools ──────────────────────────────────────────
         Tool(
             name="test.discover",
@@ -784,7 +1103,7 @@ def build_default_registry() -> ToolRegistry:
             parameters={
                 "type": "object",
                 "properties": {
-                    "target": {"type": "string", "description": "Test file, dir, or specific test (e.g. tests/test_foo.py::test_bar)."},
+                    "target": {"type": "string", "description": "Test file, directory, or specific test."},
                     "args": {"type": "string", "description": "Extra pytest args. Default '-v --tb=short'."},
                     "timeout": {"type": "integer", "description": "Timeout in seconds. Default 120."},
                 },
@@ -823,6 +1142,36 @@ def build_default_registry() -> ToolRegistry:
             handler=test_coverage,
             category="testing",
         ),
+        Tool(
+            name="test.run",
+            description="Run the full test suite with optional filtering.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Test path. Default project root."},
+                    "markers": {"type": "string", "description": "Pytest marker expression."},
+                    "verbose": {"type": "boolean", "description": "Verbose output. Default false."},
+                },
+                "required": [],
+            },
+            permission="shell.execute",
+            handler=test_run,
+            category="testing",
+        ),
+        Tool(
+            name="test.benchmark",
+            description="Run test benchmarks or show slowest tests.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Test path. Default project root."},
+                },
+                "required": [],
+            },
+            permission="shell.execute",
+            handler=test_benchmark,
+            category="testing",
+        ),
         # ── Runtime diagnostics ─────────────────────────────────
         Tool(
             name="runtime.status",
@@ -830,6 +1179,50 @@ def build_default_registry() -> ToolRegistry:
             parameters={"type": "object", "properties": {}, "required": []},
             permission="system.query",
             handler=runtime_status,
+            category="runtime",
+        ),
+        Tool(
+            name="runtime.latency",
+            description="Show model/provider latency metrics and performance data.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="system.query",
+            handler=runtime_latency,
+            category="runtime",
+        ),
+        Tool(
+            name="runtime.errors",
+            description="Show recent errors from the agent runtime.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max errors to show. Default 20."},
+                },
+                "required": [],
+            },
+            permission="system.query",
+            handler=runtime_errors,
+            category="runtime",
+        ),
+        Tool(
+            name="runtime.events",
+            description="Show recent runtime events (BusEvents).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max events. Default 20."},
+                },
+                "required": [],
+            },
+            permission="system.query",
+            handler=runtime_events,
+            category="runtime",
+        ),
+        Tool(
+            name="runtime.models",
+            description="Show loaded Ollama models and residency state.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="system.query",
+            handler=runtime_models,
             category="runtime",
         ),
         # ── Security ────────────────────────────────────────────
@@ -859,6 +1252,20 @@ def build_default_registry() -> ToolRegistry:
             },
             permission="filesystem.read",
             handler=security_check_permissions,
+            category="security",
+        ),
+        Tool(
+            name="security.scan_code",
+            description="Scan Python files for security issues (eval, exec, shell=True, pickle, etc.).",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory to scan. Default project root."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=security_scan_code,
             category="security",
         ),
     ])

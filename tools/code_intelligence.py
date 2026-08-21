@@ -185,3 +185,107 @@ async def _py_compile(path: str) -> ToolResult:
     if errors:
         return tool_result(False, output="\n".join(errors[:20]))
     return tool_result(True, output=f"All {len(files)} files compile OK.")
+
+
+async def code_definition(params: dict) -> ToolResult:
+    name = params.get("name", "")
+    if not name:
+        return tool_result(False, error="name is required")
+    search_path = params.get("path", ".")
+    patterns = [
+        rf"(class|def)\s+{name}\b",
+        rf"{name}\s*=\s",
+    ]
+    results = []
+    for pattern in patterns:
+        code, out, _ = _run_grep(pattern, search_path, "*.py")
+        if code == 0 and out:
+            for line in out.splitlines()[:20]:
+                if line not in results:
+                    results.append(line)
+    if not results:
+        return tool_result(False, error=f"no definition found for '{name}'")
+    return tool_result(True, output=truncate("\n".join(results), _MAX_OUTPUT))
+
+
+async def code_callers(params: dict) -> ToolResult:
+    name = params.get("name", "")
+    if not name:
+        return tool_result(False, error="name is required")
+    search_path = params.get("path", ".")
+    code, out, err = _run_grep(rf"{name}\s*\(", search_path, "*.py")
+    if code != 0 or not out:
+        return tool_result(False, error=f"no callers found for '{name}'")
+    lines = [line for line in out.splitlines() if name in line and "def " + name not in line]
+    if not lines:
+        lines = out.splitlines()
+    return tool_result(True, output=truncate("\n".join(lines[:30]), _MAX_OUTPUT))
+
+
+async def code_callees(params: dict) -> ToolResult:
+    file_path = params.get("file_path", "")
+    function_name = params.get("function_name", "")
+    if not file_path or not function_name:
+        return tool_result(False, error="file_path and function_name are required")
+    path = Path(file_path)
+    if not path.exists():
+        path = Path.cwd() / file_path
+    if not path.exists():
+        return tool_result(False, error=f"file not found: {file_path}")
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(content)
+    except (SyntaxError, OSError) as e:
+        return tool_result(False, error=f"cannot parse {file_path}: {e}")
+    callees = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name:
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        callees.add(child.func.id)
+                    elif isinstance(child.func, ast.Attribute):
+                        callees.add(child.func.attr)
+            break
+    if not callees:
+        return tool_result(True, output=f"No function calls found in '{function_name}'.")
+    return tool_result(True, output="\n".join(sorted(callees)))
+
+
+async def code_ast(params: dict) -> ToolResult:
+    file_path = params.get("file_path", "")
+    if not file_path:
+        return tool_result(False, error="file_path is required")
+    path = Path(file_path)
+    if not path.exists():
+        path = Path.cwd() / file_path
+    if not path.exists():
+        return tool_result(False, error=f"file not found: {file_path}")
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(content)
+    except (SyntaxError, OSError) as e:
+        return tool_result(False, error=f"cannot parse {file_path}: {e}")
+    lines = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.ClassDef):
+            bases = ", ".join(
+                b.id if isinstance(b, ast.Name) else "..."
+                for b in node.bases
+            )
+            methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            lines.append(f"class {node.name}({bases}):")
+            for m in methods:
+                lines.append(f"  def {m}()")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            lines.append(f"{'async ' if isinstance(node, ast.AsyncFunctionDef) else ''}def {node.name}()")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                lines.append(f"import {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            names = ", ".join(a.name for a in node.names)
+            lines.append(f"from {module} import {names}")
+    if not lines:
+        return tool_result(True, output="(empty file)")
+    return tool_result(True, output=truncate("\n".join(lines), _MAX_OUTPUT))

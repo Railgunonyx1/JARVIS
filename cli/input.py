@@ -121,7 +121,8 @@ def _redraw(write: Callable[[str], None], prompt: str, buf: Buffer,
     original "input renders black/blank" bug).
     """
     shown = styled_prompt if styled_prompt is not None else prompt
-    cursor_col = len(prompt) + buf.cursor
+    # +1 because ANSI CSI column addressing is 1-indexed (\x1b[1G = column 1)
+    cursor_col = len(prompt) + buf.cursor + 1
     write(f"\r{shown}{buf.text}\x1b[K\x1b[{cursor_col}G")
 
 

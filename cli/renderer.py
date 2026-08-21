@@ -594,7 +594,7 @@ class Renderer:
         """Claude Code + HUD-style compact top banner."""
         width = self.console.size.width
         sep = self.symbols["separator"]
-        
+
         t = Text()
         t.append("JARVIS MK-X", style="jarvis.accent bold")
         t.append(f" {sep} ", style="jarvis.muted")

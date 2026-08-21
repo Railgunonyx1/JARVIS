@@ -105,7 +105,10 @@ model = "qwen2.5:3b"
 max_tokens = 2048
 temperature = 0.7
 base_url = "http://127.0.0.1:11434"
-num_ctx = 4096
+num_ctx = 2048
+num_thread = 8
+top_k = 30
+top_p = 0.9
 priority = 4
 
 [ollama.fallback]

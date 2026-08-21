@@ -350,7 +350,6 @@ class InterruptExecutor:
 
             # Bounded tool loop — 1.5B can call memory.retrieve etc.
             # Max 3 iterations, 10s total hard timeout.
-            from providers.types import LLMResponse, ToolCall
             _MAX_INTERRUPT_ITERATIONS = 3
             _INTERRUPT_TIMEOUT = 10.0
             final_text = ""

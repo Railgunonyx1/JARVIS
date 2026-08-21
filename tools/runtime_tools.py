@@ -19,6 +19,7 @@ def _ollama_run(args: list[str]) -> str | None:
     try:
         result = subprocess.run(
             ["ollama", *args], capture_output=True, text=True, timeout=5,
+            check=False,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
         if result.returncode == 0:
@@ -56,13 +57,15 @@ async def runtime_status(params: dict) -> ToolResult:
 
     # ── Ollama status ───────────────────────────────────────────
     try:
-        import subprocess, sys
+        import subprocess
+        import sys
         result = subprocess.run(
             ["ollama", "list"], capture_output=True, text=True, timeout=5,
+            check=False,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
         if result.returncode == 0:
-            models = [l.split()[0] for l in result.stdout.strip().splitlines()[1:] if l.strip()]
+            models = [line.split()[0] for line in result.stdout.strip().splitlines()[1:] if line.strip()]
             sections.append(f"OLLAMA: ONLINE ({len(models)} models: {', '.join(models[:5])})")
         else:
             sections.append("OLLAMA: OFFLINE")
@@ -282,13 +285,13 @@ async def runtime_models(params: dict) -> ToolResult:
     ps_out = _ollama_run(["ps"])
     list_out = _ollama_run(["list"])
     if list_out:
-        installed = [l.split()[0] for l in list_out.strip().splitlines()[1:] if l.strip()]
+        installed = [line.split()[0] for line in list_out.strip().splitlines()[1:] if line.strip()]
     sections.append(f"OLLAMA: {len(installed)} models installed" if installed else "OLLAMA: OFFLINE or no models")
 
     loaded_lines = []
     if ps_out:
-        for l in ps_out.strip().splitlines()[1:]:
-            parts = l.split()
+        for line in ps_out.strip().splitlines()[1:]:
+            parts = line.split()
             if len(parts) >= 4:
                 until = parts[4] if len(parts) > 4 else "-"
                 loaded_lines.append(f"  {parts[0]:<30} {parts[2]:<10} {parts[3]:<14} expires {until}")
