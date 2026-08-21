@@ -1,11 +1,11 @@
-"""Intent Classifier — fast-path rule engine that dispatches simple commands
-without hitting the LLM. Eliminates an entire round-trip for common voice commands.
+"""Intent Classifier — zero-LLM fast path + semantic tool selection.
 
-Architecture:
-    User utterance → IntentClassifier.classify()
-        → INSTANT (confidence=1.0): rule-matched, dispatch tool directly
-        → SIMPLE  (confidence=0.8): likely simple, route to smallest model
-        → COMPLEX (confidence=0.0): needs full LLM reasoning
+Two core jobs:
+  1. Route simple commands directly to tools without any LLM round-trip.
+  2. For commands that DO need an LLM, select only the relevant tools to
+     reduce prompt tokens, model confusion, and inference time.
+
+Latency budget: <1ms for classification, <0.5ms for tool selection.
 """
 
 from __future__ import annotations
@@ -30,77 +30,105 @@ class ClassifiedIntent:
     tool_args: dict[str, Any] | None = None
     response: str | None = None
     context_level: str = "instant"
+    suggested_tools: tuple[str, ...] = ()
 
 
-# ── Rule definitions ─────────────────────────────────────────────────────
+_RESPONSES: dict[str, str] = {
+    "hello": "Hello! How can I help you today?",
+    "hi": "Hi there! What would you like me to work on?",
+    "hey": "Hey! What are we building?",
+    "yo": "Yo! What do you need?",
+    "help": "I can help with coding, debugging, file operations, and more.",
+    "who are you": "I am JARVIS MK-X, an autonomous engineering agent.",
+    "thanks": "You're welcome!",
+    "thank you": "You're welcome!",
+    "bye": "Goodbye! Come back anytime.",
+    "good morning": "Good morning! Ready to code?",
+    "good night": "Good night! Sleep well.",
+    "what can you do": "I can read, write, edit files, run commands, search code, manage git, browse the web, and more.",
+    "stop": "Stopped.",
+    "cancel": "Cancelled.",
+    "never mind": "No problem!",
+    "nevermind": "No problem!",
+    "quit": "Goodbye!",
+    "exit": "Goodbye!",
+}
 
-_COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None, str | None]] = [
-    # System queries — instant, no tool needed
-    (
-        re.compile(r"^(what time|what's the time|current time|time is it|tell me the time)",
-                   re.IGNORECASE),
-        "system.status", None, None,
-    ),
-    (
-        re.compile(r"^(system status|how('s| is) (my |the )?(computer|pc|system|machine)|cpu|ram|memory usage)",
-                   re.IGNORECASE),
-        "system.status", None, None,
-    ),
-    # Git operations
-    (
-        re.compile(r"^(git status|show (me )?status|working tree status)",
-                   re.IGNORECASE),
-        "git.status", None, None,
-    ),
-    (
-        re.compile(r"^(git diff|show (me )?(the )?diff|what('s| is) changed)",
-                   re.IGNORECASE),
-        "git.diff", None, None,
-    ),
-    (
-        re.compile(r"^(git log|show (me )?(the )?(recent )?commits?|commit history)",
-                   re.IGNORECASE),
-        "git.log", None, None,
-    ),
-    (
-        re.compile(r"^(git branch|what branch|current branch|which branch)",
-                   re.IGNORECASE),
-        "git.branch", None, None,
-    ),
-    # File operations — read
-    (
-        re.compile(r"^(read|show|open|cat|view) (?:the )?(?:file )?(.+)",
-                   re.IGNORECASE),
-        "filesystem.read", None, None,
-    ),
-    # Directory listing
-    (
-        re.compile(r"^(list|ls|dir|show) (?:the )?(?:files? in )?(.+)",
-                   re.IGNORECASE),
-        "filesystem.list", None, None,
-    ),
-    # Code search
-    (
-        re.compile(r"^(search|find|grep|look for|where is) (.+)",
-                   re.IGNORECASE),
-        "search.code", None, None,
-    ),
-    # Web search
-    (
-        re.compile(r"^(search (?:the )?web|google|look up|what is|who is|how (?:do|to)|tell me about) (.+)",
-                   re.IGNORECASE),
-        "web.search", None, None,
-    ),
-    # Browser
-    (
-        re.compile(r"^(open|go to|navigate to|browse) (https?://.+)",
-                   re.IGNORECASE),
-        "browser.open", None, None,
-    ),
+_MODE_COMMANDS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"^(turbo|speed|fast)\s*(mode)?$", re.IGNORECASE),
+     "turbo", "Turbo mode: fastest model, minimal context."),
+    (re.compile(r"^(quality|deep|slow)\s*(mode)?$", re.IGNORECASE),
+     "quality", "Quality mode: strongest model, full context."),
+    (re.compile(r"^(normal|default)\s*(mode)?$", re.IGNORECASE),
+     "normal", "Normal mode restored."),
+    (re.compile(r"^(compact|minimal)\s*(mode)?$", re.IGNORECASE),
+     "compact", "Compact mode: minimal context, fast responses."),
+    (re.compile(r"^(use|switch to|set)\s+(1\.?5b|1b|3b|4b|7b)\s*$", re.IGNORECASE),
+     "model_switch", ""),
+    (re.compile(r"^(optimize|enable) (latency|speed)$", re.IGNORECASE),
+     "turbo", "Latency optimization enabled."),
+    (re.compile(r"^(show|display) (performance|stats|metrics|latency)$", re.IGNORECASE),
+     "show_perf", ""),
+    (re.compile(r"^(preload|prewarm|warm ?up) (models?|ollama)$", re.IGNORECASE),
+     "prewarm", "Warming up local models..."),
+    (re.compile(r"^(clear|flush) (cache|memory|context)$", re.IGNORECASE),
+     "clear_cache", "Cache cleared."),
+    (re.compile(r"^(enable|disable) (predictive|speculative|escalat)", re.IGNORECASE),
+     "toggle_feature", ""),
+    (re.compile(r"^(enable|disable) (adaptive|routing|compression)", re.IGNORECASE),
+     "toggle_feature", ""),
 ]
 
+_COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None]] = [
+    (re.compile(r"^(what time|what's the time|current time|time is it|tell me the time|what('s| is) the date)$",
+                re.IGNORECASE), "system.status", None),
+    (re.compile(r"^(system status|how('s| is) (my |the )?(computer|pc|system|machine)|cpu|ram|memory usage)$",
+                re.IGNORECASE), "system.status", None),
+    (re.compile(r"^(git status|show (me )?status|working tree status)$", re.IGNORECASE),
+     "git.status", None),
+    (re.compile(r"^(git diff|show (me )?(the )?diff|what('s| is) changed)$", re.IGNORECASE),
+     "git.diff", None),
+    (re.compile(r"^(git log|show (me )?(the )?(recent )?commits?|commit history)$", re.IGNORECASE),
+     "git.log", None),
+    (re.compile(r"^(git branch|what branch|current branch|which branch)$", re.IGNORECASE),
+     "git.branch", None),
+    (re.compile(r"^(read|show|open|cat|view) (?:the )?(?:file )?(.+)$", re.IGNORECASE),
+     "filesystem.read", None),
+    (re.compile(r"^(list|ls|dir|show) (?:the )?(?:files? in )?(.+)$", re.IGNORECASE),
+     "filesystem.list", None),
+    (re.compile(r"^(search|find|grep|look for|where is) (.+)$", re.IGNORECASE),
+     "search.code", None),
+    (re.compile(r"^(search (?:the )?web|google|look up|what is|who is|how (?:do|to)|tell me about) (.+)$",
+                re.IGNORECASE), "web.search", None),
+    (re.compile(r"^(open|go to|navigate to|browse) (https?://.+)$", re.IGNORECASE),
+     "browser.open", None),
+]
 
-# ── Pattern-based tool arg extractors ────────────────────────────────────
+_TOOL_SELECTION: list[tuple[re.Pattern, tuple[str, ...]]] = [
+    (re.compile(r"\b(edit|modify|change|update|rewrite|refactor|fix|patch)\b.*\b(file|function|class|method|code)\b", re.I),
+     ("filesystem.read", "filesystem.write", "patch.replace", "search.code")),
+    (re.compile(r"\b(create|write|make|add)\b.*\b(file|script|module|class)\b", re.I),
+     ("filesystem.write", "filesystem.read", "filesystem.list")),
+    (re.compile(r"\b(read|show|open|cat|view)\b.*\b(file|code|source)\b", re.I),
+     ("filesystem.read", "filesystem.list")),
+    (re.compile(r"\b(delete|remove|drop)\b.*\b(file|line|code)\b", re.I),
+     ("filesystem.read", "patch.delete")),
+    (re.compile(r"\b(commit|stage|branch|merge|rebase|push|pull|checkout)\b", re.I),
+     ("git.status", "git.diff", "git.log", "git.branch", "git.add", "git.commit")),
+    (re.compile(r"\b(git)\b", re.I),
+     ("git.status", "git.diff", "git.log", "git.branch")),
+    (re.compile(r"\b(search|find|grep|where|locate|look for)\b", re.I),
+     ("search.code", "search.find")),
+    (re.compile(r"\b(search|find)\b.*\b(web|internet|online|google)\b", re.I),
+     ("web.search",)),
+    (re.compile(r"\b(run|execute|build|test|deploy|install|start|stop)\b", re.I),
+     ("shell.execute", "system.status")),
+    (re.compile(r"\b(status|health|cpu|ram|memory|disk|uptime)\b", re.I),
+     ("system.status",)),
+    (re.compile(r"\b(browse|open url|website|page|scrape|screenshot)\b", re.I),
+     ("browser.open", "browser.extract", "browser.screenshot")),
+]
+
 
 def _extract_file_path(text: str) -> str | None:
     m = re.search(
@@ -139,13 +167,15 @@ def _extract_dir_path(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-# ── Classifier ───────────────────────────────────────────────────────────
+def _extract_model_name(text: str) -> str | None:
+    m = re.search(r"(1\.?5b|1b|3b|4b|7b)", text, re.IGNORECASE)
+    return m.group(1).lower().replace(".", "") if m else None
+
 
 class IntentClassifier:
-    """Lightweight intent classifier that routes simple commands directly
-    to tools without an LLM round-trip.
-
-    Designed for <1ms classification latency. No model loading, no I/O.
+    """Two-job classifier:
+      1. Route simple commands to tools with zero LLM calls.
+      2. For LLM-bound requests, select only relevant tools.
     """
 
     def __init__(self, registry=None):
@@ -158,31 +188,28 @@ class IntentClassifier:
 
         tl = t.lower()
 
-        # ── Exact-match greetings / simple queries (response, no tool) ───
-        _GREETINGS = {
-            "hello": "Hello! How can I help you today?",
-            "hi": "Hi there! What would you like me to work on?",
-            "hey": "Hey! What are we building?",
-            "yo": "Yo! What do you need?",
-            "help": "I can help with coding, debugging, file operations, and more. Just describe what you need.",
-            "who are you": "I am JARVIS MK-X, an autonomous engineering agent.",
-            "thanks": "You're welcome!",
-            "thank you": "You're welcome!",
-            "bye": "Goodbye! Come back anytime.",
-        }
-        if tl in _GREETINGS:
+        if tl in _RESPONSES:
             return ClassifiedIntent(
                 Intent.INSTANT, 1.0,
-                response=_GREETINGS[tl],
+                response=_RESPONSES[tl],
                 context_level="instant",
             )
 
-        # ── Pattern-matched tool dispatch ─────────────────────────────────
-        for pattern, tool_name, fixed_args, fixed_response in _COMMANDS:
+        for pattern, cmd_type, response in _MODE_COMMANDS:
+            m = pattern.match(tl)
+            if m:
+                if cmd_type == "model_switch":
+                    model = _extract_model_name(t)
+                    resp = f"Switching to {model}..." if model else "Which model?"
+                    return ClassifiedIntent(Intent.INSTANT, 1.0, response=resp, context_level="instant")
+                if cmd_type in ("show_perf", "prewarm", "clear_cache", "toggle_feature"):
+                    return ClassifiedIntent(Intent.INSTANT, 1.0, response=f"__{cmd_type.upper()}__", context_level="instant")
+                return ClassifiedIntent(Intent.INSTANT, 1.0, response=response, context_level="instant")
+
+        for pattern, tool_name, fixed_args in _COMMANDS:
             m = pattern.match(tl)
             if m:
                 args = dict(fixed_args) if fixed_args else {}
-                # Extract dynamic args from capture groups
                 if tool_name == "filesystem.read" and not args.get("path"):
                     path = _extract_file_path(t)
                     if path:
@@ -204,7 +231,6 @@ class IntentClassifier:
                     if d:
                         args["path"] = d
 
-                # If tool registry is available, verify the tool exists
                 if self._registry and self._registry.get(tool_name) is None:
                     continue
 
@@ -212,11 +238,10 @@ class IntentClassifier:
                     Intent.INSTANT, 1.0,
                     tool_name=tool_name,
                     tool_args=args or None,
-                    response=fixed_response,
+                    response=None,
                     context_level="instant",
                 )
 
-        # ── Heuristic: short, imperative → SIMPLE ─────────────────────────
         word_count = len(t.split())
         if word_count <= 6 and tl.startswith((
             "open", "run", "start", "stop", "create", "delete",
@@ -226,5 +251,18 @@ class IntentClassifier:
         )):
             return ClassifiedIntent(Intent.SIMPLE, 0.6, context_level="session")
 
-        # ── Everything else → COMPLEX ─────────────────────────────────────
         return ClassifiedIntent(Intent.COMPLEX, 0.0, context_level="deep")
+
+    def select_tools(self, text: str, all_tools: list[dict]) -> list[dict]:
+        tl = text.lower()
+        selected_names: set[str] = set()
+        for pattern, tool_names in _TOOL_SELECTION:
+            if pattern.search(tl):
+                selected_names.update(tool_names)
+        if not selected_names:
+            return all_tools
+        tool_map = {t.get("function", {}).get("name", ""): t for t in all_tools}
+        result = [tool_map[n] for n in selected_names if n in tool_map]
+        if not result:
+            return all_tools
+        return result

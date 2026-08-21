@@ -320,6 +320,20 @@ class AgentLoop:
             _latency_log.append(("context_build", (time.time() - _t_ctx) * 1000))
             tools = self.registry.to_openai_tools()
 
+            # Semantic tool selection: for LLM-bound requests, only expose
+            # tools relevant to the user's intent. Reduces prompt tokens,
+            # model confusion, and inference time.
+            if classified.intent in (Intent.SIMPLE, Intent.COMPLEX):
+                tools = self.intent_classifier.select_tools(goal, tools)
+
+            # Adaptive context budgets: scale context window to task complexity
+            _context_budget_multiplier = {
+                "instant": 0.25,
+                "session": 0.5,
+                "deep": 1.0,
+            }
+            _ctx_mult = _context_budget_multiplier.get(context_level, 1.0)
+
             # Harness: filter tools and append system prompt addendum
             if self._harness is not None:
                 tools = self._harness.filter_tools(tools)

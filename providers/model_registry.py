@@ -164,18 +164,51 @@ _QUICK_PATTERNS = [
 ]
 
 
+# Commands that NEVER need an LLM — handled deterministically by the CLI.
+_DETERMINISTIC_COMMANDS = frozenset({
+    "/help", "/exit", "/quit", "/clear", "/cockpit", "/notifications",
+    "/verbose", "/plan", "/tokens", "/compact", "/tree", "/resume",
+    "/memory", "/history", "/model", "/palette", "/perf", "/audit",
+})
+
+
+def _is_deterministic_command(prompt: str) -> bool:
+    """Check if a prompt is a deterministic command that bypasses the LLM."""
+    lower = prompt.strip().lower()
+    # /commands are always deterministic
+    if lower.startswith("/"):
+        cmd = lower.split()[0]
+        return cmd in _DETERMINISTIC_COMMANDS
+    return False
+
+
 def detect_task_type(prompt: str) -> TaskType:
     """Detect the task type from a user prompt.
 
     Uses keyword/pattern matching with scoring. Returns the highest-scoring
     task type, defaulting to CONVERSATIONAL for ambiguous prompts.
     """
+    task_type, _confidence = detect_task_type_with_confidence(prompt)
+    return task_type
+
+
+def detect_task_type_with_confidence(prompt: str) -> tuple[TaskType, float]:
+    """Detect the task type AND confidence (0.0–1.0) from a user prompt.
+
+    Confidence is derived from:
+    - Score gap between best and second-best type
+    - Number of pattern matches (more matches = more certain)
+    - Input length (very short = harder to classify)
+
+    Returns:
+        (TaskType, confidence) where confidence is 0.0–1.0.
+    """
     lower = prompt.lower().strip()
 
-    # Quick check for simple inputs
+    # Quick check for simple inputs — very high confidence
     for pattern in _QUICK_PATTERNS:
         if re.match(pattern, lower):
-            return TaskType.QUICK
+            return TaskType.QUICK, 0.95
 
     scores: dict[TaskType, int] = {t: 0 for t in TaskType}
 
@@ -208,9 +241,26 @@ def detect_task_type(prompt: str) -> TaskType:
 
     # Find the winner
     best_type = max(scores, key=lambda t: scores[t])
-    if scores[best_type] == 0:
-        return TaskType.CONVERSATIONAL
-    return best_type
+    best_score = scores[best_type]
+
+    if best_score == 0:
+        return TaskType.CONVERSATIONAL, 0.3
+
+    # Compute confidence from score gap and total matches
+    sorted_scores = sorted(scores.values(), reverse=True)
+    second_best = sorted_scores[1] if len(sorted_scores) > 1 else 0
+    gap = best_score - second_best
+    total_matches = best_score // 2  # each pattern gives +2
+
+    # Confidence formula:
+    #   - gap contributes 0–0.5 (big gap = more certain)
+    #   - match count contributes 0–0.3 (more patterns = more certain)
+    #   - base confidence 0.2
+    gap_confidence = min(0.5, gap * 0.1)
+    match_confidence = min(0.3, total_matches * 0.1)
+    confidence = 0.2 + gap_confidence + match_confidence
+
+    return best_type, min(0.95, confidence)
 
 
 # ── Model selection ────────────────────────────────────────────────────
@@ -358,21 +408,49 @@ class ModelRegistry:
         return "Cascade disabled. Using single-model auto-routing."
 
     def resolve_cascade(self, prompt: str) -> dict[str, str | None]:
-        """Resolve the three-tier cascade for a prompt.
+        """Resolve the three-tier cascade using confidence-based routing.
+
+        Strategy:
+          1. Deterministic commands (/help, /status, etc.) bypass LLM entirely.
+          2. High-confidence simple tasks → 1B handles directly.
+          3. High-confidence tool tasks → 3B worker (skip 1B draft).
+          4. Medium-confidence tasks → 1B drafts, 3B verifies (draft-then-verify).
+          5. Low-confidence or heavy → 4B with full context.
 
         Returns:
             {
-                "router": "qwen2.5:1.5b",   # Always set — used for classification/simple reply
-                "worker": "qwen2.5:3b"|None, # Set if task needs tools/reasoning
-                "heavy":  "qwen3:4b"|None,    # Set only for genuinely complex tasks
+                "router": "qwen2.5:1.5b",          # Always set
+                "worker": "qwen2.5:3b"|None,       # Set if escalated
+                "heavy":  "qwen3:4b"|None,          # Set only for complex tasks
                 "task_type": "coding",
+                "confidence": 0.85,                  # 0.0–1.0
                 "needs_tools": True,
+                "draft_first": False,                 # 1B drafts, then 3B verifies
+                "deterministic": False,               # Bypass LLM entirely
             }
         """
-        task_type = detect_task_type(prompt)
+        task_type, confidence = detect_task_type_with_confidence(prompt)
         self._task_history.append(task_type)
         if len(self._task_history) > 100:
             self._task_history = self._task_history[-50:]
+
+        lower = prompt.strip()
+
+        # ── Deterministic command bypass ──
+        # These never need an LLM — handle instantly in the agent loop.
+        deterministic = lower.startswith("/") or _is_deterministic_command(lower)
+        if deterministic:
+            self._direct_handle_count += 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": None,
+                "heavy": None,
+                "task_type": task_type.value,
+                "confidence": 1.0,
+                "needs_tools": False,
+                "draft_first": False,
+                "deterministic": True,
+            }
 
         # Manual lock: skip cascade, use locked model for everything
         if not self._auto_mode and self._active_model:
@@ -382,11 +460,16 @@ class ModelRegistry:
                 "worker": None,
                 "heavy": None,
                 "task_type": task_type.value,
+                "confidence": confidence,
                 "needs_tools": task_type not in (TaskType.QUICK, TaskType.CONVERSATIONAL),
+                "draft_first": False,
+                "deterministic": False,
             }
 
-        # Quick/conversational → 1B handles directly, no escalation needed
-        if task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
+        # ── Confidence-based routing ──
+
+        # HIGH confidence + simple → 1B handles directly (no LLM call needed)
+        if confidence >= 0.8 and task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
             self._direct_handle_count += 1
             self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
             return {
@@ -394,11 +477,14 @@ class ModelRegistry:
                 "worker": None,
                 "heavy": None,
                 "task_type": task_type.value,
+                "confidence": confidence,
                 "needs_tools": False,
+                "draft_first": False,
+                "deterministic": False,
             }
 
-        # Coding/research/writing/reasoning → 3B worker handles it
-        if task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
+        # HIGH confidence + tool task → 3B worker directly (no draft needed)
+        if confidence >= 0.8 and task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
             self._escalation_count += 1
             self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
             self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
@@ -407,19 +493,74 @@ class ModelRegistry:
                 "worker": self.CASCADE_WORKER,
                 "heavy": None,
                 "task_type": task_type.value,
+                "confidence": confidence,
                 "needs_tools": True,
+                "draft_first": False,
+                "deterministic": False,
             }
 
-        # Heavy / complex multi-step → 4B heavy model
+        # MEDIUM confidence + tool task → draft-then-verify
+        # 1B generates a draft response, 3B verifies/fixes it
+        if 0.45 <= confidence < 0.8 and task_type in (TaskType.CODING, TaskType.RESEARCH, TaskType.WRITING, TaskType.REASONING):
+            self._escalation_count += 1
+            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+            self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": self.CASCADE_WORKER,
+                "heavy": None,
+                "task_type": task_type.value,
+                "confidence": confidence,
+                "needs_tools": True,
+                "draft_first": True,   # 1B drafts, 3B verifies
+                "deterministic": False,
+            }
+
+        # LOW confidence → escalate to 4B heavy model
+        if confidence < 0.45:
+            self._escalation_count += 1
+            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+            self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": self.CASCADE_WORKER,
+                "heavy": self.CASCADE_HEAVY,
+                "task_type": task_type.value,
+                "confidence": confidence,
+                "needs_tools": True,
+                "draft_first": False,
+                "deterministic": False,
+            }
+
+        # HEAVY task → 4B heavy model (even with decent confidence)
+        if task_type == TaskType.HEAVY:
+            self._escalation_count += 1
+            self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
+            self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
+            return {
+                "router": self.CASCADE_ROUTER,
+                "worker": self.CASCADE_WORKER,
+                "heavy": self.CASCADE_HEAVY,
+                "task_type": task_type.value,
+                "confidence": confidence,
+                "needs_tools": True,
+                "draft_first": False,
+                "deterministic": False,
+            }
+
+        # Default: 3B worker (medium-confidence catch-all)
         self._escalation_count += 1
         self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
-        self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
+        self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
         return {
             "router": self.CASCADE_ROUTER,
             "worker": self.CASCADE_WORKER,
-            "heavy": self.CASCADE_HEAVY,
+            "heavy": None,
             "task_type": task_type.value,
+            "confidence": confidence,
             "needs_tools": True,
+            "draft_first": False,
+            "deterministic": False,
         }
 
     def resolve_model(self, prompt: str, available_models: list[str] | None = None) -> str | None:
