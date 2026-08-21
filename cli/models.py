@@ -257,5 +257,16 @@ class AppState:
     recovery_attempt: int = 0
     recovery_error: str = ""
 
+    # Provider & Telemetry
+    provider: str = "Ollama"
+    vram_gb: float | None = None
+    last_turn_latency_s: float | None = None
+    last_turn_tokens: int | None = None
+
+    # Unobtrusive 1.5B Interrupt subagent state
+    interrupt_active: bool = False
+    interrupt_model: str = "1.5B"
+    interrupt_text: str = ""
+
     # Provider notices (rate limits, provider switches — semantic, not logging)
     provider_notice: tuple[str, str, str, float | None] | None = None  # (provider, message, kind, retry_after)

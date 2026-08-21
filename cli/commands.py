@@ -99,11 +99,14 @@ class CommandRegistry:
         def layout_cmd(args: list[str]) -> None:
             if not args:
                 r.print(f"Current layout: {r.layout_mgr.detect_mode().value}")
-                r.print("Available: minimal | normal | focus | plan | activity | code | memory | audit")
+                r.print("Available: normal (default) | minimal | workspace | hud | focus | code | memory | audit")
                 return
-            r.layout_mgr.set_mode(args[0].lower())
-            r.set_workspace(args[0].lower() if args[0].lower() in ("code", "memory", "audit", "chat", "plan", "activity") else r.state.workspace)
-            r.print_success(f"Layout → {args[0].lower()}")
+            mode_arg = args[0].lower()
+            if mode_arg in ("normal", "minimal", "workspace", "hud", "focus", "code", "memory", "audit", "plan", "activity"):
+                r.layout_mgr.set_mode(mode_arg)
+                r.print_success(f"UI Layout → {mode_arg}")
+            else:
+                r.print_error("Unknown UI mode", "Use: normal | minimal | workspace | hud")
 
         def workspace_cmd(args: list[str]) -> None:
             if not args:
@@ -245,7 +248,8 @@ class CommandRegistry:
         self._register(Command("help", "Show commands, workspaces, modes", help_cmd, ["h", "?"]))
         self._register(Command("status", "Show current status", status_cmd, ["s"]))
         self._register(Command("mode", "Set execution policy (agent|plan|controlled|smart)", mode_cmd, ["m"]))
-        self._register(Command("layout", "Change layout / workspace", layout_cmd, ["l"]))
+        self._register(Command("layout", "Change layout / UI mode (normal|minimal|workspace|hud)", layout_cmd, ["l", "ui"]))
+        self._register(Command("ui", "Change UI mode (normal|minimal|workspace|hud)", layout_cmd))
         self._register(Command("workspace", "Switch workspace", workspace_cmd, ["ws"]))
         self._register(Command("palette", "Show command palette (Ctrl+K)", palette_cmd, ["k"]))
         self._register(Command("clear", "Clear conversation", clear_cmd, ["cls"]))

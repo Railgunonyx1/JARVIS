@@ -39,7 +39,7 @@ from .models import (
     Plan,
     StepStatus,
 )
-from .theme import COLORS, BoxStyles, get_symbols
+from .theme import COLORS, BoxStyles, build_rich_theme, get_symbols
 
 logger = logging.getLogger("jarvis.cli.renderer")
 
@@ -65,7 +65,7 @@ class Renderer:
     """Pure display layer. Claude Code-style: conversation is the UI."""
 
     def __init__(self, console: Console | None = None, unicode: bool = True) -> None:
-        self.console = console or Console(highlight=False, emoji=False)
+        self.console = console or Console(theme=build_rich_theme(), highlight=False, emoji=False)
         self.layout_mgr = LayoutManager(self.console)
         self.symbols = get_symbols(unicode)
         self.state = AppState()
@@ -142,37 +142,34 @@ class Renderer:
         return f"{used_str}/{limit_str}"
 
     def render_status(self) -> Text:
-        """Compact status: JARVIS · mode · model · tokens · tools · ONLINE"""
+        """Compact status: JARVIS MK-X · model · provider · MEM ✓ · ONLINE"""
         width = self.console.size.width
         sep = self.symbols["separator"]
         parts: list[Text] = []
 
-        if width >= 120:
-            parts.append(Text("JARVIS", style="jarvis.accent bold"))
+        parts.append(Text("JARVIS MK-X", style="jarvis.accent bold"))
+        parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
+        model_name = self.state.model or "qwen2.5:3b"
+        if len(model_name) > 20:
+            model_name = model_name[:18] + "..."
+        parts.append(Text(model_name, style="jarvis.secondary"))
+        parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
+        parts.append(Text(self.state.provider or "Ollama", style="jarvis.accent"))
+        parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
+        mem_status = "MEM ✓" if self.state.memory_enabled else "MEM -"
+        mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
+        parts.append(Text(mem_status, style=mem_style))
+        parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
+        conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
+        parts.append(Text(self.state.connection, style=conn_style))
+
+        if width >= 90 and self.state.vram_gb is not None:
             parts.append(Text(f" {sep} ", style="jarvis.muted"))
-
-        parts.append(Text(self.state.mode.value.lower(), style="jarvis.accent"))
-
-        if width >= 70 and self.state.model:
-            model_display = self.state.model
-            if len(model_display) > 25:
-                model_display = model_display[:22] + "..."
-            parts += [Text(f" {sep} ", style="jarvis.muted"),
-                       Text(model_display, style="jarvis.secondary")]
-
-        parts += [Text(f" {sep} ", style="jarvis.muted"),
-                   Text(self._token_str(), style="jarvis.dim")]
-
-        if width >= 90:
-            tool_count = self.state.tools_active
-            if tool_count:
-                parts += [Text(f" {sep} ", style="jarvis.muted"),
-                           Text(f"{tool_count} tools", style="jarvis.running")]
-
-        if width >= 120:
-            conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
-            parts += [Text(f" {sep} ", style="jarvis.muted"),
-                       Text(self.state.connection, style=conn_style)]
+            parts.append(Text(f"{self.state.vram_gb:.1f}GB VRAM", style="jarvis.dim"))
 
         return Text.assemble(*parts)
 
@@ -362,7 +359,9 @@ class Renderer:
 
     def render_verification_block(self, steps: list[dict]) -> RenderableType:
         sym = self.symbols
-        lines: list[RenderableType] = [Text("  Verification", style="jarvis.info")]
+        lines: list[RenderableType] = [
+            Text.assemble(Text(f"  {sym['running']} ", style="jarvis.running"), Text("Verification", style="jarvis.info bold"))
+        ]
         for step in steps:
             name = step.get("name", "")
             passed = step.get("passed", False)
@@ -376,6 +375,47 @@ class Renderer:
                 s, style = sym["failed"], "jarvis.failed"
             dur = f" ({duration:.0f}ms)" if duration > 0 else ""
             lines.append(Text(f"    {s} {name}{dur}", style=style))
+        return Group(*lines)
+
+    def render_turn_footer(self, latency_s: float | None = None, tokens: int | None = None,
+                           tools_count: int | None = None, cost_str: str = "Local $0.00") -> RenderableType:
+        """Render Claude Code subtle turn stats footer."""
+        parts: list[Text] = []
+        sep = Text(" · ", style="jarvis.muted")
+
+        lat = latency_s if latency_s is not None else self.state.last_turn_latency_s
+        if lat is not None and lat > 0:
+            parts.append(Text(f"{lat:.1f}s", style="jarvis.dim"))
+
+        tok = tokens if tokens is not None else self.state.last_turn_tokens
+        if tok is not None and tok > 0:
+            if parts:
+                parts.append(sep)
+            parts.append(Text(f"{tok:,} tokens", style="jarvis.dim"))
+
+        tc = tools_count if tools_count is not None else len(self.state.events)
+        if tc > 0:
+            if parts:
+                parts.append(sep)
+            parts.append(Text(f"{tc} tools", style="jarvis.dim"))
+
+        if parts:
+            parts.append(sep)
+        parts.append(Text(cost_str, style="jarvis.muted"))
+
+        return Text.assemble(Text("  "), *parts)
+
+    def render_interrupt_block(self, model: str = "1.5B", text: str = "") -> RenderableType:
+        """Render the 1.5B interrupt state visibly but unobtrusively."""
+        sym = self.symbols
+        lines: list[RenderableType] = [
+            Text.assemble(
+                Text(f"  {sym['diamond']} ", style="jarvis.secondary"),
+                Text(f"interrupt · {model}", style="jarvis.secondary bold"),
+            )
+        ]
+        if text:
+            lines.append(Text(f"    {text}", style="jarvis.dim"))
         return Group(*lines)
 
     def render_recovery_block(self, error: str, attempt: int = 1) -> RenderableType:
@@ -544,44 +584,46 @@ class Renderer:
 
         return Group(*elements)
 
-    def _render_header(self) -> Text:
-        """ClaudeCode-style header: one compact line with all status info."""
+    def _render_header(self) -> RenderableType:
+        """Claude Code + HUD-style compact top banner."""
         width = self.console.size.width
+        sep = self.symbols["separator"]
+        
         t = Text()
-        t.append("JARVIS", style="jarvis.accent")
-        t.append(" MK-X", style="jarvis.tool")
-        t.append("  ·  ", style="jarvis.muted")
-        t.append(self.state.mode.value.lower(), style="jarvis.accent")
+        t.append("JARVIS MK-X", style="jarvis.accent bold")
+        t.append(f" {sep} ", style="jarvis.muted")
 
-        # Model (only if wide enough)
-        if width >= 80 and self.state.model:
-            model = self.state.model
-            if len(model) > 28:
-                model = model[:25] + "..."
-            t.append("  ·  ", style="jarvis.muted")
-            t.append(model, style="jarvis.secondary")
+        model_name = self.state.model or "qwen2.5:3b"
+        if len(model_name) > 22:
+            model_name = model_name[:20] + "..."
+        t.append(model_name, style="jarvis.secondary")
+        t.append(f" {sep} ", style="jarvis.muted")
 
-        # Tokens (only if wide)
-        if width >= 100:
-            used = self.state.tokens_used / 1000
-            limit = self.state.tokens_limit / 1000
-            t.append("  ·  ", style="jarvis.muted")
-            t.append(f"{used:.1f}K/{limit:.0f}K", style="jarvis.dim")
+        t.append(self.state.provider or "Ollama", style="jarvis.accent")
+        t.append(f" {sep} ", style="jarvis.muted")
 
-        # Connection
-        t.append("  ·  ", style="jarvis.muted")
+        mem_status = "MEM ✓" if self.state.memory_enabled else "MEM -"
+        mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
+        t.append(mem_status, style=mem_style)
+        t.append(f" {sep} ", style="jarvis.muted")
+
         conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
         t.append(self.state.connection, style=conn_style)
 
-        # Workspace (only if wide)
-        if width >= 90 and self.state.workspace and self.state.workspace != "chat":
-            t.append("  ·  ", style="jarvis.muted")
-            t.append(self.state.workspace, style="jarvis.dim")
+        if width >= 95 and self.state.vram_gb is not None:
+            t.append(f" {sep} ", style="jarvis.muted")
+            t.append(f"{self.state.vram_gb:.1f}GB VRAM", style="jarvis.dim")
 
-        return t
+        # Subtle top-framed panel (Claude Code style)
+        return Panel(
+            t,
+            box=box.ROUNDED,
+            border_style="jarvis.muted",
+            padding=(0, 1),
+        )
 
     def _render_body(self) -> RenderableType:
-        """ClaudeCode-style body: conversation is primary, plan + activity inline."""
+        """Claude Code-style body: conversation is primary, inline tool steps, verification, and diagnostics."""
         blocks: list[RenderableType] = []
 
         # Empty state
@@ -593,41 +635,51 @@ class Renderer:
             ])
             return Group(*blocks)
 
-        # Conversation (last 20 messages, semantic only)
+        # Conversation (last 20 messages)
         for msg in self.state.messages[-20:]:
             if msg.role == "user":
                 blocks.extend([
-                    Text("You", style="jarvis.accent"),
-                    Text(f"> {msg.content}", style="jarvis.user"),
+                    Text(""),
+                    Text.assemble(Text("JARVIS › ", style="jarvis.accent bold"), Text(msg.content, style="jarvis.user")),
                     Text(""),
                 ])
             elif msg.role == "agent":
                 blocks.extend([
-                    Text("JARVIS", style="jarvis.tool"),
                     self._render_agent_message(msg.content),
                     Text(""),
                 ])
             else:
                 blocks.extend([self._render_system_event(msg.content), Text("")])
 
+        # Interrupt state (1.5B fast bypass / background memory check)
+        if self.state.interrupt_active:
+            blocks.extend([
+                self.render_interrupt_block(self.state.interrupt_model, self.state.interrupt_text),
+                Text(""),
+            ])
+
         # Plan (only when active)
         plan_block = self.render_plan()
         if plan_block and self.state.plan and self.state.plan.steps:
-            blocks.extend([Text("Plan", style="jarvis.accent"), plan_block, Text("")])
+            blocks.extend([Text("  Plan", style="jarvis.accent"), plan_block, Text("")])
 
-        # Activity (only when events exist)
+        # Activity / Tool Steps (inline with step badges)
         if self.state.events:
-            blocks.extend([Text("Activity", style="jarvis.accent"), self.render_activity(), Text("")])
+            blocks.extend([self.render_activity(), Text("")])
 
-        # Verification (standalone, not in conversation)
+        # Verification (first-class post-execution gate)
         verification = self.render_verification()
         if verification is not None:
             blocks.extend([verification, Text("")])
 
-        # Recovery (standalone, not in conversation)
+        # Recovery
         recovery = self.render_recovery()
         if recovery is not None:
             blocks.extend([recovery, Text("")])
+
+        # Turn footer / cost diagnostics
+        if self.state.last_turn_latency_s is not None or self.state.last_turn_tokens is not None:
+            blocks.extend([self.render_turn_footer(), Text("")])
 
         # Provider notices (semantic, not logging)
         notice = self._render_provider_notice()

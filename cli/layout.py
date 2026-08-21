@@ -25,8 +25,10 @@ from .theme import COLORS, PANEL_TITLES, get_symbols
 
 
 class LayoutMode(StrEnum):
-    MINIMAL = "minimal"       # conversation only
-    NORMAL = "normal"         # plan + conversation (+ activity if wide)
+    NORMAL = "normal"         # conversation + inline tools + verification (Default)
+    MINIMAL = "minimal"       # compact single-line badges, conversation only
+    WORKSPACE = "workspace"   # split 2-pane / multi-pane layout
+    HUD = "hud"               # telemetry cyberpunk HUD stream
     FOCUS = "focus"           # conversation maximized
     PLAN = "plan"             # force plan + conversation
     ACTIVITY = "activity"     # force activity + conversation
