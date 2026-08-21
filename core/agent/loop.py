@@ -17,6 +17,7 @@ from typing import Any
 
 from core import events
 from core.agent.context import AgentContextBuilder
+from core.agent.intent import Intent, IntentClassifier
 from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
 from core.agent.state import AgentState, TaskStatus, classify_failure, pick_worst_failure
@@ -125,6 +126,7 @@ class AgentLoop:
         self.project = project or ProjectContext.discover()
         self.logger = decision_logger or get_decision_logger()
         self.context_builder = AgentContextBuilder(registry)
+        self.intent_classifier = IntentClassifier(registry)
         self.observer = observer or TaskObserver()
         self.context_manager = context_manager or ContextManager()
         self.mem = mem
@@ -216,46 +218,18 @@ class AgentLoop:
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
 
-            # Fast path: simple greetings/questions that don't need tools
-            _simple = goal.strip().lower()
-            _SIMPLE_INPUTS = {
-                'hello': 'Hello! How can I help you today?',
-                'hi': 'Hi there! What would you like me to work on?',
-                'hey': 'Hey! What are we building?',
-                'yo': 'Yo! What do you need?',
-                'sup': 'Not much! What can I help with?',
-                'help': 'I can help with coding, debugging, file operations, and more. Just describe what you need.',
-                'what can you do': 'I can read, write, and edit files, run commands, search code, manage git, and more. Tell me what you need!',
-                'who are you': 'I am JARVIS MK-X, an autonomous engineering agent. I help with software engineering tasks.',
-                'what is my name': "I don't have your name yet. What should I call you?",
-                'whats my name': "I don't have your name yet. What should I call you?",
-                'tell me a joke': 'Why do programmers prefer dark mode? Because light attracts bugs! 🐛',
-                'good morning': 'Good morning! Ready to code?',
-                'good night': 'Good night! Sleep well.',
-                'thanks': "You're welcome!",
-                'thank you': "You're welcome!",
-                'bye': 'Goodbye! Come back anytime.',
-                'quit': 'Goodbye!',
-                'exit': 'Goodbye!',
-            }
-            # Check exact match first, then prefix match for common patterns
-            if _simple in _SIMPLE_INPUTS:
-                final = _SIMPLE_INPUTS[_simple]
-            elif _simple.startswith(('what is ', 'whats ', 'how do ', 'how to ', 'who is ', 'who are ', 'where is ', 'where are ')):
-                # Conversational questions — answer directly, no tools needed
-                final = "That's a great question! As JARVIS, I'm focused on software engineering tasks. For general knowledge, I'd recommend using a search engine. But if you have a coding question, I'm here to help!"
-            elif any(_simple.startswith(p) for p in ('my name is ', 'i am ', 'im ', 'call me ')):
-                # Personal introduction — acknowledge, no tools needed
-                name = _simple.split('is ', 1)[-1].strip() if 'is ' in _simple else _simple.split('me ', 1)[-1].strip()
-                final = f"Nice to meet you, {name.title()}! I'm JARVIS. What would you like to work on?"
-            elif ' is my name' in _simple:
-                # "X is my name" pattern
-                name = _simple.split(' is my name')[0].strip()
-                final = f"Nice to meet you, {name.title()}! I'm JARVIS. What would you like to work on?"
-            else:
-                final = None
+            # Fast path: intent classifier checks rules before hitting the LLM
+            classified = self.intent_classifier.classify(goal)
+            self.logger.record(trace_id, "intent.classified", {
+                "goal": goal[:200],
+                "intent": classified.intent.value,
+                "confidence": classified.confidence,
+                "tool": classified.tool_name,
+            })
 
-            if final is not None:
+            # INSTANT: response-only (greetings, questions) — return immediately
+            if classified.intent == Intent.INSTANT and classified.response and not classified.tool_name:
+                final = classified.response
                 self._emit("task.completed", {
                     "goal": goal[:200], "iterations": 0,
                     "tokens": 0, "provider": "direct", "response": final,
@@ -266,6 +240,30 @@ class AgentLoop:
                     observation=self._result_observation(state),
                     perf=self._end_perf(tracer, root),
                 )
+
+            # INSTANT: tool dispatch — execute directly without LLM
+            if classified.intent == Intent.INSTANT and classified.tool_name:
+                tool_result = await self._tool_service.execute(
+                    classified.tool_name,
+                    classified.tool_args or {},
+                    trace_id=trace_id,
+                )
+                final = tool_result.output if tool_result.success else f"Tool error: {tool_result.error}"
+                self._emit("task.completed", {
+                    "goal": goal[:200], "iterations": 0,
+                    "tokens": 0, "provider": "direct",
+                    "tool": classified.tool_name, "response": final[:500],
+                }, trace_id)
+                self._finish_observation(True, final, state, 0)
+                return AgentResult(
+                    success=tool_result.success, response=final, trace_id=trace_id, state=state,
+                    error="" if tool_result.success else tool_result.error,
+                    observation=self._result_observation(state),
+                    perf=self._end_perf(tracer, root),
+                )
+
+            # SIMPLE / COMPLEX: continue to LLM pipeline
+            # SIMPLE uses minimal context; COMPLEX uses full context+memory
 
             # Model Gateway: select model based on harness requirements
             if self._model_gateway is not None:
@@ -291,8 +289,20 @@ class AgentLoop:
 
             state.transition(TaskStatus.CLASSIFYING)
             state.transition(TaskStatus.EXECUTING)
-            with tracer.span("context.build", {"project": str(self.project.root_path)}):
-                messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
+
+            # Context levels: instant (just the goal), session (minimal), deep (full)
+            context_level = classified.context_level
+            with tracer.span("context.build", {
+                "project": str(self.project.root_path), "level": context_level,
+            }):
+                if context_level == "instant":
+                    messages = [{"role": "user", "content": goal}]
+                    system_prompt = "You are JARVIS, an engineering assistant. Be concise."
+                elif context_level == "session":
+                    messages = [{"role": "user", "content": goal}]
+                    system_prompt = "You are JARVIS, an engineering assistant."
+                else:
+                    messages, system_prompt = self.context_builder.build(goal, self.project, self.mem)
             tools = self.registry.to_openai_tools()
 
             # Harness: filter tools and append system prompt addendum
@@ -303,12 +313,25 @@ class AgentLoop:
                     system_prompt = (system_prompt or "") + addendum
 
             _run_start = time.time()
-            _HARD_TIMEOUT_S = 30.0  # wall-time safety net — kills runaway tool loops
+            # Latency budgets (seconds) — configurable via harness or defaults
+            _budgets = {
+                "intent": 0.05,
+                "routing": 0.01,
+                "context": 0.10,
+                "llm_call": 15.0,
+                "tool": 0.50,
+                "total": 30.0,
+            }
+            if self._harness is not None:
+                hb = getattr(self._harness.config, "latency_budgets", None)
+                if hb:
+                    _budgets.update(hb)
+            _latency_log: list[tuple[str, float]] = []
 
             for iteration in range(1, self.max_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
                 elapsed = time.time() - _run_start
-                if elapsed > _HARD_TIMEOUT_S:
+                if elapsed > _budgets["total"]:
                     self._emit("task.failed", {
                         "goal": goal[:200],
                         "error": f"timeout after {elapsed:.0f}s",
@@ -328,9 +351,8 @@ class AgentLoop:
                         messages, self._system_tokens(system_prompt, tools),
                     )
                 state.context_usage = report.to_dict()
-                _PER_CALL_TIMEOUT = 15.0  # seconds per provider call
-                remaining = max(3.0, _HARD_TIMEOUT_S - (time.time() - _run_start))
-                _call_timeout = min(_PER_CALL_TIMEOUT, remaining)
+                remaining = max(3.0, _budgets["total"] - (time.time() - _run_start))
+                _call_timeout = min(_budgets["llm_call"], remaining)
                 with tracer.span("provider.complete") as span:
                     try:
                         response = await asyncio.wait_for(

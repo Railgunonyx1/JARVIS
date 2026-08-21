@@ -25,6 +25,10 @@ class OllamaProvider(LLMProvider):
         self._probe_interval: float = 30.0
         fallback_cfg = config.get("fallback", {})
         self._fallback_model = fallback_cfg.get("model") if isinstance(fallback_cfg, dict) else None
+        # Model residency management
+        self._keep_alive = config.get("keep_alive", "5m")
+        self._prewarm_on_start = config.get("prewarm", True)
+        self._loaded_models: dict[str, float] = {}
         self._check_package()
 
     def _probe_daemon(self) -> bool:
@@ -65,6 +69,62 @@ class OllamaProvider(LLMProvider):
         if not self._ensure_daemon():
             return False
         return self.health.available and self.check_quota()
+
+    def prewarm(self, model: str | None = None) -> bool:
+        m = model or self.config.get("model", "qwen2.5:1.5b")
+        try:
+            import urllib.request, json as _json
+            data = _json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
+            req = urllib.request.Request(
+                f"{self.base_url}/api/generate",
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                ok = resp.status == 200
+                if ok:
+                    self._loaded_models[m] = time.time()
+                return ok
+        except Exception:
+            return False
+
+    def get_loaded_models(self) -> list[dict]:
+        try:
+            import urllib.request, json as _json
+            req = urllib.request.Request(f"{self.base_url}/api/ps")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = _json.loads(resp.read())
+                return data.get("models", [])
+        except Exception:
+            return []
+
+    def unload_model(self, model: str | None = None) -> bool:
+        m = model or self.config.get("model", "qwen2.5:1.5b")
+        try:
+            import urllib.request, json as _json
+            data = _json.dumps({"model": m, "keep_alive": 0}).encode()
+            req = urllib.request.Request(
+                f"{self.base_url}/api/generate",
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status == 200:
+                    self._loaded_models.pop(m, None)
+                return resp.status == 200
+        except Exception:
+            return False
+
+    def _warm(self) -> None:
+        if self._prewarm_on_start and self._daemon_ok:
+            primary = self.config.get("model", "qwen2.5:1.5b")
+            try:
+                import threading
+                threading.Thread(target=self.prewarm, args=(primary,), daemon=True).start()
+            except Exception:
+                pass
 
     def _get_client(self):
         if self._client is None:
