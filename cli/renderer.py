@@ -10,6 +10,7 @@ this class only turns ``AppState`` snapshots into Rich renderables.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from contextlib import nullcontext
 from typing import Any
@@ -45,6 +46,13 @@ logger = logging.getLogger("jarvis.cli.renderer")
 
 CODE_THEME = "monokai"
 
+# Markdown detection: explicit constructs, not just "has newlines"
+_MD_CONSTRUCTS = re.compile(
+    r"(^#{1,6}\s|^\s*[-*+]\s|^\s*\d+\.\s|^\s*>\s|```|^\s*\|.*\|.*\||"
+    r"^\s*\[.+\]\(.+\)|^\s*!\[.*\]\(.+\))",
+    re.MULTILINE,
+)
+
 
 def render_markdown(text: str, *, plain: bool = False):
     if plain or not _looks_like_markdown(text):
@@ -53,12 +61,13 @@ def render_markdown(text: str, *, plain: bool = False):
 
 
 def _looks_like_markdown(text: str) -> bool:
+    """Detect actual Markdown constructs, not just multiline text."""
     stripped = text.lstrip()
     if not stripped:
         return False
     if "\n" not in text:
         return bool(stripped.startswith(("# ", "- ", "* ", "> ", "```")))
-    return True
+    return bool(_MD_CONSTRUCTS.search(text))
 
 
 class Renderer:
@@ -70,6 +79,7 @@ class Renderer:
         self.symbols = get_symbols(unicode)
         self.state = AppState()
         self._live_display = None
+        self._streaming_text: str = ""
 
     # ── State mutators ───────────────────────────────────────────────────
 
@@ -126,6 +136,13 @@ class Renderer:
 
     def clear_provider_notice(self) -> None:
         self.state.provider_notice = None
+
+    def set_streaming(self, text: str) -> None:
+        """Update the streaming text token-by-token."""
+        self._streaming_text = text
+
+    def clear_streaming(self) -> None:
+        self._streaming_text = ""
 
     def _recount_tools(self) -> None:
         self.state.tools_active = sum(
@@ -279,7 +296,10 @@ class Renderer:
 
     def _render_user_message(self, content: str) -> RenderableType:
         return Group(
-            Text(content, style="jarvis.user"),
+            Text.assemble(
+                Text("You", style="jarvis.user_label bold"),
+            ),
+            Text(f"> {content}", style="jarvis.user"),
             Text(""),
         )
 
@@ -387,7 +407,7 @@ class Renderer:
                            tools_count: int | None = None, cost_str: str = "Local $0.00") -> RenderableType:
         """Render Claude Code subtle turn stats footer."""
         parts: list[Text] = []
-        sep = Text(" · ", style="jarvis.muted")
+        sep = Text(" . ", style="jarvis.muted")
 
         lat = latency_s if latency_s is not None else self.state.last_turn_latency_s
         if lat is not None and lat > 0:
@@ -417,7 +437,7 @@ class Renderer:
         lines: list[RenderableType] = [
             Text.assemble(
                 Text(f"  {sym['diamond']} ", style="jarvis.secondary"),
-                Text(f"interrupt · {model}", style="jarvis.secondary bold"),
+                Text(f"interrupt . {model}", style="jarvis.secondary bold"),
             )
         ]
         if text:
@@ -445,6 +465,21 @@ class Renderer:
             self.state.recovery_error,
             attempt=self.state.recovery_attempt,
         )
+
+    # ── Streaming indicator ───────────────────────────────────────────────
+
+    def render_streaming(self) -> RenderableType:
+        """Show live streaming text with a cursor."""
+        if not self._streaming_text:
+            return Text("")
+        try:
+            md = Markdown(self._streaming_text, code_theme="monokai")
+            return Group(md, Text("  \u258c", style="jarvis.accent"))  # █ cursor
+        except Exception:
+            return Group(
+                Text(self._streaming_text, style="jarvis.agent"),
+                Text("\u258c", style="jarvis.accent"),
+            )
 
     # ── Code workspace ────────────────────────────────────────────────────
 
@@ -567,20 +602,20 @@ class Renderer:
         body = self._render_body()
 
         # ── Footer: separator + anchored prompt ─────────────────────────
-        sep = Text("─" * max(1, width - 1), style="jarvis.muted")
+        sep = Text("\u2500" * max(1, width - 1), style="jarvis.muted")
         prompt = Text()
         prompt.append("JARVIS", style="jarvis.accent")
         prompt.append(f" [{self.state.mode.value.lower()}] > ", style="jarvis.tool")
         if self.state.tools_active > 0:
-            prompt.append("working...", style="jarvis.running")
+            prompt.append("\u25d8 working...", style="jarvis.running")  # ◘
         else:
             prompt.append("_", style="jarvis.dim")
 
         elements: list[RenderableType] = [
             header,
-            Text("") if width < 70 else Text(""),
+            Text(""),
             body,
-            Text("") if width < 70 else Text(""),
+            Text(""),
             sep,
             prompt,
         ]
@@ -596,7 +631,7 @@ class Renderer:
         sep = self.symbols["separator"]
 
         t = Text()
-        t.append("JARVIS MK-X", style="jarvis.accent bold")
+        t.append("JARVIS", style="jarvis.accent bold")
         t.append(f" {sep} ", style="jarvis.muted")
 
         model_name = self.state.model or "qwen2.5:3b"
@@ -608,7 +643,7 @@ class Renderer:
         t.append(self.state.provider or "Ollama", style="jarvis.accent")
         t.append(f" {sep} ", style="jarvis.muted")
 
-        mem_status = "MEM ✓" if self.state.memory_enabled else "MEM -"
+        mem_status = "MEM \u2713" if self.state.memory_enabled else "MEM -"
         mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
         t.append(mem_status, style=mem_style)
         t.append(f" {sep} ", style="jarvis.muted")
@@ -620,7 +655,6 @@ class Renderer:
             t.append(f" {sep} ", style="jarvis.muted")
             t.append(f"{self.state.vram_gb:.1f}GB VRAM", style="jarvis.dim")
 
-        # Subtle top-framed panel (Claude Code style)
         return Panel(
             t,
             box=box.ROUNDED,
@@ -646,16 +680,27 @@ class Renderer:
             if msg.role == "user":
                 blocks.extend([
                     Text(""),
-                    Text.assemble(Text("JARVIS › ", style="jarvis.accent bold"), Text(msg.content, style="jarvis.user")),
+                    Text.assemble(Text("You", style="jarvis.user_label bold")),
+                    Text(f"> {msg.content}", style="jarvis.user"),
                     Text(""),
                 ])
             elif msg.role == "agent":
                 blocks.extend([
+                    Text.assemble(
+                        Text("JARVIS", style="jarvis.agent_label bold"),
+                    ),
                     self._render_agent_message(msg.content),
                     Text(""),
                 ])
             else:
                 blocks.extend([self._render_system_event(msg.content), Text("")])
+
+        # Streaming text (live tokens during agent work)
+        if self._streaming_text:
+            blocks.extend([
+                Text(""),
+                self.render_streaming(),
+            ])
 
         # Interrupt state (1.5B fast bypass / background memory check)
         if self.state.interrupt_active:
@@ -683,7 +728,7 @@ class Renderer:
         if recovery is not None:
             blocks.extend([recovery, Text("")])
 
-        # Turn footer / cost diagnostics
+        # Turn footer / cost diagnostics (always show after response)
         if self.state.last_turn_latency_s is not None or self.state.last_turn_tokens is not None:
             blocks.extend([self.render_turn_footer(), Text("")])
 
@@ -701,12 +746,12 @@ class Renderer:
             return None
         provider, message, kind, retry_after = notice
         style_map = {"error": "jarvis.error", "warning": "jarvis.warning", "info": "jarvis.accent"}
-        sym_map = {"error": "✗", "warning": "⚠", "info": "●"}
+        sym_map = {"error": "\u2717", "warning": "\u26a0", "info": "\u25cf"}  # ✗ ⚠ ●
         style = style_map.get(kind, "jarvis.warning")
-        sym = sym_map.get(kind, "⚠")
+        sym = sym_map.get(kind, "\u26a0")
         text = f"{provider}: {message}"
         if retry_after is not None:
-            text += f" · retrying in {retry_after:.0f}s"
+            text += f" . retrying in {retry_after:.0f}s"
         return Text(f"{sym} {text}", style=style)
 
     def render_activity_panel(self) -> RenderableType:

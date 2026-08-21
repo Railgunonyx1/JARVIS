@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
@@ -11,6 +11,12 @@ if not defined PY set "PY=python"
 
 REM Force UTF-8 for Rich output
 set "PYTHONIOENCODING=utf-8"
+
+REM ── Dispatch commands that don't need Ollama ───────────────────────────
+if /i "%~1"=="help" goto help
+if /i "%~1"=="--help" goto help
+if /i "%~1"=="tests" goto tests
+if /i "%~1"=="perf" goto perf
 
 REM ── Ollama performance settings ──────────────────────────────────────
 set "OLLAMA_FLASH_ATTENTION=1"
@@ -27,21 +33,21 @@ if errorlevel 1 (
     if not defined OLLAMA_EXE where ollama >nul 2>&1 && set "OLLAMA_EXE=ollama"
     if defined OLLAMA_EXE (
         echo Starting Ollama server...
-        start "" "%OLLAMA_EXE%" serve
-        REM Wait for Ollama to be ready (check port)
+        start "" "!OLLAMA_EXE!" serve
         set /a _tries=0
         :wait_ollama
         netstat -an 2>nul | findstr ":11434" >nul 2>&1
         if not errorlevel 1 goto ollama_ready
         set /a _tries+=1
-        if %_tries% GEQ 20 goto ollama_ready
+        if !_tries! GEQ 20 goto ollama_ready
         ping -n 2 127.0.0.1 >nul 2>&1
         goto wait_ollama
         :ollama_ready
         echo Ollama ready.
     )
 )
-REM ── Preload models in background (eliminates first-request latency) �r
+
+REM ── Preload models in background ──────────────────────────────────────
 start /B "" curl -s http://127.0.0.1:11434/api/generate -d "{\"model\":\"qwen2.5:1.5b\",\"prompt\":\"hi\",\"options\":{\"num_predict\":1}}" >nul 2>&1
 
 REM ── Launch JARVIS ─────────────────────────────────────────────────────
@@ -56,10 +62,6 @@ if /i "%~1"=="plan" goto plan
 if /i "%~1"=="controlled" goto controlled
 if /i "%~1"=="smart" goto smart
 if /i "%~1"=="oneshot" goto oneshot
-if /i "%~1"=="perf" goto perf
-if /i "%~1"=="tests" goto tests
-if /i "%~1"=="help" goto help
-if /i "%~1"=="--help" goto help
 goto chat
 
 :chat

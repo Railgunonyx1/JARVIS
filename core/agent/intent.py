@@ -101,7 +101,9 @@ _COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None]] = [
      "filesystem.list", None),
     (re.compile(r"^(search|find|grep|look for|where is) (.+)$", re.IGNORECASE),
      "search.code", None),
-    (re.compile(r"^(search (?:the )?web|google|look up|what is|who is|how (?:do|to)|tell me about) (.+)$",
+    (re.compile(r"^(search (?:the )?web|google|look up|tell me about) (.+)$",
+                re.IGNORECASE), "web.search", None),
+    (re.compile(r"^(what is|who is|how (?:do|to))\s+(?!my\b|the\s+time|your\b)(.+)$",
                 re.IGNORECASE), "web.search", None),
     (re.compile(r"^(open|go to|navigate to|browse) (https?://.+)$", re.IGNORECASE),
      "browser.open", None),
@@ -230,9 +232,10 @@ class IntentClassifier:
         # Identity/memory questions — route to LLM where memory is in the system prompt.
         # These MUST come BEFORE _COMMANDS to avoid matching 'what is' → web.search.
         _IDENTITY_RE = re.compile(
-            r"^(what(s|'s|\s+is|\s+are|s\s+)\s*(my|the|your)\s+(name|role|project|preferences?|priorities?)"
+            r"^(what(s|'?s|\s+is|\s+are|\s+s)\s+(my|the|your|\w+)'?s?\s+(name|role|project|preference|preferences|priorities?)"
+            r"|what\s+is\s+(my|your)\s+"
             r"|who\s+(am\s+I|are\s+you|is\s+this)"
-            r"|my\s+name\s+is\s+"
+            r"|my\s+name\s+(is|was)\s+"
             r"|i('m|\s+am)\s+"
             r"|call\s+me\s+"
             r"|remember\s+(my\s+name\s+is|that)\s+"

@@ -12,24 +12,6 @@ from dataclasses import dataclass
 from rich.box import DOUBLE, HEAVY, MINIMAL, ROUNDED, SIMPLE
 from rich.theme import Theme
 
-# Legacy constants — prefer JarvisColors / COLORS for new code.
-# These exist only for callers that haven't migrated yet.
-BRAND = "bold cyan"          # use COLORS.primary
-TITLE = "bold cyan"          # use COLORS.primary
-PROMPT_TEXT = "JARVIS> "      # use Renderer.print_prompt()
-PROMPT_STYLE = "bold"        # inline in Renderer
-PROMPT_HINT = "dim"          # use COLORS.dim
-OK = "green"                 # use COLORS.success
-WARN = "yellow"              # use COLORS.warning
-ERR = "red"                  # use COLORS.error
-BUSY = "bold red blink"      # use COLORS.running
-DIM = "dim"                  # use COLORS.dim
-PROVIDER = "magenta"         # use COLORS.accent
-BORDER_CORE = "cyan"         # use COLORS.border
-BORDER_CONTEXT = "blue"      # unused
-BORDER_MEMORY = "magenta"    # unused
-BORDER_OBSERVER = "green"    # unused
-
 
 @dataclass(frozen=True)
 class JarvisColors:
@@ -46,28 +28,33 @@ class JarvisColors:
     error: str = "bright_red"
     info: str = "bright_blue"
 
-    # UI chrome
-    border: str = "bright_black"
+    # UI chrome — grey (not bright_black which is invisible on dark themes)
+    border: str = "grey50"
     border_focus: str = "bright_cyan"
-    muted: str = "bright_black"
+    muted: str = "grey50"
     dim: str = "dim"
     highlight: str = "white"
 
     # Agent / tool states
     running: str = "bright_yellow"
-    planned: str = "bright_black"
+    planned: str = "grey50"
     done: str = "bright_green"
     failed: str = "bright_red"
     active: str = "bright_cyan"
 
-    # Conversation
+    # Conversation — Claude Code aesthetic
     user: str = "bold bright_white"
+    user_label: str = "bold bright_cyan"
     agent: str = "bright_cyan"
+    agent_label: str = "bold"
     tool: str = "yellow"
-    system: str = "bright_black"
+    system: str = "grey50"
 
 
 COLORS = JarvisColors()
+
+# Backward-compatible constant (prefer Renderer.print_prompt())
+PROMPT_TEXT = "> "
 
 
 def build_rich_theme() -> Theme:
@@ -85,7 +72,9 @@ def build_rich_theme() -> Theme:
             "jarvis.muted": COLORS.muted,
             "jarvis.dim": COLORS.dim,
             "jarvis.user": COLORS.user,
+            "jarvis.user_label": COLORS.user_label,
             "jarvis.agent": COLORS.agent,
+            "jarvis.agent_label": COLORS.agent_label,
             "jarvis.tool": COLORS.tool,
             "jarvis.system": COLORS.system,
             "jarvis.running": COLORS.running,
@@ -141,6 +130,7 @@ SYMBOLS = {
     "bar_empty": "\u2591",  # ░
     "diamond": "\u25c6",    # ◆
     "sparkle": "\u2728",    # ✨
+    "thinking": "\u25d8",   # ◘
 }
 
 # ASCII-safe alternatives for non-Unicode terminals
@@ -160,6 +150,7 @@ SYMBOLS_ASCII = {
     "bar_empty": "-",
     "diamond": "+",
     "sparkle": "*",
+    "thinking": "*",
 }
 
 

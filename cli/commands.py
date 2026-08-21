@@ -240,6 +240,62 @@ class CommandRegistry:
             r.print_success(f"Will resume: {goal[:80]}")
             # The REPL loop re-runs this via its own dispatch path.
 
+        def debug_cmd(args: list[str]) -> None:
+            """Show full runtime diagnostics."""
+            from rich.table import Table as RichTable
+            loop = self.bridge.loop if self.bridge else None
+            table = RichTable(title="JARVIS Runtime Diagnostics", show_header=True)
+            table.add_column("Component", style="bold")
+            table.add_column("Status")
+            # Core
+            table.add_row("Mode", str(r.state.mode.value))
+            table.add_row("Model", r.state.model or "-")
+            table.add_row("Provider", r.state.provider or "-")
+            table.add_row("Connection", r.state.connection)
+            table.add_row("Memory", "ON" if r.state.memory_enabled else "OFF")
+            # Tokens
+            table.add_row("Tokens Used", str(r.state.tokens_used))
+            table.add_row("Token Budget", str(r.state.tokens_limit))
+            # Events
+            table.add_row("Active Tools", str(r.state.tools_active))
+            table.add_row("Total Events", str(len(r.state.events)))
+            # Cascade
+            if loop:
+                try:
+                    from providers.model_registry import ModelRegistry
+                    reg = ModelRegistry.instance()
+                    table.add_row("Cascade", "ON" if reg.cascade_mode else "OFF")
+                    if reg.cascade_mode:
+                        table.add_row("  Router", reg.CASCADE_ROUTER)
+                        table.add_row("  Worker", reg.CASCADE_WORKER)
+                        table.add_row("  Heavy", reg.CASCADE_HEAVY)
+                except Exception:
+                    table.add_row("Cascade", "error")
+            # Ollama
+            try:
+                import subprocess
+                result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+                models = [line.split()[0] for line in result.stdout.strip().splitlines() if line.strip() and "NAME" not in line]
+                table.add_row("Ollama Models", ", ".join(models[:6]) or "none")
+            except Exception:
+                table.add_row("Ollama Models", "error")
+            # Runtime
+            try:
+                import psutil
+                proc = psutil.Process()
+                table.add_row("Memory (RSS)", f"{proc.memory_info().rss / 1024 / 1024:.0f} MB")
+                table.add_row("CPU", f"{proc.cpu_percent():.0f}%")
+            except Exception:
+                pass
+            # System
+            try:
+                import platform
+                table.add_row("Python", platform.python_version())
+                table.add_row("OS", f"{platform.system()} {platform.release()}")
+            except Exception:
+                pass
+            r.print(table)
+
         def not_connected(name: str) -> Callable[[list[str]], None]:
             def _h(args: list[str]) -> None:
                 r.print_error(f"{name} backend not connected", "Wire the real component first.")
@@ -264,6 +320,7 @@ class CommandRegistry:
         self._register(Command("sessions", "List recent tasks", sessions_cmd))
         self._register(Command("resume", "Resume the last goal", resume_cmd))
         self._register(Command("permissions", "Show permission/mode status", status_cmd, ["perms"]))
+        self._register(Command("debug", "Show full runtime diagnostics", debug_cmd))
 
     def dispatch(self, line: str) -> bool:
         line = line.strip()

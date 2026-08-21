@@ -262,8 +262,15 @@ class AgentBridge:
             if last is None or last.role != "agent" or not last.content:
                 self.state.messages.append(Message(role="agent", content=result.response))
         self.pull_tokens(result)
+        # Wire turn stats into the renderer for the turn footer
+        if self.renderer is not None:
+            obs = result.observation or {}
+            self.state.last_turn_latency_s = obs.get("duration_ms", 0) / 1000.0
+            self.state.last_turn_tokens = result.state.tokens_used if result.state else None
         self._complete_active_events()
         self.state.status_message = ""
+        if self.renderer is not None:
+            self.renderer.clear_streaming()
 
     def stream_delta(self, delta: str) -> None:
         """Append a streamed token to the in-progress agent message."""
@@ -271,6 +278,11 @@ class AgentBridge:
             self.state.messages[-1].content += delta
         else:
             self.state.messages.append(Message(role="agent", content=delta))
+        # Also update the renderer's streaming display
+        if self.renderer is not None and hasattr(self.renderer, 'set_streaming'):
+            last = self.state.messages[-1] if self.state.messages else None
+            if last and last.role == "agent":
+                self.renderer.set_streaming(last.content)
 
     def fail_run(self, message: str) -> None:
         """Recover from an engine failure: mark the active event failed and
