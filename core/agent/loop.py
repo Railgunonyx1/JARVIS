@@ -370,7 +370,6 @@ class AgentLoop:
                 hb = getattr(self._harness.config, "latency_budgets", None)
                 if hb:
                     _budgets.update(hb)
-            _latency_log: list[tuple[str, float]] = []
 
             for iteration in range(1, self.max_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
@@ -391,14 +390,16 @@ class AgentLoop:
                     )
                 state.iteration = iteration
                 _t_compress = time.time()
-                # Adaptive context budget: scale to task complexity
-                _orig_budget = self.context_manager.budget.messages
-                self.context_manager.budget.messages = int(_orig_budget * _ctx_mult)
+                # Adaptive context budget: use request-local copy (never mutate shared state)
+                from dataclasses import replace
+                _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))
+                _orig_budget = self.context_manager.budget
+                self.context_manager.budget = _request_budget
                 with tracer.span("context.fit"):
                     messages, report = self.context_manager.fit_for_loop(
                         messages, self._system_tokens(system_prompt, tools),
                     )
-                self.context_manager.budget.messages = _orig_budget
+                self.context_manager.budget = _orig_budget
                 _latency_log.append(("context_compress", (time.time() - _t_compress) * 1000))
                 state.context_usage = report.to_dict()
                 if report.compacted:

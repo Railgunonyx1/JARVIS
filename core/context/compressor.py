@@ -273,7 +273,7 @@ def adaptive_compress(
         )
         if candidate_idx is None:
             break
-        kept.pop(candidate_idx)
+        kept = _pair_aware_remove(kept, candidate_idx)
 
     if foldable_low and estimate_messages_tokens(kept) > budget_tokens:
         summary = {"role": "system", "content": f"[Earlier context]: {summarizer(foldable_low)}"}
@@ -295,7 +295,7 @@ def adaptive_compress(
         if len(content) > 80:
             kept[idx] = {**kept[idx], "content": content[:80] + "…"}
         else:
-            kept.pop(idx)
+            kept = _pair_aware_remove(kept, idx)
 
     return kept
 
@@ -338,6 +338,8 @@ def compress(
     foldable = others[goal_idx + 1:last_user] if goal is not None else others[:last_user]
 
     # 4. Tool results in the kept window are the first candidates for trimming.
+    #    Tool-call pairs (assistant + tool results) are removed atomically
+    #    to maintain structurally valid conversation history.
     kept: list[dict[str, Any]] = list(system_msgs) + goal_msgs + recent
     for _ in range(4):  # bounded retries, deterministic
         if estimate_messages_tokens(kept) <= budget_tokens:
@@ -348,13 +350,13 @@ def compress(
         )
         if candidate_idx is None:
             break
-        kept.pop(candidate_idx)
+        kept = _pair_aware_remove(kept, candidate_idx)
 
     # 5. If still over, fold foldable turns into a summary message.
     if foldable and estimate_messages_tokens(kept) > budget_tokens:
         summary = {"role": "system", "content": f"[Earlier context]: {summarizer(foldable)}"}
         kept = system_msgs + [summary] + goal_msgs + recent
-        # Last resort: trim tool outputs one by one.
+        # Last resort: trim tool outputs one by one (pair-aware).
         for _ in range(8):
             if estimate_messages_tokens(kept) <= budget_tokens:
                 break
@@ -367,13 +369,73 @@ def compress(
             if len(content) > 80:
                 kept[idx] = {**kept[idx], "content": content[:80] + "…"}
             else:
-                kept.pop(idx)
+                kept = _pair_aware_remove(kept, idx)
 
     return kept
 
 
+def _find_tool_call_ids(assistant_msg: dict[str, Any]) -> set[str]:
+    """Extract tool_call IDs from an assistant message."""
+    tool_calls = assistant_msg.get("tool_calls") or []
+    ids = set()
+    for tc in tool_calls:
+        if isinstance(tc, dict):
+            tc_id = tc.get("id")
+            if tc_id:
+                ids.add(tc_id)
+    return ids
+
+
+def _pair_aware_remove(messages: list[dict[str, Any]], target_idx: int) -> list[dict[str, Any]]:
+    """Remove a tool message and its parent assistant message if orphaned.
+
+    When removing a tool result, check if the preceding assistant message
+    has tool_calls. If so, remove the assistant message too to avoid
+    structurally invalid conversation history.
+    """
+    target = messages[target_idx]
+    if target.get("role") != "tool":
+        return messages[:target_idx] + messages[target_idx + 1:]
+
+    # Find tool_call_id from the tool message
+    tool_call_id = target.get("tool_call_id") or target.get("name")
+
+    # Scan backwards to find the parent assistant message
+    parent_idx = None
+    for i in range(target_idx - 1, -1, -1):
+        if messages[i].get("role") == "assistant" and messages[i].get("tool_calls"):
+            parent_idx = i
+            break
+
+    if parent_idx is None:
+        # No parent found — just remove the tool message
+        return messages[:target_idx] + messages[target_idx + 1:]
+
+    # Check if the parent has OTHER tool results still present
+    parent_ids = _find_tool_call_ids(messages[parent_idx])
+    remaining_tool_ids = set()
+    for i, m in enumerate(messages):
+        if i == target_idx:
+            continue
+        if m.get("role") == "tool":
+            tc_id = m.get("tool_call_id") or m.get("name")
+            if tc_id and tc_id in parent_ids:
+                remaining_tool_ids.add(tc_id)
+
+    # If parent still has other tool results, only remove the target tool
+    if remaining_tool_ids:
+        return messages[:target_idx] + messages[target_idx + 1:]
+
+    # Parent has no remaining tool results — remove both parent and target
+    return messages[:parent_idx] + messages[parent_idx + 1:target_idx] + messages[target_idx + 1:]
+
+
 def trim_tool_outputs(messages: list[dict[str, Any]], max_content_chars: int = 800) -> list[dict[str, Any]]:
-    """Truncate long tool-result contents in place (returns new list)."""
+    """Truncate long tool-result contents (returns new list).
+
+    Tool-call pairs (assistant with tool_calls + tool results) are treated
+    as atomic units to maintain structurally valid conversation history.
+    """
     out: list[dict[str, Any]] = []
     for msg in messages:
         if msg.get("role") == "tool":

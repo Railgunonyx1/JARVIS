@@ -231,6 +231,10 @@ class ProviderRouter:
     def swap_ollama_model(self, model_name: str) -> bool:
         """Swap the active Ollama model at runtime.
 
+        .. deprecated:: Use ``preferred_model`` parameter in ``complete()`` instead.
+           This method mutates shared state and is NOT safe for concurrent use.
+           Only use for explicit user-initiated model switches (e.g. /model command).
+
         Returns True if the swap succeeded, False if Ollama is not available.
         """
         ollama = self._providers.get("ollama")

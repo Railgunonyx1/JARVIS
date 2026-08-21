@@ -25,6 +25,7 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 import time
@@ -347,21 +348,81 @@ class InterruptExecutor:
             # Request-scoped model: pass 1B directly, never mutate global config
             _interrupt_model = "qwen2.5:1.5b"
 
-            # Single LLM call — no tool loop for interrupts
-            from providers.types import LLMResponse
-            response: LLMResponse = await asyncio.wait_for(
-                self._router.complete(
-                    messages,
-                    system_prompt=system_prompt,
-                    max_tokens=512,
-                    temperature=0.3,
-                    tools=tools if tools else None,
-                    model=_interrupt_model,
-                ),
-                timeout=10.0,  # 10s hard timeout for interrupts
-            )
+            # Bounded tool loop — 1.5B can call memory.retrieve etc.
+            # Max 3 iterations, 10s total hard timeout.
+            from providers.types import LLMResponse, ToolCall
+            _MAX_INTERRUPT_ITERATIONS = 3
+            _INTERRUPT_TIMEOUT = 10.0
+            final_text = ""
+            response = None
 
-            final_text = response.text or ""
+            for _iter in range(_MAX_INTERRUPT_ITERATIONS):
+                elapsed = time.time() - start
+                if elapsed >= _INTERRUPT_TIMEOUT:
+                    break
+                remaining = _INTERRUPT_TIMEOUT - elapsed
+
+                response = await asyncio.wait_for(
+                    self._router.complete(
+                        messages,
+                        system_prompt=system_prompt,
+                        max_tokens=512,
+                        temperature=0.3,
+                        tools=tools if tools and _iter == 0 else None,
+                        model=_interrupt_model,
+                    ),
+                    timeout=remaining,
+                )
+
+                # If no tool calls, we have the final answer
+                if not response.tool_calls:
+                    final_text = (response.text or "").strip()
+                    break
+
+                # Execute tool calls through the restricted set
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": response.text or None,
+                    "tool_calls": [
+                        {
+                            "id": call.id or f"int_{_iter}_{i}",
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for i, call in enumerate(response.tool_calls)
+                    ],
+                }
+                messages.append(assistant_msg)
+
+                for call in response.tool_calls:
+                    if not call.id:
+                        call.id = f"int_{_iter}_{uuid.uuid4().hex[:6]}"
+                    # Only execute if tool is in the allowed set
+                    if call.name in allowed_names:
+                        try:
+                            tool = self._registry.get(call.name)
+                            if tool is not None:
+                                result = await tool.execute(call.arguments)
+                                tool_output = result.output if hasattr(result, 'output') else str(result)
+                            else:
+                                tool_output = f"Tool '{call.name}' not found"
+                        except Exception as e:
+                            tool_output = f"Error: {str(e)[:200]}"
+                    else:
+                        tool_output = f"Tool '{call.name}' not allowed in interrupt lane"
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "name": call.name,
+                        "content": tool_output,
+                    })
+
+            if not final_text and response:
+                final_text = (response.text or "").strip()
             latency_ms = (time.time() - start) * 1000
 
             result = {
