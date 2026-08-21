@@ -39,20 +39,20 @@ class MemoryExtractor:
                     tags=["identity", "name"],
                 ))
 
-        for p in re.findall(r"i (?:love|like|enjoy|hate|dislike|don't like|prefer)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
-            p = p.strip()
-            if len(p) > 1:
+        for pref in re.findall(r"i (?:love|like|enjoy|hate|dislike|don't like|prefer)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
+            pref = pref.strip()
+            if len(pref) > 1:
                 items.append(MemoryItem(
-                    content=f"User preference: {p}",
+                    content=f"User preference: {pref}",
                     type=PREFERENCE, importance=importance, source=source, project=project,
                     tags=["preference"],
                 ))
 
-        for relation, name in re.findall(r"(my\s+(?!name)\w+)\s+(?:is|are|has|have|named?)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
-            name = name.strip()
-            if len(name) > 1 and 3 < len(name) < 80:
+        for relation, rel_name in re.findall(r"(my\s+(?!name)\w+)\s+(?:is|are|has|have|named?)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
+            rel_name = rel_name.strip()
+            if len(rel_name) > 1 and 3 < len(rel_name) < 80:
                 items.append(MemoryItem(
-                    content=f"{relation.strip()} is {name}",
+                    content=f"{relation.strip()} is {rel_name}",
                     type=RELATIONSHIP, importance=importance + 0.1, source=source, project=project,
                     tags=["relationship"],
                 ))

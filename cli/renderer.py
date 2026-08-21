@@ -137,9 +137,9 @@ class Renderer:
 
     def _token_str(self) -> str:
         used, limit = self.state.tokens_used, self.state.tokens_limit
-        u = f"{used / 1000:.1f}K" if used >= 1000 else str(used)
-        l = f"{limit // 1000}K" if limit >= 1000 else str(limit)
-        return f"{u}/{l}"
+        used_str = f"{used / 1000:.1f}K" if used >= 1000 else str(used)
+        limit_str = f"{limit // 1000}K" if limit >= 1000 else str(limit)
+        return f"{used_str}/{limit_str}"
 
     def render_status(self) -> Text:
         """Compact status: JARVIS · mode · model · tokens · tools · ONLINE"""

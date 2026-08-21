@@ -20,13 +20,13 @@ def compress_output(
     max_size_reduction: float = 0.3,
 ) -> str:
     """Compress output data with lossless compression.
-    
+
     Args:
         data: The data to compress (dict, list, str, etc.)
         format_type: "auto", "json", "yaml", "csv", "markdown", "text"
         method: "gzip", "zlib", "none"
         max_size_reduction: Target reduction fraction (0-1)
-    
+
     Returns:
         Compressed string representation
     """
@@ -130,11 +130,11 @@ def _remove_redundant_whitespace(text: str) -> str:
 
 def decompress_output(compressed: str, *, format_type: str = "auto") -> Any:
     """Decompress output that was compressed with compress_output().
-    
+
     Args:
         compressed: The compressed string (may be hex-encoded zlib/gzip)
         format_type: Expected format type
-    
+
     Returns:
         Decompressed data
     """

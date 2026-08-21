@@ -21,6 +21,7 @@ ignore = [
     "B008",    # Lambda default — mode.lower() in loop body is safe
     "B007",    # Unused loop variable — intentional in async for
     "E402",    # Module level import not at top — needed for env setup before imports
+    "PLW2901", # Loop variable overwritten — intentional in strip() and conditional reassignment
 ]
 
 [tool.ruff.lint.isort]

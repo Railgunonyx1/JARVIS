@@ -210,18 +210,18 @@ def _tool_completed(state: SessionState, event: CoreEvent) -> SessionState:
     # Update the matching record
     new_tool_calls = []
     found = False
-    for tc in state.tool_calls:
-        if tc.id == tool_call_id and not found:
-            tc = ToolCallRecord(
-                id=tc.id, name=tc.name, arguments=tc.arguments,
+    for record in state.tool_calls:
+        if record.id == tool_call_id and not found:
+            record = ToolCallRecord(
+                id=record.id, name=record.name, arguments=record.arguments,
                 success=p.get("success", True),
                 output=p.get("output", ""),
                 error=p.get("error", ""),
                 duration_ms=p.get("duration_ms", 0.0),
-                timestamp=tc.timestamp,
+                timestamp=record.timestamp,
             )
             found = True
-        new_tool_calls.append(tc)
+        new_tool_calls.append(record)
     if not found:
         # Tool completed without a matching started event
         record = ToolCallRecord(

@@ -65,12 +65,12 @@ class ToolExecutor:
     async def execute(self, tool_name: str, arguments: dict,
                       executor_func) -> Any:
         """Execute a tool call with duplicate prevention.
-        
+
         Args:
             tool_name: Name of the tool to execute
             arguments: Tool arguments
             executor_func: Async function that performs the actual execution
-            
+
         Returns:
             Tool execution result
         """
@@ -119,12 +119,12 @@ _executor = ToolExecutor()
 
 def execute_tool(tool_name: str, arguments: dict, executor_func) -> Any:
     """Convenience function for agent loop integration.
-    
+
     Args:
         tool_name: Name of the tool to execute
         arguments: Tool arguments
         executor_func: Async function that performs the actual execution
-        
+
     Returns:
         Tool execution result
     """

@@ -375,10 +375,10 @@ def compress(
 def trim_tool_outputs(messages: list[dict[str, Any]], max_content_chars: int = 800) -> list[dict[str, Any]]:
     """Truncate long tool-result contents in place (returns new list)."""
     out: list[dict[str, Any]] = []
-    for message in messages:
-        if message.get("role") == "tool":
-            content = message.get("content") or ""
+    for msg in messages:
+        if msg.get("role") == "tool":
+            content = msg.get("content") or ""
             if len(content) > max_content_chars:
-                message = {**message, "content": content[:max_content_chars] + "…"}
-        out.append(message)
+                msg = {**msg, "content": content[:max_content_chars] + "…"}
+        out.append(msg)
     return out

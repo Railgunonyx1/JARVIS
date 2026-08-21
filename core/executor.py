@@ -527,7 +527,7 @@ class AgentExecutor:
                             msg = f"Task aborted, sir. {recovery.get('reason', '')}"
                             decision_logger.record(trace_id, "task.failed", {"error": "abort", "reason": str(recovery.get('reason', ''))[:200], "goal": goal[:200], "source": "executor"})
                             if speak:
-                    speak(msg)
+                                speak(msg)
                             return msg
 
                         else:
@@ -599,8 +599,10 @@ class AgentExecutor:
             )
             response = model.generate_content(prompt)
             summary  = response.text.strip()
-            if speak: speak(summary)
+            if speak:
+                speak(summary)
             return summary
         except Exception:
-            if speak: speak(fallback)
+            if speak:
+                speak(fallback)
             return fallback

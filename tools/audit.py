@@ -190,7 +190,7 @@ def check_security_basics(path: str = ".") -> dict[str, Any]:
 
 def run_audit(project_path: str = ".") -> dict[str, Any]:
     """Run full audit pipeline. Read-only - never modifies environment.
-    
+
     Returns evidence-backed report. Never claims 'no bugs' without evidence.
     """
     project_path = Path(project_path)
@@ -284,7 +284,7 @@ def audit_filesystem(path: str = ".") -> dict[str, Any]:
 
 def check_no_file_writes() -> bool:
     """Check that no file writes occurred during this session.
-    
+
     Used by the agent loop to enforce the read-only audit policy.
     """
     # This would be checked against a before-snapshot of the filesystem

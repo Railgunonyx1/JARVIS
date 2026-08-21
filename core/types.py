@@ -119,27 +119,27 @@ class Plan:
     def with_step(self, step_id: str, status: StepStatus) -> Plan:
         """Return a new Plan with the given step updated.  Pure — no mutation."""
         new_steps = []
-        for s in self.steps:
-            if s.id == step_id:
+        for step in self.steps:
+            if step.id == step_id:
                 if status == StepStatus.ACTIVE:
-                    s = PlanStep(
-                        id=s.id, description=s.description, status=status,
+                    step = PlanStep(
+                        id=step.id, description=step.description, status=status,
                         started_at=time.time(), completed_at=None,
-                        related_event_ids=s.related_event_ids,
+                        related_event_ids=step.related_event_ids,
                     )
                 elif status in (StepStatus.COMPLETED, StepStatus.FAILED, StepStatus.SKIPPED):
-                    s = PlanStep(
-                        id=s.id, description=s.description, status=status,
-                        started_at=s.started_at, completed_at=time.time(),
-                        related_event_ids=s.related_event_ids,
+                    step = PlanStep(
+                        id=step.id, description=step.description, status=status,
+                        started_at=step.started_at, completed_at=time.time(),
+                        related_event_ids=step.related_event_ids,
                     )
                 else:
-                    s = PlanStep(
-                        id=s.id, description=s.description, status=status,
-                        started_at=s.started_at, completed_at=s.completed_at,
-                        related_event_ids=s.related_event_ids,
+                    step = PlanStep(
+                        id=step.id, description=step.description, status=status,
+                        started_at=step.started_at, completed_at=step.completed_at,
+                        related_event_ids=step.related_event_ids,
                     )
-            new_steps.append(s)
+            new_steps.append(step)
         return Plan(
             id=self.id, goal=self.goal, steps=tuple(new_steps),
             revision=self.revision + 1,

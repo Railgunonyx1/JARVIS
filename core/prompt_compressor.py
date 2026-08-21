@@ -33,7 +33,7 @@ def compress_prompt(
     max_tokens: int | None = None,
 ) -> str:
     """Compress a prompt by reducing each section proportionally.
-    
+
     Args:
         prompt: The full prompt text (system + user + examples + context)
         system_retain: Fraction of system prompt to keep (0-1)
@@ -41,7 +41,7 @@ def compress_prompt(
         rag_retain: Fraction of RAG context to keep (0-1)
         code_retain: Fraction of code snippets to keep (0-1)
         max_tokens: Hard cap on output tokens
-    
+
     Returns:
         Compressed prompt string
     """
@@ -91,7 +91,7 @@ def compress_prompt(
 
 def _split_into_sections(prompt: str) -> list[tuple[str, str]]:
     """Heuristically split prompt into named sections.
-    
+
     Returns list of (section_type, section_text) tuples.
     Recognizes: system prompt, user query, few-shot examples, RAG context, code.
     """
@@ -160,12 +160,12 @@ def compress_tool_output(
     max_chars: int = 800,
 ) -> str:
     """Compress tool output with format-aware truncation.
-    
+
     Args:
         output: The tool output text
         format_type: "auto", "json", "yaml", "csv", "markdown", "text"
         max_chars: Maximum characters to keep
-    
+
     Returns:
         Compressed output (lossless within cap)
     """
@@ -275,7 +275,7 @@ def compress_context_budget(
     budget: Any,
 ) -> tuple[int, int, int, int]:
     """Apply proportional compression to context budget sections.
-    
+
     Returns reduced token counts that fit within the budget.
     """
     total_budget = budget.total if hasattr(budget, 'total') else sum([

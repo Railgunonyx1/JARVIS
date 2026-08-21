@@ -296,12 +296,12 @@ class MemoryController:
     def _graph_add_from_item(self, item: MemoryItem) -> None:
         if self._graph is None:
             return
-        for subj, obj in _TRIPLE_RE.findall(item.content):
-            subj = subj.strip().lower()
-            obj = obj.strip()
-            if len(subj) > 2 and len(obj) > 1:
+        for raw_subj, raw_obj in _TRIPLE_RE.findall(item.content):
+            subject = raw_subj.strip().lower()
+            obj = raw_obj.strip()
+            if len(subject) > 2 and len(obj) > 1:
                 self._graph.add_triple(KnowledgeTriple(
-                    subject=subj.title(), relation="is", obj=obj,
+                    subject=subject.title(), relation="is", obj=obj,
                     confidence=item.importance, source=item.source,
                 ))
 
