@@ -45,7 +45,10 @@ _RESPONSES: dict[str, str] = {
     "bye": "Goodbye! Come back anytime.",
     "good morning": "Good morning! Ready to code?",
     "good night": "Good night! Sleep well.",
-    "what can you do": "I can read, write, edit files, run commands, search code, manage git, browse the web, and more.",
+    "what can you do": (
+        "I can read, write, edit files, run commands, search code, "
+        "manage git, browse the web, and more."
+    ),
     "stop": "Stopped.",
     "cancel": "Cancelled.",
     "never mind": "No problem!",
@@ -105,7 +108,9 @@ _COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None]] = [
 ]
 
 _TOOL_SELECTION: list[tuple[re.Pattern, tuple[str, ...]]] = [
-    (re.compile(r"\b(edit|modify|change|update|rewrite|refactor|fix|patch)\b.*\b(file|function|class|method|code)\b", re.I),
+    (re.compile(
+        r"\b(edit|modify|change|update|rewrite|refactor|fix|patch)\b"
+        r".*\b(file|function|class|method|code)\b", re.I),
      ("filesystem.read", "filesystem.write", "patch.replace", "search.code")),
     (re.compile(r"\b(create|write|make|add)\b.*\b(file|script|module|class)\b", re.I),
      ("filesystem.write", "filesystem.read", "filesystem.list")),
@@ -127,6 +132,15 @@ _TOOL_SELECTION: list[tuple[re.Pattern, tuple[str, ...]]] = [
      ("system.status",)),
     (re.compile(r"\b(browse|open url|website|page|scrape|screenshot)\b", re.I),
      ("browser.open", "browser.extract", "browser.screenshot")),
+    # Memory tools — always include when memory-related intent detected
+    (re.compile(r"\b(remember|recall|retrieve|memory|memorize|forget|forget about)\b", re.I),
+     ("memory.retrieve", "memory.remember", "memory.forget")),
+    (re.compile(r"\b(what|who|how|when|where)\s+(do you|does|is|are|was|were)\s+(know|remember)\b", re.I),
+     ("memory.retrieve",)),
+    (re.compile(r"\b(remember|store|save)\s+(that|this|my|your|our)\b", re.I),
+     ("memory.remember",)),
+    (re.compile(r"\b(decision|decided|chose|agreed|plan|strategy)\b", re.I),
+     ("memory.retrieve",)),
 ]
 
 
@@ -201,10 +215,17 @@ class IntentClassifier:
                 if cmd_type == "model_switch":
                     model = _extract_model_name(t)
                     resp = f"Switching to {model}..." if model else "Which model?"
-                    return ClassifiedIntent(Intent.INSTANT, 1.0, response=resp, context_level="instant")
+                    return ClassifiedIntent(
+                        Intent.INSTANT, 1.0, response=resp, context_level="instant"
+                    )
                 if cmd_type in ("show_perf", "prewarm", "clear_cache", "toggle_feature"):
-                    return ClassifiedIntent(Intent.INSTANT, 1.0, response=f"__{cmd_type.upper()}__", context_level="instant")
-                return ClassifiedIntent(Intent.INSTANT, 1.0, response=response, context_level="instant")
+                    sym = f"__{cmd_type.upper()}__"
+                    return ClassifiedIntent(
+                        Intent.INSTANT, 1.0, response=sym, context_level="instant"
+                    )
+                return ClassifiedIntent(
+                    Intent.INSTANT, 1.0, response=response, context_level="instant"
+                )
 
         # Identity/memory questions — route to LLM where memory is in the system prompt.
         # These must come BEFORE _COMMANDS to avoid matching 'what is' → web.search.

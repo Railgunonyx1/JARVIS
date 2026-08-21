@@ -18,9 +18,13 @@ from typing import Any
 from core import events
 from core.agent.context import AgentContextBuilder
 from core.agent.intent import Intent, IntentClassifier
+from core.agent.latency_router import LatencyAwareRouter
+from core.agent.model_residency import ModelResidencyScheduler
 from core.agent.observer import TaskObserver
 from core.agent.permissions import PermissionEngine
+from core.agent.speculative import SpeculativeExecutor
 from core.agent.state import AgentState, TaskStatus, classify_failure, pick_worst_failure
+from core.agent.tool_verifier import ToolResultVerifier
 from core.agent.tools import AgentToolExecutor, generate_tool_call_id
 from core.context.budget import estimate_tokens
 from core.context.manager import ContextManager
@@ -127,6 +131,10 @@ class AgentLoop:
         self.logger = decision_logger or get_decision_logger()
         self.context_builder = AgentContextBuilder(registry)
         self.intent_classifier = IntentClassifier(registry)
+        self._speculative = SpeculativeExecutor(self.intent_classifier)
+        self._latency_router = LatencyAwareRouter()
+        self._residency = ModelResidencyScheduler()
+        self._tool_verifier = ToolResultVerifier()
         self.observer = observer or TaskObserver()
         self.context_manager = context_manager or ContextManager()
         self.mem = mem
@@ -413,6 +421,10 @@ class AgentLoop:
                         span.set_attribute("latency_ms", response.latency_ms)
                         span.set_attribute("tokens", response.tokens_used)
                 _latency_log.append(("llm_call", (time.time() - _t_llm) * 1000))
+                self._latency_router.record(
+                    response.model, response.latency_ms,
+                    (time.time() - _t_llm) * 1000, response.has_tool_calls or bool(response.text),
+                )
                 state.add_tokens(response.tokens_prompt, response.tokens_completion)
                 state.provider = response.provider
                 state.model = response.model
@@ -737,3 +749,13 @@ class AgentLoop:
             call, trace_id=trace_id, session_id=session_id,
             append_to_messages=messages, state=state,
         )
+        if self._tool_verifier.should_verify(call.name):
+            try:
+                vr = await self._tool_verifier.verify(call.name, call.arguments, "")
+                if vr and not vr.verified:
+                    self._emit("tool.verification_failed", {
+                        "tool": call.name, "check": vr.check_name,
+                        "message": vr.message,
+                    }, trace_id)
+            except Exception:
+                pass

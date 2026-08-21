@@ -35,6 +35,7 @@ def build_default_registry() -> ToolRegistry:
     from tools.shell import shell_execute
     from tools.system_monitor import system_status
     from tools.web_search import web_search
+    from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.world_monitor import (
         world_monitor_get_alerts,
         world_monitor_get_event,
@@ -567,6 +568,73 @@ def build_default_registry() -> ToolRegistry:
             permission="filesystem.write",
             handler=patch_delete,
             category="patch",
+        ),
+        # ── Memory tools ─────────────────────────────────────────────
+        Tool(
+            name="memory.retrieve",
+            description=(
+                "Search across all memory backends (KV, vector, decisions, project knowledge) "
+                "and return the most relevant results. Use this to look up previously stored "
+                "information, decisions, preferences, or facts."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Semantic search query."},
+                    "limit": {"type": "integer", "description": "Max results (default 5, max 10)."},
+                    "project": {"type": "string", "description": "Filter to a specific project."},
+                },
+                "required": ["query"],
+            },
+            permission="memory.retrieve",
+            handler=memory_retrieve,
+            category="memory",
+        ),
+        Tool(
+            name="memory.remember",
+            description=(
+                "Store a new memory with a key, value, and category. "
+                "Categories: identity, preferences, priorities, notes, projects, decisions. "
+                "Use this to remember user information, preferences, or important facts."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Memory key (e.g., 'user_name', 'coding_style')."},
+                    "value": {"type": "string", "description": "Memory value."},
+                    "category": {
+                        "type": "string",
+                        "description": "Category: identity, preferences, priorities, notes, projects, decisions.",
+                        "enum": ["identity", "preferences", "priorities", "notes", "projects", "decisions"],
+                    },
+                },
+                "required": ["key", "value"],
+            },
+            permission="memory.remember",
+            handler=memory_remember,
+            category="memory",
+        ),
+        Tool(
+            name="memory.forget",
+            description="Delete a memory by key.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Key of the memory to delete."},
+                },
+                "required": ["key"],
+            },
+            permission="memory.forget",
+            handler=memory_forget,
+            category="memory",
+        ),
+        Tool(
+            name="memory.stats",
+            description="Show memory system statistics (counts, categories).",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="memory.stats",
+            handler=memory_stats,
+            category="memory",
         ),
     ])
     return registry

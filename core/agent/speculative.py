@@ -9,9 +9,8 @@ Latency savings: overlaps STT with intent classification + tool prep.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from core.agent.intent import Intent, IntentClassifier
