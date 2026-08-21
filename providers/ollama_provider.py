@@ -215,11 +215,13 @@ class OllamaProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> LLMResponse:
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        primary_model = self.config.get("model", "qwen2.5:1.5b")
+        # Request-scoped model: use explicit model param, fall back to config
+        primary_model = model or self.config.get("model", "qwen2.5:1.5b")
         try:
             result = await self._chat_once(client, primary_model, full_messages,
                                           self._limit_tools(tools, primary_model), max_tokens, temperature)
@@ -254,6 +256,7 @@ class OllamaProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream text chunks from Ollama.
 
@@ -265,7 +268,7 @@ class OllamaProvider(LLMProvider):
         client = self._get_client()
         full_messages = self._convert_messages(messages, system_prompt)
 
-        primary_model = self.config.get("model", "qwen2.5:1.5b")
+        primary_model = model or self.config.get("model", "qwen2.5:1.5b")
         start = time.time()
         self._stream_tool_calls = {}
         try:

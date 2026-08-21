@@ -193,6 +193,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     loop._last_goal = goal
     loop._last_task_id = f"task_{int(time.time())}"
     _main_task_running = True
+    _cancel_event = asyncio.Event()  # Set to cancel the current task gracefully
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
     # Live display is ALWAYS enabled (except --json pipe mode).
@@ -250,15 +251,15 @@ async def _run_once(goal: str, loop, json_output: bool = False,
                 sys.stdout.flush()
                 return
             _worker = _cascade.get("worker") or _cascade.get("heavy")
-            if _worker and loop.router.get_ollama_model() != _worker:
-                loop.router.swap_ollama_model(_worker)
+            if _worker:
+                loop._preferred_model = _worker
                 logger.info("Cascade: %s (conf=%.2f) → %s for: %s",
                             _cascade["task_type"], _cascade["confidence"],
                             _worker, goal[:60])
         else:
             _resolved = _registry.resolve_model(goal)
-            if _resolved and loop.router.get_ollama_model() != _resolved:
-                loop.router.swap_ollama_model(_resolved)
+            if _resolved:
+                loop._preferred_model = _resolved
                 logger.info("Auto-routed to %s for: %s", _resolved, goal[:60])
     except Exception:
         pass  # Auto-routing is best-effort
@@ -266,10 +267,9 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         if _draft_first:
             # Draft-then-verify: 1B generates draft, 3B verifies/fixes
             # First run with 1B router to get a draft
-            _router_model = _cascade.get("router") or loop.router.get_ollama_model()
-            if _router_model and loop.router.get_ollama_model() != _router_model:
-                loop.router.swap_ollama_model(_router_model)
-                logger.info("Draft phase: using %s for initial draft", _router_model)
+            _router_model = _cascade.get("router") or "qwen2.5:1.5b"
+            loop._preferred_model = _router_model
+            logger.info("Draft phase: using %s for initial draft", _router_model)
             if bridge is not None:
                 async def _on_chunk_draft(delta: str) -> None:
                     bridge.stream_delta(delta)
@@ -281,8 +281,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
             # If 1B produced a text response, pass it to 3B for verification
             if draft_result.success and draft_result.response:
                 _verify_model = _cascade.get("worker")
-                if _verify_model and loop.router.get_ollama_model() != _verify_model:
-                    loop.router.swap_ollama_model(_verify_model)
+                if _verify_model:
+                    loop._preferred_model = _verify_model
                     logger.info("Verify phase: using %s to check draft", _verify_model)
                 verify_goal = (
                     f"Here is a draft response to the user's request. "
@@ -638,6 +638,14 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_memory_list(loop)
         elif line.startswith("/model"):
             _cmd_model(line, loop)
+        elif line == "/providers":
+            _cmd_providers(loop)
+        elif line == "/status":
+            _cmd_status(loop)
+        elif line == "/memory prompt":
+            _cmd_memory_prompt(loop)
+        elif line == "/cancel":
+            _cmd_cancel(loop)
         elif line.startswith("/"):
             commands.dispatch(line)
         else:
@@ -810,6 +818,108 @@ def _cmd_remember(line: str, loop) -> None:
         console.print(Text(f"  remembered: {category}/{key} = {value}", style="jarvis.success"))
     else:
         console.print(Text("  memory disabled", style="jarvis.error"))
+
+
+def _cmd_providers(loop) -> None:
+    """Show provider status, latency, and availability."""
+    from rich.table import Table
+    table = Table(title="Provider Status")
+    table.add_column("Provider", style="bold")
+    table.add_column("Model")
+    table.add_column("Status")
+    table.add_column("Latency")
+    table.add_column("Errors")
+    for name, info in loop.router.status.items():
+        available = info.get("available", False)
+        status_style = "green" if available else "red"
+        status_text = "online" if available else "offline"
+        latency = info.get("latency_ms", 0)
+        errors = info.get("errors", 0)
+        table.add_row(
+            name,
+            info.get("model", "-")[:30],
+            Text(status_text, style=status_style),
+            f"{latency:.0f}ms" if latency else "-",
+            str(errors) if errors else "0",
+        )
+    console.print(table)
+
+
+def _cmd_status(loop) -> None:
+    """Show quick system status."""
+    from rich.table import Table
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column("Key", style="dim")
+    table.add_column("Value")
+    # Mode
+    mode = str(loop.mode).lower()
+    table.add_row("Mode", Text(mode, style="cyan"))
+    # Provider/model
+    provider = getattr(loop.router, "_last_provider", "-")
+    model = getattr(loop.router, "_last_model", "-")
+    table.add_row("Provider", provider or "-")
+    table.add_row("Model", (model or "-")[:40])
+    # Memory
+    if loop.mem is not None:
+        try:
+            stats = loop.mem.get_stats()
+            kv_count = stats.get("kv_count", stats.get("memories", "?"))
+            table.add_row("Memories", str(kv_count))
+        except Exception:
+            table.add_row("Memories", "?")
+    # Cascade
+    try:
+        from providers.model_registry import ModelRegistry
+        reg = ModelRegistry.instance()
+        cascade_status = "on" if reg.cascade_mode else "off"
+        table.add_row("Cascade", cascade_status)
+        if reg.cascade_mode:
+            table.add_row("  Router", reg.CASCADE_ROUTER)
+            table.add_row("  Worker", reg.CASCADE_WORKER)
+            table.add_row("  Heavy", reg.CASCADE_HEAVY)
+    except Exception:
+        pass
+    # Runtime
+    try:
+        from core.agent.runtime import get_runtime
+        rt = get_runtime()
+        rt_status = rt.get_status()
+        table.add_row("Main task", "running" if rt_status["main_running"] else "idle")
+        table.add_row("Interrupts", "running" if rt_status["interrupt_running"] else "idle")
+    except Exception:
+        pass
+    console.print(table)
+
+
+def _cmd_memory_prompt(loop) -> None:
+    """Show the formatted memory section that gets injected into the system prompt."""
+    if loop.mem is None:
+        console.print(Text("  memory disabled", style="jarvis.error"))
+        return
+    try:
+        prompt = loop.mem.format_for_prompt(str(loop.project.root_path))
+        if not prompt:
+            console.print(Text("  (empty memory prompt)", style="dim"))
+        else:
+            console.print(Text("  Memory prompt:", style="jarvis.accent"))
+            for line in prompt.split("\n"):
+                console.print(Text(f"  {line}", style="dim"))
+    except Exception as e:
+        console.print(Text(f"  error: {e}", style="jarvis.error"))
+
+
+def _cmd_cancel(loop) -> None:
+    """Cancel the current running task."""
+    try:
+        from core.agent.runtime import get_runtime
+        rt = get_runtime()
+        if rt.is_main_running:
+            rt.cancel_main()
+            console.print(Text("  task cancelled", style="jarvis.success"))
+        else:
+            console.print(Text("  no task running", style="dim"))
+    except Exception:
+        console.print(Text("  cancel not available", style="jarvis.error"))
 
 
 def _cmd_memory_list(loop) -> None:

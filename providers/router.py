@@ -271,14 +271,8 @@ class ProviderRouter:
         if not chain:
             raise RuntimeError("No LLM providers available. Check API keys and network.")
 
-        # Model swap: temporarily change Ollama's model if requested
-        _restored_model = None
-        if preferred_model and chain and chain[0] == "ollama":
-            ollama = self._providers.get("ollama")
-            if ollama is not None:
-                _restored_model = ollama.config.get("model")
-                ollama.config["model"] = preferred_model
-                logger.info("Router: swapped Ollama to %s for this request", preferred_model)
+        # Request-scoped model: pass directly to provider, never mutate config.
+        _request_model = preferred_model
 
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
@@ -306,7 +300,7 @@ class ProviderRouter:
                     continue
                 try:
                     logger.info("Trying %s (%s)", provider_name, provider.model)
-                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param)
+                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param, model=_request_model)
                     if name_map:
                         restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
@@ -323,11 +317,6 @@ class ProviderRouter:
                         "Success via %s: %d tokens, %.0fms",
                         provider_name, response.tokens_used, response.latency_ms,
                     )
-                    # Restore Ollama model if we swapped it
-                    if _restored_model is not None:
-                        ollama = self._providers.get("ollama")
-                        if ollama is not None:
-                            ollama.config["model"] = _restored_model
                     return response
                 except Exception as e:
                     last_error = e
@@ -361,6 +350,7 @@ class ProviderRouter:
                         try:
                             response = await provider.complete(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_request_model,
                             )
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
@@ -381,11 +371,6 @@ class ProviderRouter:
                 span.set_attribute("attempts", attempts)
                 span.set_attribute("last_error", str(last_error)[:200])
 
-        # Restore Ollama model if we swapped it
-        if _restored_model is not None:
-            ollama = self._providers.get("ollama")
-            if ollama is not None:
-                ollama.config["model"] = _restored_model
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
     async def complete_stream(
@@ -396,6 +381,7 @@ class ProviderRouter:
         temperature: float | None = None,
         tools: list | None = None,
         preferred_provider: str | None = None,
+        preferred_model: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream completion with automatic fallback + TTFT/token KPIs.
 
@@ -505,6 +491,7 @@ class ProviderRouter:
         temperature: float | None = None,
         tools: list | None = None,
         preferred_provider: str | None = None,
+        preferred_model: str | None = None,
     ) -> AsyncIterator[tuple[str | None, list | None]]:
         """Like :meth:`complete_stream` but also surfaces streamed tool calls.
 
@@ -543,6 +530,7 @@ class ProviderRouter:
                         if not getattr(provider, "captures_stream_tool_calls", False):
                             response = await provider.complete(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_request_model,
                             )
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)

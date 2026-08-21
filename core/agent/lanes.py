@@ -343,46 +343,41 @@ class InterruptExecutor:
                 if t.get("function", {}).get("name", "") in allowed_names
             ]
 
-            # Swap to 1B model for the interrupt
-            original_model = self._router.get_ollama_model()
-            self._router.swap_ollama_model("qwen2.5:1.5b")
+            # Request-scoped model: pass 1B directly, never mutate global config
+            _interrupt_model = "qwen2.5:1.5b"
 
-            try:
-                # Single LLM call — no tool loop for interrupts
-                from providers.types import LLMResponse
-                response: LLMResponse = await asyncio.wait_for(
-                    self._router.complete(
-                        messages,
-                        system_prompt=system_prompt,
-                        max_tokens=512,
-                        temperature=0.3,
-                        tools=tools if tools else None,
-                    ),
-                    timeout=10.0,  # 10s hard timeout for interrupts
-                )
+            # Single LLM call — no tool loop for interrupts
+            from providers.types import LLMResponse
+            response: LLMResponse = await asyncio.wait_for(
+                self._router.complete(
+                    messages,
+                    system_prompt=system_prompt,
+                    max_tokens=512,
+                    temperature=0.3,
+                    tools=tools if tools else None,
+                    model=_interrupt_model,
+                ),
+                timeout=10.0,  # 10s hard timeout for interrupts
+            )
 
-                final_text = response.text or ""
-                latency_ms = (time.time() - start) * 1000
+            final_text = response.text or ""
+            latency_ms = (time.time() - start) * 1000
 
-                result = {
-                    "success": bool(final_text),
-                    "response": final_text,
-                    "task_id": task_id,
-                    "latency_ms": round(latency_ms, 1),
-                    "model": response.model or "qwen2.5:1.5b",
-                    "parent_task_id": classification.parent_task_id,
-                }
+            result = {
+                "success": bool(final_text),
+                "response": final_text,
+                "task_id": task_id,
+                "latency_ms": round(latency_ms, 1),
+                "model": response.model or "qwen2.5:1.5b",
+                "parent_task_id": classification.parent_task_id,
+            }
 
-                self._interrupt_results.append(result)
-                logger.info(
-                    "Interrupt completed: %s in %.0fms (model=%s)",
-                    task_id, latency_ms, result["model"],
-                )
-                return result
-
-            finally:
-                # Restore original model
-                self._router.swap_ollama_model(original_model)
+            self._interrupt_results.append(result)
+            logger.info(
+                "Interrupt completed: %s in %.0fms (model=%s)",
+                task_id, latency_ms, result["model"],
+            )
+            return result
 
         except asyncio.TimeoutError:
             latency_ms = (time.time() - start) * 1000

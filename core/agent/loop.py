@@ -21,7 +21,10 @@ from core.agent.intent import Intent, IntentClassifier
 from core.agent.latency_router import LatencyAwareRouter
 from core.agent.model_residency import ModelResidencyScheduler
 from core.agent.observer import TaskObserver
+from core.agent.partial_stt import PartialSTTRouter
+from core.agent.perf_tracker import PerfTracker
 from core.agent.permissions import PermissionEngine
+from core.agent.quality_evaluator import QualityEvaluator
 from core.agent.speculative import SpeculativeExecutor
 from core.agent.state import AgentState, TaskStatus, classify_failure, pick_worst_failure
 from core.agent.tool_verifier import ToolResultVerifier
@@ -132,8 +135,11 @@ class AgentLoop:
         self.context_builder = AgentContextBuilder(registry)
         self.intent_classifier = IntentClassifier(registry)
         self._speculative = SpeculativeExecutor(self.intent_classifier)
+        self._partial_stt = PartialSTTRouter(self.intent_classifier)
         self._latency_router = LatencyAwareRouter()
         self._residency = ModelResidencyScheduler()
+        self._quality_eval = QualityEvaluator()
+        self._perf_tracker = PerfTracker()
         self._tool_verifier = ToolResultVerifier()
         self.observer = observer or TaskObserver()
         self.context_manager = context_manager or ContextManager()
@@ -159,6 +165,7 @@ class AgentLoop:
             self._planning_enabled = True
 
         self._tool_counter = 0
+        self._preferred_model: str | None = None  # request-scoped model override
 
         # Single tool execution boundary -- permissions and executor live
         # inside ToolExecutionService; nothing outside may access them.
@@ -429,6 +436,12 @@ class AgentLoop:
                 state.provider = response.provider
                 state.model = response.model
 
+                self._perf_tracker.record(
+                    response.model, response.latency_ms,
+                    (time.time() - _t_llm) * 1000,
+                    bool(response.text) or response.has_tool_calls,
+                )
+
                 if not response.has_tool_calls:
                     fallback_call = self._parse_text_tool_call(response.text, self.registry)
                     if fallback_call is not None:
@@ -451,6 +464,29 @@ class AgentLoop:
                                 error=error, observation=self._result_observation(state),
                                 perf=self._end_perf(tracer, root),
                             )
+
+                        # Quality escalation: evaluate cheap-model answers,
+                        # re-route to reasoning model if uncertain
+                        q_result = self._quality_eval.evaluate(final, goal)
+                        if (q_result.should_escalate
+                                and not getattr(state, "_quality_escalated", False)
+                                and iteration < self.max_iterations):
+                            state._quality_escalated = True
+                            self._emit("quality.escalate", {
+                                "score": q_result.score,
+                                "model": response.model,
+                                "signals": q_result.signals,
+                            }, trace_id)
+                            messages.append({
+                                "role": "user",
+                                "content": (
+                                    "Your previous answer was uncertain or incomplete. "
+                                    "Please provide a more specific, confident, and "
+                                    "complete answer to the original question."
+                                ),
+                            })
+                            continue
+
                         self.logger.record(trace_id, events.TASK_COMPLETED, {
                             "goal": goal[:200],
                             "iterations": iteration,
@@ -635,6 +671,7 @@ class AgentLoop:
             temperature=self.temperature,
             tools=tools,
             preferred_provider=getattr(self.router, "preferred_provider", None),
+            preferred_model=self._preferred_model,
         )
         if on_chunk is None:
             return await self.router.complete(messages, **kwargs)
