@@ -12,28 +12,23 @@ from dataclasses import dataclass
 from rich.box import DOUBLE, HEAVY, MINIMAL, ROUNDED, SIMPLE
 from rich.theme import Theme
 
-# Brand / identity
-BRAND = "bold cyan"
-TITLE = "bold cyan"
-
-# REPL input
-PROMPT_TEXT = "JARVIS> "
-PROMPT_STYLE = "bold"
-PROMPT_HINT = "dim"
-
-# Status
-OK = "green"
-WARN = "yellow"
-ERR = "red"
-BUSY = "bold red blink"
-DIM = "dim"
-PROVIDER = "magenta"
-
-# Panels
-BORDER_CORE = "cyan"
-BORDER_CONTEXT = "blue"
-BORDER_MEMORY = "magenta"
-BORDER_OBSERVER = "green"
+# Legacy constants — prefer JarvisColors / COLORS for new code.
+# These exist only for callers that haven't migrated yet.
+BRAND = "bold cyan"          # use COLORS.primary
+TITLE = "bold cyan"          # use COLORS.primary
+PROMPT_TEXT = "JARVIS> "      # use Renderer.print_prompt()
+PROMPT_STYLE = "bold"        # inline in Renderer
+PROMPT_HINT = "dim"          # use COLORS.dim
+OK = "green"                 # use COLORS.success
+WARN = "yellow"              # use COLORS.warning
+ERR = "red"                  # use COLORS.error
+BUSY = "bold red blink"      # use COLORS.running
+DIM = "dim"                  # use COLORS.dim
+PROVIDER = "magenta"         # use COLORS.accent
+BORDER_CORE = "cyan"         # use COLORS.border
+BORDER_CONTEXT = "blue"      # unused
+BORDER_MEMORY = "magenta"    # unused
+BORDER_OBSERVER = "green"    # unused
 
 
 @dataclass(frozen=True)

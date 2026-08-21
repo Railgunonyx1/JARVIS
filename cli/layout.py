@@ -1,14 +1,13 @@
-"""
-JARVIS MK-X Layout Manager
+"""JARVIS MK-X Layout Manager.
 
-Locked responsive rules:
-  Always: status bar + content + input
-  ≥ 90 cols : PLAN + CONVERSATION
-  ≥ 120 cols: PLAN + CONVERSATION + ACTIVITY
-  < 70 cols : CONVERSATION only
+Breakpoints (deterministic, implementation matches docs):
+  < 70 cols  → MINIMAL  (conversation only)
+  70–119 cols → NORMAL   (plan + conversation)
+  ≥ 120 cols → WIDE     (plan + conversation + activity)
 
-Workspaces (Code / Memory / Audit) are on-demand and replace
-the content area; they do not permanently pollute the agent view.
+Always: status bar + content + input.
+Workspaces (Code / Memory / Audit) replace the content area
+while preserving the status/input structure.
 """
 
 from __future__ import annotations
@@ -25,16 +24,15 @@ from .theme import COLORS, PANEL_TITLES, get_symbols
 
 
 class LayoutMode(StrEnum):
-    NORMAL = "normal"         # conversation + inline tools + verification (Default)
-    MINIMAL = "minimal"       # compact single-line badges, conversation only
-    WORKSPACE = "workspace"   # split 2-pane / multi-pane layout
-    HUD = "hud"               # telemetry cyberpunk HUD stream
-    FOCUS = "focus"           # conversation maximized
-    PLAN = "plan"             # force plan + conversation
-    ACTIVITY = "activity"     # force activity + conversation
-    CODE = "code"             # code workspace
-    MEMORY = "memory"         # memory workspace
-    AUDIT = "audit"           # audit workspace
+    NORMAL = "normal"         # plan + conversation (default at 70-119 cols)
+    MINIMAL = "minimal"       # conversation only (< 70 cols)
+    WIDE = "wide"             # plan + conversation + activity (≥ 120 cols)
+    FOCUS = "focus"           # conversation maximized, no plan/activity
+    PLAN = "plan"             # force plan + conversation (override breakpoint)
+    ACTIVITY = "activity"     # force activity + conversation (override breakpoint)
+    CODE = "code"             # code workspace (replaces content)
+    MEMORY = "memory"         # memory workspace (replaces content)
+    AUDIT = "audit"           # audit workspace (replaces content)
 
 
 @dataclass
@@ -98,7 +96,7 @@ class LayoutManager:
         return panel.visible
 
     def detect_mode(self) -> LayoutMode:
-        """Deterministic breakpoint detection.  No ambiguity."""
+        """Deterministic breakpoint detection. No ambiguity."""
         if self._force_mode is not None:
             return self._force_mode
         width = self.console.size.width
@@ -106,7 +104,7 @@ class LayoutManager:
         if width < self.MINIMAL_COLS or height < 16:
             return LayoutMode.MINIMAL
         if width >= self.WIDE:
-            return LayoutMode.NORMAL  # NORMAL + activity shown via width check in build()
+            return LayoutMode.WIDE
         return LayoutMode.NORMAL
 
     def build(
@@ -132,28 +130,39 @@ class LayoutManager:
         width = self.console.size.width
         root = Layout(name="root")
 
-        # Workspaces replace content area
+        # Workspaces replace content area while preserving structure
+        workspace_content = None
         if mode == LayoutMode.CODE and code is not None:
-            root.split_column(Layout(code, name="code"))
-            return root
-        if mode == LayoutMode.MEMORY and memory is not None:
-            root.split_column(Layout(memory, name="memory"))
-            return root
-        if mode == LayoutMode.AUDIT and audit is not None:
-            root.split_column(Layout(audit, name="audit"))
+            workspace_content = code
+        elif mode == LayoutMode.MEMORY and memory is not None:
+            workspace_content = memory
+        elif mode == LayoutMode.AUDIT and audit is not None:
+            workspace_content = audit
+
+        if workspace_content is not None:
+            root.split_column(Layout(workspace_content, name="workspace"))
             return root
 
         if mode == LayoutMode.MINIMAL:
             root.split_column(Layout(conversation, name="conversation"))
             return root
 
-        # Deterministic: 70–119 = plan + conversation, ≥ 120 = plan + conversation + activity
+        # FOCUS: conversation maximized, no side panels
+        if mode == LayoutMode.FOCUS:
+            root.split_column(Layout(conversation, name="conversation", ratio=1))
+            return root
+
+        # PLAN mode: force plan visible even below 120 cols
         show_plan = (
             self.config.panels["plan"].visible
             and plan is not None
         )
+        if mode == LayoutMode.PLAN and plan is not None:
+            show_plan = True
+
+        # Activity visible in WIDE and ACTIVITY modes
         show_activity = (
-            width >= self.WIDE
+            mode in (LayoutMode.WIDE, LayoutMode.ACTIVITY)
             and self.config.panels["activity"].visible
             and activity is not None
         )
@@ -183,7 +192,8 @@ class LayoutManager:
         title = PANEL_TITLES.get(name, name.upper())
         return Panel(
             content,
-            title=f"[jarvis.muted]{title}[/]",
+            title=title,
+            title_align="left",
             border_style=COLORS.border,
             padding=(0, 1),
             expand=True,

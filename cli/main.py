@@ -203,6 +203,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     # In one-shot mode: transient=False keeps the full conversation on screen.
     use_live = not json_output
     display = LiveTaskDisplay(
+        console=console,
         status_getter=(lambda: _status_getter(loop)),
         enable=use_live,
         renderable_provider=(renderer.render_task_screen if renderer is not None else None),

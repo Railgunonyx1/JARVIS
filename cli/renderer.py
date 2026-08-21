@@ -159,6 +159,10 @@ class Renderer:
         parts.append(Text(self.state.provider or "Ollama", style="jarvis.accent"))
         parts.append(Text(f" {sep} ", style="jarvis.muted"))
 
+        # Token budget (always visible)
+        parts.append(Text(self._token_str(), style="jarvis.dim"))
+        parts.append(Text(f" {sep} ", style="jarvis.muted"))
+
         mem_status = "MEM ✓" if self.state.memory_enabled else "MEM -"
         mem_style = "jarvis.success" if self.state.memory_enabled else "jarvis.dim"
         parts.append(Text(mem_status, style=mem_style))
@@ -251,8 +255,12 @@ class Renderer:
     # ── Conversation ──────────────────────────────────────────────────────
 
     def render_conversation(self) -> RenderableType:
-        """Conversation = semantic interaction only. No tool output, no
-        verification, no recovery leaking in."""
+        """Conversation = semantic interaction only.
+
+        User and agent messages only. Tool output, verification,
+        recovery, and system events live in the activity layer,
+        not the conversation stream.
+        """
         if not self.state.messages:
             return Group(
                 Text(""),
@@ -265,10 +273,8 @@ class Renderer:
                 blocks.append(self._render_user_message(msg.content))
             elif msg.role == "agent":
                 blocks.append(self._render_agent_message(msg.content))
-            elif msg.role == "tool":
-                blocks.append(self._render_tool_result(msg.content))
-            else:
-                blocks.append(self._render_system_event(msg.content))
+            # Tool, system, verification, recovery messages are excluded from
+            # the semantic conversation — they appear in activity/event layer.
         return Group(*blocks)
 
     def _render_user_message(self, content: str) -> RenderableType:
@@ -618,7 +624,7 @@ class Renderer:
         return Panel(
             t,
             box=box.ROUNDED,
-            border_style="jarvis.muted",
+            border_style=COLORS.border,
             padding=(0, 1),
         )
 
