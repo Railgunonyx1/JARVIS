@@ -20,13 +20,13 @@ import time
 import warnings
 from pathlib import Path
 
-_IMPORT_START = time.perf_counter()
+_IMPORT_START = time.perf_counter()  # noqa: E402 — must be before heavy imports
 
-import typer
-from rich.console import Console
-from rich.text import Text
+import typer  # noqa: E402
+from rich.console import Console  # noqa: E402
+from rich.text import Text  # noqa: E402
 
-from cli.theme import build_rich_theme
+from cli.theme import build_rich_theme  # noqa: E402
 
 # Pipes on Windows default to cp1252, which cannot encode arrows/dashes the
 # cockpit uses — force UTF-8 everywhere with a lossless fallback.
@@ -631,7 +631,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 console.print(Text("  no previous goal", style="jarvis.error"))
             else:
                 try:
-                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
+                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))  # noqa: E501
                 except Exception as exc:
                     console.print(Text(f"  error: {exc}", style="jarvis.error"))
         elif line.startswith("/remember "):
@@ -675,7 +675,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                         console.print(Text(f"  interrupt error: {exc}", style="jarvis.error"))
             if not _is_interrupt:
                 try:
-                    asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))
+                    asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))  # noqa: E501
                 except KeyboardInterrupt:
                     console.print(Text("  (interrupted)", style="dim"))
                 except Exception as exc:
@@ -750,7 +750,7 @@ def _cmd_memory(loop, line: str) -> None:
             console.print(Text(f"  [{hit['source']}:{hit['score']:.2f}] {hit['content'][:160]}", style="dim"))
     elif action == "add" and len(parts) == 3:
         key, _, value = parts[2].partition("=")
-        console.print(Text(f"  {loop.mem.remember(key.strip() or 'note', value.strip(), category='notes')}", style="dim"))
+        console.print(Text(f"  {loop.mem.remember(key.strip() or 'note', value.strip(), category='notes')}", style="dim"))  # noqa: E501
     else:
         console.print(Text("  usage: /memory [search <q> | add <k>=<v>]", style="jarvis.error"))
 
@@ -761,7 +761,7 @@ def _cmd_audit(line: str, limit_default: int = 12) -> None:
     args = parts[1].strip() if len(parts) == 2 else ""
     log = get_audit_log()
     stats = log.get_stats()
-    console.print(Text(f"  {stats['total_actions']} actions | {stats['denied']} denied | {stats['failed']} failed", style="dim"))
+    console.print(Text(f"  {stats['total_actions']} actions | {stats['denied']} denied | {stats['failed']} failed", style="dim"))  # noqa: E501
     if stats["top_tools"]:
         top = ", ".join(f"{k}={v}" for k, v in list(stats["top_tools"].items())[:5])
         console.print(Text(f"  top: {top}", style="dim"))
@@ -775,7 +775,7 @@ def _cmd_audit(line: str, limit_default: int = 12) -> None:
             ts = datetime.datetime.fromtimestamp(e["timestamp"]).strftime("%H:%M:%S")
             ok = "ok" if e["success"] else "fail"
             flag = "" if e["allowed"] else " DENIED"
-            console.print(Text(f"  {ts} {e['tool'] or e['action']:<28} {ok}{flag} {e['duration_ms']:.0f}ms", style="dim"))
+            console.print(Text(f"  {ts} {e['tool'] or e['action']:<28} {ok}{flag} {e['duration_ms']:.0f}ms", style="dim"))  # noqa: E501
         return
     limit = limit_default
     tool = args or None
@@ -983,13 +983,13 @@ def _cmd_model(line: str, loop) -> None:
         console.print(Text(f"  Auto: {status['auto_mode']}", style="jarvis.dim"))
         console.print(Text(f"  Cascade: {status['cascade_mode']}", style="jarvis.dim"))
         if status["cascade_mode"]:
-            console.print(Text(f"    Router: {status['cascade_router']} (ultra-fast, simple tasks)", style="jarvis.dim"))
-            console.print(Text(f"    Worker: {status['cascade_worker']} (coding, tools, reasoning)", style="jarvis.dim"))
+            console.print(Text(f"    Router: {status['cascade_router']} (ultra-fast, simple tasks)", style="jarvis.dim"))  # noqa: E501
+            console.print(Text(f"    Worker: {status['cascade_worker']} (coding, tools, reasoning)", style="jarvis.dim"))  # noqa: E501
             console.print(Text(f"    Heavy:  {status['cascade_heavy']} (complex multi-step)", style="jarvis.dim"))
             console.print(Text(f"    Direct (1B handled): {status['direct_handle_count']}x", style="jarvis.dim"))
             console.print(Text(f"    Escalated (→3B/4B): {status['escalation_count']}x", style="jarvis.dim"))
             console.print(Text(f"    Draft-then-verify:  {status.get('draft_verify_count', 0)}x", style="jarvis.dim"))
-            console.print(Text(f"    Deterministic (no LLM): {status.get('deterministic_count', 0)}x", style="jarvis.dim"))
+            console.print(Text(f"    Deterministic (no LLM): {status.get('deterministic_count', 0)}x", style="jarvis.dim"))  # noqa: E501
         if status["model_usage"]:
             console.print(Text("  Usage:", style="jarvis.accent"))
             for model, count in status["model_usage"].items():

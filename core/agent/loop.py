@@ -216,7 +216,7 @@ class AgentLoop:
                 trace_id=trace_id,
             ))
         except Exception:
-            pass
+            pass  # Best-effort: bus publish failure must not crash the agent
 
     async def run(
         self,
@@ -389,7 +389,7 @@ class AgentLoop:
                 _t_compress = time.time()
                 # Adaptive context budget: use request-local copy (never mutate shared state)
                 from dataclasses import replace
-                _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))
+                _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))  # noqa: E501
                 _orig_budget = self.context_manager.budget
                 self.context_manager.budget = _request_budget
                 with tracer.span("context.fit"):

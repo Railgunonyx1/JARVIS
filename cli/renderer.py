@@ -139,7 +139,7 @@ class Renderer:
     def set_audit(self, sections: Sequence[AuditSection]) -> None:
         self.state.audit_sections = list(sections)
 
-    def set_provider_notice(self, provider: str, message: str, kind: str = "warning", retry_after: float | None = None) -> None:
+    def set_provider_notice(self, provider: str, message: str, kind: str = "warning", retry_after: float | None = None) -> None:  # noqa: E501
         self.state.provider_notice = (provider, message, kind, retry_after)
 
     def clear_provider_notice(self) -> None:
@@ -404,7 +404,7 @@ class Renderer:
     def render_verification_block(self, steps: list[dict]) -> RenderableType:
         sym = self.symbols
         lines: list[RenderableType] = [
-            Text.assemble(Text(f"  {sym['running']} ", style="jarvis.running"), Text("Verification", style="jarvis.info bold"))
+            Text.assemble(Text(f"  {sym['running']} ", style="jarvis.running"), Text("Verification", style="jarvis.info bold"))  # noqa: E501
         ]
         for step in steps:
             name = step.get("name", "")

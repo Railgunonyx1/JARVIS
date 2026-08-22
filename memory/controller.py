@@ -64,7 +64,7 @@ class MemoryController:
         # Metadata / tiers / graph follow the primary store's data dir.
         self._metadata = metadata or (MetadataStore(self._data_dir) if kv is not None else None)
         self._tiers = tiers or (TieredMemoryStore(self._data_dir) if kv is not None else None)
-        self._graph = graph or (KnowledgeGraph(path=self._data_dir / "knowledge_graph.json") if kv is not None else None)
+        self._graph = graph or (KnowledgeGraph(path=self._data_dir / "knowledge_graph.json") if kv is not None else None)  # noqa: E501
 
         self._extractor = extractor or MemoryExtractor()
         self._scorer = scorer or ImportanceScorer()

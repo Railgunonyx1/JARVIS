@@ -59,11 +59,8 @@ class RequestClass(StrEnum):
 # Mostly read-only; memory.remember is a safe write for identity/preferences.
 _INTERRUPT_ALLOWED_TOOLS: frozenset[str] = frozenset({
     "memory.retrieve",
-    "memory.search",
-    "memory.recent",
     "memory.stats",
     "memory.remember",  # Safe: identity/preference updates only
-    "context.lookup",
     "system.status",
     "git.status",
     "git.branch",
@@ -77,13 +74,13 @@ _INTERRUPT_ALLOWED_TOOLS: frozenset[str] = frozenset({
 _INTERRUPT_PATTERNS: list[re.Pattern] = [
     # Memory/status queries
     re.compile(r"^(what|who|how|when|where)\s+(do you|does|is|are|was|were)\s+(know|remember|know about)", re.I),
-    re.compile(r"^(what|who|how)\s+(is|are|was|were)\s+(my|the|our|your)\s+(name|role|project|decision|plan|status)", re.I),
+    re.compile(r"^(what|who|how)\s+(is|are|was|were)\s+(my|the|our|your)\s+(name|role|project|decision|plan|status)", re.I),  # noqa: E501
     re.compile(r"^(retrieve|recall|lookup|find|search)\s+(what|our|the|my|info|info about|memory)", re.I),
     re.compile(r"^(what|tell me)\s+(did we|have we|should we)\s+(decide|choose|agree|plan)", re.I),
     re.compile(r"^(status|current|what's|whats)\s+(the\s+)?(status|state|progress|plan|decision)", re.I),
     re.compile(r"^(status|progress|plan)\s+(of|for|on|about)\s+", re.I),
     re.compile(r"^(show|list|display)\s+(me\s+)?(the\s+)?(memory|status|plan|progress|decision)", re.I),
-    re.compile(r"^(what|which)\s+(files?|code|function|class)\s+(are|is|was)\s+(being|currently|modified|changed)", re.I),
+    re.compile(r"^(what|which)\s+(files?|code|function|class)\s+(are|is|was)\s+(being|currently|modified|changed)", re.I),  # noqa: E501
     re.compile(r"^(remember|recall)\s+(that|when|what|how)", re.I),
     re.compile(r"^(what|how)\s+(is|was)\s+(the|our|my)\s+(architecture|design|approach|strategy)", re.I),
     re.compile(r"^(do you|did you)\s+(know|remember|have)\s+(any|a|the)\s+(context|info|details?)", re.I),

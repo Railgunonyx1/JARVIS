@@ -8,6 +8,7 @@ SDK output into these shapes.
 from __future__ import annotations
 
 import json
+from enum import StrEnum
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -57,8 +58,6 @@ class ProviderUnavailableError(ProviderError):
 
 # ── Structured error classification ───────────────────────────────────
 
-from enum import StrEnum
-
 
 class ErrorKind(StrEnum):
     """Classification of provider errors for router decision-making."""
@@ -99,7 +98,7 @@ def classify_provider_error(error_str: str, status_code: int | None = None) -> E
         return ErrorKind.SERVER_ERROR
 
     # Substring fallback
-    if any(m in lower for m in ("429", "rate limit", "too many requests", "throttl", "tokens per minute", "requests per minute", "request limit")):
+    if any(m in lower for m in ("429", "rate limit", "too many requests", "throttl", "tokens per minute", "requests per minute", "request limit")):  # noqa: E501
         if any(m in lower for m in ("daily", "monthly", "permanently")):
             return ErrorKind.QUOTA_EXHAUSTED
         return ErrorKind.RATE_LIMIT

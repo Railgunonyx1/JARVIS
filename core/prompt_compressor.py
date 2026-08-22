@@ -106,7 +106,7 @@ def _split_into_sections(prompt: str) -> list[tuple[str, str]]:
             # Find next section marker or end
             rest = remaining[idx + len(marker):]
             # Look for common next markers
-            next_markers = ["<user>", "<USER>", "<assistant>", "<ASSISTANT>", "<fewshot>", "<few-shot>", "<RAG>", "<rag>", "<code>", "<CODE>"]
+            next_markers = ["<user>", "<USER>", "<assistant>", "<ASSISTANT>", "<fewshot>", "<few-shot>", "<RAG>", "<rag>", "<code>", "<CODE>"]  # noqa: E501
             next_idx = len(rest)
             for nm in next_markers:
                 pos = rest.find(nm)

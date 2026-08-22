@@ -137,13 +137,13 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation, no code blocks:
     }}
   ]
 }}
-"""
+"""  # noqa: E501
 
 
 def _get_mode_description(mode: ExecutionMode) -> str:
     """Get human-readable mode description."""
     descriptions = {
-        ExecutionMode.CONTROLLED: "CONTROLLED MODE: Only safe, non-destructive actions available. No confirmations needed.",
+        ExecutionMode.CONTROLLED: "CONTROLLED MODE: Only safe, non-destructive actions available. No confirmations needed.",  # noqa: E501
         ExecutionMode.SMART: "SMART MODE: Most actions available. Risky operations require confirmation.",
         ExecutionMode.AGENT: "AGENT MODE: Full access within sandbox. Critical system changes require confirmation.",
     }
@@ -210,7 +210,7 @@ def create_plan(goal: str, context: str = "", mode: ExecutionMode = None) -> dic
             # Validate against the real executor tool set + mode permissions
             mode_manager = get_mode_manager()
             if tool not in EXEC_TOOLS or not mode_manager.is_allowed(tool, mode):
-                print(f"[Planner] Tool '{tool}' not allowed in {str(mode)} mode (allowed: {_get_mode_tools(mode)}) - replacing with generated_code")
+                print(f"[Planner] Tool '{tool}' not allowed in {str(mode)} mode (allowed: {_get_mode_tools(mode)}) - replacing with generated_code")  # noqa: E501
                 step["tool"] = "generated_code"
                 step["parameters"] = {"description": step.get("description", f"Do: {tool}")}
 

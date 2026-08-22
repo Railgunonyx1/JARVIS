@@ -102,7 +102,7 @@ class CommandRegistry:
                 r.print("Available: normal (default) | minimal | workspace | hud | focus | code | memory | audit")
                 return
             mode_arg = args[0].lower()
-            if mode_arg in ("normal", "minimal", "workspace", "hud", "focus", "code", "memory", "audit", "plan", "activity"):
+            if mode_arg in ("normal", "minimal", "workspace", "hud", "focus", "code", "memory", "audit", "plan", "activity"):  # noqa: E501
                 r.layout_mgr.set_mode(mode_arg)
                 r.print_success(f"UI Layout → {mode_arg}")
             else:
@@ -275,7 +275,7 @@ class CommandRegistry:
             try:
                 import subprocess
                 result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
-                models = [line.split()[0] for line in result.stdout.strip().splitlines() if line.strip() and "NAME" not in line]
+                models = [line.split()[0] for line in result.stdout.strip().splitlines() if line.strip() and "NAME" not in line]  # noqa: E501
                 table.add_row("Ollama Models", ", ".join(models[:6]) or "none")
             except Exception:
                 table.add_row("Ollama Models", "error")
@@ -304,7 +304,7 @@ class CommandRegistry:
         self._register(Command("help", "Show commands, workspaces, modes", help_cmd, ["h", "?"]))
         self._register(Command("status", "Show current status", status_cmd, ["s"]))
         self._register(Command("mode", "Set execution policy (agent|plan|controlled|smart)", mode_cmd, ["m"]))
-        self._register(Command("layout", "Change layout / UI mode (normal|minimal|workspace|hud)", layout_cmd, ["l", "ui"]))
+        self._register(Command("layout", "Change layout / UI mode (normal|minimal|workspace|hud)", layout_cmd, ["l", "ui"]))  # noqa: E501
         self._register(Command("ui", "Change UI mode (normal|minimal|workspace|hud)", layout_cmd))
         self._register(Command("workspace", "Switch workspace", workspace_cmd, ["ws"]))
         self._register(Command("palette", "Show command palette (Ctrl+K)", palette_cmd, ["k"]))

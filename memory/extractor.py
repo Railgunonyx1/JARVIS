@@ -39,7 +39,7 @@ class MemoryExtractor:
                     tags=["identity", "name"],
                 ))
 
-        for pref in re.findall(r"i (?:love|like|enjoy|hate|dislike|don't like|prefer)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
+        for pref in re.findall(r"i (?:love|like|enjoy|hate|dislike|don't like|prefer)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):  # noqa: E501
             pref = pref.strip()
             if len(pref) > 1:
                 items.append(MemoryItem(
@@ -48,7 +48,7 @@ class MemoryExtractor:
                     tags=["preference"],
                 ))
 
-        for relation, rel_name in re.findall(r"(my\s+(?!name)\w+)\s+(?:is|are|has|have|named?)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
+        for relation, rel_name in re.findall(r"(my\s+(?!name)\w+)\s+(?:is|are|has|have|named?)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):  # noqa: E501
             rel_name = rel_name.strip()
             if len(rel_name) > 1 and 3 < len(rel_name) < 80:
                 items.append(MemoryItem(
@@ -57,7 +57,7 @@ class MemoryExtractor:
                     tags=["relationship"],
                 ))
 
-        for p in re.findall(r"(?:i['']?m working on|my project|building|creating|developing)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):
+        for p in re.findall(r"(?:i['']?m working on|my project|building|creating|developing)\s+(.+?)(?:\.|!|\?|$)", text, re.IGNORECASE):  # noqa: E501
             items.append(MemoryItem(
                 content=f"User project: {p.strip()}",
                 type=PROJECT, importance=0.8, source=source, project=project,

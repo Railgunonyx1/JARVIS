@@ -71,7 +71,7 @@ async def patch_replace(params: dict) -> ToolResult:
     except Exception as e:
         return tool_result(False, error=f"Write failed: {e}")
 
-    operation = f"Replace {'all ' if params.get('all') else ''}{count} occurrence(s)" if count > 1 else "Replace 1 occurrence"
+    operation = f"Replace {'all ' if params.get('all') else ''}{count} occurrence(s)" if count > 1 else "Replace 1 occurrence"  # noqa: E501
     return tool_result(
         True,
         output=f"{operation} in {path}",

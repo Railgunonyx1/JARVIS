@@ -21,16 +21,16 @@ class Intent:
 # ORDER MATTERS: more specific patterns first, planner.execute before simple ones
 _COMPILED_PATTERNS = [
     # ── Complex Tasks (route to planner) — MUST BE FIRST ──────────────
-    (re.compile(r"\b(make|create|build|design|develop|generate)\s+(a\s+)?(ui|interface|dashboard|webpage|page|app|website|html|css|frontend)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(make|create|build)\s+(me\s+)?(.+)\s+(based on|from|using|with)\s+(what you see|the screen|my screen|current screen)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(make|create|build)\s+(me\s+)?(a\s+)?(website|web\s*site|web\s*page|webapp)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(write|generate|create)\s+(a\s+)?(python|script|code|program|automation)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(set up|setup|configure)\s+(a\s+)?(dev|development|coding|programming)\s+(environment|workspace|setup)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(organize|sort|clean up|tidy)\s+(my\s+)?(desktop|files?|folder|downloads|documents)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(research|find out|look into|investigate)\s+(.+)\s+(and|then)\s+(save|write|create|store)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(take|capture)\s+(a\s+)?(screenshot|screen)\s+(and|then)\s+(analyze|describe|explain)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(help me|assist me|can you)\s+(make|create|build|write|set up|configure|organize)\b", re.I), "planner.execute", {}),
-    (re.compile(r"\b(make|create|build)\s+(a\s+)?(clean|modern|minimal|simple|nice)\s+(looking\s+)?(ui|interface|dashboard|webpage|page|app|website)\b", re.I), "planner.execute", {}),
+    (re.compile(r"\b(make|create|build|design|develop|generate)\s+(a\s+)?(ui|interface|dashboard|webpage|page|app|website|html|css|frontend)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(make|create|build)\s+(me\s+)?(.+)\s+(based on|from|using|with)\s+(what you see|the screen|my screen|current screen)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(make|create|build)\s+(me\s+)?(a\s+)?(website|web\s*site|web\s*page|webapp)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(write|generate|create)\s+(a\s+)?(python|script|code|program|automation)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(set up|setup|configure)\s+(a\s+)?(dev|development|coding|programming)\s+(environment|workspace|setup)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(organize|sort|clean up|tidy)\s+(my\s+)?(desktop|files?|folder|downloads|documents)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(research|find out|look into|investigate)\s+(.+)\s+(and|then)\s+(save|write|create|store)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(take|capture)\s+(a\s+)?(screenshot|screen)\s+(and|then)\s+(analyze|describe|explain)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(help me|assist me|can you)\s+(make|create|build|write|set up|configure|organize)\b", re.I), "planner.execute", {}),  # noqa: E501
+    (re.compile(r"\b(make|create|build)\s+(a\s+)?(clean|modern|minimal|simple|nice)\s+(looking\s+)?(ui|interface|dashboard|webpage|page|app|website)\b", re.I), "planner.execute", {}),  # noqa: E501
 
     # System
     (re.compile(r"\b(exit|quit|shutdown|shut down|goodbye|bye)\b"), "system.exit", {}),
@@ -43,40 +43,40 @@ _COMPILED_PATTERNS = [
     (re.compile(r"\b(weather|temperature|forecast)\b"), "query.weather", {"ask_city": True}),
 
     # Vision
-    (re.compile(r"\b(what's on my screen|describe screen|read screen|analyze screen|look at my screen)\b"), "vision.screen_capture", {}),
+    (re.compile(r"\b(what's on my screen|describe screen|read screen|analyze screen|look at my screen)\b"), "vision.screen_capture", {}),  # noqa: E501
 
     # ── Screen Analyzer ────────────────────────────────────────────────
-    (re.compile(r"\b(capture|take)\s+(a\s+)?(screenshot|screen)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),
-    (re.compile(r"\b(what(?:'s| is) on (?:my )?screen|describe (?:my )?screen|look at (?:my )?screen)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),
-    (re.compile(r"\b(analyze|describe)\s+(my\s+)?(screen|display|monitor)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),
-    (re.compile(r"\b(look|peek)\s+(through\s+)?(the\s+)?camera\b", re.I), "action.screen_analyzer", {"action": "analyze_camera"}),
-    (re.compile(r"\b(webcam|camera)\s+(capture|photo|look)\b", re.I), "action.screen_analyzer", {"action": "analyze_camera"}),
-    (re.compile(r"\b(find|locate|where\s+is)\s+(the\s+)?(.+?)\s+(on\s+screen|on\s+the\s+screen)\b", re.I), "action.screen_analyzer", {"action": "find_element", "description": 3}),
-    (re.compile(r"\b(click|tap)\s+(the\s+)?(.+?)\s+(on\s+screen|on\s+the\s+screen)\b", re.I), "action.screen_analyzer", {"action": "click_element", "description": 3}),
+    (re.compile(r"\b(capture|take)\s+(a\s+)?(screenshot|screen)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),  # noqa: E501
+    (re.compile(r"\b(what(?:'s| is) on (?:my )?screen|describe (?:my )?screen|look at (?:my )?screen)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),  # noqa: E501
+    (re.compile(r"\b(analyze|describe)\s+(my\s+)?(screen|display|monitor)\b", re.I), "action.screen_analyzer", {"action": "analyze_screen"}),  # noqa: E501
+    (re.compile(r"\b(look|peek)\s+(through\s+)?(the\s+)?camera\b", re.I), "action.screen_analyzer", {"action": "analyze_camera"}),  # noqa: E501
+    (re.compile(r"\b(webcam|camera)\s+(capture|photo|look)\b", re.I), "action.screen_analyzer", {"action": "analyze_camera"}),  # noqa: E501
+    (re.compile(r"\b(find|locate|where\s+is)\s+(the\s+)?(.+?)\s+(on\s+screen|on\s+the\s+screen)\b", re.I), "action.screen_analyzer", {"action": "find_element", "description": 3}),  # noqa: E501
+    (re.compile(r"\b(click|tap)\s+(the\s+)?(.+?)\s+(on\s+screen|on\s+the\s+screen)\b", re.I), "action.screen_analyzer", {"action": "click_element", "description": 3}),  # noqa: E501
 
     # ── Browser Control ────────────────────────────────────────────────
-    (re.compile(r"\b(open|go\s+to|navigate\s+to|visit)\s+(.+)\s+(in\s+)?(browser|chrome|edge|firefox)\b", re.I), "action.browser", {"action": "open", "url": 2, "browser": 4}),
-    (re.compile(r"\b(open|go\s+to|navigate\s+to|visit)\s+(.+\.com|.+\.org|.+\.net|.+\.io|.+\.dev|.+\.edu|youtube|github|google|reddit|twitter|instagram)\b", re.I), "action.browser", {"action": "open", "url": 2}),
-    (re.compile(r"\b(search|google|look\s+up|find)\s+(.+?)\s+(on\s+)?(google|bing|duckduckgo)\b", re.I), "action.browser", {"action": "search", "query": 2, "engine": 4}),
-    (re.compile(r"\b(search|google|look\s+up|find)\s+(.+?)\s+(on\s+)?(the\s+)?browser\b", re.I), "action.browser", {"action": "search", "query": 2}),
-    (re.compile(r"\b(click|tap)\s+(on\s+)?(.+?)\s+(button|link|text|tab)\b", re.I), "action.browser", {"action": "smart_click", "description": 2}),
-    (re.compile(r"\b(type|input|enter|write)\s+(.+?)\s+(into|in)\s+(.+)\b", re.I), "action.browser", {"action": "smart_type", "description": 4, "text": 2}),
+    (re.compile(r"\b(open|go\s+to|navigate\s+to|visit)\s+(.+)\s+(in\s+)?(browser|chrome|edge|firefox)\b", re.I), "action.browser", {"action": "open", "url": 2, "browser": 4}),  # noqa: E501
+    (re.compile(r"\b(open|go\s+to|navigate\s+to|visit)\s+(.+\.com|.+\.org|.+\.net|.+\.io|.+\.dev|.+\.edu|youtube|github|google|reddit|twitter|instagram)\b", re.I), "action.browser", {"action": "open", "url": 2}),  # noqa: E501
+    (re.compile(r"\b(search|google|look\s+up|find)\s+(.+?)\s+(on\s+)?(google|bing|duckduckgo)\b", re.I), "action.browser", {"action": "search", "query": 2, "engine": 4}),  # noqa: E501
+    (re.compile(r"\b(search|google|look\s+up|find)\s+(.+?)\s+(on\s+)?(the\s+)?browser\b", re.I), "action.browser", {"action": "search", "query": 2}),  # noqa: E501
+    (re.compile(r"\b(click|tap)\s+(on\s+)?(.+?)\s+(button|link|text|tab)\b", re.I), "action.browser", {"action": "smart_click", "description": 2}),  # noqa: E501
+    (re.compile(r"\b(type|input|enter|write)\s+(.+?)\s+(into|in)\s+(.+)\b", re.I), "action.browser", {"action": "smart_type", "description": 4, "text": 2}),  # noqa: E501
     (re.compile(r"\b(scroll)\s+(up|down)\b", re.I), "action.browser", {"action": "scroll", "direction": 2}),
-    (re.compile(r"\b(get|read|extract)\s+(page\s+)?(text|content|page)\b", re.I), "action.browser", {"action": "get_text"}),
-    (re.compile(r"\b(what\s+)?(page|url|site)\s+(am\s+I\s+on|is\s+this|address)\b", re.I), "action.browser", {"action": "get_url"}),
+    (re.compile(r"\b(get|read|extract)\s+(page\s+)?(text|content|page)\b", re.I), "action.browser", {"action": "get_text"}),  # noqa: E501
+    (re.compile(r"\b(what\s+)?(page|url|site)\s+(am\s+I\s+on|is\s+this|address)\b", re.I), "action.browser", {"action": "get_url"}),  # noqa: E501
     (re.compile(r"\b(go\s+back|back\s+button|navigate\s+back)\b", re.I), "action.browser", {"action": "back"}),
-    (re.compile(r"\b(go\s+forward|forward\s+button|navigate\s+forward)\b", re.I), "action.browser", {"action": "forward"}),
+    (re.compile(r"\b(go\s+forward|forward\s+button|navigate\s+forward)\b", re.I), "action.browser", {"action": "forward"}),  # noqa: E501
     (re.compile(r"\b(reload|refresh)\s+(the\s+)?(page|site)\b", re.I), "action.browser", {"action": "reload"}),
     (re.compile(r"\b(new\s+tab|open\s+new\s+tab)\b", re.I), "action.browser", {"action": "new_tab"}),
     (re.compile(r"\b(close\s+tab|close\s+this\s+tab)\b", re.I), "action.browser", {"action": "close_tab"}),
-    (re.compile(r"\b(close|quit|exit)\s+(the\s+)?(browser|chrome|edge|firefox)\b", re.I), "action.browser", {"action": "close_all"}),
-    (re.compile(r"\b(screenshot|capture)\s+(the\s+)?(page|site|browser)\b", re.I), "action.browser", {"action": "screenshot"}),
+    (re.compile(r"\b(close|quit|exit)\s+(the\s+)?(browser|chrome|edge|firefox)\b", re.I), "action.browser", {"action": "close_all"}),  # noqa: E501
+    (re.compile(r"\b(screenshot|capture)\s+(the\s+)?(page|site|browser)\b", re.I), "action.browser", {"action": "screenshot"}),  # noqa: E501
 
     # Desktop control
-    (re.compile(r"\b(volume up|volume down|mute|unmute|play media|pause media|next track|previous track|minimize all|show desktop|task manager)\b"), "action.desktop_control", {}),
+    (re.compile(r"\b(volume up|volume down|mute|unmute|play media|pause media|next track|previous track|minimize all|show desktop|task manager)\b"), "action.desktop_control", {}),  # noqa: E501
 
     # Memory
-    (re.compile(r"\b(search memory|semantic memory|vector memory|remember when)\s+(.+)"), "memory.vector_query", {"query": 2}),
+    (re.compile(r"\b(search memory|semantic memory|vector memory|remember when)\s+(.+)"), "memory.vector_query", {"query": 2}),  # noqa: E501
     (re.compile(r"\b(remember that|my name is|I am|I'm)\s+(.+)"), "memory.store", {"fact": 2}),
     (re.compile(r"\b(what do you know about me|my preferences|what do you remember)\b"), "memory.query", {}),
 
@@ -103,13 +103,13 @@ _COMPILED_PATTERNS = [
     (re.compile(r"\b(help|what can you do|capabilities)\b"), "meta.help", {}),
 
     # ── File Management ───────────────────────────────────────────────
-    (re.compile(r"\b(list|show|display)\s+(files?|folder|directory|contents?)\s+(in|of|at)?\s*(.*)", re.I), "action.file", {"action": "list", "path": 4}),
+    (re.compile(r"\b(list|show|display)\s+(files?|folder|directory|contents?)\s+(in|of|at)?\s*(.*)", re.I), "action.file", {"action": "list", "path": 4}),  # noqa: E501
     (re.compile(r"\b(read|open|cat|show)\s+(file|text)\s+(.+)"), "action.file", {"action": "read", "path": 3}),
-    (re.compile(r"\b(write|save|create)\s+(file|text)\s+(.+)\s+(to|in|at)\s+(.+)"), "action.file", {"action": "write", "content": 3, "path": 5}),
+    (re.compile(r"\b(write|save|create)\s+(file|text)\s+(.+)\s+(to|in|at)\s+(.+)"), "action.file", {"action": "write", "content": 3, "path": 5}),  # noqa: E501
     (re.compile(r"\b(create|make)\s+(file|folder|directory)\s+(.+)"), "action.file", {"action": "create", "path": 3}),
     (re.compile(r"\b(delete|remove|trash)\s+(file|folder)?\s*(.+)"), "action.file", {"action": "delete", "path": 3}),
-    (re.compile(r"\b(copy|duplicate)\s+(.+)\s+(to|into)\s+(.+)"), "action.file", {"action": "copy", "source": 2, "destination": 4}),
-    (re.compile(r"\b(move|transfer)\s+(.+)\s+(to|into)\s+(.+)"), "action.file", {"action": "move", "source": 2, "destination": 4}),
+    (re.compile(r"\b(copy|duplicate)\s+(.+)\s+(to|into)\s+(.+)"), "action.file", {"action": "copy", "source": 2, "destination": 4}),  # noqa: E501
+    (re.compile(r"\b(move|transfer)\s+(.+)\s+(to|into)\s+(.+)"), "action.file", {"action": "move", "source": 2, "destination": 4}),  # noqa: E501
     (re.compile(r"\b(rename)\s+(.+)\s+(to|as)\s+(.+)"), "action.file", {"action": "rename", "path": 2, "new_name": 4}),
     (re.compile(r"\bsearch\s+(for\s+)?files?\s+(.+)"), "action.file", {"action": "search", "query": 2}),
     (re.compile(r"\b(file\s+info|info\s+on\s+file)\s+(.+)"), "action.file", {"action": "info", "path": 2}),
@@ -119,7 +119,7 @@ _COMPILED_PATTERNS = [
 
     # ── Process Management ────────────────────────────────────────────
     (re.compile(r"\b(list|show|running)\s+(processes?|programs?|apps?)\b"), "action.process", {"action": "list"}),
-    (re.compile(r"\b(kill|stop|end|terminate)\s+(process|program|app)?\s*(.+)"), "action.process", {"action": "kill", "name": 3}),
+    (re.compile(r"\b(kill|stop|end|terminate)\s+(process|program|app)?\s*(.+)"), "action.process", {"action": "kill", "name": 3}),  # noqa: E501
     (re.compile(r"\bfind\s+(process|program)\s+(.+)"), "action.process", {"action": "search", "query": 2}),
     (re.compile(r"\b(top|most)\s+(cpu|processor)\s+(processes?|programs?)\b"), "action.process", {"action": "top"}),
     (re.compile(r"\b(top|most)\s+(memory|ram)\s+(processes?|programs?)\b"), "action.process", {"action": "top_mem"}),
@@ -147,15 +147,15 @@ _COMPILED_PATTERNS = [
 
     # ── System Settings ───────────────────────────────────────────────
     (re.compile(r"\b(brightness)\s+(to\s+)?(\d+)\b"), "action.settings", {"action": "brightness", "level": 3}),
-    (re.compile(r"\b(brightness)\s+(up|increase|higher)\b"), "action.settings", {"action": "brightness", "level": "75"}),
-    (re.compile(r"\b(brightness)\s+(down|decrease|lower)\b"), "action.settings", {"action": "brightness", "level": "25"}),
+    (re.compile(r"\b(brightness)\s+(up|increase|higher)\b"), "action.settings", {"action": "brightness", "level": "75"}),  # noqa: E501
+    (re.compile(r"\b(brightness)\s+(down|decrease|lower)\b"), "action.settings", {"action": "brightness", "level": "25"}),  # noqa: E501
     (re.compile(r"\b(get|check|what.* brightness)\b"), "action.settings", {"action": "get_brightness"}),
     (re.compile(r"\b(wifi|wi-fi|wireless)\s+(on|enable|turn on)\b"), "action.settings", {"action": "wifi_on"}),
     (re.compile(r"\b(wifi|wi-fi|wireless)\s+(off|disable|turn off)\b"), "action.settings", {"action": "wifi_off"}),
     (re.compile(r"\b(wifi|wi-fi|wireless)\s+status\b"), "action.settings", {"action": "wifi_status"}),
     (re.compile(r"\b(bluetooth)\s+(on|enable)\b"), "action.settings", {"action": "bluetooth_on"}),
     (re.compile(r"\b(bluetooth)\s+(off|disable)\b"), "action.settings", {"action": "bluetooth_off"}),
-    (re.compile(r"\b(shutdown|power off|turn off)\s+(the\s+)?(computer|pc|laptop)\b"), "action.settings", {"action": "shutdown"}),
+    (re.compile(r"\b(shutdown|power off|turn off)\s+(the\s+)?(computer|pc|laptop)\b"), "action.settings", {"action": "shutdown"}),  # noqa: E501
     (re.compile(r"\b(restart|reboot)\s+(the\s+)?(computer|pc|laptop)\b"), "action.settings", {"action": "restart"}),
     (re.compile(r"\b(sleep|suspend|standby)\b"), "action.settings", {"action": "sleep"}),
     (re.compile(r"\b(hibernate)\b"), "action.settings", {"action": "hibernate"}),
@@ -163,10 +163,10 @@ _COMPILED_PATTERNS = [
     (re.compile(r"\b(airplane|flight)\s+mode\s+(on|off)\b"), "action.settings", {"action": "airplane_on"}),
 
     # ── Input Control ─────────────────────────────────────────────────
-    (re.compile(r"\b(click|tap|press)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_click", "x": 3, "y": 4}),
-    (re.compile(r"\b(double\s*click|double\s*tap)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_double_click", "x": 3, "y": 4}),
-    (re.compile(r"\b(right\s*click)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_right_click", "x": 3, "y": 4}),
-    (re.compile(r"\b(move\s+mouse|cursor\s+to)\s+(to\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_move", "x": 3, "y": 4}),
+    (re.compile(r"\b(click|tap|press)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_click", "x": 3, "y": 4}),  # noqa: E501
+    (re.compile(r"\b(double\s*click|double\s*tap)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_double_click", "x": 3, "y": 4}),  # noqa: E501
+    (re.compile(r"\b(right\s*click)\s+(at\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_right_click", "x": 3, "y": 4}),  # noqa: E501
+    (re.compile(r"\b(move\s+mouse|cursor\s+to)\s+(to\s+)?(\d+)[,\s]+(\d+)\b"), "action.input", {"action": "mouse_move", "x": 3, "y": 4}),  # noqa: E501
     (re.compile(r"\b(scroll\s+(up|down))\b"), "action.input", {"action": "mouse_scroll"}),
     (re.compile(r"\b(type|input|enter)\s+(.+)"), "action.input", {"action": "type_text", "text": 2}),
     (re.compile(r"\b(press|hit|tap)\s+(key\s+)?(.+)"), "action.input", {"action": "press_key", "key": 3}),
@@ -180,7 +180,7 @@ _COMPILED_PATTERNS = [
     (re.compile(r"\b(what's?\s+my|my)\s+(ip|address)\b"), "action.network", {"action": "ip"}),
     (re.compile(r"\b(public\s+ip|external\s+ip)\b"), "action.network", {"action": "ip", "public": True}),
     (re.compile(r"\b(scan|find|list)\s+(wifi|wireless|networks?)\b"), "action.network", {"action": "wifi_scan"}),
-    (re.compile(r"\b(connect\s+to|join)\s+(wifi|wireless)\s+(.+)"), "action.network", {"action": "wifi_connect", "ssid": 3}),
+    (re.compile(r"\b(connect\s+to|join)\s+(wifi|wireless)\s+(.+)"), "action.network", {"action": "wifi_connect", "ssid": 3}),  # noqa: E501
     (re.compile(r"\b(ping|test|check)\s+(connection|connectivity)\b"), "action.network", {"action": "ping"}),
     (re.compile(r"\b(ping)\s+(.+)"), "action.network", {"action": "ping", "host": 2}),
     (re.compile(r"\bspeed\s*test\b"), "action.network", {"action": "speed_test"}),
@@ -202,13 +202,13 @@ _COMPILED_PATTERNS = [
 
     # ── Audio ─────────────────────────────────────────────────────────
     (re.compile(r"\b(audio|speaker|headphone)\s+devices?\b"), "action.audio", {"action": "devices"}),
-    (re.compile(r"\b(switch\s+to|use)\s+(speaker|headphone|headset|mic)\s*(.*)"), "action.audio", {"action": "set_output", "name": 3}),
+    (re.compile(r"\b(switch\s+to|use)\s+(speaker|headphone|headset|mic)\s*(.*)"), "action.audio", {"action": "set_output", "name": 3}),  # noqa: E501
     (re.compile(r"\b(volume)\s+(to\s+)?(\d+)\b"), "action.audio", {"action": "volume", "level": 3}),
     (re.compile(r"\b(volume)\s+(up|down)\b"), "action.audio", {"action": "volume"}),
     (re.compile(r"\btest\s+(speaker|audio|sound)\b"), "action.audio", {"action": "test_speakers"}),
 
     # ── Display ───────────────────────────────────────────────────────
-    (re.compile(r"\b(set\s+)?resolution\s+(to\s+)?(\d+)[x\s]+(\d+)\b"), "action.display", {"action": "resolution", "width": 3, "height": 4}),
+    (re.compile(r"\b(set\s+)?resolution\s+(to\s+)?(\d+)[x\s]+(\d+)\b"), "action.display", {"action": "resolution", "width": 3, "height": 4}),  # noqa: E501
     (re.compile(r"\b(list|show)\s+monitors?\b"), "action.display", {"action": "monitors"}),
     (re.compile(r"\b(set|change)\s+wallpaper\s+(to\s+)?(.+)"), "action.display", {"action": "wallpaper", "path": 3}),
     (re.compile(r"\bwhat('s| is)\s+(my\s+)?wallpaper\b"), "action.display", {"action": "get_wallpaper"}),

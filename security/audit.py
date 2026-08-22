@@ -178,8 +178,8 @@ class AuditLog:
         params = [since] if since else []
 
         total = conn.execute(f"SELECT COUNT(*) FROM audit_log {where}", params).fetchone()[0]
-        denied = conn.execute(f"SELECT COUNT(*) FROM audit_log {where} {'AND' if where else 'WHERE'} allowed = 0", params).fetchone()[0]
-        failed = conn.execute(f"SELECT COUNT(*) FROM audit_log {where} {'AND' if where else 'WHERE'} success = 0", params).fetchone()[0]
+        denied = conn.execute(f"SELECT COUNT(*) FROM audit_log {where} {'AND' if where else 'WHERE'} allowed = 0", params).fetchone()[0]  # noqa: E501
+        failed = conn.execute(f"SELECT COUNT(*) FROM audit_log {where} {'AND' if where else 'WHERE'} success = 0", params).fetchone()[0]  # noqa: E501
 
         tool_counts = conn.execute(
             f"SELECT tool, COUNT(*) as cnt FROM audit_log {where} GROUP BY tool ORDER BY cnt DESC LIMIT 10",

@@ -315,7 +315,7 @@ class ProviderRouter:
                     continue
                 try:
                     logger.info("Trying %s (%s)", provider_name, provider.model)
-                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param, model=_request_model)
+                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param, model=_request_model)  # noqa: E501
                     if name_map:
                         restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
@@ -346,7 +346,7 @@ class ProviderRouter:
 
                     # Immediately fallback for permanent errors
                     if self._should_fallback(e):
-                        provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                        provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
                         self._notify("provider.rate_limit",
                                      provider=provider_name, message=kind.value,
                                      kind="warning", switching=True)
@@ -469,7 +469,7 @@ class ProviderRouter:
                         # Before first token: safe to retry or fallback
                         if first_chunk:
                             if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
                                 self._notify("provider.rate_limit",
                                              provider=provider_name, message=kind.value,
                                              kind="warning", switching=True)
@@ -605,7 +605,7 @@ class ProviderRouter:
                         # Before first token: safe to retry or fallback
                         if first_chunk:
                             if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])
+                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
                                 self._notify("provider.rate_limit",
                                              provider=provider_name, message=kind.value,
                                              kind="warning", switching=True)

@@ -238,98 +238,98 @@ class CapabilityTree:
 
 _FLAT_REGISTRY: dict[str, Capability] = {
     # App
-    "app.launch": Capability(name="app.launch", category=CapabilityCategory.APP, risk=CapabilityRisk.SAFE, description="Launch installed applications", tags=["app", "launch"]),
-    "app.close": Capability(name="app.close", category=CapabilityCategory.APP, risk=CapabilityRisk.LOW, description="Close running applications", is_destructive=True, tags=["app", "close"]),
-    "app.list": Capability(name="app.list", category=CapabilityCategory.APP, risk=CapabilityRisk.SAFE, description="List installed applications", tags=["app", "list"]),
+    "app.launch": Capability(name="app.launch", category=CapabilityCategory.APP, risk=CapabilityRisk.SAFE, description="Launch installed applications", tags=["app", "launch"]),  # noqa: E501
+    "app.close": Capability(name="app.close", category=CapabilityCategory.APP, risk=CapabilityRisk.LOW, description="Close running applications", is_destructive=True, tags=["app", "close"]),  # noqa: E501
+    "app.list": Capability(name="app.list", category=CapabilityCategory.APP, risk=CapabilityRisk.SAFE, description="List installed applications", tags=["app", "list"]),  # noqa: E501
     # Media
-    "media.control": Capability(name="media.control", category=CapabilityCategory.MEDIA, risk=CapabilityRisk.SAFE, description="Control media playback", tags=["media", "playback"]),
-    "media.volume": Capability(name="media.volume", category=CapabilityCategory.MEDIA, risk=CapabilityRisk.SAFE, description="Adjust media volume", tags=["media", "volume"]),
+    "media.control": Capability(name="media.control", category=CapabilityCategory.MEDIA, risk=CapabilityRisk.SAFE, description="Control media playback", tags=["media", "playback"]),  # noqa: E501
+    "media.volume": Capability(name="media.volume", category=CapabilityCategory.MEDIA, risk=CapabilityRisk.SAFE, description="Adjust media volume", tags=["media", "volume"]),  # noqa: E501
     # System
-    "system.volume": Capability(name="system.volume", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.SAFE, description="Adjust system volume", tags=["system", "volume"]),
-    "system.query": Capability(name="system.query", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.SAFE, description="Query system information", tags=["system", "query"]),
-    "system.shutdown": Capability(name="system.shutdown", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.CRITICAL, description="Shutdown the computer", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["system", "power", "dangerous"]),
-    "system.restart": Capability(name="system.restart", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.CRITICAL, description="Restart the computer", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["system", "power", "dangerous"]),
-    "system.sleep": Capability(name="system.sleep", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Put system to sleep", requires_confirmation=True, tags=["system", "power"]),
+    "system.volume": Capability(name="system.volume", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.SAFE, description="Adjust system volume", tags=["system", "volume"]),  # noqa: E501
+    "system.query": Capability(name="system.query", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.SAFE, description="Query system information", tags=["system", "query"]),  # noqa: E501
+    "system.shutdown": Capability(name="system.shutdown", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.CRITICAL, description="Shutdown the computer", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["system", "power", "dangerous"]),  # noqa: E501
+    "system.restart": Capability(name="system.restart", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.CRITICAL, description="Restart the computer", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["system", "power", "dangerous"]),  # noqa: E501
+    "system.sleep": Capability(name="system.sleep", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Put system to sleep", requires_confirmation=True, tags=["system", "power"]),  # noqa: E501
     # Clipboard
-    "clipboard.read": Capability(name="clipboard.read", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Read clipboard contents", tags=["clipboard", "read"]),
-    "clipboard.write": Capability(name="clipboard.write", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Write to clipboard", tags=["clipboard", "write"]),
-    "clipboard.clear": Capability(name="clipboard.clear", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Clear clipboard", tags=["clipboard", "clear"]),
+    "clipboard.read": Capability(name="clipboard.read", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Read clipboard contents", tags=["clipboard", "read"]),  # noqa: E501
+    "clipboard.write": Capability(name="clipboard.write", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Write to clipboard", tags=["clipboard", "write"]),  # noqa: E501
+    "clipboard.clear": Capability(name="clipboard.clear", category=CapabilityCategory.CLIPBOARD, risk=CapabilityRisk.LOW, description="Clear clipboard", tags=["clipboard", "clear"]),  # noqa: E501
     # Window
-    "window.list": Capability(name="window.list", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.SAFE, description="List open windows", tags=["window", "list"]),
-    "window.focus": Capability(name="window.focus", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Focus a window", tags=["window", "focus"]),
-    "window.close": Capability(name="window.close", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Close a window", tags=["window", "close"]),
-    "window.minimize": Capability(name="window.minimize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Minimize a window", tags=["window", "minimize"]),
-    "window.maximize": Capability(name="window.maximize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Maximize a window", tags=["window", "maximize"]),
-    "window.resize": Capability(name="window.resize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Resize a window", tags=["window", "resize"]),
-    "window.move": Capability(name="window.move", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Move a window", tags=["window", "move"]),
+    "window.list": Capability(name="window.list", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.SAFE, description="List open windows", tags=["window", "list"]),  # noqa: E501
+    "window.focus": Capability(name="window.focus", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Focus a window", tags=["window", "focus"]),  # noqa: E501
+    "window.close": Capability(name="window.close", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Close a window", tags=["window", "close"]),  # noqa: E501
+    "window.minimize": Capability(name="window.minimize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Minimize a window", tags=["window", "minimize"]),  # noqa: E501
+    "window.maximize": Capability(name="window.maximize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Maximize a window", tags=["window", "maximize"]),  # noqa: E501
+    "window.resize": Capability(name="window.resize", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Resize a window", tags=["window", "resize"]),  # noqa: E501
+    "window.move": Capability(name="window.move", category=CapabilityCategory.WINDOW, risk=CapabilityRisk.LOW, description="Move a window", tags=["window", "move"]),  # noqa: E501
     # Memory
-    "memory.store": Capability(name="memory.store", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Store information in memory", tags=["memory", "store"]),
-    "memory.recall": Capability(name="memory.recall", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Recall stored information", tags=["memory", "recall"]),
-    "memory.clear": Capability(name="memory.clear", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.LOW, description="Clear memory", is_destructive=True, tags=["memory", "clear"]),
-    "memory.forget": Capability(name="memory.forget", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.LOW, description="Forget specific information", tags=["memory", "forget"]),
-    "memory.vector_store": Capability(name="memory.vector_store", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Store vector embedding", tags=["memory", "vector"]),
-    "memory.vector_query": Capability(name="memory.vector_query", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Query semantic memory", tags=["memory", "vector", "search"]),
+    "memory.store": Capability(name="memory.store", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Store information in memory", tags=["memory", "store"]),  # noqa: E501
+    "memory.recall": Capability(name="memory.recall", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Recall stored information", tags=["memory", "recall"]),  # noqa: E501
+    "memory.clear": Capability(name="memory.clear", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.LOW, description="Clear memory", is_destructive=True, tags=["memory", "clear"]),  # noqa: E501
+    "memory.forget": Capability(name="memory.forget", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.LOW, description="Forget specific information", tags=["memory", "forget"]),  # noqa: E501
+    "memory.vector_store": Capability(name="memory.vector_store", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Store vector embedding", tags=["memory", "vector"]),  # noqa: E501
+    "memory.vector_query": Capability(name="memory.vector_query", category=CapabilityCategory.MEMORY, risk=CapabilityRisk.SAFE, description="Query semantic memory", tags=["memory", "vector", "search"]),  # noqa: E501
     # Web
-    "web.search": Capability(name="web.search", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Search the web", tags=["web", "search"]),
-    "web.open": Capability(name="web.open", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Open a URL in browser", tags=["web", "open"]),
-    "web.navigate": Capability(name="web.navigate", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Navigate browser to URL", tags=["web", "navigate"]),
-    "web.scrape": Capability(name="web.scrape", category=CapabilityCategory.WEB, risk=CapabilityRisk.MEDIUM, description="Scrape web page content", tags=["web", "scrape"]),
+    "web.search": Capability(name="web.search", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Search the web", tags=["web", "search"]),  # noqa: E501
+    "web.open": Capability(name="web.open", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Open a URL in browser", tags=["web", "open"]),  # noqa: E501
+    "web.navigate": Capability(name="web.navigate", category=CapabilityCategory.WEB, risk=CapabilityRisk.SAFE, description="Navigate browser to URL", tags=["web", "navigate"]),  # noqa: E501
+    "web.scrape": Capability(name="web.scrape", category=CapabilityCategory.WEB, risk=CapabilityRisk.MEDIUM, description="Scrape web page content", tags=["web", "scrape"]),  # noqa: E501
     # Filesystem
-    "filesystem.read": Capability(name="filesystem.read", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.SAFE, description="Read files", tags=["filesystem", "read"]),
-    "filesystem.write": Capability(name="filesystem.write", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.HIGH, description="Write to files", requires_confirmation=True, affected_resources=["filesystem"], tags=["filesystem", "write", "dangerous"]),
-    "filesystem.delete": Capability(name="filesystem.delete", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.CRITICAL, description="Delete files", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["filesystem", "delete", "dangerous"]),
-    "filesystem.list": Capability(name="filesystem.list", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.SAFE, description="List files in directory", tags=["filesystem", "list"]),
-    "filesystem.copy": Capability(name="filesystem.copy", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.MEDIUM, description="Copy files", requires_confirmation=True, tags=["filesystem", "copy"]),
-    "filesystem.move": Capability(name="filesystem.move", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.MEDIUM, description="Move or rename files", requires_confirmation=True, tags=["filesystem", "move"]),
+    "filesystem.read": Capability(name="filesystem.read", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.SAFE, description="Read files", tags=["filesystem", "read"]),  # noqa: E501
+    "filesystem.write": Capability(name="filesystem.write", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.HIGH, description="Write to files", requires_confirmation=True, affected_resources=["filesystem"], tags=["filesystem", "write", "dangerous"]),  # noqa: E501
+    "filesystem.delete": Capability(name="filesystem.delete", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.CRITICAL, description="Delete files", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["filesystem", "delete", "dangerous"]),  # noqa: E501
+    "filesystem.list": Capability(name="filesystem.list", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.SAFE, description="List files in directory", tags=["filesystem", "list"]),  # noqa: E501
+    "filesystem.copy": Capability(name="filesystem.copy", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.MEDIUM, description="Copy files", requires_confirmation=True, tags=["filesystem", "copy"]),  # noqa: E501
+    "filesystem.move": Capability(name="filesystem.move", category=CapabilityCategory.FILESYSTEM, risk=CapabilityRisk.MEDIUM, description="Move or rename files", requires_confirmation=True, tags=["filesystem", "move"]),  # noqa: E501
     # Terminal
-    "terminal.list": Capability(name="terminal.list", category=CapabilityCategory.TERMINAL, risk=CapabilityRisk.SAFE, description="List active terminals", tags=["terminal", "list"]),
-    "terminal.write": Capability(name="terminal.write", category=CapabilityCategory.TERMINAL, risk=CapabilityRisk.HIGH, description="Write to terminal", requires_confirmation=True, tags=["terminal", "write", "dangerous"]),
+    "terminal.list": Capability(name="terminal.list", category=CapabilityCategory.TERMINAL, risk=CapabilityRisk.SAFE, description="List active terminals", tags=["terminal", "list"]),  # noqa: E501
+    "terminal.write": Capability(name="terminal.write", category=CapabilityCategory.TERMINAL, risk=CapabilityRisk.HIGH, description="Write to terminal", requires_confirmation=True, tags=["terminal", "write", "dangerous"]),  # noqa: E501
     # Process
-    "process.list": Capability(name="process.list", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.SAFE, description="List running processes", tags=["process", "list"]),
-    "process.kill": Capability(name="process.kill", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.HIGH, description="Kill a process", requires_confirmation=True, is_destructive=True, tags=["process", "kill", "dangerous"]),
-    "process.start": Capability(name="process.start", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.MEDIUM, description="Start a process", tags=["process", "start"]),
+    "process.list": Capability(name="process.list", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.SAFE, description="List running processes", tags=["process", "list"]),  # noqa: E501
+    "process.kill": Capability(name="process.kill", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.HIGH, description="Kill a process", requires_confirmation=True, is_destructive=True, tags=["process", "kill", "dangerous"]),  # noqa: E501
+    "process.start": Capability(name="process.start", category=CapabilityCategory.PROCESS, risk=CapabilityRisk.MEDIUM, description="Start a process", tags=["process", "start"]),  # noqa: E501
     # Service
-    "service.list": Capability(name="service.list", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.SAFE, description="List services", tags=["service", "list"]),
-    "service.start": Capability(name="service.start", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Start a service", tags=["service", "start"]),
-    "service.stop": Capability(name="service.stop", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Stop a service", requires_confirmation=True, tags=["service", "stop"]),
-    "service.restart": Capability(name="service.restart", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Restart a service", requires_confirmation=True, tags=["service", "restart"]),
+    "service.list": Capability(name="service.list", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.SAFE, description="List services", tags=["service", "list"]),  # noqa: E501
+    "service.start": Capability(name="service.start", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Start a service", tags=["service", "start"]),  # noqa: E501
+    "service.stop": Capability(name="service.stop", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Stop a service", requires_confirmation=True, tags=["service", "stop"]),  # noqa: E501
+    "service.restart": Capability(name="service.restart", category=CapabilityCategory.SERVICE, risk=CapabilityRisk.MEDIUM, description="Restart a service", requires_confirmation=True, tags=["service", "restart"]),  # noqa: E501
     # Shell
-    "shell.execute": Capability(name="shell.execute", category=CapabilityCategory.SHELL, risk=CapabilityRisk.CRITICAL, description="Execute shell command", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["shell", "execute", "dangerous"]),
-    "shell.run": Capability(name="shell.run", category=CapabilityCategory.SHELL, risk=CapabilityRisk.CRITICAL, description="Run shell command (alias)", requires_confirmation=True, is_destructive=True, tags=["shell", "execute", "dangerous"]),
+    "shell.execute": Capability(name="shell.execute", category=CapabilityCategory.SHELL, risk=CapabilityRisk.CRITICAL, description="Execute shell command", requires_confirmation=True, is_destructive=True, affected_resources=["system"], tags=["shell", "execute", "dangerous"]),  # noqa: E501
+    "shell.run": Capability(name="shell.run", category=CapabilityCategory.SHELL, risk=CapabilityRisk.CRITICAL, description="Run shell command (alias)", requires_confirmation=True, is_destructive=True, tags=["shell", "execute", "dangerous"]),  # noqa: E501
     # Package
-    "package.install": Capability(name="package.install", category=CapabilityCategory.PACKAGE, risk=CapabilityRisk.HIGH, description="Install software packages", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["package", "install", "dangerous"]),
-    "package.uninstall": Capability(name="package.uninstall", category=CapabilityCategory.PACKAGE, risk=CapabilityRisk.HIGH, description="Uninstall software packages", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["package", "uninstall", "dangerous"]),
+    "package.install": Capability(name="package.install", category=CapabilityCategory.PACKAGE, risk=CapabilityRisk.HIGH, description="Install software packages", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["package", "install", "dangerous"]),  # noqa: E501
+    "package.uninstall": Capability(name="package.uninstall", category=CapabilityCategory.PACKAGE, risk=CapabilityRisk.HIGH, description="Uninstall software packages", requires_confirmation=True, is_destructive=True, affected_resources=["filesystem"], tags=["package", "uninstall", "dangerous"]),  # noqa: E501
     # Desktop
-    "desktop.control": Capability(name="desktop.control", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Control desktop automation", requires_confirmation=True, tags=["desktop", "automation"]),
+    "desktop.control": Capability(name="desktop.control", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Control desktop automation", requires_confirmation=True, tags=["desktop", "automation"]),  # noqa: E501
     # Browser
-    "browser.control": Capability(name="browser.control", category=CapabilityCategory.WEB, risk=CapabilityRisk.MEDIUM, description="Control browser via keyboard shortcuts", requires_confirmation=True, tags=["browser", "control"]),
+    "browser.control": Capability(name="browser.control", category=CapabilityCategory.WEB, risk=CapabilityRisk.MEDIUM, description="Control browser via keyboard shortcuts", requires_confirmation=True, tags=["browser", "control"]),  # noqa: E501
     # Screen
-    "screen.capture": Capability(name="screen.capture", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Capture and analyze screen", tags=["screen", "capture", "vision"]),
-    "screen.analyze": Capability(name="screen.analyze", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Analyze screen content", tags=["screen", "analyze", "vision"]),
+    "screen.capture": Capability(name="screen.capture", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Capture and analyze screen", tags=["screen", "capture", "vision"]),  # noqa: E501
+    "screen.analyze": Capability(name="screen.analyze", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Analyze screen content", tags=["screen", "analyze", "vision"]),  # noqa: E501
     # Audio
-    "audio.list": Capability(name="audio.list", category=CapabilityCategory.AUDIO, risk=CapabilityRisk.SAFE, description="List audio devices", tags=["audio", "list"]),
-    "audio.record": Capability(name="audio.record", category=CapabilityCategory.AUDIO, risk=CapabilityRisk.LOW, description="Record audio", tags=["audio", "record"]),
+    "audio.list": Capability(name="audio.list", category=CapabilityCategory.AUDIO, risk=CapabilityRisk.SAFE, description="List audio devices", tags=["audio", "list"]),  # noqa: E501
+    "audio.record": Capability(name="audio.record", category=CapabilityCategory.AUDIO, risk=CapabilityRisk.LOW, description="Record audio", tags=["audio", "record"]),  # noqa: E501
     # Input
-    "input.keyboard": Capability(name="input.keyboard", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Simulate keyboard input", requires_confirmation=True, tags=["input", "keyboard"]),
-    "input.mouse": Capability(name="input.mouse", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Simulate mouse input", requires_confirmation=True, tags=["input", "mouse"]),
+    "input.keyboard": Capability(name="input.keyboard", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Simulate keyboard input", requires_confirmation=True, tags=["input", "keyboard"]),  # noqa: E501
+    "input.mouse": Capability(name="input.mouse", category=CapabilityCategory.SYSTEM, risk=CapabilityRisk.MEDIUM, description="Simulate mouse input", requires_confirmation=True, tags=["input", "mouse"]),  # noqa: E501
     # Network
-    "network.status": Capability(name="network.status", category=CapabilityCategory.NETWORK, risk=CapabilityRisk.SAFE, description="Get network status", tags=["network", "status"]),
-    "network.info": Capability(name="network.info", category=CapabilityCategory.NETWORK, risk=CapabilityRisk.SAFE, description="Get network information", tags=["network", "info"]),
+    "network.status": Capability(name="network.status", category=CapabilityCategory.NETWORK, risk=CapabilityRisk.SAFE, description="Get network status", tags=["network", "status"]),  # noqa: E501
+    "network.info": Capability(name="network.info", category=CapabilityCategory.NETWORK, risk=CapabilityRisk.SAFE, description="Get network information", tags=["network", "info"]),  # noqa: E501
     # Display
-    "display.manage": Capability(name="display.manage", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Manage display settings", tags=["display", "manage"]),
+    "display.manage": Capability(name="display.manage", category=CapabilityCategory.DISPLAY, risk=CapabilityRisk.MEDIUM, description="Manage display settings", tags=["display", "manage"]),  # noqa: E501
     # Startup
-    "startup.manage": Capability(name="startup.manage", category=CapabilityCategory.STARTUP, risk=CapabilityRisk.MEDIUM, description="Manage startup programs", requires_confirmation=True, tags=["startup", "manage"]),
+    "startup.manage": Capability(name="startup.manage", category=CapabilityCategory.STARTUP, risk=CapabilityRisk.MEDIUM, description="Manage startup programs", requires_confirmation=True, tags=["startup", "manage"]),  # noqa: E501
     # Task
-    "task.list": Capability(name="task.list", category=CapabilityCategory.TASK, risk=CapabilityRisk.SAFE, description="List scheduled tasks", tags=["task", "list"]),
-    "task.manage": Capability(name="task.manage", category=CapabilityCategory.TASK, risk=CapabilityRisk.MEDIUM, description="Manage scheduled tasks", requires_confirmation=True, tags=["task", "manage"]),
+    "task.list": Capability(name="task.list", category=CapabilityCategory.TASK, risk=CapabilityRisk.SAFE, description="List scheduled tasks", tags=["task", "list"]),  # noqa: E501
+    "task.manage": Capability(name="task.manage", category=CapabilityCategory.TASK, risk=CapabilityRisk.MEDIUM, description="Manage scheduled tasks", requires_confirmation=True, tags=["task", "manage"]),  # noqa: E501
     # AI
-    "ai.llm.query": Capability(name="ai.llm.query", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Query LLM for reasoning", tags=["ai", "llm", "reasoning"]),
-    "ai.vision.analyze": Capability(name="ai.vision.analyze", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Analyze image with vision model", tags=["ai", "vision", "image"]),
-    "ai.embedding.create": Capability(name="ai.embedding.create", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Create text embeddings", tags=["ai", "embedding"]),
+    "ai.llm.query": Capability(name="ai.llm.query", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Query LLM for reasoning", tags=["ai", "llm", "reasoning"]),  # noqa: E501
+    "ai.vision.analyze": Capability(name="ai.vision.analyze", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Analyze image with vision model", tags=["ai", "vision", "image"]),  # noqa: E501
+    "ai.embedding.create": Capability(name="ai.embedding.create", category=CapabilityCategory.AI, risk=CapabilityRisk.SAFE, description="Create text embeddings", tags=["ai", "embedding"]),  # noqa: E501
     # Scheduling
-    "schedule.create": Capability(name="schedule.create", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.MEDIUM, description="Create scheduled task", tags=["schedule", "create"]),
-    "schedule.list": Capability(name="schedule.list", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.SAFE, description="List scheduled tasks", tags=["schedule", "list"]),
-    "schedule.delete": Capability(name="schedule.delete", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.MEDIUM, description="Delete scheduled task", requires_confirmation=True, tags=["schedule", "delete"]),
+    "schedule.create": Capability(name="schedule.create", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.MEDIUM, description="Create scheduled task", tags=["schedule", "create"]),  # noqa: E501
+    "schedule.list": Capability(name="schedule.list", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.SAFE, description="List scheduled tasks", tags=["schedule", "list"]),  # noqa: E501
+    "schedule.delete": Capability(name="schedule.delete", category=CapabilityCategory.SCHEDULE, risk=CapabilityRisk.MEDIUM, description="Delete scheduled task", requires_confirmation=True, tags=["schedule", "delete"]),  # noqa: E501
 }
 
 # Build tree from flat registry

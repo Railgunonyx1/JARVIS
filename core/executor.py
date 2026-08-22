@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from core.async_utils import sync_retry
+from core.config import ModelCatalog
 from core.decision_logger import get_decision_logger
 from core.mode_manager import get_mode_manager
 from core.utils import get_project_root as _get_base_dir
@@ -19,7 +20,6 @@ BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
 # Model names for executor's inline Gemini usage (config-driven with defaults).
-from core.config import ModelCatalog
 
 _CODE_MODEL = ModelCatalog.GEMINI_FLASH   # "gemini-2.5-flash"
 _QUICK_MODEL = ModelCatalog.GEMINI_FLASH_LITE  # "gemini-2.5-flash-lite"
@@ -389,7 +389,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
 
     else:
         print(f"[Executor] ERROR: Unknown tool '{tool}' - cannot execute")
-        return f"I don't know how to use the tool '{tool}' yet, sir. I can use: file_manager, process_manager, shell, browser, screen_analyzer, and more."
+        return f"I don't know how to use the tool '{tool}' yet, sir. I can use: file_manager, process_manager, shell, browser, screen_analyzer, and more."  # noqa: E501
 
 class AgentExecutor:
 
@@ -433,7 +433,7 @@ class AgentExecutor:
 
             if not steps:
                 msg = "I couldn't create a valid plan for this task, sir."
-                decision_logger.record(trace_id, "task.failed", {"error": "no plan steps", "goal": goal[:200], "source": "executor"})
+                decision_logger.record(trace_id, "task.failed", {"error": "no plan steps", "goal": goal[:200], "source": "executor"})  # noqa: E501
                 if speak:
                     speak(msg)
                 return msg
@@ -502,7 +502,7 @@ class AgentExecutor:
 
                     except Exception as e:
                         error_msg = str(e)
-                        _log_step_result(step, tool, params, False, error_msg=error_msg, ms=(time.time() - _step_start) * 1000)
+                        _log_step_result(step, tool, params, False, error_msg=error_msg, ms=(time.time() - _step_start) * 1000)  # noqa: E501
                         print(f"[Executor] Step {step_num} attempt {attempt} failed: {error_msg}")
 
                         recovery = analyze_error(step, error_msg, attempt=attempt)
@@ -525,7 +525,7 @@ class AgentExecutor:
 
                         elif decision == ErrorDecision.ABORT:
                             msg = f"Task aborted, sir. {recovery.get('reason', '')}"
-                            decision_logger.record(trace_id, "task.failed", {"error": "abort", "reason": str(recovery.get('reason', ''))[:200], "goal": goal[:200], "source": "executor"})
+                            decision_logger.record(trace_id, "task.failed", {"error": "abort", "reason": str(recovery.get('reason', ''))[:200], "goal": goal[:200], "source": "executor"})  # noqa: E501
                             if speak:
                                 speak(msg)
                             return msg

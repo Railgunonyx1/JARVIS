@@ -41,7 +41,9 @@ def test_no_results_without_transport():
     result = ws.web_search({"query": "anything", "limit": 3})
     assert isinstance(result, ToolResult)
     assert result.success is False
-    assert "No results found" in result.output
+    # Error message is in result.error (not output) after the error-handling fix
+    combined = result.output + result.error
+    assert "No search results found" in combined or "No results found" in combined
 
 
 def test_formats_ddg_results(monkeypatch):

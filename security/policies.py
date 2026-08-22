@@ -112,7 +112,7 @@ def build_controlled_policy() -> Policy:
             PolicyRule("system_status", r"^query\.status$", PermissionLevel.READ_ONLY),
             PolicyRule("web_search", r"^action\.search$", PermissionLevel.SAFE, requires_confirmation=True),
             PolicyRule("open_app", r"^action\.open$", PermissionLevel.SAFE, requires_confirmation=True),
-            PolicyRule("desktop_control", r"^action\.desktop_control$", PermissionLevel.SAFE, requires_confirmation=True),
+            PolicyRule("desktop_control", r"^action\.desktop_control$", PermissionLevel.SAFE, requires_confirmation=True),  # noqa: E501
             PolicyRule("clipboard_read", r"^action\.clipboard\.read$", PermissionLevel.READ_ONLY),
             PolicyRule("screen_analyzer", r"^action\.screen_analyzer$", PermissionLevel.SAFE),
         ],
@@ -128,7 +128,7 @@ def build_smart_policy() -> Policy:
     controlled.max_concurrent_actions = 5
     controlled.rules.extend([
         PolicyRule("file_read", r"^action\.file\.read$", PermissionLevel.SAFE),
-        PolicyRule("file_write", r"^action\.file\.(write|create|delete|move|copy)$", PermissionLevel.MODERATE, requires_confirmation=True),
+        PolicyRule("file_write", r"^action\.file\.(write|create|delete|move|copy)$", PermissionLevel.MODERATE, requires_confirmation=True),  # noqa: E501
         PolicyRule("shell_safe", r"^action\.shell\.run$", PermissionLevel.MODERATE, requires_confirmation=True),
         PolicyRule("process_list", r"^action\.process\.list$", PermissionLevel.READ_ONLY),
         PolicyRule("process_kill", r"^action\.process\.kill$", PermissionLevel.ELEVATED, requires_confirmation=True),
@@ -140,7 +140,7 @@ def build_smart_policy() -> Policy:
         PolicyRule("disk_info", r"^action\.disk\.info$", PermissionLevel.READ_ONLY),
         PolicyRule("audio_devices", r"^action\.audio\.devices$", PermissionLevel.READ_ONLY),
         PolicyRule("fs_read", r"^filesystem\.(read|list)$", PermissionLevel.SAFE),
-        PolicyRule("fs_write", r"^filesystem\.(write|delete|move|copy)$", PermissionLevel.MODERATE, requires_confirmation=True),
+        PolicyRule("fs_write", r"^filesystem\.(write|delete|move|copy)$", PermissionLevel.MODERATE, requires_confirmation=True),  # noqa: E501
         PolicyRule("shell_exec", r"^shell\.execute$", PermissionLevel.MODERATE, requires_confirmation=True),
     ])
     return controlled
