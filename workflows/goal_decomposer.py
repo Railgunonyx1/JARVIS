@@ -270,7 +270,7 @@ class GoalDecomposer:
                 name_to_id[sg.name] = sg.id
                 sub_goals.append(sg)
 
-            for sg, item in zip(sub_goals, parsed):
+            for sg, item in zip(sub_goals, parsed, strict=False):
                 dep_names = item.get("depends_on", [])
                 sg.depends_on = [name_to_id[n] for n in dep_names if n in name_to_id]
 
@@ -360,7 +360,6 @@ class GoalDecomposer:
 
     def get_dependency_graph(self, sub_goals: list[SubGoal]) -> dict[str, list[str]]:
         graph: dict[str, list[str]] = {sg.id: [] for sg in sub_goals}
-        id_map = {sg.id: sg for sg in sub_goals}
 
         for sg in sub_goals:
             for dep_id in sg.depends_on:

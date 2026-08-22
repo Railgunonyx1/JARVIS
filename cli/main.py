@@ -198,10 +198,8 @@ async def _run_once(goal: str, loop, json_output: bool = False,
                     perf: bool = False, bridge=None, screen: bool = False) -> None:
     from cli.ux import LiveTaskDisplay
 
-    global _main_task_running
     loop._last_goal = goal
     loop._last_task_id = f"task_{int(time.time())}"
-    _main_task_running = True
     _cancel_event = asyncio.Event()  # Set to cancel the current task gracefully
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
@@ -330,7 +328,6 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         console.print(Text(f"  error: {str(exc)[:200]}", style="jarvis.error"))
         raise
     finally:
-        _main_task_running = False
         if use_live:
             display.stop()
             if renderer is not None:
@@ -492,7 +489,6 @@ def _print_startup_report() -> None:
 # Interrupt executor globals (initialized in _interactive after kernel boots)
 _interrupt_executor = None
 _interrupt_classifier = None
-_main_task_running = False
 
 
 def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
@@ -561,12 +557,12 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     def _input_thread() -> None:
         """Read input in a background thread.
 
-        Only reads when the REPL signals it is ready (via _input_ready).
-        This prevents the same input from being queued multiple times
-        while the agent task is running.
+        ALWAYS reads when REPL is ready. The REPL sets _input_ready before
+        blocking on input_q.get(), and clears it after consuming a line.
+        This allows the input thread to read interrupts while the main
+        task is running.
         """
         while not _stop_event.is_set():
-            # Wait until the REPL is ready for input
             _input_ready.wait(timeout=0.5)
             if _stop_event.is_set():
                 break
@@ -576,7 +572,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 mode_str = str(loop.mode).lower() if loop else "agent"
                 prompt = f"JARVIS [{mode_str}] > "
                 line = reader.read_line(prompt)
-                _input_ready.clear()  # Consumed input — not ready until REPL loops
+                _input_ready.clear()  # Consumed — REPL will set again
                 input_q.put(line)
             except (EOFError, KeyboardInterrupt):
                 input_q.put(None)
@@ -656,23 +652,33 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     async def _run_agent_async(goal: str) -> None:
         """Run the agent task on the background event loop.
 
-        This avoids nesting asyncio.run() — the coroutine is scheduled
-        on the already-running background loop.
+        Registers with TaskRegistry as the authoritative task-state source.
         """
-        global _main_task_running
-        _main_task_running = True
+        from core.agent.lanes import ExecutionLane, TaskHandle
+        _task_id = f"main_{int(time.time())}"
+        _handle = TaskHandle(
+            task_id=_task_id, goal=goal, lane=ExecutionLane.MAIN,
+            model=loop._preferred_model or 'unknown',
+        )
+        # Use interrupt executor's registry if available, else local
+        _registry = (
+            _interrupt_executor.task_registry if _interrupt_executor
+            else None
+        )
+        if _registry:
+            _registry.register(_handle)
         try:
             await _run_once(
                 goal, loop, collapsed=True,
                 notifications=notifications, bridge=bridge, screen=False,
             )
         finally:
-            _main_task_running = False
+            if _registry:
+                _registry.unregister(_task_id)
 
     # ── Async interrupt handler (runs on background event loop) ──
     async def _handle_interrupt(text: str) -> None:
         """Classify and execute an interrupt on the 1B model."""
-        global _main_task_running
         if _interrupt_classifier is None or _interrupt_executor is None:
             return
         classification = _interrupt_classifier.classify(
@@ -723,15 +729,42 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 bridge.attach_loop(loop)
                 bridge.pull_status()
                 boot_ms = (time.time() - boot_start) * 1000
-                bridge.renderer.state.connection = "ONLINE"
+                # Determine connection state based on Ollama availability
+                ollama_ok = False
+                try:
+                    for _pname, _pinfo in loop.router.status.items():
+                        if _pname == 'ollama' and _pinfo.get('available'):
+                            ollama_ok = True
+                            break
+                except Exception:
+                    pass
+                if ollama_ok:
+                    bridge.renderer.state.connection = "ONLINE"
+                elif getattr(loop.router, '_last_provider', None) and \
+                     loop.router._last_provider != 'ollama':
+                    bridge.renderer.state.connection = "CLOUD"
+                else:
+                    bridge.renderer.state.connection = "OFFLINE"
+                # Show boot phase breakdown in status
+                _boot_phases = []
+                try:
+                    for name, start, end in profiler._phases:
+                        ms = (end - start) * 1000
+                        if ms > 50:
+                            _boot_phases.append(f"{name.split('.')[-1]}:{ms:.0f}ms")
+                except Exception:
+                    pass
+                _phase_str = ' '.join(_boot_phases) if _boot_phases else ''
                 bridge.renderer.state.status_message = f"ready in {boot_ms/1000:.1f}s"
+                if _phase_str:
+                    logger.info("Boot phases: %s", _phase_str)
                 bridge.renderer.refresh()
                 def _forward_provider_event(name, payload):
                     if hasattr(loop.observer, 'on_event'):
                         loop.observer.on_event(name, payload)
                 loop.router.on_provider_event = _forward_provider_event
                 loop.router.warm()
-                global _interrupt_executor, _interrupt_classifier, _main_task_running
+                global _interrupt_executor, _interrupt_classifier
                 try:
                     from core.agent.lanes import InterruptExecutor, RequestClassifier
                     _interrupt_classifier = RequestClassifier()
@@ -741,7 +774,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                         mem=loop.mem, project=loop.project,
                         tool_service=_tool_svc,
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.warning("InterruptExecutor init failed: %s", exc)
                     _interrupt_classifier = None
                     _interrupt_executor = None
                 if profile_startup:
@@ -756,32 +790,85 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 _input_ready.set()  # Ready for next input
                 continue  # Non-agent command handled, get next input
 
-            # Agent command: submit to background loop, then continue
-            # accepting input so interrupts can be detected.
-            if _agent_task is not None and not _agent_task.done():
-                # Previous task still running — queue as interrupt or new main
+            # Check if a main task is already running (via TaskRegistry)
+            _main_active = (
+                _interrupt_executor is not None
+                and _interrupt_executor.task_registry.has_active_main
+            )
+
+            if _main_active:
+                # Main task running — classify this input
                 if _interrupt_classifier is not None:
                     classification = _interrupt_classifier.classify(
                         line,
-                        active_task_id=getattr(loop, '_last_task_id', None),
+                        active_task_id=(
+                            _interrupt_executor.task_registry.main_task.task_id
+                            if _interrupt_executor.task_registry.main_task
+                            else None
+                        ),
                         active_task_status="executing",
                     )
                     if classification.lane.value == "interrupt":
+                        # Run interrupt concurrently — main task continues
                         asyncio.run_coroutine_threadsafe(
                             _handle_interrupt(line), _agent_event_loop,
                         )
+                        _input_ready.set()  # Ready for next input immediately
                         continue
                 # Not an interrupt — queue for after current task finishes
                 console.print(Text("  (task still running — queuing...)", style="dim"))
-                input_q.put(line)  # Re-queue for processing later
-                await asyncio.sleep(0.1)  # Yield to let agent task progress
+                input_q.put(line)
+                _input_ready.set()  # Ready for next input
+                await asyncio.sleep(0.1)
                 continue
 
-            # No agent task running — launch one and wait for completion
+            # No main task running — launch one
             _agent_task = asyncio.ensure_future(_run_agent_async(line))
-            await _agent_task
-            # Belt-and-suspenders: print the response directly here too,
-            # in case _print_collapsed output was swallowed by Rich state.
+            # Allow input thread to read — interrupts can arrive while the
+            # main task is running.  We poll the queue below.
+            _input_ready.set()
+
+            # Poll for interrupts while main task runs
+            import queue as _qmod
+            while not _agent_task.done():
+                try:
+                    incoming = input_q.get(timeout=0.15)
+                except _qmod.Empty:
+                    continue
+                if incoming is None:
+                    _stop_event.set()
+                    _agent_task.cancel()
+                    break
+                incoming = incoming.strip()
+                history.add(incoming)
+                # Classify as interrupt or queued main task
+                if _interrupt_classifier is not None:
+                    _main_id = (
+                        _interrupt_executor.task_registry.main_task.task_id
+                        if (
+                            _interrupt_executor
+                            and _interrupt_executor.task_registry.main_task
+                        )
+                        else None
+                    )
+                    cls = _interrupt_classifier.classify(
+                        incoming, active_task_id=_main_id,
+                        active_task_status="executing",
+                    )
+                    if cls.lane.value == "interrupt" and _agent_event_loop:
+                        asyncio.run_coroutine_threadsafe(
+                            _handle_interrupt(incoming), _agent_event_loop,
+                        )
+                        continue
+                # Not interrupt — queue for after main task
+                console.print(Text("  (task running — queued)", style="dim"))
+                input_q.put(incoming)
+
+            # Main task finished — collect result
+            try:
+                await _agent_task
+            except Exception:
+                pass
             _lr = getattr(loop, '_last_result', None)
             if _lr and _lr.success and _lr.response:
                 import re as _re
@@ -789,7 +876,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 sys.stdout.write('\n' + _clean + '\n\n')
                 sys.stdout.flush()
             await asyncio.sleep(0.1)
-            # Agent done — allow input thread to read next input
             _input_ready.set()
             continue
 
@@ -1010,7 +1096,7 @@ def _cmd_status(loop) -> None:
     from rich.table import Table
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Key", style="dim")
-    table.add_column("Value")
+    table.add_column("Value")
     # Mode
     mode = str(loop.mode).lower()
     table.add_row("Mode", Text(mode, style="cyan"))

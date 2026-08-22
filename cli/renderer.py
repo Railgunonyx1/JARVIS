@@ -210,7 +210,11 @@ class Renderer:
         parts.append(Text(mem_status, style=mem_style))
         parts.append(Text(f" {sep} ", style="jarvis.muted"))
 
-        conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
+        conn_style = (
+            "jarvis.success" if self.state.connection == "ONLINE"
+            else "jarvis.error" if self.state.connection in ("OFFLINE", "BOOTING")
+            else "jarvis.warning"
+        )
         parts.append(Text(self.state.connection, style=conn_style))
 
         if width >= 90 and self.state.vram_gb is not None:
@@ -668,7 +672,11 @@ class Renderer:
         t.append(mem_status, style=mem_style)
         t.append(f" {sep} ", style="jarvis.muted")
 
-        conn_style = "jarvis.success" if self.state.connection == "ONLINE" else "jarvis.warning"
+        conn_style = (
+            "jarvis.success" if self.state.connection == "ONLINE"
+            else "jarvis.error" if self.state.connection in ("OFFLINE", "BOOTING")
+            else "jarvis.warning"
+        )
         t.append(self.state.connection, style=conn_style)
 
         if width >= 95 and self.state.vram_gb is not None:

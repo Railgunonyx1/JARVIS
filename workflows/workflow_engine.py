@@ -573,7 +573,9 @@ class WorkflowEngine:
             for step in steps:
                 conn.execute("""
                     INSERT OR REPLACE INTO workflow_steps
-                    (id, workflow_id, name, action, params, status, dependencies, timeout, result, error, attempts, max_attempts, created_at, completed_at)
+                    (id, workflow_id, name, action, params, status,
+                     dependencies, timeout, result, error, attempts,
+                     max_attempts, created_at, completed_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', '', 0, ?, ?, 0)
                 """, (
                     step.id, wf_id, step.name, step.action, json.dumps(step.params),
