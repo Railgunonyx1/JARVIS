@@ -387,9 +387,12 @@ class ModelRegistry:
     _instance = None
 
     # Default cascade configuration
-    CASCADE_ROUTER = "qwen2.5:1.5b"  # Tier 1: handles QUICK/CONVERSATIONAL directly
-    CASCADE_WORKER = "qwen2.5:3b"    # Tier 2: default worker for most tasks
-    CASCADE_HEAVY  = "qwen3:4b"      # Tier 3: only for genuinely complex tasks
+    # Tier 1 (router):  gemma3:1b — 815MB, ultra-fast, handles greetings/simple tasks
+    # Tier 2 (worker):  qwen2.5:1.5b — 986MB, fallback for interrupt lane + light tasks
+    # Tier 3 (heavy):   qwen2.5:3b — 1.9GB, default worker for tool-using tasks
+    CASCADE_ROUTER = "gemma3:1b"     # Tier 1: fastest, loaded first at boot
+    CASCADE_WORKER = "qwen2.5:1.5b"  # Tier 2: fallback, loaded lazily
+    CASCADE_HEAVY  = "qwen2.5:3b"    # Tier 3: heavy tasks, loaded on demand
 
     def __init__(self):
         self._active_model: str | None = None

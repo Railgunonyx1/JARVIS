@@ -16,6 +16,8 @@ REM and providers/ollama_provider.py — not here. BAT only configures the
 REM daemon process and proxy bypass for localhost connections.
 set "OLLAMA_FLASH_ATTENTION=1"
 set "OLLAMA_HOST=127.0.0.1:11434"
+set "OLLAMA_MAX_LOADED_MODELS=2"
+set "OLLAMA_NUM_PARALLEL=2"
 set "NO_PROXY=127.0.0.1,localhost,::1"
 set "no_proxy=127.0.0.1,localhost,::1"
 

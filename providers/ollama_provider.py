@@ -282,17 +282,47 @@ class OllamaProvider(LLMProvider):
         super()._warm()
         if self._prewarm_on_start and self._daemon_ok:
             import threading
+            # Priority: load gemma3:1b FIRST — 815MB, fastest model.
+            # Handles interrupts, greetings, and simple queries.
+            # The 1.5B fallback and 3B worker are loaded lazily.
+            primary_router = "gemma3:1b"
+            try:
+                threading.Thread(target=self.prewarm, args=(primary_router,), daemon=True).start()
+            except Exception:
+                pass
+
+    _worker_prewarming = False
+    _fallback_prewarming = False
+
+    def ensure_worker_model(self) -> None:
+        """Lazily prewarm the 1.5B fallback and 3B worker models.
+
+        Called by the agent loop before the first non-trivial request.
+        Runs in a background thread so the boot stays fast.
+        Loads qwen2.5:1.5b (986MB) as fallback first, then qwen2.5:3b (1.9GB)
+        as the heavy worker. Only triggers once per model.
+        """
+        if not self._daemon_ok:
+            return
+        import threading
+        # Load 1.5B fallback first (if not already loaded)
+        if not self._fallback_prewarming:
+            self._fallback_prewarming = True
+            fallback = "qwen2.5:1.5b"
+            try:
+                threading.Thread(target=self.prewarm, args=(fallback,), daemon=True).start()
+                logger.info("Lazy prewarm started for fallback: %s", fallback)
+            except Exception:
+                pass
+        # Load 3B worker (if not already loaded)
+        if not self._worker_prewarming:
+            self._worker_prewarming = True
             primary = self.config.get("model", "qwen2.5:3b")
             try:
                 threading.Thread(target=self.prewarm, args=(primary,), daemon=True).start()
+                logger.info("Lazy prewarm started for worker: %s", primary)
             except Exception:
                 pass
-            interrupt_model = "qwen2.5:1.5b"
-            if interrupt_model != primary:
-                try:
-                    threading.Thread(target=self.prewarm, args=(interrupt_model,), daemon=True).start()
-                except Exception:
-                    pass
 
     def _get_client(self):
         if self._client is None:

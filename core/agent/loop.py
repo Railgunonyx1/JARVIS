@@ -681,6 +681,15 @@ class AgentLoop:
         keep working. Without a callback it behaves exactly like the plain
         :meth:`router.complete` call.
         """
+        # Lazy 3B prewarm: on first real LLM call, start loading the worker
+        # model in background so it's ready by the time a tool-using task
+        # arrives. The 1.5B is already loaded from boot.
+        try:
+            for provider in getattr(self.router, '_providers', {}).values():
+                if hasattr(provider, 'ensure_worker_model'):
+                    provider.ensure_worker_model()
+        except Exception:
+            pass
         kwargs = dict(
             system_prompt=system_prompt,
             max_tokens=self.max_tokens,

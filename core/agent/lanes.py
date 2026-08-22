@@ -352,7 +352,7 @@ class InterruptExecutor:
             task_id=task_id,
             goal=text,
             lane=ExecutionLane.INTERRUPT,
-            model="qwen2.5:1.5b",  # Always 1B for interrupts
+            model="gemma3:1b",  # Primary interrupt model (815MB, fastest)
             parent_task_id=classification.parent_task_id,
         )
         self._task_registry.register(handle)
@@ -379,10 +379,11 @@ class InterruptExecutor:
                 if t.get("function", {}).get("name", "") in allowed_names
             ]
 
-            # Request-scoped model: pass 1B directly, never mutate global config
-            _interrupt_model = "qwen2.5:1.5b"
+            # Request-scoped model: gemma3:1b primary, qwen2.5:1.5b fallback
+            _interrupt_model = "gemma3:1b"
+            _interrupt_fallback = "qwen2.5:1.5b"
 
-            # Bounded tool loop — 1.5B can call memory.retrieve etc.
+            # Bounded tool loop — 1B/1.5B can call memory.retrieve etc.
             # Max 3 iterations, 10s total hard timeout.
             _MAX_INTERRUPT_ITERATIONS = 3
             _INTERRUPT_TIMEOUT = 10.0
@@ -395,17 +396,36 @@ class InterruptExecutor:
                     break
                 remaining = _INTERRUPT_TIMEOUT - elapsed
 
-                response = await asyncio.wait_for(
-                    self._router.complete(
-                        messages,
-                        system_prompt=system_prompt,
-                        max_tokens=512,
-                        temperature=0.3,
-                        tools=tools if tools and _iter == 0 else None,
-                        preferred_model=_interrupt_model,
-                    ),
-                    timeout=remaining,
-                )
+                try:
+                    response = await asyncio.wait_for(
+                        self._router.complete(
+                            messages,
+                            system_prompt=system_prompt,
+                            max_tokens=512,
+                            temperature=0.3,
+                            tools=tools if tools and _iter == 0 else None,
+                            preferred_model=_interrupt_model,
+                        ),
+                        timeout=remaining,
+                    )
+                except Exception:
+                    # Primary model failed — try fallback
+                    if _interrupt_model != _interrupt_fallback:
+                        _interrupt_model = _interrupt_fallback
+                        logger.info("Interrupt fallback: gemma3:1b -> qwen2.5:1.5b")
+                        response = await asyncio.wait_for(
+                            self._router.complete(
+                                messages,
+                                system_prompt=system_prompt,
+                                max_tokens=512,
+                                temperature=0.3,
+                                tools=tools if tools and _iter == 0 else None,
+                                preferred_model=_interrupt_model,
+                            ),
+                            timeout=remaining,
+                        )
+                    else:
+                        raise
 
                 # If no tool calls, we have the final answer
                 if not response.tool_calls:
