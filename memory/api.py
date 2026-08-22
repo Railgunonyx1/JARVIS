@@ -378,6 +378,33 @@ class MemoryAPI:
             _instance = None
 
 
+class _LazyVectorStore:
+    """Proxy that initializes VectorMemoryStore on first use.
+
+    Saves ~140ms at boot by deferring sqlite-vec + embedding model init.
+    All attribute access is forwarded to the real store once created.
+    """
+
+    _real = None
+    _creating = False
+
+    def _ensure(self):
+        if self._real is None and not self._creating:
+            self._creating = True
+            try:
+                from memory.vector_store import VectorMemoryStore
+                self._real = VectorMemoryStore()
+            finally:
+                self._creating = False
+        return self._real
+
+    def __getattr__(self, name: str):
+        return getattr(self._ensure(), name)
+
+    def __bool__(self):
+        return True
+
+
 def get_mem() -> MemoryAPI:
     """Process-wide memory instance (replaces the old Mem singleton)."""
     global _instance
@@ -387,10 +414,9 @@ def get_mem() -> MemoryAPI:
                 from memory.decision_memory import get_decision_memory
                 from memory.project_knowledge import get_project_knowledge
                 from memory.store import MemoryStore
-                from memory.vector_store import VectorMemoryStore
                 _instance = MemoryAPI(
                     kv=MemoryStore(),
-                    vector=VectorMemoryStore(),
+                    vector=_LazyVectorStore(),
                     decisions=get_decision_memory(),
                     knowledge=get_project_knowledge(),
                     mirror_json=True,

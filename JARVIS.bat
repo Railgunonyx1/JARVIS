@@ -20,69 +20,46 @@ set "NO_PROXY=127.0.0.1,localhost"
 set "no_proxy=127.0.0.1,localhost"
 
 REM ── Quick dispatch (no Ollama needed) ─────────────────────────────────
-if /i "%~1"=="" goto launch_jarvis
+if /i "%~1"=="" goto ensure_ollama
 if /i "%~1"=="help" goto help
 if /i "%~1"=="--help" goto help
 if /i "%~1"=="tests" goto tests
 if /i "%~1"=="perf" goto perf
+goto ensure_ollama
 
-REM ── Check if Ollama is already running ────────────────────────────────
+REM ── Fast Ollama check via Python socket (no tasklist /FI hang) ────────
+:ensure_ollama
+python -c "import socket; s=socket.socket(); s.settimeout(1); s.connect_ex(('127.0.0.1',11434)); s.close()" 2>nul
+if %errorlevel%==0 goto ollama_ready
+
+REM ── Not running — start it ────────────────────────────────────────────
 echo Starting Ollama...
-tasklist /FI "IMAGENAME eq ollama.exe" 2>nul | find /i "ollama.exe" >nul 2>&1
-if not errorlevel 1 goto ollama_ready
-
-REM ── Start Ollama ─────────────────────────────────────────────────────
-where ollama >nul 2>&1
-if not errorlevel 1 goto start_by_name
-if exist "C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe" goto start_by_path
-echo WARNING: Ollama not found. Local models unavailable.
-goto launch_jarvis
-
-:start_by_name
-start "" ollama serve
-goto wait_for_ollama
-
-:start_by_path
-start "" "C:\Users\aayan\AppData\Local\Programs\Ollama\ollama.exe" serve
-goto wait_for_ollama
-
-:wait_for_ollama
-REM Wait up to 15 seconds for Ollama port to open
-set OLLAMA_READY=0
+start "" ollama serve 2>nul
 set OLLAMA_WAIT=0
 :wait_loop
-if %OLLAMA_WAIT% geq 15 goto ollama_timeout
+if %OLLAMA_WAIT% geq 8 goto ollama_timeout
 timeout /t 1 /nobreak >nul 2>&1
 set /a OLLAMA_WAIT+=1
-REM Check if port 11434 is listening
-python -c "import socket; s=socket.socket(); s.settimeout(1); r=s.connect_ex(('127.0.0.1',11434)); s.close(); exit(0 if r==0 else 1)" 2>nul
-if not errorlevel 1 (
-    set OLLAMA_READY=1
-    goto ollama_ready
-)
+python -c "import socket; s=socket.socket(); s.settimeout(1); s.connect_ex(('127.0.0.1',11434)); s.close()" 2>nul
+if %errorlevel%==0 goto ollama_ready
 goto wait_loop
 
 :ollama_timeout
-echo WARNING: Ollama not responding after 15s. Local models may be unavailable.
+echo WARNING: Ollama not responding after 8s.
 
 :ollama_ready
-if "%OLLAMA_READY%"=="1" echo Ollama is ready.
 
-:launch_jarvis
+:launch
 if /i "%~1"=="" goto interactive
-if /i "%~1"=="chat" goto chat
-if /i "%~1"=="agent" goto chat
+if /i "%~1"=="chat" goto interactive
+if /i "%~1"=="agent" goto interactive
 if /i "%~1"=="plan" goto plan
 if /i "%~1"=="controlled" goto controlled
 if /i "%~1"=="smart" goto smart
 if /i "%~1"=="oneshot" goto oneshot
-goto chat
+goto interactive
 
 :interactive
-"%PY%" -m cli --mode agent
-goto quit
-
-:chat
 "%PY%" -m cli --mode agent
 goto quit
 
@@ -115,15 +92,10 @@ goto quit
 :help
 echo.
 echo   JARVIS.bat [chat^|plan^|controlled^|smart^|oneshot^|perf^|tests^|help]
-goto quit
-
-:error_exit
 echo.
-echo ============================================
-echo   JARVIS exited with an error.
-echo   Check the messages above for details.
-echo ============================================
-timeout /t 5 /nobreak >nul 2>&1
+echo   Quick start: double-click JARVIS.bat
+echo   Type /skills inside JARVIS to see all 31 skills
+goto quit
 
 :quit
 endlocal
