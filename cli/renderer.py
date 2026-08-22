@@ -23,11 +23,29 @@ from typing import Any
 
 from rich import box
 from rich.console import Console, Group, RenderableType
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
+
+# Lazy-loaded to save ~1.7s cold-start (rich.markdown imports pygments)
+_Markdown = None
+_Syntax = None
+
+
+def _get_markdown():
+    global _Markdown
+    if _Markdown is None:
+        from rich.markdown import Markdown as _M
+        _Markdown = _M
+    return _Markdown
+
+
+def _get_syntax():
+    global _Syntax
+    if _Syntax is None:
+        from rich.syntax import Syntax as _S
+        _Syntax = _S
+    return _Syntax
 
 from .layout import LayoutManager
 from .models import (
@@ -61,7 +79,7 @@ _MD_CONSTRUCTS = re.compile(
 def render_markdown(text: str, *, plain: bool = False):
     if plain or not _looks_like_markdown(text):
         return Text(text)
-    return Markdown(text, code_theme=CODE_THEME)
+    return _get_markdown()(text, code_theme=CODE_THEME)
 
 
 def _looks_like_markdown(text: str) -> bool:
@@ -225,7 +243,7 @@ class Renderer:
         if not _looks_like_markdown(content):
             return Text(content, style="jarvis.agent")
         try:
-            return Markdown(content, code_theme=CODE_THEME)
+            return _get_markdown()(content, code_theme=CODE_THEME)
         except Exception:
             return Text(content, style="jarvis.agent")
 
@@ -495,7 +513,7 @@ class Renderer:
                 Text("\u258c", style="jarvis.accent"),
             )
         try:
-            md = Markdown(self._streaming_text, code_theme="monokai")
+            md = _get_markdown()(self._streaming_text, code_theme="monokai")
             return Group(md, Text("  \u258c", style="jarvis.accent"))
         except Exception:
             return Group(
@@ -518,7 +536,7 @@ class Renderer:
     def render_code_buffer(self) -> RenderableType:
         if not self.state.code_content:
             return Text("No file selected", style="jarvis.muted")
-        return Syntax(
+        return _get_syntax()(
             self.state.code_content, self.state.code_language,
             theme="monokai", line_numbers=True, word_wrap=False,
         )

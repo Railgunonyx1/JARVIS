@@ -274,7 +274,7 @@ class CommandRegistry:
             # Ollama
             try:
                 import subprocess
-                result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+                result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5, check=False)
                 models = [line.split()[0] for line in result.stdout.strip().splitlines() if line.strip() and "NAME" not in line]  # noqa: E501
                 table.add_row("Ollama Models", ", ".join(models[:6]) or "none")
             except Exception:
