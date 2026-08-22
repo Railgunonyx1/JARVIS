@@ -100,7 +100,8 @@ def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
             router = _build_router()
         with profiler.phase("memory.open"):
             mem = get_mem()
-            mem.import_project_docs(str(project.root_path), project.root_path)
+        # Defer project doc import — expensive, not needed for first response
+        # Will be done in background after UI is ready
         if not getattr(_build_loop, "_mem_cleanup_registered", False):
             _build_loop._mem_cleanup_registered = True
             import atexit
@@ -509,14 +510,50 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     holder: dict = {}
     ready = threading.Event()
 
+    _BOOT_PHASES = ["config", "tools", "project", "providers", "memory", "loop"]
+    _boot_phase_idx = [0]
+
+    def _update_boot_phase(phase: str) -> None:
+        """Update the header bar with current boot phase."""
+        try:
+            bridge.renderer.state.status_message = f"booting: {phase}..."
+            bridge.renderer.refresh()
+        except Exception:
+            pass
+
     def _boot() -> None:
         try:
             profiler.begin_trace()
             try:
                 profiler.begin("kernel.boot")
+                _update_boot_phase("config")
                 try:
-                    holder["loop"] = _build_loop(
-                        mode, max_iterations, max_tokens, project_dir,
+                    # Import and build in phases with progress updates
+                    from core.agent.loop import AgentLoop as _AL
+                    from core.config import Config as _Cfg
+                    from core.project import ProjectContext as _PC
+                    from memory.mem import get_mem as _gm
+                    from tools import build_default_registry as _bdr
+
+                    _update_boot_phase("config")
+                    _Cfg.instance()
+                    _update_boot_phase("tools")
+                    registry = _bdr()
+                    _update_boot_phase("project")
+                    project = _PC.discover(project_dir) if project_dir else _PC.discover()
+                    _update_boot_phase("providers")
+                    router = _build_router()
+                    _update_boot_phase("memory")
+                    mem = _gm()
+                    _update_boot_phase("loop")
+                    if not getattr(_build_loop, "_mem_cleanup_registered", False):
+                        _build_loop._mem_cleanup_registered = True
+                        import atexit
+                        atexit.register(mem.close)
+                    holder["loop"] = _AL(
+                        router=router, registry=registry, project=project,
+                        mode=mode, max_iterations=max_iterations,
+                        max_tokens=max_tokens, mem=mem,
                         confirmation_handler=bridge.confirmation_call,
                     )
                 finally:
@@ -763,6 +800,16 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     if hasattr(loop.observer, 'on_event'):
                         loop.observer.on_event(name, payload)
                 loop.router.on_provider_event = _forward_provider_event
+                # Defer project doc import — do it in background so UI is responsive
+                def _deferred_project_import():
+                    try:
+                        loop.mem.import_project_docs(
+                            str(loop.project.root_path), loop.project.root_path,
+                        )
+                    except Exception:
+                        pass
+                threading.Thread(target=_deferred_project_import, daemon=True).start()
+                # Start Ollama model prewarming in background
                 loop.router.warm()
                 global _interrupt_executor, _interrupt_classifier
                 try:
