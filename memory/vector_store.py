@@ -210,9 +210,13 @@ class VectorMemoryStore:
                     )
 
                 conn.commit()
-            # Don't nuke the search cache on every write — a store for "cat
-            # name" doesn't invalidate a cached search for "python functions".
-            # The LRU eviction handles staleness naturally.
+            # Invalidate search cache: any cached query might now be stale
+            # because a new vector was just inserted. Clear the entire cache
+            # rather than trying to selectively invalidate — the LRU is small
+            # (64 entries) and writes are infrequent.
+            # Invalidate search cache after successful write
+            with self._cache._lock:
+                self._cache._cache.clear()
             logger.info("Vector memory stored: '%s'", text[:50])
             return True
         except Exception as e:

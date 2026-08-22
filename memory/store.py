@@ -61,6 +61,15 @@ class MemoryStore:
         self._conn.execute("PRAGMA synchronous = NORMAL")
         self._conn.execute("PRAGMA journal_mode = WAL")
 
+        # Integrity check — if corrupt, backup and rebuild
+        try:
+            result = self._conn.execute("PRAGMA integrity_check").fetchone()
+            if result and result[0] != "ok":
+                logger.error("SQLite integrity check failed: %s — rebuilding", result[0])
+                self._rebuild_from_json()
+        except Exception as e:
+            logger.warning("Integrity check skipped: %s", e)
+
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS memories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,6 +97,76 @@ class MemoryStore:
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
         """)
         self._conn.commit()
+
+    def _rebuild_from_json(self) -> None:
+        """Rebuild the SQLite memories table from long_term.json.
+
+        Called when integrity_check fails. Creates a fresh DB and
+        re-imports from the JSON source of truth.
+        """
+        try:
+            # Backup corrupt DB
+            backup_path = self._db_path.with_suffix(".db.corrupt")
+            if backup_path.exists():
+                backup_path.unlink()
+            self._db_path.rename(backup_path)
+            logger.info("Backed up corrupt DB to %s", backup_path)
+        except OSError:
+            pass
+        # Re-init with fresh DB
+        self._conn = sqlite3.connect(
+            str(self._db_path),
+            check_same_thread=False,
+            timeout=10,
+        )
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA synchronous = NORMAL")
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                value TEXT NOT NULL,
+                category TEXT DEFAULT 'general',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                access_count INTEGER DEFAULT 0,
+                importance REAL DEFAULT 0.5
+            );
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                intent TEXT DEFAULT '',
+                timestamp REAL NOT NULL,
+                tokens_used INTEGER DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_conv_session ON conversations(session_id);
+            CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
+        """)
+        self._conn.commit()
+        # Rebuild from JSON
+        try:
+            from core.utils import get_project_root
+            json_path = get_project_root() / "memory" / "long_term.json"
+            if not json_path.exists():
+                return
+            import json as _json
+            data = _json.loads(json_path.read_text(encoding="utf-8"))
+            count = 0
+            for category, items in data.items():
+                if not isinstance(items, dict):
+                    continue
+                for key, entry in items.items():
+                    val = entry.get("value") if isinstance(entry, dict) else entry
+                    if val and isinstance(val, str):
+                        self.store(key, val, category=category, importance=0.9)
+                        count += 1
+            logger.info("Rebuilt %d memories from long_term.json", count)
+        except Exception as e:
+            logger.error("Failed to rebuild from JSON: %s", e)
 
     def store(self, key: str, value: str, category: str = "general", importance: float = 0.5):
         """Store a key-value memory."""

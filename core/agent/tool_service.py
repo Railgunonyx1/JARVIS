@@ -145,6 +145,16 @@ class ToolExecutionService:
             )
         except TimeoutError:
             error = f"Tool '{call.name}' timed out after {_tool_timeout:.0f}s"
+            # Signal cancellation to the background thread (cooperative tools check this)
+            cancel_event = self._executor._active_cancellations.get(call.name)
+            if cancel_event is not None:
+                cancel_event.set()
+            # Log abandoned task for monitoring
+            abandoned = self._executor.abandoned_count()
+            logger.warning(
+                "Tool '%s' timed out — background thread abandoned (%d total abandoned)",
+                call.name, abandoned + 1,
+            )
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
             if step is not None:
                 self._observer.step_finished(step, "error", _tool_timeout * 1000, error)

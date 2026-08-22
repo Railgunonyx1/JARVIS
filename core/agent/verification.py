@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import subprocess
 import time
 from dataclasses import dataclass
@@ -141,27 +142,24 @@ class VerificationEngine:
         )
 
     async def _run_step(self, step: VerificationStep) -> VerificationResult:
-        import os
-
         start = time.perf_counter()
         proc = None
         try:
             creationflags = 0
-            start_new_session = True
             if os.name == "nt":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
-                start_new_session = False
-            proc = subprocess.Popen(
+            proc = await asyncio.create_subprocess_shell(
                 step.command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=self._project_root or None,
                 creationflags=creationflags,
-                start_new_session=start_new_session,
             )
-            stdout, stderr = proc.communicate(timeout=step.timeout_seconds)
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=step.timeout_seconds,
+            )
+            stdout = (stdout_bytes or b"").decode(errors="replace")
+            stderr = (stderr_bytes or b"").decode(errors="replace")
             duration_ms = (time.perf_counter() - start) * 1000
             passed = proc.returncode in step.success_exit_codes
             summary = ""
@@ -171,18 +169,20 @@ class VerificationEngine:
             return VerificationResult(
                 step_name=step.name,
                 passed=passed,
-                exit_code=proc.returncode,
+                exit_code=proc.returncode or -1,
                 command=step.command,
                 stdout=stdout[:2000],
                 stderr=stderr[:2000],
                 summary=summary,
                 duration_ms=duration_ms,
             )
-        except subprocess.TimeoutExpired:
+        except TimeoutError:
             duration_ms = (time.perf_counter() - start) * 1000
-            # Kill the process tree to prevent orphaned verification processes
             if proc is not None:
-                self._kill_tree(proc)
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
             return VerificationResult(
                 step_name=step.name, passed=False,
                 command=step.command,
@@ -193,7 +193,10 @@ class VerificationEngine:
         except Exception as e:
             duration_ms = (time.perf_counter() - start) * 1000
             if proc is not None:
-                self._kill_tree(proc)
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
             return VerificationResult(
                 step_name=step.name, passed=False,
                 command=step.command,
@@ -201,27 +204,3 @@ class VerificationEngine:
                 summary=f"{step.name} error: {str(e)[:200]}",
                 duration_ms=duration_ms,
             )
-
-    @staticmethod
-    def _kill_tree(proc: subprocess.Popen) -> None:
-        """Kill the process and its children."""
-        import os
-        import signal
-
-        try:
-            if os.name == "nt":
-                subprocess.run(
-                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                    capture_output=True, timeout=10, check=False,
-                )
-            else:
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                except (OSError, ProcessLookupError):
-                    proc.kill()
-        except Exception:
-            pass
-        try:
-            proc.wait(timeout=5)
-        except Exception:
-            pass

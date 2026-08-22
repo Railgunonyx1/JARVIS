@@ -332,8 +332,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
             display.stop()
             if renderer is not None:
                 renderer.detach_live()
-            # After Live stops: transient=True cleared the screen.
-            # Print the final result so the user sees it.
+            # After Live stops: print the final result so the user sees it.
             if collapsed and 'result' in dir():
                 pass  # will print below
         sys.stderr.flush()
@@ -363,7 +362,7 @@ async def _run_once(goal: str, loop, json_output: bool = False,
         state = payload.pop("state", {})
         print(json.dumps({"goal": goal, **state, **payload}, indent=2, default=str))
     elif collapsed:
-        # transient=True cleared the Live display. Print the final result.
+        # transient=False keeps the Live display. Print the final result.
         _print_collapsed(result)
         sys.stdout.flush()
     else:
@@ -549,6 +548,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     # interrupts while an agent task is running concurrently.
     import queue as _queue
     input_q: _queue.Queue[str | None] = _queue.Queue()
+    pending_main: _queue.Queue[str] = _queue.Queue()  # deferred main requests (separate from input)
     _stop_event = threading.Event()
     _agent_task: asyncio.Task | None = None
     _agent_event_loop: asyncio.AbstractEventLoop | None = None
@@ -817,7 +817,7 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                         continue
                 # Not an interrupt — queue for after current task finishes
                 console.print(Text("  (task still running — queuing...)", style="dim"))
-                input_q.put(line)
+                pending_main.put(line)
                 _input_ready.set()  # Ready for next input
                 await asyncio.sleep(0.1)
                 continue
@@ -861,9 +861,9 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                             _handle_interrupt(incoming), _agent_event_loop,
                         )
                         continue
-                # Not interrupt — queue for after main task
+                # Not interrupt — queue for after main task (SEPARATE queue)
                 console.print(Text("  (task running — queued)", style="dim"))
-                input_q.put(incoming)
+                pending_main.put(incoming)
 
             # Main task finished — collect result
             try:
@@ -878,6 +878,23 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 _clean = _re.sub(r'\x1b\[[0-9;]*m', '', _lr.response)
                 sys.stdout.write('\n' + _clean + '\n\n')
                 sys.stdout.flush()
+            # Drain pending main requests from the separate queue
+            while not pending_main.empty():
+                try:
+                    pending_line = pending_main.get_nowait()
+                except _qmod.Empty:
+                    break
+                if pending_line and pending_line.strip():
+                    console.print(Text(f"  (running queued: {pending_line.strip()[:50]})", style="dim"))
+                    _agent_task = asyncio.ensure_future(_run_agent_async(pending_line.strip()))
+                    _input_ready.set()
+                    await _agent_task
+                    _lr2 = getattr(loop, '_last_result', None)
+                    if _lr2 and _lr2.success and _lr2.response:
+                        import re as _re2
+                        _clean2 = _re2.sub(r'\x1b\[[0-9;]*m', '', _lr2.response)
+                        sys.stdout.write('\n' + _clean2 + '\n\n')
+                        sys.stdout.flush()
             await asyncio.sleep(0.1)
             _input_ready.set()
             continue

@@ -209,52 +209,64 @@ class TaskHandle:
 
 
 class TaskRegistry:
-    """Tracks all running tasks across both lanes."""
+    """Tracks all running tasks across both lanes.
+
+    Thread-safe: protected by a lock since the CLI input thread and
+    the asyncio event loop can access the registry concurrently.
+    """
 
     def __init__(self):
         self._tasks: dict[str, TaskHandle] = {}
         self._main_task: TaskHandle | None = None
+        import threading as _t
+        self._lock = _t.Lock()
 
     def register(self, handle: TaskHandle) -> None:
-        self._tasks[handle.task_id] = handle
-        if handle.lane == ExecutionLane.MAIN:
-            self._main_task = handle
+        with self._lock:
+            self._tasks[handle.task_id] = handle
+            if handle.lane == ExecutionLane.MAIN:
+                self._main_task = handle
 
     def unregister(self, task_id: str) -> None:
-        self._tasks.pop(task_id, None)
-        if self._main_task and self._main_task.task_id == task_id:
-            self._main_task = None
+        with self._lock:
+            self._tasks.pop(task_id, None)
+            if self._main_task and self._main_task.task_id == task_id:
+                self._main_task = None
 
     @property
     def main_task(self) -> TaskHandle | None:
-        return self._main_task
+        with self._lock:
+            return self._main_task
 
     @property
     def active_interrupts(self) -> list[TaskHandle]:
-        return [
-            h for h in self._tasks.values()
-            if h.lane == ExecutionLane.INTERRUPT
-        ]
+        with self._lock:
+            return [
+                h for h in self._tasks.values()
+                if h.lane == ExecutionLane.INTERRUPT
+            ]
 
     @property
     def has_active_main(self) -> bool:
-        return (
-            self._main_task is not None
-            and self._main_task.future is not None
-            and not self._main_task.future.done()
-        )
+        with self._lock:
+            return (
+                self._main_task is not None
+                and self._main_task.future is not None
+                and not self._main_task.future.done()
+            )
 
     def summary(self) -> dict[str, Any]:
-        return {
-            "main": {
-                "task_id": self._main_task.task_id if self._main_task else None,
-                "goal": self._main_task.goal[:60] if self._main_task else None,
-                "model": self._main_task.model if self._main_task else None,
-                "elapsed_ms": self._main_task.elapsed_ms if self._main_task else 0,
-            },
-            "interrupts_active": len(self.active_interrupts),
-            "total_tasks": len(self._tasks),
-        }
+        with self._lock:
+            return {
+                "main": {
+                    "task_id": self._main_task.task_id if self._main_task else None,
+                    "goal": self._main_task.goal[:60] if self._main_task else None,
+                    "model": self._main_task.model if self._main_task else None,
+                    "elapsed_ms": self._main_task.elapsed_ms if self._main_task else 0,
+                },
+                "interrupts_active": len(self.active_interrupts),
+                "total_tasks": len(self._tasks),
+            }
 
 
 # ── Interrupt Executor ──────────────────────────────────────────────────
@@ -423,6 +435,19 @@ class InterruptExecutor:
                         call.id = f"int_{_iter}_{uuid.uuid4().hex[:6]}"
                     # Only execute if tool is in the allowed set
                     if call.name in allowed_names:
+                        # Enforce category restriction on memory.remember
+                        if call.name == "memory.remember":
+                            _allowed_cats = {"identity", "preferences", "priorities"}
+                            _cat = call.arguments.get("category", "notes")
+                            if _cat not in _allowed_cats:
+                                tool_output = f"Interrupt lane only allows memory writes to categories: {_allowed_cats}"
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": call.id,
+                                    "name": call.name,
+                                    "content": tool_output,
+                                })
+                                continue
                         tool_output = await self._execute_tool_safe(
                             call, task_id,
                         )

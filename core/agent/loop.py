@@ -798,8 +798,8 @@ class AgentLoop:
                 outcome=outcome,
                 project=str(self.project.root_path),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug("Decision memory record failed: %s", exc)
 
     def _result_observation(self, state: AgentState) -> dict[str, Any]:
         observation = self.observer.summary()

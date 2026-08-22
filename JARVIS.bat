@@ -50,7 +50,7 @@ goto quit
 
 REM ── Check if daemon is running ────────────────────────────────────────
 :check_running
-"%PY%" -c "import socket; s=socket.socket(); s.settimeout(1); s.connect_ex(('127.0.0.1',11434)); s.close()" 2>nul
+"%PY%" -c "import socket,sys; s=socket.socket(); s.settimeout(1); rc=s.connect_ex(('127.0.0.1',11434)); s.close(); sys.exit(0 if rc==0 else 1)" 2>nul
 if %errorlevel%==0 goto ollama_ready
 
 REM ── Not running — start it with progressive wait ──────────────────────
@@ -67,7 +67,7 @@ if %OLLAMA_WAIT% lss 1 (set /a "_sleep=1") else if %OLLAMA_WAIT% lss 3 (set /a "
 timeout /t %_sleep% /nobreak >nul 2>&1
 set /a "OLLAMA_WAIT+=_sleep"
 
-"%PY%" -c "import socket; s=socket.socket(); s.settimeout(1); s.connect_ex(('127.0.0.1',11434)); s.close()" 2>nul
+"%PY%" -c "import socket,sys; s=socket.socket(); s.settimeout(1); rc=s.connect_ex(('127.0.0.1',11434)); s.close(); sys.exit(0 if rc==0 else 1)" 2>nul
 if %errorlevel%==0 goto ollama_ready
 goto wait_loop
 

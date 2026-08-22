@@ -45,15 +45,25 @@ _local_opener = _no_proxy_opener()
 
 
 def _local_fetch(url: str, timeout: int = 10, **kwargs: Any) -> Any:
-    """Fetch a URL bypassing proxy — for localhost/Ollama connections."""
-    return _local_opener.open(url, timeout=timeout, **kwargs)
+    """Fetch a URL bypassing proxy — for localhost/Ollama connections.
+    Returns raw bytes; response is always closed."""
+    resp = _local_opener.open(url, timeout=timeout, **kwargs)
+    try:
+        return resp.read()
+    finally:
+        resp.close()
 
 
 def _local_post(url: str, data: bytes, headers: dict | None = None,
                 timeout: int = 10) -> Any:
-    """POST to a URL bypassing proxy — for localhost/Ollama connections."""
+    """POST to a URL bypassing proxy — for localhost/Ollama connections.
+    Returns raw bytes; response is always closed."""
     req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST")
-    return _local_opener.open(req, timeout=timeout)
+    resp = _local_opener.open(req, timeout=timeout)
+    try:
+        return resp.read()
+    finally:
+        resp.close()
 
 # Lane-specific inference profiles — different parameters per model tier
 _LANE_PROFILES: dict[str, dict] = {
@@ -141,8 +151,8 @@ class OllamaProvider(LLMProvider):
     def _probe_daemon(self) -> bool:
         """Check if Ollama is reachable. Uses proxy bypass for localhost."""
         try:
-            resp = _local_fetch(f"{self.base_url}/api/tags", timeout=3)
-            return resp.status == 200
+            _local_fetch(f"{self.base_url}/api/tags", timeout=3)
+            return True
         except ConnectionRefusedError:
             logger.debug("Ollama not running at %s", self.base_url)
             return False
@@ -228,17 +238,15 @@ class OllamaProvider(LLMProvider):
         m = model or self.config.get("model", "qwen2.5:3b")
         try:
             data = json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
-            resp = _local_post(
+            _local_post(
                 f"{self.base_url}/api/generate",
                 data=data,
                 headers={"Content-Type": "application/json"},
                 timeout=60,
             )
-            ok = resp.status == 200
-            if ok:
-                self._loaded_models[m] = time.time()
-                logger.info("Prewarmed model: %s", m)
-            return ok
+            self._loaded_models[m] = time.time()
+            logger.info("Prewarmed model: %s", m)
+            return True
         except ConnectionRefusedError:
             logger.debug("Cannot prewarm %s — Ollama not running", m)
             return False
@@ -248,8 +256,8 @@ class OllamaProvider(LLMProvider):
     def get_loaded_models(self) -> list[dict]:
         """List models currently loaded in Ollama memory."""
         try:
-            resp = _local_fetch(f"{self.base_url}/api/ps", timeout=5)
-            data = json.loads(resp.read())
+            raw = _local_fetch(f"{self.base_url}/api/ps", timeout=5)
+            data = json.loads(raw)
             return data.get("models", [])
         except Exception:
             return []
@@ -259,15 +267,14 @@ class OllamaProvider(LLMProvider):
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
             data = json.dumps({"model": m, "keep_alive": 0}).encode()
-            resp = _local_post(
+            _local_post(
                 f"{self.base_url}/api/generate",
                 data=data,
                 headers={"Content-Type": "application/json"},
                 timeout=10,
             )
-            if resp.status == 200:
-                self._loaded_models.pop(m, None)
-            return resp.status == 200
+            self._loaded_models.pop(m, None)
+            return True
         except Exception:
             return False
 

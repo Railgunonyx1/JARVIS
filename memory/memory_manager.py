@@ -3,6 +3,7 @@
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from threading import Lock
 
 from core.utils import get_project_root
@@ -30,30 +31,52 @@ def _get_store():
 _EMPTY = {"identity": {}, "preferences": {}, "priorities": {}, "projects": {}, "relationships": {}, "wishes": {}, "notes": {}}  # noqa: E501
 
 
+def _load_json_file(path: Path) -> dict | None:
+    """Load a JSON file, returning None if missing or corrupt."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Failed to load %s: %s", path, e)
+    return None
+
+
 def load_memory() -> dict:
-    """Load memory from disk, with cache protection.
+    """Load memory from disk, with cache protection and .bak recovery.
 
     Cache is validated under the lock to prevent stale reads when
     another thread has called save_memory() concurrently.
+    If the primary JSON is corrupt or missing, attempts recovery from .bak.
     """
     global _cache, _cache_version
     with _lock:
         if _cache is not None:
             return _cache
-        if not MEMORY_PATH.exists():
+        data = _load_json_file(MEMORY_PATH)
+        if data is None:
+            # Primary file missing/corrupt — try .bak recovery
+            bak_path = MEMORY_PATH.with_suffix(".json.bak")
+            data = _load_json_file(bak_path)
+            if data is not None:
+                logger.warning("Recovered memory from .bak backup")
+                # Rebuild primary from backup
+                try:
+                    MEMORY_PATH.write_text(
+                        json.dumps(data, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    pass  # best-effort rebuild
+        if data is None:
             _cache = dict(_EMPTY)
             return _cache
-        try:
-            data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                for k in _EMPTY:
-                    data.setdefault(k, {})
-                _cache = data
-                return data
-        except Exception as e:
-            logger.error("Load error: %s", e)
-    _cache = dict(_EMPTY)
-    return _cache
+        for k in _EMPTY:
+            data.setdefault(k, {})
+        _cache = data
+        return data
 
 
 def save_memory(memory: dict) -> None:
@@ -103,14 +126,15 @@ def save_memory(memory: dict) -> None:
                 except OSError:
                     pass  # backup is best-effort
             os.replace(tmp_path, str(MEMORY_PATH))
+            # Invalidate cache UNDER the lock to prevent stale reads
+            global _cache
+            _cache = None
         except Exception:
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
             raise
-    global _cache
-    _cache = None
 
 
 def _truncate(val: str) -> str:
