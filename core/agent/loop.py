@@ -333,6 +333,7 @@ class AgentLoop:
                 # context_level controls prompt size: instant=~50 tokens, session=~150, deep=~500
                 messages, system_prompt = self.context_builder.build(
                     goal, self.project, self.mem, tools=tools, context_level=context_level,
+                    model=state.model,
                 )
             _latency_log.append(("context_build", (time.time() - _t_ctx) * 1000))
             if not tools:
@@ -368,7 +369,19 @@ class AgentLoop:
                 if hb:
                     _budgets.update(hb)
 
-            for iteration in range(1, self.max_iterations + 1):
+            # Model-aware iteration limits: smaller models get fewer iterations
+            _model_iterations = self.max_iterations
+            _current_model = state.model or ""
+            if any(s in _current_model for s in ("1.5b", "1b")):
+                _model_iterations = min(_model_iterations, 5)
+                _budgets["total"] = min(_budgets["total"], 20.0)
+            elif "3b" in _current_model:
+                _model_iterations = min(_model_iterations, 10)
+                _budgets["total"] = min(_budgets["total"], 45.0)
+            elif any(s in _current_model for s in ("4b", "7b")):
+                _budgets["total"] = min(_budgets["total"], 60.0)
+
+            for iteration in range(1, _model_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
                 elapsed = time.time() - _run_start
                 if elapsed > _budgets["total"]:

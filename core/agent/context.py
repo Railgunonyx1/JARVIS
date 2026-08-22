@@ -75,6 +75,7 @@ class AgentContextBuilder:
         mem=None,
         tools: list | None = None,
         context_level: str = "deep",
+        model: str | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """Return (messages, system_prompt) with token-optimized prompt.
 
@@ -82,6 +83,8 @@ class AgentContextBuilder:
           - 'instant': ~50 tokens (identity only, no memory)
           - 'session': ~150 tokens (brief + memory)
           - 'deep':    ~500 tokens (full instructions + memory)
+
+        model: optional model name — small models get shorter prompts.
         """
         if context_level == "instant":
             return [{"role": "user", "content": goal}], _IDENTITY
@@ -93,8 +96,10 @@ class AgentContextBuilder:
                     prompt = f"{prompt}\n{mem_text}"
             return [{"role": "user", "content": goal}], prompt
 
-        # deep context
-        lines = [_FULL]
+        is_small = model and any(s in model for s in ("1.5b", "1b", "3b"))
+        prompt_base = _SMALL_FULL if is_small else _FULL
+
+        lines = [prompt_base]
         proj_ctx = self._project_context(project)
         if proj_ctx:
             lines.append(proj_ctx)

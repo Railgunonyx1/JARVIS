@@ -313,7 +313,7 @@ class TestFallbackModelInheritance:
 
         mock_client.chat = fake_chat
         p._client = mock_client
-        tools = [_tool_schema(f"t{i}") for i in range(12)]
+        tools = [_tool_schema(f"t{i}") for i in range(20)]
         await p.complete([{"role": "user", "content": "hi"}], tools=tools)
         assert tool_counts == [15, 7]
 
