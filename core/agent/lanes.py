@@ -277,11 +277,13 @@ class InterruptExecutor:
         registry,  # ToolRegistry
         mem=None,
         project=None,
+        tool_service=None,  # ToolExecutionService — security boundary
     ):
         self._router = router
         self._registry = registry
         self._mem = mem
         self._project = project
+        self._tool_service = tool_service  # If None, falls back to direct (legacy)
         self._task_registry = TaskRegistry()
         self._interrupt_count = 0
         self._interrupt_results: list[dict[str, Any]] = []
@@ -293,6 +295,36 @@ class InterruptExecutor:
     def _generate_interrupt_id(self) -> str:
         self._interrupt_count += 1
         return f"interrupt_{self._interrupt_count}_{uuid.uuid4().hex[:8]}"
+
+    async def _execute_tool_safe(self, call, trace_id: str) -> str:
+        """Execute a tool call through ToolExecutionService (security boundary).
+
+        Falls back to direct execution only if ToolExecutionService is not
+        available (legacy mode). The security boundary is:
+            allowed-tool filter → ToolExecutionService → PermissionEngine
+            → SecurityEngine → Executor → redaction → audit.
+        """
+        if self._tool_service is not None:
+            # Full security boundary: permission check, executor, redaction, audit
+            from providers.types import ToolCall as TC
+            tc = TC(name=call.name, arguments=call.arguments, id=call.id or "")
+            try:
+                result = await self._tool_service.execute_tool(
+                    tc, trace_id=trace_id,
+                )
+                return result.output if result.success else f"ERROR: {result.error}"
+            except Exception as e:
+                return f"Error: {str(e)[:200]}"
+        else:
+        # Fallback: direct execution (no security boundary — legacy mode)
+            try:
+                tool = self._registry.get(call.name)
+                if tool is not None:
+                    result = await tool.execute(call.arguments)
+                    return result.output if hasattr(result, 'output') else str(result)
+                return f"Tool '{call.name}' not found"
+            except Exception as e:
+                return f"Error: {str(e)[:200]}"
 
     async def execute(
         self,
@@ -399,15 +431,9 @@ class InterruptExecutor:
                         call.id = f"int_{_iter}_{uuid.uuid4().hex[:6]}"
                     # Only execute if tool is in the allowed set
                     if call.name in allowed_names:
-                        try:
-                            tool = self._registry.get(call.name)
-                            if tool is not None:
-                                result = await tool.execute(call.arguments)
-                                tool_output = result.output if hasattr(result, 'output') else str(result)
-                            else:
-                                tool_output = f"Tool '{call.name}' not found"
-                        except Exception as e:
-                            tool_output = f"Error: {str(e)[:200]}"
+                        tool_output = await self._execute_tool_safe(
+                            call, task_id,
+                        )
                     else:
                         tool_output = f"Tool '{call.name}' not allowed in interrupt lane"
 

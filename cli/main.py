@@ -521,6 +521,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
     threading.Thread(target=_boot, daemon=True, name="jarvis-kernel-boot").start()
 
+    # Show startup progress while kernel boots
+    bridge.renderer.state.connection = "BOOTING"
+    bridge.renderer.refresh()
+    boot_start = time.time()
     notifications: list = []
     _configure_noise(verbose=False)
     loop = None
@@ -563,6 +567,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 break
             bridge.attach_loop(loop)
             bridge.pull_status()
+            boot_ms = (time.time() - boot_start) * 1000
+            bridge.renderer.state.connection = "ONLINE"
+            bridge.renderer.state.status_message = f"ready in {boot_ms/1000:.1f}s"
+            bridge.renderer.refresh()
             # Wire router rate-limit events to the UI via the observer
             def _forward_provider_event(name, payload):
                 if hasattr(loop.observer, 'on_event'):
@@ -574,11 +582,15 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             try:
                 from core.agent.lanes import InterruptExecutor, RequestClassifier
                 _interrupt_classifier = RequestClassifier()
+                # Pass ToolExecutionService so interrupts go through the
+                # security boundary (permission → executor → redaction → audit)
+                _tool_svc = getattr(loop, '_tool_service', None)
                 _interrupt_executor = InterruptExecutor(
                     router=loop.router,
                     registry=loop.registry,
                     mem=loop.mem,
                     project=loop.project,
+                    tool_service=_tool_svc,
                 )
             except Exception:
                 _interrupt_classifier = None
@@ -1009,22 +1021,16 @@ def _cmd_model(line: str, loop) -> None:
     # Switch to a specific model or auto
     result = registry.set_model(arg)
     console.print(Text(f"  {result}", style="jarvis.accent"))
-    # Also swap the router's Ollama model if we locked to a specific one
-    if registry.active_model:
-        loop.router.swap_ollama_model(registry.active_model)
-        # Remember preference in memory
-        try:
-            if loop.mem is not None:
-                loop.mem.store("preferred_model", registry.active_model, category="preferences")
-        except Exception:
-            pass
-    else:
-        # Auto mode — remove preference
-        try:
-            if loop.mem is not None:
-                loop.mem.store("preferred_model", "auto", category="preferences")
-        except Exception:
-            pass
+    # Store preference in memory (request-scoped, NOT global mutation)
+    # Model selection is resolved per-request via ModelRegistry.resolve_model()
+    # and passed as preferred_model to ProviderRouter.complete(), so we do NOT
+    # call swap_ollama_model() which mutates shared state unsafely.
+    try:
+        if loop.mem is not None:
+            model_val = registry.active_model or "auto"
+            loop.mem.store("preferred_model", model_val, category="preferences")
+    except Exception:
+        pass
 
 
 def _cmd_history(line: str) -> None:

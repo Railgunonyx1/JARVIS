@@ -12,16 +12,16 @@
       "value": "JARVIS MK-X - autonomous engineering agent",
       "updated": "2026-08-20"
     },
+    "test_identity_key": {
+      "value": "TestUser",
+      "updated": "2026-08-22"
+    },
     "ctx_test_name": {
       "value": "ContextTestUser",
       "updated": "2026-08-22"
     },
     "instant_test": {
       "value": "should_not_appear",
-      "updated": "2026-08-22"
-    },
-    "test_identity_key": {
-      "value": "TestUser",
       "updated": "2026-08-22"
     }
   },
@@ -39,19 +39,13 @@
   "relationships": {},
   "wishes": {},
   "notes": {
-    "persist_test_key": {
-      "value": "persist_test_value",
-      "updated": "2026-08-22"
-    },
     "test_mem_key_unique_xyz": {
       "value": "test_mem_value_unique",
       "updated": "2026-08-22"
-    }
-  },
-  "smoke": {
-    "smoke_key": {
-      "value": "smoke_val",
-      "updated": "2026-08-05"
+    },
+    "persist_test_key": {
+      "value": "persist_test_value",
+      "updated": "2026-08-22"
     }
   },
   "priorities": {

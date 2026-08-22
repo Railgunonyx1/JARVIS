@@ -27,6 +27,23 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from .layout import LayoutManager
+from .models import (
+    AgentEvent,
+    AppState,
+    AuditSection,
+    CodeFile,
+    ConfirmationRequest,
+    EventStatus,
+    EventType,
+    MemoryHit,
+    Message,
+    Mode,
+    Plan,
+    StepStatus,
+)
+from .theme import COLORS, BoxStyles, build_rich_theme, get_symbols
+
 # Lazy-loaded to save ~1.7s cold-start (rich.markdown imports pygments)
 _Markdown = None
 _Syntax = None
@@ -46,23 +63,6 @@ def _get_syntax():
         from rich.syntax import Syntax as _S
         _Syntax = _S
     return _Syntax
-
-from .layout import LayoutManager
-from .models import (
-    AgentEvent,
-    AppState,
-    AuditSection,
-    CodeFile,
-    ConfirmationRequest,
-    EventStatus,
-    EventType,
-    MemoryHit,
-    Message,
-    Mode,
-    Plan,
-    StepStatus,
-)
-from .theme import COLORS, BoxStyles, build_rich_theme, get_symbols
 
 logger = logging.getLogger("jarvis.cli.renderer")
 
