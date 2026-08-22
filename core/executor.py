@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import subprocess
@@ -15,6 +16,8 @@ from core.decision_logger import get_decision_logger
 from core.mode_manager import get_mode_manager
 from core.utils import get_project_root as _get_base_dir
 from security.engine import get_security_engine
+
+logger = logging.getLogger("jarvis.executor")
 
 BASE_DIR        = _get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -192,7 +195,7 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             f.write(code)
             tmp_path = f.name
 
-        print(f"[Executor] INFO: Running generated code: {tmp_path}")
+        logger.info("Running generated code: %s", tmp_path)
 
         # Sanitize environment — strip secrets before subprocess inherits
         exec_env = {k: v for k, v in os.environ.items()
@@ -249,7 +252,7 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
                 combined = "\n\n---\n\n".join(all_results)
                 translated = _translate_to_goal_language(combined, goal)
                 params["content"] = translated
-                print("[Executor] INFO: Injected + translated content")
+                logger.info("Injected + translated content")
 
     return params
 def _detect_language(text: str) -> str:
@@ -276,7 +279,7 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
         model = genai.GenerativeModel(_executor_model("code_model", _CODE_MODEL))
 
         target_lang = _detect_language(goal)
-        print(f"[Executor] INFO: Translating to: {target_lang}")
+        logger.info("Translating to: %s", target_lang)
 
         prompt = (
             f"You are a professional translator. "
@@ -290,10 +293,10 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
         )
         response = model.generate_content(prompt)
         translated = response.text.strip()
-        print(f"[Executor] INFO: Translation done ({target_lang})")
+        logger.info("Translation done (%s)", target_lang)
         return translated
-    except Exception as e:
-        print(f"[Executor] WARN: Translation failed: {e}")
+    except Exception:
+        logger.warning("Translation failed")
         return content
 
 def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
@@ -388,7 +391,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         return _run_generated_code(description, speak=speak)
 
     else:
-        print(f"[Executor] ERROR: Unknown tool '{tool}' - cannot execute")
+        logger.error("Unknown tool '%s' - cannot execute", tool)
         return f"I don't know how to use the tool '{tool}' yet, sir. I can use: file_manager, process_manager, shell, browser, screen_analyzer, and more."  # noqa: E501
 
 class AgentExecutor:
@@ -404,7 +407,7 @@ class AgentExecutor:
         create_plan, replan = _ensure_planner()
         analyze_error, generate_fix, ErrorDecision = _ensure_error_handler()
 
-        print(f"\n[Executor] Goal: {goal}")
+        logger.info("Goal: %s", goal)
 
         decision_logger = get_decision_logger()
         trace_id = decision_logger.begin_task(goal, source="executor")
@@ -460,7 +463,7 @@ class AgentExecutor:
                 mode_manager = get_mode_manager()
                 if not mode_manager.is_allowed(tool):
                     error_msg = f"Tool '{tool}' not allowed in {mode_manager.get_mode()} mode"
-                    print(f"[Executor] Permission denied: {error_msg}")
+                    logger.warning("Permission denied: %s", error_msg)
                     if speak:
                         speak(f"I can't do that in {mode_manager.get_mode()} mode, sir.")
                     step_results[step_num] = f"Permission denied: {error_msg}"
@@ -473,7 +476,7 @@ class AgentExecutor:
                 security = get_security_engine()
                 allowed, sec_reason = security.check_permission(tool, session_id="", params=params)
                 if not allowed:
-                    print(f"[Executor] Security denied: {sec_reason}")
+                    logger.warning("Security denied: %s", sec_reason)
                     if speak:
                         speak("Security policy blocked that action, sir.")
                     step_results[step_num] = f"Security denied: {sec_reason}"
@@ -482,7 +485,7 @@ class AgentExecutor:
                     failed_error = sec_reason
                     break
 
-                print(f"\n[Executor] Step {step_num}: [{tool}] {desc}")
+                logger.info("Step %d: [%s] %s", step_num, tool, desc)
 
                 attempt = 1
                 step_ok = False
@@ -496,14 +499,14 @@ class AgentExecutor:
                         _log_step_result(step, tool, params, True, ms=(time.time() - _step_start) * 1000)
                         step_results[step_num] = result
                         completed_steps.append(step)
-                        print(f"[Executor] Step {step_num} done: {str(result)[:100]}")
+                        logger.info("Step %d done: %s", step_num, str(result)[:100])
                         step_ok = True
                         break
 
                     except Exception as e:
                         error_msg = str(e)
                         _log_step_result(step, tool, params, False, error_msg=error_msg, ms=(time.time() - _step_start) * 1000)  # noqa: E501
-                        print(f"[Executor] Step {step_num} attempt {attempt} failed: {error_msg}")
+                        logger.warning("Step %d attempt %d failed: %s", step_num, attempt, error_msg)
 
                         recovery = analyze_error(step, error_msg, attempt=attempt)
                         decision = recovery["decision"]
@@ -518,7 +521,7 @@ class AgentExecutor:
                             continue
 
                         elif decision == ErrorDecision.SKIP:
-                            print(f"[Executor] Skipping step {step_num}")
+                            logger.info("Skipping step %d", step_num)
                             completed_steps.append(step)
                             step_ok = True
                             break
@@ -546,8 +549,8 @@ class AgentExecutor:
                                     completed_steps.append(step)
                                     step_ok = True
                                     break
-                                except Exception as fix_err:
-                                    print(f"[Executor] Fix failed: {fix_err}")
+                                except Exception:
+                                    logger.error("Fix failed")
 
                             failed_step  = step
                             failed_error = error_msg

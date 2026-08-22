@@ -1,9 +1,13 @@
 import json
+import logging
 import re
 
 from core.config import ModelCatalog
 from core.mode_manager import ExecutionMode, get_mode_manager
+
 from core.utils import get_project_root as get_base_dir
+
+logger = logging.getLogger("jarvis.planner")
 
 BASE_DIR = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -210,26 +214,26 @@ def create_plan(goal: str, context: str = "", mode: ExecutionMode = None) -> dic
             # Validate against the real executor tool set + mode permissions
             mode_manager = get_mode_manager()
             if tool not in EXEC_TOOLS or not mode_manager.is_allowed(tool, mode):
-                print(f"[Planner] Tool '{tool}' not allowed in {str(mode)} mode (allowed: {_get_mode_tools(mode)}) - replacing with generated_code")  # noqa: E501
+                logger.warning("Tool '%s' not allowed in %s mode - replacing with generated_code", tool, mode)  # noqa: E501
                 step["tool"] = "generated_code"
                 step["parameters"] = {"description": step.get("description", f"Do: {tool}")}
 
-        print(f"[Planner] OK: Plan: {len(plan['steps'])} steps")
+        logger.info("Plan: %d steps", len(plan['steps']))
         for s in plan["steps"]:
-            print(f"  Step {s['step']}: [{s['tool']}] {s['description']}")
+            logger.info("  Step %d: [%s] %s", s['step'], s['tool'], s['description'])
 
         return plan
 
     except json.JSONDecodeError as e:
-        print(f"[Planner] WARN: JSON parse failed: {e}")
+        logger.warning("JSON parse failed: %s", e)
         return _fallback_plan(goal)
     except Exception as e:
-        print(f"[Planner] WARN: Planning failed: {e}")
+        logger.warning("Planning failed: %s", e)
         return _fallback_plan(goal)
 
 
 def _fallback_plan(goal: str) -> dict:
-    print("[Planner] INFO: Fallback plan")
+    logger.info("Fallback plan")
     return {
         "goal": goal,
         "steps": [
@@ -277,12 +281,12 @@ Create a REVISED plan for the remaining work only. Do not repeat completed steps
         for step in plan.get("steps", []):
             tool = step.get("tool", "")
             if tool not in EXEC_TOOLS:
-                print(f"[Planner] Replan: unknown tool '{tool}' - replacing with generated_code")
+                logger.warning("Replan: unknown tool '%s' - replacing with generated_code", tool)
                 step["tool"] = "generated_code"
                 step["parameters"] = {"description": step.get("description", f"Do: {tool}")}
 
-        print(f"[Planner] INFO: Revised plan: {len(plan['steps'])} steps")
+        logger.info("Revised plan: %d steps", len(plan['steps']))
         return plan
     except Exception as e:
-        print(f"[Planner] WARN: Replan failed: {e}")
+        logger.warning("Replan failed: %s", e)
         return _fallback_plan(goal)

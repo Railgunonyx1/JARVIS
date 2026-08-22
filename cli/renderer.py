@@ -799,6 +799,14 @@ class Renderer:
 
     # ── Output helpers ────────────────────────────────────────────────────
 
+    def refresh(self) -> None:
+        """Refresh the display — prints current status bar.
+
+        Used during startup to show BOOTING/ONLINE state.
+        In live display mode, the LiveTaskDisplay handles rendering.
+        """
+        self.print_status_bar()
+
     def print_status_bar(self) -> None:
         self.console.print(self.render_status())
 

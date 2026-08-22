@@ -11,7 +11,10 @@ import json
 import logging
 import os
 import time
+import urllib.request
 from collections.abc import AsyncIterator
+from functools import partial
+from typing import Any
 
 from providers.base import LLMProvider, LLMResponse
 from providers.types import ToolCall, parse_ollama_tool_calls
@@ -20,6 +23,38 @@ logger = logging.getLogger("jarvis.providers.ollama")
 
 # Adaptive CPU thread count: use os.cpu_count() at import time
 _CPU_COUNT = os.cpu_count() or 4
+
+
+# ── Proxy bypass for localhost connections ─────────────────────────────
+# Ollama runs on 127.0.0.1 — it should NEVER go through a proxy.
+# This affects both urllib (for health checks) and httpx (used by ollama SDK).
+_local_hosts = "127.0.0.1,localhost,::1"
+_existing_noproxy = os.environ.get("NO_PROXY", "")
+if _local_hosts not in _existing_noproxy:
+    sep = "," if _existing_noproxy else ""
+    os.environ["NO_PROXY"] = f"{_existing_noproxy}{sep}{_local_hosts}"
+    os.environ["no_proxy"] = os.environ["NO_PROXY"]
+
+
+def _no_proxy_opener() -> urllib.request.OpenerDirector:
+    """Create a URL opener that bypasses proxy for localhost."""
+    handler = urllib.request.ProxyHandler({})  # Empty dict = no proxy
+    return urllib.request.build_opener(handler)
+
+
+_local_opener = _no_proxy_opener()
+
+
+def _local_fetch(url: str, timeout: int = 10, **kwargs: Any) -> Any:
+    """Fetch a URL bypassing proxy — for localhost/Ollama connections."""
+    return _local_opener.open(url, timeout=timeout, **kwargs)
+
+
+def _local_post(url: str, data: bytes, headers: dict | None = None,
+                timeout: int = 10) -> Any:
+    """POST to a URL bypassing proxy — for localhost/Ollama connections."""
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST")
+    return _local_opener.open(req, timeout=timeout)
 
 # Lane-specific inference profiles — different parameters per model tier
 _LANE_PROFILES: dict[str, dict] = {
@@ -105,11 +140,16 @@ class OllamaProvider(LLMProvider):
         self._check_package()
 
     def _probe_daemon(self) -> bool:
+        """Check if Ollama is reachable. Uses proxy bypass for localhost."""
         try:
-            import urllib.request
-            req = urllib.request.Request(f"{self.base_url}/api/tags")
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                return resp.status == 200
+            resp = _local_fetch(f"{self.base_url}/api/tags", timeout=3)
+            return resp.status == 200
+        except ConnectionRefusedError:
+            logger.debug("Ollama not running at %s", self.base_url)
+            return False
+        except OSError as exc:
+            logger.debug("Ollama probe failed: %s", exc)
+            return False
         except Exception:
             return False
 
@@ -185,52 +225,50 @@ class OllamaProvider(LLMProvider):
         return profile
 
     def prewarm(self, model: str | None = None) -> bool:
+        """Preload a model into Ollama memory. Uses proxy bypass for localhost."""
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
-            import json as _json
-            import urllib.request
-            data = _json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
-            req = urllib.request.Request(
+            data = json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
+            resp = _local_post(
                 f"{self.base_url}/api/generate",
                 data=data,
                 headers={"Content-Type": "application/json"},
-                method="POST",
+                timeout=60,
             )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                ok = resp.status == 200
-                if ok:
-                    self._loaded_models[m] = time.time()
-                return ok
+            ok = resp.status == 200
+            if ok:
+                self._loaded_models[m] = time.time()
+                logger.info("Prewarmed model: %s", m)
+            return ok
+        except ConnectionRefusedError:
+            logger.debug("Cannot prewarm %s — Ollama not running", m)
+            return False
         except Exception:
             return False
 
     def get_loaded_models(self) -> list[dict]:
+        """List models currently loaded in Ollama memory."""
         try:
-            import json as _json
-            import urllib.request
-            req = urllib.request.Request(f"{self.base_url}/api/ps")
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = _json.loads(resp.read())
-                return data.get("models", [])
+            resp = _local_fetch(f"{self.base_url}/api/ps", timeout=5)
+            data = json.loads(resp.read())
+            return data.get("models", [])
         except Exception:
             return []
 
     def unload_model(self, model: str | None = None) -> bool:
+        """Unload a model from Ollama memory."""
         m = model or self.config.get("model", "qwen2.5:1.5b")
         try:
-            import json as _json
-            import urllib.request
-            data = _json.dumps({"model": m, "keep_alive": 0}).encode()
-            req = urllib.request.Request(
+            data = json.dumps({"model": m, "keep_alive": 0}).encode()
+            resp = _local_post(
                 f"{self.base_url}/api/generate",
                 data=data,
                 headers={"Content-Type": "application/json"},
-                method="POST",
+                timeout=10,
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    self._loaded_models.pop(m, None)
-                return resp.status == 200
+            if resp.status == 200:
+                self._loaded_models.pop(m, None)
+            return resp.status == 200
         except Exception:
             return False
 
@@ -253,6 +291,8 @@ class OllamaProvider(LLMProvider):
     def _get_client(self):
         if self._client is None:
             import ollama
+            # Ensure NO_PROXY includes localhost for the httpx client
+            # used internally by the ollama SDK
             self._client = ollama.AsyncClient(host=self.base_url)
         return self._client
 

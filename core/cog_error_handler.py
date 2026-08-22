@@ -1,9 +1,13 @@
 import json
+import logging
 import re
 from enum import Enum
 
 from core.config import ModelCatalog
+
 from core.utils import get_project_root as get_base_dir
+
+logger = logging.getLogger("jarvis.error_handler")
 
 BASE_DIR        = get_base_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
@@ -91,7 +95,7 @@ def analyze_error(
     import google.generativeai as genai
 
     if attempt >= max_attempts:
-        print(f"[ErrorHandler] ⚠️ Max attempts reached for step {step.get('step')} — forcing replan")
+        logger.warning("Max attempts reached for step %s — forcing replan", step.get('step'))
         return {
             "decision":      ErrorDecision.REPLAN,
             "reason":        f"Failed {attempt} times: {error[:100]}",
@@ -138,11 +142,11 @@ Attempt number: {attempt}"""
             result["decision"]     = ErrorDecision.REPLAN
             result["user_message"] = "This step is critical — finding alternative approach, sir."
 
-        print(f"[ErrorHandler] Decision: {result['decision'].value} — {result.get('reason', '')}")
+        logger.info("Decision: %s — %s", result['decision'].value, result.get('reason', ''))
         return result
 
     except Exception as e:
-        print(f"[ErrorHandler] ⚠️ Analysis failed: {e} — defaulting to replan")
+        logger.warning("Analysis failed: %s — defaulting to replan", e)
         return {
             "decision":       ErrorDecision.REPLAN,
             "reason":         str(e),
@@ -200,7 +204,7 @@ Return ONLY the Python code, no explanation."""
         }
 
     except Exception as e:
-        print(f"[ErrorHandler] ⚠️ Fix generation failed: {e}")
+        logger.warning("Fix generation failed: %s", e)
         return {
             "step":        step.get("step"),
             "tool":        "generated_code",
