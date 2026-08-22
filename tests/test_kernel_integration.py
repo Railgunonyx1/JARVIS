@@ -225,8 +225,9 @@ class TestToolExecutionService:
     def test_execute_known_tool(self):
         svc = ToolExecutionService(registry=build_default_registry())
         import os
-        import tempfile
-        tmp = os.path.join(tempfile.gettempdir(), "test_svc.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".test_svc.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "hello"}, id="t2")
         result = asyncio.run(svc.execute_tool(call))
         assert result.success
@@ -236,8 +237,9 @@ class TestToolExecutionService:
     def test_execute_appends_to_messages(self):
         svc = ToolExecutionService(registry=build_default_registry())
         import os
-        import tempfile
-        tmp = os.path.join(tempfile.gettempdir(), "test_svc2.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".test_svc2.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "world"}, id="t3")
         msgs = []
         asyncio.run(svc.execute_tool(call, append_to_messages=msgs))
@@ -250,8 +252,10 @@ class TestToolExecutionService:
         svc = ToolExecutionService(registry=build_default_registry())
         import os
         import tempfile
-        tmp1 = os.path.join(tempfile.gettempdir(), "test_b1.txt")
-        tmp2 = os.path.join(tempfile.gettempdir(), "test_b2.txt")
+        from core.project import ProjectContext
+        _root = str(ProjectContext.discover().root_path)
+        tmp1 = os.path.join(_root, ".test_b1.txt")
+        tmp2 = os.path.join(_root, ".test_b2.txt")
         calls = [
             ToolCall(name="filesystem.write", arguments={"path": tmp1, "content": "a"}, id="b1"),
             ToolCall(name="filesystem.write", arguments={"path": tmp2, "content": "b"}, id="b2"),
@@ -551,7 +555,9 @@ class TestUnifiedPipeline:
     def test_mcp_tools_call_goes_through_service(self):
         svc = self._make_svc()
         mcp = MCPAdapter(tool_service=svc)
-        tmp = os.path.join(tempfile.gettempdir(), "mcp_test.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".mcp_test.txt")
         result = asyncio.run(mcp._call_tool("filesystem.write", {
             "path": tmp, "content": "mcp",
         }))
@@ -562,7 +568,9 @@ class TestUnifiedPipeline:
     def test_acp_tools_call_goes_through_service(self):
         svc = self._make_svc()
         acp = ACPAdapter(tool_service=svc)
-        tmp = os.path.join(tempfile.gettempdir(), "acp_test.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".acp_test.txt")
         result = asyncio.run(acp._call_tool("filesystem.write", {
             "path": tmp, "content": "acp",
         }))
@@ -570,10 +578,13 @@ class TestUnifiedPipeline:
         if os.path.exists(tmp):
             os.remove(tmp)
 
+
     def test_codex_tool_goes_through_service(self):
         svc = self._make_svc()
         codex = CodexExecAdapter(tool_service=svc)
-        tmp = os.path.join(tempfile.gettempdir(), "codex_test.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".codex_test.txt")
         result = asyncio.run(codex.handle_tool("filesystem.write", {
             "path": tmp, "content": "codex",
         }))
@@ -605,26 +616,28 @@ class TestUnifiedPipeline:
 
     def test_no_bypass_all_paths_use_same_service(self):
         svc = self._make_svc()
-        tmp = os.path.join(tempfile.gettempdir(), "bypass_test.txt")
+        from core.project import ProjectContext
+        _root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(_root, ".bypass_test.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "bypass"}, id="b1")
         result_direct = asyncio.run(svc.execute_tool(call))
         assert result_direct.success
 
-        tmp2 = os.path.join(tempfile.gettempdir(), "bypass_mcp.txt")
+        tmp2 = os.path.join(_root, ".bypass_mcp.txt")
         mcp = MCPAdapter(tool_service=svc)
         result_mcp = asyncio.run(mcp._call_tool("filesystem.write", {
             "path": tmp2, "content": "bypass_mcp",
         }))
         assert result_mcp["status"] == "completed"
 
-        tmp3 = os.path.join(tempfile.gettempdir(), "bypass_acp.txt")
+        tmp3 = os.path.join(_root, ".bypass_acp.txt")
         acp = ACPAdapter(tool_service=svc)
         result_acp = asyncio.run(acp._call_tool("filesystem.write", {
             "path": tmp3, "content": "bypass_acp",
         }))
         assert result_acp["status"] == "completed"
 
-        tmp4 = os.path.join(tempfile.gettempdir(), "bypass_codex.txt")
+        tmp4 = os.path.join(_root, ".bypass_codex.txt")
         codex = CodexExecAdapter(tool_service=svc)
         result_codex = asyncio.run(codex.handle_tool("filesystem.write", {
             "path": tmp4, "content": "bypass_codex",
@@ -741,7 +754,9 @@ class TestUnifiedPipeline:
 
     def test_success_has_no_failure_class(self):
         svc = self._make_svc()
-        tmp = os.path.join(tempfile.gettempdir(), "success_test.txt")
+        from core.project import ProjectContext
+        root = str(ProjectContext.discover().root_path)
+        tmp = os.path.join(root, ".success_test.txt")
         call = ToolCall(name="filesystem.write", arguments={"path": tmp, "content": "ok"}, id="s1")
         result = asyncio.run(svc.execute_tool(call))
         assert result.success

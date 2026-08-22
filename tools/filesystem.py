@@ -40,18 +40,44 @@ def _root() -> Path:
     return ProjectContext.discover().root_path
 
 
+def _is_within(path: Path, base: Path) -> bool:
+    """True if path is inside base (or equals it)."""
+    try:
+        path.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
 def _resolve(path_str: str | None) -> Path:
+    """Resolve a path and enforce it is within the project root.
+
+    Raises ValueError if the resolved path escapes the project boundary.
+    This prevents the agent from reading/writing files outside the project.
+    """
     root = _root()
     if not path_str:
         return root
     path = Path(path_str)
     if not path.is_absolute():
         path = root / path
-    return path.resolve()
+    resolved = path.resolve()
+    if not _is_within(resolved, root):
+        raise ValueError(
+            f"Path {resolved} is outside project root {root}. "
+            f"Only files within the project can be accessed."
+        )
+    return resolved
 
 
 def filesystem_write(args: dict[str, Any]) -> ToolResult:
-    path = _resolve(args.get("path"))
+    import os
+    import tempfile
+
+    try:
+        path = _resolve(args.get("path"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     content = str(args.get("content", "") or "")
     overwrite = bool(args.get("overwrite", True))
     if path.exists() and path.is_dir():
@@ -61,7 +87,22 @@ def filesystem_write(args: dict[str, Any]) -> ToolResult:
     try:
         before = path.read_text(encoding="utf-8") if path.exists() else ""
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        # Atomic write: write to temp file, then os.replace() into place.
+        # This prevents corruption if the process is killed mid-write.
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(path.parent), suffix=".tmp", prefix=".jarvis_",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(content)
+            os.replace(tmp_path, str(path))
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     except OSError as e:
         return ToolResult(success=False, error=f"Failed to write {path}: {e}")
     diff = _brief_diff(before, content)
@@ -77,7 +118,10 @@ def filesystem_write(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_read(args: dict[str, Any]) -> ToolResult:
-    path = _resolve(args.get("path"))
+    try:
+        path = _resolve(args.get("path"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     if not path.exists():
         return ToolResult(success=False, error=f"File not found: {path}")
     if path.is_dir():
@@ -97,7 +141,10 @@ def filesystem_read(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_list(args: dict[str, Any]) -> ToolResult:
-    path = _resolve(args.get("path"))
+    try:
+        path = _resolve(args.get("path"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     if not path.exists():
         return ToolResult(success=False, error=f"Directory not found: {path}")
     if not path.is_dir():
@@ -126,7 +173,10 @@ def filesystem_list(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_delete(args: dict[str, Any]) -> ToolResult:
-    path = _resolve(args.get("path"))
+    try:
+        path = _resolve(args.get("path"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     if not path.exists():
         return ToolResult(success=False, error=f"Path not found: {path}")
     if path.is_dir():
@@ -159,14 +209,20 @@ def filesystem_delete(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_copy(args: dict[str, Any]) -> ToolResult:
-    source = _resolve(args.get("source"))
-    dest = _resolve(args.get("dest"))
+    try:
+        source = _resolve(args.get("source"))
+        dest = _resolve(args.get("dest"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
+    overwrite = bool(args.get("overwrite", False))
     if not source.exists():
         return ToolResult(success=False, error=f"Source not found: {source}")
     if source.is_dir():
         return ToolResult(success=False, error=f"Source is a directory: {source}")
     if dest.is_dir():
         dest = dest / source.name
+    if dest.exists() and not overwrite:
+        return ToolResult(success=False, error=f"Destination exists: {dest} (set overwrite=true to replace)")
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, dest)
@@ -180,12 +236,18 @@ def filesystem_copy(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_move(args: dict[str, Any]) -> ToolResult:
-    source = _resolve(args.get("source"))
-    dest = _resolve(args.get("dest"))
+    try:
+        source = _resolve(args.get("source"))
+        dest = _resolve(args.get("dest"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
+    overwrite = bool(args.get("overwrite", False))
     if not source.exists():
         return ToolResult(success=False, error=f"Source not found: {source}")
     if dest.exists() and dest.is_dir():
         dest = dest / source.name
+    if dest.exists() and not overwrite:
+        return ToolResult(success=False, error=f"Destination exists: {dest} (set overwrite=true to replace)")
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source), str(dest))
@@ -199,8 +261,11 @@ def filesystem_move(args: dict[str, Any]) -> ToolResult:
 
 
 def filesystem_diff(args: dict[str, Any]) -> ToolResult:
-    path_a = _resolve(args.get("file_a"))
-    path_b = _resolve(args.get("file_b"))
+    try:
+        path_a = _resolve(args.get("file_a"))
+        path_b = _resolve(args.get("file_b"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     if not path_a.exists():
         return ToolResult(success=False, error=f"File not found: {path_a}")
     if not path_b.exists():
@@ -256,7 +321,10 @@ def _tree_lines(path: Path, prefix: str, depth: int, max_depth: int, budget: lis
 
 
 def filesystem_tree(args: dict[str, Any]) -> ToolResult:
-    path = _resolve(args.get("path"))
+    try:
+        path = _resolve(args.get("path"))
+    except ValueError as e:
+        return ToolResult(success=False, error=str(e))
     if not path.exists():
         return ToolResult(success=False, error=f"Directory not found: {path}")
     if not path.is_dir():

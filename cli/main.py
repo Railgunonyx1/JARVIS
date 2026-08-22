@@ -828,12 +828,13 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             # main task is running.  We poll the queue below.
             _input_ready.set()
 
-            # Poll for interrupts while main task runs
+            # Poll for interrupts while main task runs (non-blocking)
             import queue as _qmod
             while not _agent_task.done():
                 try:
-                    incoming = input_q.get(timeout=0.15)
-                except _qmod.Empty:
+                    incoming = await asyncio.to_thread(input_q.get, timeout=0.15)
+                except (_qmod.Empty, TimeoutError):
+                    await asyncio.sleep(0.01)
                     continue
                 if incoming is None:
                     _stop_event.set()
@@ -867,6 +868,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             # Main task finished — collect result
             try:
                 await _agent_task
+            except asyncio.CancelledError:
+                pass
             except Exception:
                 pass
             _lr = getattr(loop, '_last_result', None)

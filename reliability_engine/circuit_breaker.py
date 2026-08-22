@@ -97,6 +97,22 @@ class CircuitBreaker:
             self._on_success(name)
             return result
 
+    # Errors that indicate a transient provider issue (worth counting
+    # toward the circuit breaker threshold).  Permanent errors like
+    # KeyError, TypeError, or AssertionError are NOT counted — they
+    # indicate a bug, not a provider failure.
+    _TRANSIENT_TYPES = (ConnectionError, TimeoutError, OSError)
+
+    def _is_transient(self, exc: Exception) -> bool:
+        """True if this exception indicates a transient provider issue."""
+        if isinstance(exc, self._TRANSIENT_TYPES):
+            return True
+        exc_str = str(exc).lower()
+        return any(kw in exc_str for kw in (
+            "rate limit", "timeout", "connection", "503", "429",
+            "overloaded", "temporarily", "try again",
+        ))
+
     def _on_failure(self, name: str, exc: Exception) -> None:
         with self._lock:
             circuit = self._circuits[name]
@@ -108,6 +124,15 @@ class CircuitBreaker:
                     "Circuit '%s' reopened from HALF_OPEN: %s",
                     name,
                     exc,
+                )
+                return
+
+            # Only count transient errors toward the threshold.
+            # Permanent errors (bugs, bad config) should not trip the breaker.
+            if not self._is_transient(exc):
+                logger.debug(
+                    "Circuit '%s': non-transient error, not counting: %s",
+                    name, exc,
                 )
                 return
 

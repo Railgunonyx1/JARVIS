@@ -225,7 +225,7 @@ class OllamaProvider(LLMProvider):
 
     def prewarm(self, model: str | None = None) -> bool:
         """Preload a model into Ollama memory. Uses proxy bypass for localhost."""
-        m = model or self.config.get("model", "qwen2.5:1.5b")
+        m = model or self.config.get("model", "qwen2.5:3b")
         try:
             data = json.dumps({"model": m, "keep_alive": self._keep_alive}).encode()
             resp = _local_post(
@@ -361,12 +361,24 @@ class OllamaProvider(LLMProvider):
             kwargs["think"] = True
 
         start = time.time()
-        response = await client.chat(
-            model=model,
-            messages=full_messages,
-            options=self._build_options(max_tokens, temperature, model=model),
-            **kwargs,
-        )
+        try:
+            response = await client.chat(
+                model=model,
+                messages=full_messages,
+                options=self._build_options(max_tokens, temperature, model=model),
+                **kwargs,
+            )
+        except TypeError:
+            if is_thinking:
+                kwargs.pop("think", None)
+                response = await client.chat(
+                    model=model,
+                    messages=full_messages,
+                    options=self._build_options(max_tokens, temperature, model=model),
+                    **kwargs,
+                )
+            else:
+                raise
         latency = (time.time() - start) * 1000
         message = response["message"]
         text = message.get("content") or ""

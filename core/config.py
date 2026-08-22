@@ -23,6 +23,7 @@ _API_KEYS_TTL = 30.0
 
 _CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 _instance: Optional["Config"] = None
+_instance_lock = __import__("threading").Lock()
 
 
 class Config:
@@ -32,13 +33,16 @@ class Config:
         self._config_dir = config_dir or _CONFIG_DIR
         self._data: dict[str, dict[str, Any]] = {}
         self._listeners: list[callable] = []
+        self._lock = __import__("threading").Lock()
         self.load_all()
 
     @classmethod
     def instance(cls) -> "Config":
         global _instance
         if _instance is None:
-            _instance = cls()
+            with _instance_lock:
+                if _instance is None:
+                    _instance = cls()
         return _instance
 
     def load_all(self):

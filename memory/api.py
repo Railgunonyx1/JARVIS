@@ -422,6 +422,19 @@ def get_mem() -> MemoryAPI:
                     mirror_json=True,
                 )
                 _instance.start_background()
+                # Register cleanup for vector store (WAL journal flush)
+                import atexit
+                _api_ref = _instance  # Capture reference for atexit
+                def _cleanup_vector():
+                    if _api_ref is None:
+                        return
+                    vec = getattr(_api_ref._vector, '_real', None)
+                    if vec is not None:
+                        try:
+                            vec.close()
+                        except Exception:
+                            pass
+                atexit.register(_cleanup_vector)
                 # Bootstrap: sync long_term.json → KV store so the LLM
                 # sees user identity, preferences, and priorities on first request.
                 _bootstrap_long_term(_instance)

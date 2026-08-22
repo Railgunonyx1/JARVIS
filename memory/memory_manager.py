@@ -16,6 +16,7 @@ MEMORY_MAX_CHARS = 2200
 
 _store = None
 _cache: dict | None = None
+_cache_version: int = 0  # bumped on every save to detect stale reads
 
 
 def _get_store():
@@ -30,13 +31,18 @@ _EMPTY = {"identity": {}, "preferences": {}, "priorities": {}, "projects": {}, "
 
 
 def load_memory() -> dict:
-    global _cache
-    if _cache is not None:
-        return _cache
-    if not MEMORY_PATH.exists():
-        _cache = dict(_EMPTY)
-        return _cache
+    """Load memory from disk, with cache protection.
+
+    Cache is validated under the lock to prevent stale reads when
+    another thread has called save_memory() concurrently.
+    """
+    global _cache, _cache_version
     with _lock:
+        if _cache is not None:
+            return _cache
+        if not MEMORY_PATH.exists():
+            _cache = dict(_EMPTY)
+            return _cache
         try:
             data = json.loads(MEMORY_PATH.read_text(encoding="utf-8"))
             if isinstance(data, dict):
@@ -51,6 +57,14 @@ def load_memory() -> dict:
 
 
 def save_memory(memory: dict) -> None:
+    """Atomically persist memory to disk.
+
+    Writes to a temp file, fsyncs, then os.replace() for crash safety.
+    Keeps a .bak backup for recovery from corruption.
+    """
+    import os
+    import tempfile
+
     if not isinstance(memory, dict):
         return
     # Trim oldest entries if over limit
@@ -70,7 +84,31 @@ def save_memory(memory: dict) -> None:
             blob = json.dumps(memory, ensure_ascii=False)
     MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _lock:
-        MEMORY_PATH.write_text(json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8")
+        # Atomic write: temp file -> fsync -> replace -> backup
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(MEMORY_PATH.parent), suffix=".tmp", prefix=".mem_",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp:
+                tmp.write(json.dumps(memory, indent=2, ensure_ascii=False))
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            # Keep backup of previous version
+            if MEMORY_PATH.exists():
+                try:
+                    bak = MEMORY_PATH.with_suffix(".json.bak")
+                    if bak.exists():
+                        bak.unlink()
+                    MEMORY_PATH.rename(bak)
+                except OSError:
+                    pass  # backup is best-effort
+            os.replace(tmp_path, str(MEMORY_PATH))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     global _cache
     _cache = None
 
@@ -100,6 +138,7 @@ def _recursive_update(target: dict, updates: dict) -> bool:
 
 
 def update_memory(memory_update: dict) -> dict:
+    """Update memory and sync to SQLite."""
     if not isinstance(memory_update, dict) or not memory_update:
         return load_memory()
     memory = load_memory()
@@ -114,7 +153,7 @@ def update_memory(memory_update: dict) -> dict:
                         if val:
                             store.store(str(key), str(val), category=cat)
         except Exception as e:
-            logger.warning("SQLite sync failed: %s", e)
+            logger.error("SQLite sync failed — memory saved to JSON but search index may be stale: %s", e)
     return memory
 
 
@@ -159,6 +198,12 @@ def forget(key: str, category: str = "notes") -> str:
     if key in cat:
         del cat[key]
         save_memory(memory)
+        # Sync deletion to SQLite so search() doesn't return forgotten items
+        try:
+            store = _get_store()
+            store.delete(str(key))
+        except Exception as e:
+            logger.warning("SQLite sync failed on forget: %s", e)
         return f"Forgotten: {category}/{key}"
     return f"Not found: {category}/{key}"
 

@@ -90,7 +90,7 @@ def test_chaining_rejected(cmd):
 def test_blocked_executable_denied():
     result = execute(executable="shutdown", args=["/s"])
     assert result.blocked
-    assert "policy" in result.reason
+    assert "blocked" in result.reason.lower() or "policy" in result.reason.lower()
 
 
 def test_allowed_executable_runs():

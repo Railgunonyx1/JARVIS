@@ -297,15 +297,16 @@ class SecureExecutor:
 
     def __init__(self, policy: CommandPolicy | None = None) -> None:
         self.policy = policy or CommandPolicy()
-        self._active: dict[int, subprocess.Popen] = {}
+        self._active: dict[int, tuple[subprocess.Popen, int]] = {}  # pid -> (proc, pgid)
         self._lock = threading.Lock()
 
     def execute(self, req: ExecRequest) -> ExecResult:
         """Run a request through the policy boundary."""
         mode = self.policy.classify(req)
         if mode == ExecMode.BLOCKED:
-            logger.warning("Executor blocked request (mode=%s)", req.command or req.executable)
-            return _blocked("Command failed policy checks")
+            reason = self._explain_block(req)
+            logger.warning("Executor blocked request: %s", reason)
+            return _blocked(reason)
 
         ok, reason = self.policy.check_cwd(self.policy.effective_cwd(req))
         if not ok:
@@ -315,6 +316,33 @@ class SecureExecutor:
             argv = [req.executable, *req.args]
             return self._run(argv, req, mode)
         return self._run_shell(req, mode)
+
+    def _explain_block(self, req: ExecRequest) -> str:
+        """Return a specific human-readable reason why the request was blocked."""
+        command = (req.command or "").strip()
+        exe = req.executable or ""
+        # Check blocked executable
+        if exe:
+            exe_base = os.path.basename(exe).lower()
+            for blocked in self.policy._blocked_executables:
+                if blocked.lower() == exe_base:
+                    return f"Blocked executable: {exe_base}"
+        # Check shell operators
+        for op in self.policy._shell_operators:
+            if op in command:
+                return f"Blocked: contains shell operator '{op}'"
+        # Check dangerous patterns
+        lower = command.lower()
+        for pattern in self.policy._dangerous_patterns:
+            if re.search(pattern, lower):
+                return f"Blocked: matches dangerous pattern '{pattern}'"
+        # Check blocked executables in command
+        parts = command.split()
+        if parts:
+            for blocked in self.policy._blocked_executables:
+                if blocked.lower() == parts[0].lower():
+                    return f"Blocked executable: {blocked}"
+        return "Command failed policy checks"
 
     def _run_shell(self, req: ExecRequest, mode: ExecMode) -> ExecResult:
         host = _shell_host(mode)
@@ -357,7 +385,14 @@ class SecureExecutor:
                               stderr=str(e), mode=mode.value)
 
         with self._lock:
-            self._active[proc.pid] = proc
+            # Store the actual process group ID for reliable tree kill on Linux.
+            pgid = proc.pid  # default: same as PID (session leader)
+            if not _is_windows():
+                try:
+                    pgid = os.getpgid(proc.pid)
+                except (OSError, ProcessLookupError):
+                    pgid = proc.pid
+            self._active[proc.pid] = (proc, pgid)
 
         cap = req.max_output_bytes
         out_sink: list[bytes] = []
@@ -418,8 +453,13 @@ class SecureExecutor:
             with lock:
                 sink[:] = chunks
 
-    def _terminate_tree(self, proc: subprocess.Popen) -> None:
-        """Kill the process and its whole tree."""
+    def _terminate_tree(self, proc: subprocess.Popen, pgid: int | None = None) -> None:
+        """Kill the process and its whole tree.
+
+        Args:
+            proc: The process to kill.
+            pgid: The process group ID (Linux only). If None, looks it up.
+        """
         if _is_windows():
             try:
                 subprocess.run(  # nosec B603 B607 -- fixed Windows taskkill utility
@@ -433,8 +473,11 @@ class SecureExecutor:
                     pass  # nosec B110 -- best-effort kill fallback
         else:
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except Exception:
+                _pgid = pgid
+                if _pgid is None:
+                    _pgid = os.getpgid(proc.pid)
+                os.killpg(_pgid, signal.SIGKILL)
+            except (OSError, ProcessLookupError):
                 try:
                     proc.kill()
                 except Exception:
@@ -448,10 +491,10 @@ class SecureExecutor:
         """Terminate every active process tree. Returns the count killed."""
         killed = 0
         with self._lock:
-            procs = list(self._active.values())
+            entries = list(self._active.values())
             self._active.clear()
-        for proc in procs:
-            self._terminate_tree(proc)
+        for proc, pgid in entries:
+            self._terminate_tree(proc, pgid=pgid)
             killed += 1
         return killed
 

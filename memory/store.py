@@ -177,14 +177,20 @@ class MemoryStore:
             self._conv_timer.daemon = True
             self._conv_timer.start()
 
-    def _flush_conversations(self):
-        """Flush buffered conversation logs to SQLite."""
+    def _flush_conversations(self, force: bool = False):
+        """Flush buffered conversation logs to SQLite.
+
+        Args:
+            force: If True, bypasses the _closed check (used by shutdown).
+        """
         with self._conv_flush_lock:
             buffer = self._conv_buffer[:]
             self._conv_buffer.clear()
         if not buffer:
             return
-        if self._closed or self._conn is None:
+        if not force and self._closed:
+            return
+        if self._conn is None:
             return
         with self._lock:
             self._conn.executemany("""
@@ -242,14 +248,18 @@ class MemoryStore:
         self.shutdown()
 
     def shutdown(self):
-        """Cancel the conversation timer, flush the buffer, close the connection."""
+        """Cancel the conversation timer, flush the buffer, close the connection.
+
+        Sets _closed BEFORE flushing to prevent new writes from being added
+        to the buffer after the flush runs but before _closed is set.
+        """
+        self._closed = True  # Block new writes first
         with self._conv_flush_lock:
             timer = self._conv_timer
             self._conv_timer = None
         if timer is not None:
             timer.cancel()
-        self._flush_conversations()
-        self._closed = True
+        self._flush_conversations(force=True)  # force=True bypasses _closed check
         if self._conn:
             self._conn.close()
             self._conn = None

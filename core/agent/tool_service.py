@@ -12,6 +12,7 @@ Architecture:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -132,11 +133,31 @@ class ToolExecutionService:
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
 
-        # Execute
-        result = await self._executor.execute(
-            call.name, call.arguments, trace_id,
-            mode=self._mode, session_id=session_id,
-        )
+        # Execute (with timeout to prevent hangs)
+        _tool_timeout = 60.0
+        try:
+            result = await asyncio.wait_for(
+                self._executor.execute(
+                    call.name, call.arguments, trace_id,
+                    mode=self._mode, session_id=session_id,
+                ),
+                timeout=_tool_timeout,
+            )
+        except TimeoutError:
+            error = f"Tool '{call.name}' timed out after {_tool_timeout:.0f}s"
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            if step is not None:
+                self._observer.step_finished(step, "error", _tool_timeout * 1000, error)
+            if append_to_messages is not None:
+                append_to_messages.append({
+                    "role": "tool", "tool_call_id": call.id, "name": call.name,
+                    "content": f"ERROR: {error}",
+                })
+            return ToolExecutionResult(
+                tool_name=call.name, call_id=call.id, error=error,
+                failure_class=FailureClass.TIMEOUT,
+                duration_ms=(time.perf_counter() - start) * 1000,
+            )
         duration_ms = result.metadata.get("duration_ms", 0.0)
 
         # Observer: step finished

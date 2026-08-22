@@ -390,7 +390,7 @@ class AgentLoop:
                         "error": f"timeout after {elapsed:.0f}s",
                     }, trace_id)
                     state.transition(TaskStatus.FAILED)
-                    final = self._extract_final(messages)
+                    final = self._extract_last_assistant_text(messages)
                     self._finish_observation(False, final or "", state, iteration)
                     return AgentResult(
                         success=False, response=final, trace_id=trace_id,
@@ -400,16 +400,18 @@ class AgentLoop:
                     )
                 state.iteration = iteration
                 _t_compress = time.time()
-                # Adaptive context budget: use request-local copy (never mutate shared state)
+                # Adaptive context budget: temporarily swap, always restore
                 from dataclasses import replace
                 _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))  # noqa: E501
                 _orig_budget = self.context_manager.budget
                 self.context_manager.budget = _request_budget
-                with tracer.span("context.fit"):
-                    messages, report = self.context_manager.fit_for_loop(
-                        messages, self._system_tokens(system_prompt, tools),
-                    )
-                self.context_manager.budget = _orig_budget
+                try:
+                    with tracer.span("context.fit"):
+                        messages, report = self.context_manager.fit_for_loop(
+                            messages, self._system_tokens(system_prompt, tools),
+                        )
+                finally:
+                    self.context_manager.budget = _orig_budget
                 _latency_log.append(("context_compress", (time.time() - _t_compress) * 1000))
                 state.context_usage = report.to_dict()
                 if report.compacted:
@@ -427,11 +429,11 @@ class AgentLoop:
                             timeout=_call_timeout,
                         )
                     except TimeoutError:
-                        # Provider didn't respond in time — treat as provider failure
                         from providers.types import LLMResponse
                         response = LLMResponse(
                             text='', model='', provider='timeout',
                             latency_ms=_call_timeout * 1000,
+                            finish_reason='timeout',
                         )
                     if span is not None:
                         span.set_attribute("provider", response.provider)
@@ -460,9 +462,12 @@ class AgentLoop:
                     else:
                         final = self._strip_thinking(response.text).strip()
                         if not final:
-                            error = "provider returned an empty response"
-                            if response.finish_reason and response.finish_reason != "stop":
-                                error += f" (finish_reason={response.finish_reason})"
+                            if response.finish_reason == "timeout":
+                                error = f"LLM call timed out after {_call_timeout:.0f}s"
+                            else:
+                                error = "provider returned an empty response"
+                                if response.finish_reason and response.finish_reason != "stop":
+                                    error += f" (finish_reason={response.finish_reason})"
                             state.errors.append(error)
                             self.logger.record(trace_id, events.TASK_FAILED, {
                                 "goal": goal[:200], "error": error,
@@ -481,7 +486,7 @@ class AgentLoop:
                         q_result = self._quality_eval.evaluate(final, goal)
                         if (q_result.should_escalate
                                 and not getattr(state, "_quality_escalated", False)
-                                and iteration < self.max_iterations):
+                                and iteration < _model_iterations):
                             state._quality_escalated = True
                             self._emit("quality.escalate", {
                                 "score": q_result.score,
@@ -522,7 +527,7 @@ class AgentLoop:
                                 failure_ctx = self._build_verification_failure_context(ver_report)
                                 state.errors.append(failure_ctx)
                                 from core.agent.state import TerminalReason
-                                if iteration < self.max_iterations:
+                                if iteration < _model_iterations:
                                     messages.append({
                                         "role": "user",
                                         "content": (
@@ -586,7 +591,7 @@ class AgentLoop:
                         {
                             "id": call.id,
                             "type": "function",
-                            "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
+                            "function": {"name": call.name, "arguments": json.dumps(call.arguments, default=str)},
                         }
                         for call in response.tool_calls
                     ],
@@ -655,7 +660,7 @@ class AgentLoop:
             response="",
             trace_id=trace_id,
             state=state,
-            error=f"Max iterations ({self.max_iterations}) reached without a final answer",
+            error=f"Max iterations ({_model_iterations}) reached without a final answer",
             observation=self._result_observation(state),
             perf=self._end_perf(tracer, root),
         )
@@ -714,6 +719,18 @@ class AgentLoop:
         )
 
     @staticmethod
+    def _extract_last_assistant_text(messages: list[dict]) -> str:
+        """Extract the last assistant message text from the conversation.
+
+        Used as fallback when the agent times out or fails before producing
+        a final answer — gives the LLM's partial response to the user.
+        """
+        for msg in reversed(messages):
+            if msg.get("role") == "assistant" and msg.get("content"):
+                return msg["content"]
+        return ""
+
+    @staticmethod
     def _end_perf(tracer, root, status: str = "OK", error: str = "") -> dict[str, Any]:
         trace = tracer.end(root, status=status, error=error)
         return trace or {}
@@ -734,17 +751,23 @@ class AgentLoop:
         """Build bounded, structured failure context from VerificationReport.
 
         Uses VerificationResult.summary for concise failure info (enough to
-        fix, not enough to overflow the context window). Falls back to raw
-        stderr for results without a summary.
+        fix, not enough to overflow the context window). Falls back to the
+        LAST 5 lines of stderr (more useful than the first 200 chars for
+        test failures and stack traces).
         """
         lines = []
         for r in report.results:
             if not r.passed:
                 if r.summary:
                     lines.append(f"- {r.summary}")
+                elif r.stderr:
+                    # Last 5 lines of stderr — usually the assertion/error
+                    tail = "\n".join(r.stderr.strip().splitlines()[-5:])
+                    lines.append(f"- {r.step_name}: {tail[:300]}")
+                elif r.error:
+                    lines.append(f"- {r.step_name}: {r.error[:300]}")
                 else:
-                    detail = r.error or r.stderr[:200] if r.stderr else "unknown"
-                    lines.append(f"- {r.step_name}: {detail}")
+                    lines.append(f"- {r.step_name}: unknown failure")
         return "\n".join(lines) if lines else "unknown verification failure"
 
     def _finish_observation(self, success: bool, response: str, state: AgentState,
