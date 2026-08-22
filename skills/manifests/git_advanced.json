@@ -1,0 +1,9 @@
+{
+  "name": "git_advanced",
+  "description": "Full git workflow: branches, commits, stash, rebase, merge, cherry-pick, worktrees, tags",
+  "tools": ["git.status", "git.log", "git.diff", "git.add", "git.commit", "git.branch", "git.create_branch", "git.stash", "git.fetch", "git.pull", "git.push", "git.rebase", "git.merge", "git.cherry_pick", "git.reset", "git.restore", "git.revert", "git.show", "git.blame", "git.tag", "git.worktree"],
+  "tags": ["git", "version-control", "workflow", "collaboration"],
+  "risk": "high",
+  "timeout": 120,
+  "version": "1.0.0"
+}

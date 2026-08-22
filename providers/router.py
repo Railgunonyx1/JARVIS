@@ -315,7 +315,11 @@ class ProviderRouter:
                     continue
                 try:
                     logger.info("Trying %s (%s)", provider_name, provider.model)
-                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param, model=_request_model)  # noqa: E501
+                    # Only Ollama accepts model= parameter; cloud providers don't.
+                    _provider_kwargs = {}
+                    if provider_name == "ollama" and _request_model:
+                        _provider_kwargs["model"] = _request_model
+                    response = await provider.complete(messages, system_prompt, max_tokens, temperature, tools_param, **_provider_kwargs)  # noqa: E501
                     if name_map:
                         restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
@@ -363,9 +367,12 @@ class ProviderRouter:
                         logger.info("%s: retrying in %.1fs", provider_name, delay)
                         await asyncio.sleep(delay)
                         try:
+                            _pk = {}
+                            if provider_name == "ollama" and _request_model:
+                                _pk["model"] = _request_model
                             response = await provider.complete(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
-                                model=_request_model,
+                                **_pk,
                             )
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
@@ -546,9 +553,12 @@ class ProviderRouter:
                 while True:
                     try:
                         if not getattr(provider, "captures_stream_tool_calls", False):
+                            _pk = {}
+                            if provider_name == "ollama" and _request_model:
+                                _pk["model"] = _request_model
                             response = await provider.complete(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
-                                model=_request_model,
+                                **_pk,
                             )
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)

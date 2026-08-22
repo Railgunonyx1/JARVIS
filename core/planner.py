@@ -4,7 +4,6 @@ import re
 
 from core.config import ModelCatalog
 from core.mode_manager import ExecutionMode, get_mode_manager
-
 from core.utils import get_project_root as get_base_dir
 
 logger = logging.getLogger("jarvis.planner")

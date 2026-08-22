@@ -1,0 +1,9 @@
+{
+  "name": "file_operations",
+  "description": "Complete file operations: read, write, copy, move, delete, diff, list, tree",
+  "tools": ["filesystem.read", "filesystem.write", "filesystem.copy", "filesystem.move", "filesystem.delete", "filesystem.diff", "filesystem.list", "filesystem.tree"],
+  "tags": ["files", "filesystem", "operations", "io"],
+  "risk": "medium",
+  "timeout": 60,
+  "version": "1.0.0"
+}

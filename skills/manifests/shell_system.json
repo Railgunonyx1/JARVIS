@@ -1,0 +1,9 @@
+{
+  "name": "shell_system",
+  "description": "Execute shell commands, monitor system health, check CPU/RAM/processes",
+  "tools": ["shell.execute", "system.status"],
+  "tags": ["system", "shell", "monitoring", "devops"],
+  "risk": "high",
+  "timeout": 120,
+  "version": "1.0.0"
+}

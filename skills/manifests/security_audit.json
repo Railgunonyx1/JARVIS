@@ -1,0 +1,9 @@
+{
+  "name": "security_audit",
+  "description": "Security scanning: check file permissions, scan code for vulnerabilities, detect hardcoded secrets",
+  "tools": ["security.check_permissions", "security.scan_code", "security.scan_secrets"],
+  "tags": ["security", "audit", "vulnerabilities", "secrets"],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0"
+}

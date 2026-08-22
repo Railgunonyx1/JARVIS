@@ -1,0 +1,9 @@
+{
+  "name": "memory_management",
+  "description": "Manage JARVIS memory: search, store, delete, and check stats for user/project/decision memory",
+  "tools": ["memory.retrieve", "memory.remember", "memory.forget", "memory.stats"],
+  "tags": ["memory", "knowledge", "user-context", "persistence"],
+  "risk": "low",
+  "timeout": 30,
+  "version": "1.0.0"
+}

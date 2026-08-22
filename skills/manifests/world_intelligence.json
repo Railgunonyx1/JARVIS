@@ -1,0 +1,9 @@
+{
+  "name": "world_intelligence",
+  "description": "Global intelligence: real-time news, situational briefs, risk assessments, crisis alerts by region",
+  "tools": ["world_monitor.search", "world_monitor.world_brief", "world_monitor.get_alerts", "world_monitor.get_event", "world_monitor.get_region", "world_monitor.get_sources"],
+  "tags": ["research", "news", "geopolitics", "risk", "intelligence"],
+  "risk": "low",
+  "timeout": 60,
+  "version": "1.0.0"
+}

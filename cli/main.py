@@ -22,12 +22,6 @@ from pathlib import Path
 
 _IMPORT_START = time.perf_counter()  # noqa: E402 — must be before heavy imports
 
-import typer  # noqa: E402
-from rich.console import Console  # noqa: E402
-from rich.text import Text  # noqa: E402
-
-from cli.theme import build_rich_theme  # noqa: E402
-
 # Pipes on Windows default to cp1252, which cannot encode arrows/dashes the
 # cockpit uses — force UTF-8 everywhere with a lossless fallback.
 for _stream in (sys.stdout, sys.stderr):
@@ -46,9 +40,16 @@ warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=FutureWarning,
                         message=r"(?s).*google\.generativeai")
 
+logger = logging.getLogger("jarvis.cli")
+
+import typer  # noqa: E402
+from rich.console import Console  # noqa: E402
+from rich.text import Text  # noqa: E402
+
+from cli.theme import build_rich_theme  # noqa: E402
+
 app = typer.Typer(add_completion=False)
 console = Console(theme=build_rich_theme())
-logger = logging.getLogger("jarvis.cli")
 
 _IMPORT_MS = (time.perf_counter() - _IMPORT_START) * 1000.0
 
@@ -150,39 +151,29 @@ def _print_result(result) -> None:
 def _print_collapsed(result) -> None:
     """Print result after agent finishes.
 
-    Uses plain print() instead of console.print() because Rich's Live
-    display can interfere with the Console's output state. The response
-    must appear reliably before the next input prompt.
+    Uses plain sys.stdout.write() to bypass ALL Rich state (Console, Live,
+    Panel, etc). Rich's internal cursor tracking can swallow prints even
+    after Live.stop(). Writing directly to the file descriptor is the only
+    reliable way to guarantee output appears.
     """
-    from cli.renderer import render_markdown
     try:
         if result and result.success and result.response:
-            # Use plain print() to bypass any Rich/Live state issues.
-            # console.print() can be swallowed if Live was using the same Console.
-            print()  # newline separator before response
+            text = result.response
+            # Strip any ANSI codes that Rich might have injected
+            import re as _re
+            text = _re.sub(r'\x1b\[[0-9;]*m', '', text)
+            sys.stdout.write('\n' + text + '\n\n')
             sys.stdout.flush()
-            # Render markdown to string and print via plain stdout
-            rendered = render_markdown(result.response)
-            # Rich renderables need a console to render — use a fresh one
-            from rich.console import Console as RichConsole
-            out_console = RichConsole(
-                highlight=False, emoji=False,
-                file=sys.stdout, force_terminal=True,
-            )
-            out_console.print(rendered)
-            out_console.print()
         elif result and not result.success:
             err = getattr(result, 'error', 'unknown error')
-            print(f"  error: {err[:200]}")
-        else:
-            print("  (no response)")
-    except Exception as e:
-        print(f"  (output error: {e})")
-    finally:
-        try:
+            sys.stdout.write(f'\n  error: {err[:200]}\n\n')
             sys.stdout.flush()
-        except Exception:
-            pass
+        else:
+            sys.stdout.write('\n  (no response)\n\n')
+            sys.stdout.flush()
+    except Exception as e:
+        sys.stdout.write(f'\n  (output error: {e})\n\n')
+        sys.stdout.flush()
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -237,6 +228,11 @@ async def _run_once(goal: str, loop, json_output: bool = False,
             display._on_event(name, payload)
 
     if bridge is not None:
+        # Clear previous conversation so each run starts fresh.
+        # The Live display renders bridge.state.messages — accumulating
+        # across runs causes the growing repetition bug.
+        bridge.state.messages.clear()
+        bridge.state.plan = None
         bridge.start_run(goal)
     if use_live:
         display.attach(loop.observer)
@@ -560,14 +556,27 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     _stop_event = threading.Event()
     _agent_task: asyncio.Task | None = None
     _agent_event_loop: asyncio.AbstractEventLoop | None = None
+    _input_ready = threading.Event()  # Set when REPL is waiting for input
 
     def _input_thread() -> None:
-        """Read input in a background thread (non-blocking for asyncio)."""
+        """Read input in a background thread.
+
+        Only reads when the REPL signals it is ready (via _input_ready).
+        This prevents the same input from being queued multiple times
+        while the agent task is running.
+        """
         while not _stop_event.is_set():
+            # Wait until the REPL is ready for input
+            _input_ready.wait(timeout=0.5)
+            if _stop_event.is_set():
+                break
+            if not _input_ready.is_set():
+                continue
             try:
                 mode_str = str(loop.mode).lower() if loop else "agent"
                 prompt = f"JARVIS [{mode_str}] > "
                 line = reader.read_line(prompt)
+                _input_ready.clear()  # Consumed input — not ready until REPL loops
                 input_q.put(line)
             except (EOFError, KeyboardInterrupt):
                 input_q.put(None)
@@ -624,6 +633,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_providers(loop)
         elif line == "/status":
             _cmd_status(loop)
+        elif line == "/skills":
+            _cmd_skills()
         elif line == "/memory prompt":
             _cmd_memory_prompt(loop)
         elif line == "/cancel":
@@ -735,10 +746,14 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     _interrupt_executor = None
                 if profile_startup:
                     _print_startup_report()
+                # Kernel is ready — allow input thread to read
+                _input_ready.set()
                 continue
+
 
             # ── Dispatch or queue agent command ──
             if _dispatch_sync(line):
+                _input_ready.set()  # Ready for next input
                 continue  # Non-agent command handled, get next input
 
             # Agent command: submit to background loop, then continue
@@ -764,12 +779,18 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
 
             # No agent task running — launch one and wait for completion
             _agent_task = asyncio.ensure_future(_run_agent_async(line))
-            # Wait for the agent task to complete. During execution,
-            # interrupts can still be submitted via the input thread.
             await _agent_task
-            # Small pause so the user can read the response before the
-            # next input prompt appears.
-            await asyncio.sleep(0.15)
+            # Belt-and-suspenders: print the response directly here too,
+            # in case _print_collapsed output was swallowed by Rich state.
+            _lr = getattr(loop, '_last_result', None)
+            if _lr and _lr.success and _lr.response:
+                import re as _re
+                _clean = _re.sub(r'\x1b\[[0-9;]*m', '', _lr.response)
+                sys.stdout.write('\n' + _clean + '\n\n')
+                sys.stdout.flush()
+            await asyncio.sleep(0.1)
+            # Agent done — allow input thread to read next input
+            _input_ready.set()
             continue
 
     # Run the async REPL
@@ -943,6 +964,45 @@ def _cmd_providers(loop) -> None:
             str(errors) if errors else "0",
         )
     console.print(table)
+
+
+def _cmd_skills() -> None:
+    """Show all available skills and their tool coverage."""
+    from rich.table import Table
+
+    from skills import build_default_skill_registry
+    from tools import build_default_registry
+
+    skill_reg = build_default_skill_registry()
+    tool_reg = build_default_registry()
+    tool_names = {t.name for t in tool_reg.list()}
+
+    table = Table(title="JARVIS Skills")
+    table.add_column("Skill", style="bold")
+    table.add_column("Tools", justify="right")
+    table.add_column("Risk")
+    table.add_column("Description", max_width=50)
+
+    for s in sorted(skill_reg.list_all(), key=lambda x: x.name):
+        tools_ok = sum(1 for t in s.tool_names if t in tool_names)
+        risk_raw = getattr(s, 'risk', '') or ''
+        risk_str = (
+            "high" if "high" in str(risk_raw)
+            else "medium" if "medium" in str(risk_raw)
+            else "low"
+        )
+        table.add_row(
+            s.name,
+            f"{tools_ok}/{len(s.tool_names)}",
+            risk_str,
+            s.description[:50],
+        )
+    console.print(table)
+    console.print(
+        Text(f"  {len(skill_reg.list_all())} skills, {len(tool_names)} tools",
+             style="dim")
+    )
+
 
 
 def _cmd_status(loop) -> None:

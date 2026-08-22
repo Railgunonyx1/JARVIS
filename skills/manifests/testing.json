@@ -1,0 +1,9 @@
+{
+  "name": "testing",
+  "description": "Test management: run tests, run specific targets, discover tests, check coverage, find failures, benchmark",
+  "tools": ["test.run", "test.run_target", "test.discover", "test.failed", "test.coverage", "test.benchmark"],
+  "tags": ["testing", "qa", "coverage", "performance"],
+  "risk": "low",
+  "timeout": 300,
+  "version": "1.0.0"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "web_research",
+  "description": "Web research: search the internet for information, documentation, solutions, and references",
+  "tools": ["web.search"],
+  "tags": ["web", "search", "research", "information"],
+  "risk": "low",
+  "timeout": 30,
+  "version": "1.0.0"
+}

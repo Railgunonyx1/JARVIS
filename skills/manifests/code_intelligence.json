@@ -1,0 +1,9 @@
+{
+  "name": "code_intelligence",
+  "description": "Deep code analysis: AST parsing, type checking, call graphs, symbol definitions, import analysis",
+  "tools": ["code.ast", "code.callees", "code.callers", "code.definition", "code.imports", "code.references", "code.symbol", "code.typecheck"],
+  "tags": ["code", "analysis", "navigation", "debugging"],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0"
+}

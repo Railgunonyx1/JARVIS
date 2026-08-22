@@ -4,7 +4,6 @@ import re
 from enum import Enum
 
 from core.config import ModelCatalog
-
 from core.utils import get_project_root as get_base_dir
 
 logger = logging.getLogger("jarvis.error_handler")

@@ -1,0 +1,9 @@
+{
+  "name": "runtime_diagnostics",
+  "description": "Self-diagnostics: check JARVIS runtime health, provider latency, loaded models, recent errors, events",
+  "tools": ["runtime.status", "runtime.latency", "runtime.models", "runtime.errors", "runtime.events"],
+  "tags": ["diagnostics", "self-monitoring", "health", "debugging"],
+  "risk": "low",
+  "timeout": 30,
+  "version": "1.0.0"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "patching",
+  "description": "Precise code patching: replace text, insert at line, delete lines — surgical edits without rewriting files",
+  "tools": ["patch.replace", "patch.insert", "patch.delete"],
+  "tags": ["patching", "editing", "refactoring", "code-modification"],
+  "risk": "medium",
+  "timeout": 30,
+  "version": "1.0.0"
+}

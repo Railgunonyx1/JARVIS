@@ -424,7 +424,7 @@ class SecureExecutor:
             try:
                 subprocess.run(  # nosec B603 B607 -- fixed Windows taskkill utility
                     ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                    capture_output=True, timeout=10,
+                    capture_output=True, timeout=10, check=False,
                 )
             except Exception:
                 try:
