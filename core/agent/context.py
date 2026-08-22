@@ -48,6 +48,14 @@ _FULL = (
     "- Stop when goal is complete. Summarize in 2-3 sentences."
 )
 
+_SMALL_FULL = (
+    f"{_IDENTITY} running on a Windows PC.\n"
+    "\n"
+    "Answer simple questions directly. For code/file tasks: read first, "
+    "then edit minimally. Use tools to read, write, search, and run commands. "
+    "Stop when done. Summarize briefly."
+)
+
 # Cache: project context string (changes rarely)
 _project_cache: dict[str, str] = {}
 

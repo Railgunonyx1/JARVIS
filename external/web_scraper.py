@@ -92,7 +92,7 @@ class WebScraper:
 
     def _extract_links(self, html: str, base_url: str) -> list:
         links = re.findall(r'href=["\']([^"\']+)["\']', html, re.IGNORECASE)
-        return [l for l in links if l.startswith("http")][:50]
+        return [link for link in links if link.startswith("http")][:50]
 
     def _clean(self, text: str) -> str:
         return re.sub(r'<[^>]+>', '', text).strip()

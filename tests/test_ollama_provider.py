@@ -92,17 +92,19 @@ class TestDaemonProbing:
 # ── Tool limiting ────────────────────────────────────────────────────────
 
 class TestToolLimiting:
-    def test_1_5b_gets_5_tools(self):
+    def test_1_5b_gets_interrupt_limited_tools(self):
+        """1.5B interrupt lane gets up to 7 tools (ranked by relevance)."""
         p = _make_provider(model="qwen2.5:1.5b")
         tools = [_tool_schema(f"t{i}") for i in range(10)]
         result = p._limit_tools(tools, "qwen2.5:1.5b")
-        assert len(result) == 5
+        assert len(result) == 7  # Interrupt lane limit
 
-    def test_3b_gets_10_tools(self):
+    def test_3b_gets_ranked_tools(self):
+        """3B normal lane gets up to 15 tools, ranked by relevance."""
         p = _make_provider(model="qwen2.5:3b")
-        tools = [_tool_schema(f"t{i}") for i in range(15)]
+        tools = [_tool_schema(f"t{i}") for i in range(20)]
         result = p._limit_tools(tools, "qwen2.5:3b")
-        assert len(result) == 10
+        assert len(result) == 15  # Normal lane limit
 
     def test_large_model_gets_20_tools(self):
         p = _make_provider(model="qwen2.5:7b")
@@ -121,12 +123,13 @@ class TestToolLimiting:
         assert p._limit_tools(None, "qwen2.5:1.5b") is None
 
     def test_fallback_model_gets_own_limit(self):
+        """Primary (3B) and fallback (1.5B) have different tool limits."""
         p = _make_provider(model="qwen2.5:3b", fallback_model="qwen2.5:1.5b")
-        tools = [_tool_schema(f"t{i}") for i in range(12)]
+        tools = [_tool_schema(f"t{i}") for i in range(20)]
         primary = p._limit_tools(tools, "qwen2.5:3b")
         fallback = p._limit_tools(tools, "qwen2.5:1.5b")
-        assert len(primary) == 10
-        assert len(fallback) == 5
+        assert len(primary) == 15  # Normal lane: up to 15
+        assert len(fallback) == 7   # Interrupt lane: up to 7
 
 
 # ── Message conversion ───────────────────────────────────────────────────
@@ -312,7 +315,7 @@ class TestFallbackModelInheritance:
         p._client = mock_client
         tools = [_tool_schema(f"t{i}") for i in range(12)]
         await p.complete([{"role": "user", "content": "hi"}], tools=tools)
-        assert tool_counts == [10, 5]
+        assert tool_counts == [15, 7]
 
 
 # ── Streaming fallback ───────────────────────────────────────────────────
@@ -423,6 +426,7 @@ class TestEdgeCases:
         mock_client = AsyncMock()
 
         async def fake_chat(model, messages, options, **kwargs):
+            # Config overrides lane default (0.2 for 1.5b -> 0.3 from config)
             assert options["temperature"] == 0.3
             assert options["num_predict"] == 100
             return _fake_response()

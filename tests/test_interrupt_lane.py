@@ -195,3 +195,91 @@ def test_multiple_classifier_calls_are_idempotent():
             assert result.lane.value == expected_lane, (
                 f"Query '{query}' got lane={result.lane.value}, expected {expected_lane}"
             )
+
+
+# ---------------------------------------------------------------------------
+# 4. Security boundary invariant: InterruptExecutor uses ToolExecutionService
+# ---------------------------------------------------------------------------
+
+def test_interrupt_executor_accepts_tool_service():
+    """InterruptExecutor must accept a ToolExecutionService parameter."""
+    from core.agent.lanes import InterruptExecutor
+    import inspect
+    sig = inspect.signature(InterruptExecutor.__init__)
+    assert 'tool_service' in sig.parameters, (
+        "InterruptExecutor.__init__ must accept 'tool_service' parameter "
+        "to enforce the security boundary."
+    )
+
+
+def test_interrupt_executor_prefers_tool_service_over_direct():
+    """When tool_service is provided, InterruptExecutor must use it
+    instead of calling tool.execute() directly.
+    """
+    from core.agent.lanes import InterruptExecutor
+    import inspect
+
+    # The _execute_tool_safe method must exist and check self._tool_service
+    source = inspect.getsource(InterruptExecutor._execute_tool_safe)
+    assert 'self._tool_service' in source, (
+        "_execute_tool_safe must reference self._tool_service"
+    )
+    assert 'execute_tool' in source, (
+        "_execute_tool_safe must call tool_service.execute_tool() "
+        "for the security boundary (permission → executor → redaction)"
+    )
+    # Verify it does NOT directly call tool.execute when service is available
+    # The fallback path (else branch) should be the only direct-call path
+    lines = source.split('\n')
+    in_else_block = False
+    found_direct_execute_in_else = False
+    found_direct_execute_outside_else = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('else:'):
+            in_else_block = True
+        elif not stripped.startswith('#') and not stripped.startswith('if self._tool_service'):
+            if 'tool.execute(' in stripped and not in_else_block:
+                found_direct_execute_outside_else = True
+
+    assert not found_direct_execute_outside_else, (
+        "_execute_tool_safe must NOT call tool.execute() outside the fallback "
+        "else branch. Direct tool execution bypasses PermissionEngine, "
+        "SecurityEngine, observer lifecycle, and result redaction."
+    )
+
+
+def test_interrupt_lane_tools_are_security_classified():
+    """Every tool in the interrupt allowed set must have a risk classification."""
+    from core.agent.lanes import _INTERRUPT_ALLOWED_TOOLS
+    from tools import build_default_registry
+
+    registry = build_default_registry()
+    registered = {t.name for t in registry.list()}
+
+    for tool_name in _INTERRUPT_ALLOWED_TOOLS:
+        assert tool_name in registered, (
+            f"Interrupt tool '{tool_name}' is not in the tool registry."
+        )
+
+
+def test_no_dangerous_tools_in_interrupt_lane():
+    """Shell, write, delete, and other dangerous tools must NEVER be in the
+    interrupt allowed set.
+    """
+    from core.agent.lanes import _INTERRUPT_ALLOWED_TOOLS
+
+    forbidden = {
+        'shell.execute', 'shell.run', 'shell.bash',
+        'filesystem.write', 'filesystem.edit', 'filesystem.delete',
+        'git.commit', 'git.push', 'git.merge',
+        'process.kill', 'process.terminate',
+        'network.request', 'network.fetch',
+        'credential.read', 'credential.write',
+    }
+
+    violations = _INTERRUPT_ALLOWED_TOOLS & forbidden
+    assert not violations, (
+        f"Dangerous tools in interrupt lane: {violations}. "
+        f"The interrupt lane must never allow destructive operations."
+    )

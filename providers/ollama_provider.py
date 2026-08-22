@@ -1,8 +1,15 @@
-"""Ollama Provider - Local inference for privacy-first / offline mode."""
+"""Ollama Provider - Local inference for privacy-first / offline mode.
+
+Lane-specific inference profiles:
+  1.5B → interrupt/quick: small context, minimal tools, low latency
+  3B   → normal coding:   medium context, moderate tools, throughput
+  4B   → heavy reasoning: larger context, broad tools, quality
+"""
 
 import importlib.util
 import json
 import logging
+import os
 import time
 from collections.abc import AsyncIterator
 
@@ -10,6 +17,72 @@ from providers.base import LLMProvider, LLMResponse
 from providers.types import ToolCall, parse_ollama_tool_calls
 
 logger = logging.getLogger("jarvis.providers.ollama")
+
+# Adaptive CPU thread count: use os.cpu_count() at import time
+_CPU_COUNT = os.cpu_count() or 4
+
+# Lane-specific inference profiles — different parameters per model tier
+_LANE_PROFILES: dict[str, dict] = {
+    # 1.5B interrupt lane: minimize latency, deterministic output
+    "interrupt": {
+        "num_ctx": 1536,
+        "num_predict": 384,
+        "temperature": 0.15,
+        "top_k": 8,
+        "top_p": 0.65,
+        "repeat_penalty": 1.0,
+        "num_gpu": 999,
+        "num_thread": min(_CPU_COUNT, 4),
+        "mirostat": 0,
+    },
+    # 3B normal coding: balance speed and capability
+    "normal": {
+        "num_ctx": 4096,
+        "num_predict": 1536,
+        "temperature": 0.3,
+        "top_k": 15,
+        "top_p": 0.75,
+        "repeat_penalty": 1.0,
+        "num_gpu": 999,
+        "num_thread": _CPU_COUNT,
+        "mirostat": 2,
+        "mirostat_tau": 4.0,
+        "mirostat_eta": 0.1,
+    },
+    # 4B heavy reasoning: prioritize quality over speed
+    "heavy": {
+        "num_ctx": 8192,
+        "num_predict": 4096,
+        "temperature": 0.4,
+        "top_k": 25,
+        "top_p": 0.85,
+        "repeat_penalty": 1.05,
+        "num_gpu": 999,
+        "num_thread": _CPU_COUNT,
+        "mirostat": 2,
+        "mirostat_tau": 6.0,
+        "mirostat_eta": 0.15,
+    },
+}
+
+# Tool priority ranking per lane — ranked tools, not first-N
+_TOOL_RANKINGS: dict[str, list[str]] = {
+    "interrupt": [
+        "memory.retrieve", "memory.remember", "memory.stats",
+        "system.status", "git.status", "filesystem.read", "filesystem.list",
+        "filesystem.diff", "git.diff",
+    ],
+    "normal": [
+        "filesystem.read", "filesystem.write", "filesystem.edit",
+        "filesystem.list", "filesystem.search", "filesystem.diff",
+        "shell.execute", "git.status", "git.diff", "git.commit",
+        "git.log", "git.branch",
+        "search.code", "code.symbol", "code.references",
+        "memory.retrieve", "memory.remember",
+        "test.run", "test.discover",
+    ],
+    "heavy": [],  # Empty = use all available tools
+}
 
 
 class OllamaProvider(LLMProvider):
@@ -70,21 +143,46 @@ class OllamaProvider(LLMProvider):
             return False
         return self.health.available and self.check_quota()
 
-    def _build_options(self, max_tokens: int | None, temperature: float | None) -> dict:
-        """Build Ollama options with aggressive performance tuning."""
-        return {
-            "num_predict": max_tokens if max_tokens is not None else self.config.get("max_tokens", 1024),
-            "temperature": temperature if temperature is not None else self.config.get("temperature", 0.4),
-            "num_ctx": self.config.get("num_ctx", 2048),
-            "num_thread": self.config.get("num_thread", 8),
-            "top_k": self.config.get("top_k", 20),
-            "top_p": self.config.get("top_p", 0.8),
-            "repeat_penalty": 1.0,
-            "mirostat": 2,           # Adaptive sampling — better quality/speed ratio
-            "mirostat_tau": 5.0,     # Target entropy
-            "mirostat_eta": 0.1,     # Learning rate
-            "num_gpu": 999,          # Offload all layers to GPU if available
-        }
+    def _detect_lane(self, model: str) -> str:
+        """Detect the lane (interrupt/normal/heavy) from model name."""
+        ml = model.lower()
+        if any(tag in ml for tag in ('1.5b', '1b', '0.5b')):
+            return "interrupt"
+        if any(tag in ml for tag in ('4b', '7b', '8b', '13b')):
+            return "heavy"
+        return "normal"  # 3b and unknown models
+
+    def _build_options(self, max_tokens: int | None, temperature: float | None,
+                       model: str | None = None) -> dict:
+        """Build Ollama options using lane-specific inference profiles.
+
+        Each model tier (1.5B/3B/4B) gets optimized parameters:
+        - interrupt: minimize latency (small context, deterministic sampling)
+        - normal: balance speed and capability (medium context, mirostat)
+        - heavy: prioritize quality (larger context, broader sampling)
+        """
+        lane = self._detect_lane(model or self.config.get("model", "qwen2.5:1.5b"))
+        profile = _LANE_PROFILES[lane].copy()
+
+        # Priority 1: config overrides (legacy compatibility)
+        for key in ("num_ctx", "num_thread", "top_k", "top_p", "temperature", "num_predict"):
+            if key in self.config:
+                profile[key] = self.config[key]
+        # Also support 'max_tokens' config key (maps to num_predict)
+        if "max_tokens" in self.config:
+            profile["num_predict"] = self.config["max_tokens"]
+
+        # Priority 2: explicit request parameters (highest)
+        if max_tokens is not None:
+            profile["num_predict"] = max_tokens
+        if temperature is not None:
+            profile["temperature"] = temperature
+
+        # Disable mirostat if explicitly set to 0 in config
+        if self.config.get("mirostat") == 0:
+            profile["mirostat"] = 0
+
+        return profile
 
     def prewarm(self, model: str | None = None) -> bool:
         m = model or self.config.get("model", "qwen2.5:1.5b")
@@ -139,12 +237,18 @@ class OllamaProvider(LLMProvider):
     def _warm(self) -> None:
         super()._warm()
         if self._prewarm_on_start and self._daemon_ok:
-            primary = self.config.get("model", "qwen2.5:1.5b")
+            import threading
+            primary = self.config.get("model", "qwen2.5:3b")
             try:
-                import threading
                 threading.Thread(target=self.prewarm, args=(primary,), daemon=True).start()
             except Exception:
                 pass
+            interrupt_model = "qwen2.5:1.5b"
+            if interrupt_model != primary:
+                try:
+                    threading.Thread(target=self.prewarm, args=(interrupt_model,), daemon=True).start()
+                except Exception:
+                    pass
 
     def _get_client(self):
         if self._client is None:
@@ -176,19 +280,35 @@ class OllamaProvider(LLMProvider):
                 out.append(msg)
         return out
 
-    @staticmethod
-    def _max_tools_for_model(model: str) -> int:
-        if any(tag in model for tag in ('1.5b', '1b')):
-            return 5
-        if '3b' in model:
-            return 10
-        return 20
-
     def _limit_tools(self, tools: list | None, model: str) -> list | None:
+        """Select best tools for the lane, ranked by relevance not position.
+
+        Uses lane-specific tool rankings so the 1.5B interrupt gets only
+        memory/status tools (not arbitrary first-N), while 3B/4B get
+        tools ranked for coding/reasoning tasks.
+        """
         if not tools:
             return tools
-        limit = self._max_tools_for_model(model)
-        return tools[:limit] if len(tools) > limit else tools
+        lane = self._detect_lane(model)
+        ranking = _TOOL_RANKINGS.get(lane, [])
+        if not ranking:
+            # Heavy lane or unknown: use all tools (with a sane cap)
+            return tools[:20] if len(tools) > 20 else tools
+
+        # Rank tools by lane priority: matching tools first, then others
+        ranked = []
+        tool_names = {t.get("function", {}).get("name", ""): t for t in tools}
+        for name in ranking:
+            if name in tool_names:
+                ranked.append(tool_names.pop(name))
+        # Append remaining tools (capped by lane limit)
+        lane_limits = {"interrupt": 7, "normal": 15, "heavy": 25}
+        limit = lane_limits.get(lane, 10)
+        for t in tool_names.values():
+            if len(ranked) >= limit:
+                break
+            ranked.append(t)
+        return ranked
 
     async def _chat_once(self, client, model: str, full_messages: list,
                          tools: list | None, max_tokens, temperature) -> LLMResponse:
@@ -196,11 +316,16 @@ class OllamaProvider(LLMProvider):
         kwargs = {}
         if tools:
             kwargs["tools"] = tools
+
+        is_thinking = "qwen3" in model.lower()
+        if is_thinking:
+            kwargs["think"] = True
+
         start = time.time()
         response = await client.chat(
             model=model,
             messages=full_messages,
-            options=self._build_options(max_tokens, temperature),
+            options=self._build_options(max_tokens, temperature, model=model),
             **kwargs,
         )
         latency = (time.time() - start) * 1000
@@ -320,7 +445,7 @@ class OllamaProvider(LLMProvider):
         stream = await client.chat(
             model=model,
             messages=full_messages,
-            options=self._build_options(max_tokens, temperature),
+            options=self._build_options(max_tokens, temperature, model=model),
             **kwargs,
             stream=True,
         )

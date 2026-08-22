@@ -8,9 +8,9 @@ SDK output into these shapes.
 from __future__ import annotations
 
 import json
-from enum import StrEnum
 import re
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 
 _TOOL_NAME_SAFE = re.compile(r"[^a-zA-Z0-9_-]")

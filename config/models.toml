@@ -102,23 +102,16 @@ temperature = 0.7
 
 [ollama]
 model = "qwen2.5:3b"
-max_tokens = 2048
-temperature = 0.7
+max_tokens = 1536
 base_url = "http://127.0.0.1:11434"
-num_ctx = 2048
-num_thread = 8
-top_k = 30
-top_p = 0.9
 priority = 4
+# Sampling params (temperature, top_k, top_p, num_ctx, mirostat) are
+# lane-specific in ollama_provider.py (_LANE_PROFILES). Config overrides
+# here only force a specific value across all lanes.
 
 [ollama.fallback]
 model = "qwen2.5:1.5b"
-max_tokens = 2048
-temperature = 0.7
-num_ctx = 1024
-num_thread = 8
-top_k = 20
-top_p = 0.8
+max_tokens = 384
 
 [cerebras]
 model = "llama-3.3-70b"

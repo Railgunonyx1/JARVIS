@@ -100,9 +100,9 @@ MODEL_CATALOG: list[ModelProfile] = [
     # === 1B models (ultra-fast fallback) ===
     ModelProfile(
         name="qwen2.5:1.5b", size_gb=0.9,
-        strengths=[TaskType.QUICK, TaskType.CONVERSATIONAL],
+        strengths=[TaskType.QUICK, TaskType.CONVERSATIONAL, TaskType.CODING],
         speed="fast", tools=True,
-        description="Ultra-fast. Simple tasks only.",
+        description="Ultra-fast. Simple tasks and basic coding.",
     ),
     ModelProfile(
         name="gemma3:1b", size_gb=0.8,
@@ -381,6 +381,7 @@ class ModelRegistry:
       Tier 1 (router):  qwen2.5:1.5b — ultra-fast, handles greetings/simple tasks
       Tier 2 (worker):  qwen2.5:3b  — fast, handles coding/tools/reasoning
       Tier 3 (heavy):   qwen3:4b    — smart, handles complex multi-step tasks
+                         (with thinking mode for deep reasoning)
     """
 
     _instance = None
@@ -488,29 +489,30 @@ class ModelRegistry:
         router_perf = self._perf.get(self.CASCADE_ROUTER)
         worker_perf = self._perf.get(self.CASCADE_WORKER)
 
-        # Default: draft-verify enabled, escalate at confidence < 0.45
         result = {
             "draft_enabled": True,
             "escalate_threshold": 0.45,
         }
 
-        # If 1.5B has < 70% success rate after 5+ requests, disable draft
-        if router_perf and router_perf.requests >= 5 and router_perf.success_rate < 0.70:
+        if router_perf and router_perf.requests >= 3 and router_perf.success_rate < 0.75:
             result["draft_enabled"] = False
             logger.info("Adaptive: disabling draft-verify (1.5B success rate: %.0f%%)",
                         router_perf.success_rate * 100)
 
-        # If 3B has < 80% success rate after 5+ requests, escalate earlier
-        if worker_perf and worker_perf.requests >= 5 and worker_perf.success_rate < 0.80:
-            result["escalate_threshold"] = 0.65  # More aggressively use 4B
+        if worker_perf and worker_perf.requests >= 3 and worker_perf.success_rate < 0.80:
+            result["escalate_threshold"] = 0.60
             logger.info("Adaptive: raising escalate threshold (3B success rate: %.0f%%)",
                         worker_perf.success_rate * 100)
 
-        # If 1.5B avg latency > 3s, it's not worth using even for simple tasks
-        if router_perf and router_perf.requests >= 3 and router_perf.avg_ttft_ms > 3000:
+        if router_perf and router_perf.requests >= 2 and router_perf.avg_ttft_ms > 2000:
             result["draft_enabled"] = False
             logger.info("Adaptive: disabling draft-verify (1.5B TTFT: %.0fms)",
                         router_perf.avg_ttft_ms)
+
+        if worker_perf and worker_perf.requests >= 3 and worker_perf.avg_ttft_ms > 5000:
+            result["escalate_threshold"] = 0.55
+            logger.info("Adaptive: raising threshold (3B TTFT: %.0fms)",
+                        worker_perf.avg_ttft_ms)
 
         return result
 
@@ -521,11 +523,11 @@ class ModelRegistry:
     def resolve_cascade(self, prompt: str) -> dict[str, str | None]:
         """Resolve model routing using confidence + adaptive performance data.
 
-        Strategy (updated — 1.5B is NOT the first stop for tool tasks):
+        Strategy:
           1. Deterministic commands → skip LLM entirely.
           2. QUICK/CONVERSATIONAL with high confidence → 1.5B handles directly.
-          3. CODING/RESEARCH/WRITING/REASONING → go straight to 3B worker.
-          4. Low confidence or ambiguous → 4B heavy model.
+          3. CODING/RESEARCH/WRITING/REASONING with high confidence → 3B worker.
+          4. Low confidence or ambiguous → 4B heavy model (with thinking).
           5. Adapt escalation threshold based on actual performance metrics.
 
         Returns:
@@ -549,7 +551,6 @@ class ModelRegistry:
         lower = prompt.strip()
         needs_tools = task_type not in (TaskType.QUICK, TaskType.CONVERSATIONAL)
 
-        # ── Deterministic command bypass ──
         deterministic = lower.startswith("/") or _is_deterministic_command(lower)
         if deterministic:
             self._deterministic_count += 1
@@ -565,7 +566,6 @@ class ModelRegistry:
                 "selected_model": self.CASCADE_ROUTER,
             }
 
-        # Manual lock: skip cascade, use locked model for everything
         if not self._auto_mode and self._active_model:
             self._model_usage[self._active_model] = self._model_usage.get(self._active_model, 0) + 1
             return {
@@ -580,13 +580,9 @@ class ModelRegistry:
                 "selected_model": self._active_model,
             }
 
-        # ── Adaptive performance threshold ──
-        # If 1.5B has poor success rate on tool tasks, skip it entirely.
-        _adaptive_threshold = self._get_adaptive_threshold()
+        _adaptive = self._get_adaptive_threshold()
+        escalate_at = _adaptive["escalate_threshold"]
 
-        # ── Confidence-based routing ──
-
-        # QUICK/CONVERSATIONAL → 1.5B handles directly (no tools needed)
         if task_type in (TaskType.QUICK, TaskType.CONVERSATIONAL):
             self._direct_handle_count += 1
             self._model_usage[self.CASCADE_ROUTER] = self._model_usage.get(self.CASCADE_ROUTER, 0) + 1
@@ -602,8 +598,7 @@ class ModelRegistry:
                 "selected_model": self.CASCADE_ROUTER,
             }
 
-        # HEAVY task → 4B directly (don't waste time on smaller models)
-        if task_type == TaskType.HEAVY or confidence < 0.45:
+        if task_type == TaskType.HEAVY or confidence < escalate_at:
             self._escalation_count += 1
             self._model_usage[self.CASCADE_HEAVY] = self._model_usage.get(self.CASCADE_HEAVY, 0) + 1
             return {
@@ -618,17 +613,12 @@ class ModelRegistry:
                 "selected_model": self.CASCADE_HEAVY,
             }
 
-        # CODING/RESEARCH/WRITING/REASONING → go straight to 3B worker
-        # 1.5B does NOT get a chance to attempt tool tasks — it adds latency
-        # for no benefit. The 3B model is the minimum viable model for tools.
         self._escalation_count += 1
         self._model_usage[self.CASCADE_WORKER] = self._model_usage.get(self.CASCADE_WORKER, 0) + 1
 
-        # Adaptive: if 1.5B success rate is poor AND confidence is low,
-        # skip draft-verify and go straight to 3B.
         use_draft = (
-            _adaptive_threshold.get("draft_enabled", True)
-            and 0.5 <= confidence < 0.8
+            _adaptive.get("draft_enabled", True)
+            and 0.4 <= confidence < 0.7
         )
 
         if use_draft:

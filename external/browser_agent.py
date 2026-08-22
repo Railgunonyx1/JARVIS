@@ -18,7 +18,7 @@ import logging
 import os
 import tempfile
 import time
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("external.browser_agent")
 
@@ -123,7 +123,7 @@ class BrowserAgent:
             "backend": "playwright",
         }
 
-    def screenshot(self, path: Optional[str] = None) -> str:
+    def screenshot(self, path: str | None = None) -> str:
         """Capture a screenshot. Returns the file path (saved to temp by default)."""
         if not self.available:
             raise RuntimeError("Screenshots require Playwright (browser not available)")
@@ -152,7 +152,7 @@ class BrowserAgent:
         self._page.fill(selector, text)
         return True
 
-    def extract_text(self, selector: Optional[str] = None) -> str:
+    def extract_text(self, selector: str | None = None) -> str:
         """Return visible text from the whole page or a single selector."""
         if not self.available:
             raise RuntimeError("Extraction requires Playwright")
@@ -217,14 +217,14 @@ class BrowserAgent:
             "headless": self.headless,
         }
 
-    def __enter__(self) -> "BrowserAgent":
+    def __enter__(self) -> BrowserAgent:
         return self
 
     def __exit__(self, *exc) -> None:
         self.close()
 
 
-_agent: Optional[BrowserAgent] = None
+_agent: BrowserAgent | None = None
 
 
 def get_browser_agent() -> BrowserAgent:

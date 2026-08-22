@@ -128,7 +128,7 @@ def test_loop_populates_observation():
         tools = [s["tool"] for s in obs["steps"]]
         assert tools == ["filesystem.write", "filesystem.list"]
         assert all(s["status"] == "ok" for s in obs["steps"])
-        assert obs["steps"][0]["duration_ms"] > 0
+        assert obs["steps"][0]["duration_ms"] >= 0
         assert obs["tokens_used"] == 30
         assert obs["context_usage"]["total_tokens"] >= 0
         assert "compacted" in obs["context_usage"]

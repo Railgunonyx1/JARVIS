@@ -533,86 +533,45 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     reader = InputReader()
     reader.set_history(history.to_list())
 
-    def _read_command() -> str:
-        mode = str(loop.mode).lower() if loop else "agent"
-        prompt = f"JARVIS [{mode}] > "
-        while True:
+    # ── Input thread + asyncio REPL (P0-1: concurrent interrupt support) ──
+    # Input reading runs in a daemon thread feeding a queue.
+    # The main asyncio event loop consumes commands and checks for
+    # interrupts while an agent task is running concurrently.
+    import queue as _queue
+    input_q: _queue.Queue[str | None] = _queue.Queue()
+    _stop_event = threading.Event()
+    _agent_task: asyncio.Task | None = None
+    _agent_event_loop: asyncio.AbstractEventLoop | None = None
+
+    def _input_thread() -> None:
+        """Read input in a background thread (non-blocking for asyncio)."""
+        while not _stop_event.is_set():
             try:
-                return reader.read_line(prompt)
+                mode_str = str(loop.mode).lower() if loop else "agent"
+                prompt = f"JARVIS [{mode_str}] > "
+                line = reader.read_line(prompt)
+                input_q.put(line)
+            except (EOFError, KeyboardInterrupt):
+                input_q.put(None)
+                break
             except PaletteRequest:
                 try:
                     commands.dispatch("/palette")
                 except SystemExit:
-                    raise
-
-    while True:
-        if loop is None:
-            try:
-                line = _read_command()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            line = line.strip()
-            history.add(line)
-            history.save()
-            if not ready.is_set():
-                try:
-                    ready.wait()
-                except KeyboardInterrupt:
-                    print()
+                    input_q.put(None)
                     break
-            loop = holder.get("loop")
-            if loop is None:
-                console.print(Text(f"  startup failed: {holder.get('error', 'unknown')}", style="jarvis.error"))
-                break
-            bridge.attach_loop(loop)
-            bridge.pull_status()
-            boot_ms = (time.time() - boot_start) * 1000
-            bridge.renderer.state.connection = "ONLINE"
-            bridge.renderer.state.status_message = f"ready in {boot_ms/1000:.1f}s"
-            bridge.renderer.refresh()
-            # Wire router rate-limit events to the UI via the observer
-            def _forward_provider_event(name, payload):
-                if hasattr(loop.observer, 'on_event'):
-                    loop.observer.on_event(name, payload)
-            loop.router.on_provider_event = _forward_provider_event
-            loop.router.warm()
-            # Initialize interrupt executor for parallel lightweight queries
-            global _interrupt_executor, _interrupt_classifier, _main_task_running
-            try:
-                from core.agent.lanes import InterruptExecutor, RequestClassifier
-                _interrupt_classifier = RequestClassifier()
-                # Pass ToolExecutionService so interrupts go through the
-                # security boundary (permission → executor → redaction → audit)
-                _tool_svc = getattr(loop, '_tool_service', None)
-                _interrupt_executor = InterruptExecutor(
-                    router=loop.router,
-                    registry=loop.registry,
-                    mem=loop.mem,
-                    project=loop.project,
-                    tool_service=_tool_svc,
-                )
-            except Exception:
-                _interrupt_classifier = None
-                _interrupt_executor = None
-            if profile_startup:
-                _print_startup_report()
-        else:
-            try:
-                line = _read_command().strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            history.add(line)
-            history.save()
+
+    # ── Synchronous command dispatcher (non-agent commands) ──
+    def _dispatch_sync(line: str) -> bool:
+        """Dispatch non-agent commands. Returns False if agent task should run."""
         if not line:
             last = getattr(loop, "_last_result", None)
             if last is not None:
                 console.print(render_expanded(last))
-            continue
-
+            return True
         if line in ("/exit", "/quit"):
-            break
+            _stop_event.set()
+            return True
         if line == "/clear":
             console.clear()
         elif line == "/cockpit":
@@ -637,15 +596,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _print_tree(loop.project)
         elif line.startswith("/history"):
             _cmd_history(line)
-        elif line == "/resume":
-            goal = getattr(loop, "_last_goal", None)
-            if not goal:
-                console.print(Text("  no previous goal", style="jarvis.error"))
-            else:
-                try:
-                    asyncio.run(_run_once(goal, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))  # noqa: E501
-                except Exception as exc:
-                    console.print(Text(f"  error: {exc}", style="jarvis.error"))
         elif line.startswith("/remember "):
             _cmd_remember(line, loop)
         elif line == "/memory":
@@ -660,39 +610,165 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_memory_prompt(loop)
         elif line == "/cancel":
             _cmd_cancel(loop)
+        elif line == "/resume":
+            goal = getattr(loop, "_last_goal", None)
+            if not goal:
+                console.print(Text("  no previous goal", style="jarvis.error"))
+                return True
+            line = goal  # Fall through to agent runner below
+            return False
         elif line.startswith("/"):
             commands.dispatch(line)
         else:
-            # Check if this is an interrupt (lightweight query while main task runs)
-            _is_interrupt = False
-            if _main_task_running and _interrupt_classifier is not None:
-                _classification = _interrupt_classifier.classify(
-                    line,
-                    active_task_id=getattr(loop, '_last_task_id', None),
-                    active_task_status="executing",
-                )
-                if _classification.lane.value == "interrupt":
-                    _is_interrupt = True
-                    try:
-                        _result = asyncio.run(_interrupt_executor.execute(
-                            line, _classification
-                        ))
-                        if _result["success"]:
-                            console.print(Text(f"  {_result['response']}", style="cyan"))
-                            console.print(Text(f"  (interrupt · {_result['latency_ms']:.0f}ms · 1B)", style="dim"))
-                        else:
-                            err = _result.get("error", "no response")
-                            console.print(Text(f"  interrupt error: {err}", style="jarvis.error"))
-                    except Exception as exc:
-                        console.print(Text(f"  interrupt error: {exc}", style="jarvis.error"))
-            if not _is_interrupt:
-                try:
-                    asyncio.run(_run_once(line, loop, collapsed=True, notifications=notifications, bridge=bridge, screen=False))  # noqa: E501
-                except KeyboardInterrupt:
-                    console.print(Text("  (interrupted)", style="dim"))
-                except Exception as exc:
-                    console.print(Text(f"  error: {exc}", style="jarvis.error"))
+            return False  # Agent command
+        return True
 
+    # ── Async agent task runner (runs on background event loop) ──
+    async def _run_agent_async(goal: str) -> None:
+        """Run the agent task on the background event loop.
+
+        This avoids nesting asyncio.run() — the coroutine is scheduled
+        on the already-running background loop.
+        """
+        global _main_task_running
+        _main_task_running = True
+        try:
+            await _run_once(
+                goal, loop, collapsed=True,
+                notifications=notifications, bridge=bridge, screen=False,
+            )
+        finally:
+            _main_task_running = False
+
+    # ── Async interrupt handler (runs on background event loop) ──
+    async def _handle_interrupt(text: str) -> None:
+        """Classify and execute an interrupt on the 1B model."""
+        global _main_task_running
+        if _interrupt_classifier is None or _interrupt_executor is None:
+            return
+        classification = _interrupt_classifier.classify(
+            text,
+            active_task_id=getattr(loop, '_last_task_id', None),
+            active_task_status="executing",
+        )
+        if classification.lane.value == "interrupt":
+            try:
+                _result = await _interrupt_executor.execute(text, classification)
+                if _result["success"]:
+                    console.print(Text(f"  {_result['response']}", style="cyan"))
+                    console.print(Text(f"  (interrupt · {_result['latency_ms']:.0f}ms · 1B)", style="dim"))
+                else:
+                    err = _result.get("error", "no response")
+                    console.print(Text(f"  interrupt error: {err}", style="jarvis.error"))
+            except Exception as exc:
+                console.print(Text(f"  interrupt error: {exc}", style="jarvis.error"))
+
+    # ── Async REPL main loop (runs on main thread via asyncio.run) ──
+    async def _repl_loop() -> None:
+        nonlocal loop, _agent_task, _agent_event_loop
+        _agent_event_loop = asyncio.get_running_loop()
+        t = threading.Thread(target=_input_thread, daemon=True, name="jarvis-input")
+        t.start()
+
+        while not _stop_event.is_set():
+            # ── Wait for first input ──
+            if loop is None:
+                try:
+                    line = await asyncio.get_event_loop().run_in_executor(None, input_q.get)
+                except Exception:
+                    break
+                if line is None:
+                    break
+                line = line.strip()
+                history.add(line)
+                history.save()
+                if not ready.is_set():
+                    try:
+                        await asyncio.get_event_loop().run_in_executor(None, ready.wait)
+                    except (KeyboardInterrupt, Exception):
+                        break
+                loop = holder.get("loop")
+                if loop is None:
+                    console.print(Text(f"  startup failed: {holder.get('error', 'unknown')}", style="jarvis.error"))
+                    break
+                bridge.attach_loop(loop)
+                bridge.pull_status()
+                boot_ms = (time.time() - boot_start) * 1000
+                bridge.renderer.state.connection = "ONLINE"
+                bridge.renderer.state.status_message = f"ready in {boot_ms/1000:.1f}s"
+                bridge.renderer.refresh()
+                def _forward_provider_event(name, payload):
+                    if hasattr(loop.observer, 'on_event'):
+                        loop.observer.on_event(name, payload)
+                loop.router.on_provider_event = _forward_provider_event
+                loop.router.warm()
+                global _interrupt_executor, _interrupt_classifier, _main_task_running
+                try:
+                    from core.agent.lanes import InterruptExecutor, RequestClassifier
+                    _interrupt_classifier = RequestClassifier()
+                    _tool_svc = getattr(loop, '_tool_service', None)
+                    _interrupt_executor = InterruptExecutor(
+                        router=loop.router, registry=loop.registry,
+                        mem=loop.mem, project=loop.project,
+                        tool_service=_tool_svc,
+                    )
+                except Exception:
+                    _interrupt_classifier = None
+                    _interrupt_executor = None
+                if profile_startup:
+                    _print_startup_report()
+                continue
+
+            # ── Dispatch or queue agent command ──
+            if _dispatch_sync(line):
+                continue  # Non-agent command handled, get next input
+
+            # Agent command: submit to background loop, then continue
+            # accepting input so interrupts can be detected.
+            if _agent_task is not None and not _agent_task.done():
+                # Previous task still running — queue as interrupt or new main
+                if _interrupt_classifier is not None:
+                    classification = _interrupt_classifier.classify(
+                        line,
+                        active_task_id=getattr(loop, '_last_task_id', None),
+                        active_task_status="executing",
+                    )
+                    if classification.lane.value == "interrupt":
+                        asyncio.run_coroutine_threadsafe(
+                            _handle_interrupt(line), _agent_event_loop,
+                        )
+                        continue
+                # Not an interrupt — queue for after current task finishes
+                console.print(Text("  (task still running — queuing...)", style="dim"))
+                input_q.put(line)  # Re-queue for processing later
+                await asyncio.sleep(0.1)  # Yield to let agent task progress
+                continue
+
+            # No agent task running — launch one
+            _agent_task = asyncio.ensure_future(_run_agent_async(line))
+            # Continue the REPL loop to accept interrupts
+            try:
+                line = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, input_q.get),
+                    timeout=0.5,
+                )
+            except TimeoutError:
+                continue  # No input yet — check again
+            except Exception:
+                break
+            if line is None:
+                break
+            line = line.strip()
+            history.add(line)
+            history.save()
+
+    # Run the async REPL
+    try:
+        asyncio.run(_repl_loop())
+    except KeyboardInterrupt:
+        pass
+
+    _stop_event.set()
     if loop is not None:
         loop.logger.flush()
     history.save()
