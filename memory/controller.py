@@ -252,11 +252,45 @@ class MemoryController:
         project: str = "",
         top_k: int = 3,
         min_score: float = 0.15,
+        use_llm_enhance: bool = True,
     ) -> list[dict[str, Any]]:
-        """Legacy-shaped results for existing callers (CLI/cockpit/tests)."""
+        """Legacy-shaped results for existing callers (CLI/cockpit/tests).
+
+        When use_llm_enhance=True, uses the 1B model to reformulate the
+        query and rerank results for better relevance.
+        """
         _SOURCE_NAMES = {"v": "vector", "kv": "kv", "d": "decision", "k": "knowledge"}
+
+        # Optional 1B enhancement: reformulate query before retrieval
+        search_query = query
+        if use_llm_enhance:
+            try:
+                from memory.llm_enhance import reformulate_query
+                search_query = reformulate_query(query)
+            except Exception:
+                pass
+
+        items = self.retrieve_items(search_query, project=project, top_k=top_k * 2, min_score=min_score)
+
+        # Optional 1B reranking
+        if use_llm_enhance and items:
+            try:
+                from memory.llm_enhance import rerank_memories
+                item_dicts = [
+                    {"content": i.content, "type": i.type, "score": getattr(i, "_signals", {}).get("score", 0.0)}
+                    for i in items
+                ]
+                reranked = rerank_memories(query, item_dicts, max_results=top_k)
+                # Map back to items (by content match)
+                reranked_contents = {m["content"][:100] for m in reranked}
+                items = [i for i in items if i.content[:100] in reranked_contents][:top_k]
+            except Exception:
+                items = items[:top_k]
+        else:
+            items = items[:top_k]
+
         out = []
-        for item in self.retrieve_items(query, project=project, top_k=top_k, min_score=min_score):
+        for item in items:
             prefix = str(item.id).split(":", 1)[0]
             out.append({
                 "source": _SOURCE_NAMES.get(prefix, prefix),

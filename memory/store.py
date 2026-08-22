@@ -96,6 +96,19 @@ class MemoryStore:
             CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp);
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
         """)
+        # FTS5 virtual table for fast BM25 full-text search
+        # Standalone table (not content-synced) — rebuilt on store/delete
+        try:
+            self._conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                    key, value, category,
+                    tokenize='porter unicode61'
+                )
+            """)
+            self._fts_available = True
+        except Exception as e:
+            logger.debug("FTS5 not available: %s", e)
+            self._fts_available = False
         self._conn.commit()
 
     def _rebuild_from_json(self) -> None:
@@ -180,6 +193,19 @@ class MemoryStore:
                     updated_at = excluded.updated_at,
                     importance = excluded.importance
             """, (key, value, category, now, now, importance))
+            # Sync FTS5 index
+            if getattr(self, '_fts_available', False):
+                try:
+                    # Delete old FTS entry if exists, then insert new
+                    self._conn.execute(
+                        "DELETE FROM memories_fts WHERE key = ?", (key,)
+                    )
+                    self._conn.execute(
+                        "INSERT INTO memories_fts(key, value, category) VALUES (?, ?, ?)",
+                        (key, value, category),
+                    )
+                except Exception:
+                    pass  # FTS sync is best-effort
             self._conn.commit()
         logger.info("Memory stored: %s [%s]", key, category)
 
@@ -204,6 +230,14 @@ class MemoryStore:
             cur = self._conn.execute(
                 "DELETE FROM memories WHERE key = ?", (key,)
             )
+            # Sync FTS5 index
+            if getattr(self, '_fts_available', False):
+                try:
+                    self._conn.execute(
+                        "DELETE FROM memories_fts WHERE key = ?", (key,)
+                    )
+                except Exception:
+                    pass  # FTS sync is best-effort
             self._conn.commit()
         return cur.rowcount > 0
 
@@ -222,20 +256,43 @@ class MemoryStore:
         return [dict(r) for r in rows]
 
     def search_lexical(self, query: str, limit: int = 10) -> list[dict]:
-        """Token-overlap scored search via the Headroom selector (Claude Mem).
+        """Token-overlap scored search via FTS5 (fast) or selector (fallback).
 
-        Stronger than the LIKE substring match: ranks by shared vocabulary so
-        a query can hit memories that don't contain the exact phrase.
+        Uses FTS5 BM25 ranking when available (much faster than loading
+        500 rows into Python). Falls back to the Headroom selector for
+        scoring when FTS5 is unavailable.
         """
         if not query:
             return []
+
+        # Fast path: FTS5 BM25 search
+        if getattr(self, '_fts_available', False):
+            try:
+                # FTS5 query syntax: wrap in quotes for phrase, or use AND/OR
+                fts_query = query.replace('"', '""')
+                with self._lock:
+                    rows = [dict(r) for r in self._conn.execute(
+                        "SELECT m.key, m.value, m.category, m.importance, "
+                        "rank AS bm25_score "
+                        "FROM memories_fts fts "
+                        "JOIN memories m ON m.id = fts.rowid "
+                        "WHERE memories_fts MATCH ? "
+                        "ORDER BY rank "
+                        "LIMIT ?",
+                        (fts_query, limit * 3),
+                    ).fetchall()]
+                if rows:
+                    return rows[:limit]
+            except Exception as e:
+                logger.debug("FTS5 search failed, falling back: %s", e)
+
+        # Fallback: load-and-score (slow but reliable)
         from core.context.selector import score as _score
         with self._lock:
             rows = [dict(r) for r in self._conn.execute(
                 "SELECT key, value, category, importance FROM memories "
                 "ORDER BY updated_at DESC LIMIT 500",
             ).fetchall()]
-        # Split snake_case keys so "favorite_language" matches "favorite language".
         scored = [
             (_score(f"{r['key'].replace('_', ' ')} {r['value']}", query), r)
             for r in rows

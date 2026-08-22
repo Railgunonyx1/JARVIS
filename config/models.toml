@@ -175,3 +175,14 @@ fix_model = "gemini-2.0-flash"
 
 # inference_engine section removed — dead config, never referenced by code.
 # Model routing is handled by ModelRegistry (Ollama cascade) and ProviderRouter (cloud fallback).
+
+# ── Memory Enhancement (1B Model) ──────────────────────────────────────
+# Uses a small model for query reformulation, reranking, and condensation.
+# Set enable=false to disable (fallback to regex-only pipeline).
+[memory]
+enable_small_model = true
+small_model = "qwen2.5:1.5b"  # Auto-pulled if missing
+reformulate_timeout = 3.0      # Max seconds for query reformulation
+rerank_timeout = 2.0           # Max seconds for reranking
+condense_timeout = 3.0         # Max seconds for condensation
+top_k = 3                      # Max memories to return after reranking

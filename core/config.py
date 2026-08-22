@@ -172,7 +172,7 @@ class Config:
         """
         # Check for config override
         cfg_val = self.get("failure_analyzer", event_name, default=None)
-        if cfg_val is not None and cfg_val != default:
+        if cfg_val is not None:
             return cfg_val
         # Fall back to built-in mapping
         return self.FAILURE_RECOVERY_CONFIG.get(event_name, default)
