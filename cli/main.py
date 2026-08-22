@@ -148,25 +148,37 @@ def _print_result(result) -> None:
 
 
 def _print_collapsed(result) -> None:
-    """Print result after agent finishes. Uses console.print to ensure
-    Rich terminal state is correct. Always outputs something."""
+    """Print result after agent finishes.
+
+    Uses plain print() instead of console.print() because Rich's Live
+    display can interfere with the Console's output state. The response
+    must appear reliably before the next input prompt.
+    """
     from cli.renderer import render_markdown
     try:
         if result and result.success and result.response:
-            # Start on a fresh line so the response doesn't jam against the
-            # Live display's footer prompt (e.g. 'JARVIS [agent] > _').
-            print()  # newline separator
-            console.print(render_markdown(result.response))
-            console.print()
+            # Use plain print() to bypass any Rich/Live state issues.
+            # console.print() can be swallowed if Live was using the same Console.
+            print()  # newline separator before response
+            sys.stdout.flush()
+            # Render markdown to string and print via plain stdout
+            rendered = render_markdown(result.response)
+            # Rich renderables need a console to render — use a fresh one
+            from rich.console import Console as RichConsole
+            out_console = RichConsole(
+                highlight=False, emoji=False,
+                file=sys.stdout, force_terminal=True,
+            )
+            out_console.print(rendered)
+            out_console.print()
         elif result and not result.success:
             err = getattr(result, 'error', 'unknown error')
-            console.print(Text(f"  error: {err[:200]}", style="jarvis.error"))
+            print(f"  error: {err[:200]}")
         else:
-            console.print(Text("  (no response)", style="jarvis.dim"))
+            print("  (no response)")
     except Exception as e:
-        console.print(Text(f"  (output error: {e})", style="jarvis.error"))
+        print(f"  (output error: {e})")
     finally:
-        # Ensure output is visible before the next prompt appears
         try:
             sys.stdout.flush()
         except Exception:
