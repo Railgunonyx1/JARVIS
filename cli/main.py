@@ -165,6 +165,12 @@ def _print_collapsed(result) -> None:
             console.print(Text("  (no response)", style="jarvis.dim"))
     except Exception as e:
         console.print(Text(f"  (output error: {e})", style="jarvis.error"))
+    finally:
+        # Ensure output is visible before the next prompt appears
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
 
 
 def _capture_notification(name: str, payload: dict, notifications: list) -> None:
@@ -744,23 +750,15 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 await asyncio.sleep(0.1)  # Yield to let agent task progress
                 continue
 
-            # No agent task running — launch one
+            # No agent task running — launch one and wait for completion
             _agent_task = asyncio.ensure_future(_run_agent_async(line))
-            # Continue the REPL loop to accept interrupts
-            try:
-                line = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(None, input_q.get),
-                    timeout=0.5,
-                )
-            except TimeoutError:
-                continue  # No input yet — check again
-            except Exception:
-                break
-            if line is None:
-                break
-            line = line.strip()
-            history.add(line)
-            history.save()
+            # Wait for the agent task to complete. During execution,
+            # interrupts can still be submitted via the input thread.
+            await _agent_task
+            # Small pause so the user can read the response before the
+            # next input prompt appears.
+            await asyncio.sleep(0.15)
+            continue
 
     # Run the async REPL
     try:

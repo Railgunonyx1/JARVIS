@@ -13,7 +13,6 @@ import os
 import time
 import urllib.request
 from collections.abc import AsyncIterator
-from functools import partial
 from typing import Any
 
 from providers.base import LLMProvider, LLMResponse
@@ -405,6 +404,13 @@ class OllamaProvider(LLMProvider):
             self.record_success(result.latency_ms)
             return result
         except Exception as primary_err:
+            # Connection refused = Ollama not running — give clear message
+            if isinstance(primary_err, (ConnectionRefusedError, OSError)) or \
+               "connection refused" in str(primary_err).lower() or \
+               "connect" in type(primary_err).__name__.lower():
+                msg = (f"Ollama is not running at {self.base_url}. "
+                       f"Start it with: ollama serve")
+                raise type(primary_err)(msg) from primary_err
             if self._fallback_model and self._fallback_model != primary_model:
                 try:
                     logger.info("Ollama primary model %s failed, trying fallback %s",
@@ -454,6 +460,13 @@ class OllamaProvider(LLMProvider):
             latency = (time.time() - start) * 1000
             self.record_success(latency)
         except Exception as primary_err:
+            # Connection refused = Ollama not running — give clear message
+            if isinstance(primary_err, (ConnectionRefusedError, OSError)) or \
+               "connection refused" in str(primary_err).lower() or \
+               "connect" in type(primary_err).__name__.lower():
+                msg = (f"Ollama is not running at {self.base_url}. "
+                       f"Start it with: ollama serve")
+                raise type(primary_err)(msg) from primary_err
             if self._fallback_model and self._fallback_model != primary_model:
                 try:
                     logger.info("Ollama streaming primary %s failed, trying fallback %s",

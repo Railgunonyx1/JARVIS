@@ -80,34 +80,28 @@ goto chat
 
 :interactive
 "%PY%" -m cli --mode agent
-if errorlevel 1 goto error_exit
 goto quit
 
 :chat
 "%PY%" -m cli --mode agent
-if errorlevel 1 goto error_exit
 goto quit
 
 :plan
 "%PY%" -m cli --mode plan
-if errorlevel 1 goto error_exit
 goto quit
 
 :controlled
 "%PY%" -m cli --mode controlled
-if errorlevel 1 goto error_exit
 goto quit
 
 :smart
 "%PY%" -m cli --mode smart
-if errorlevel 1 goto error_exit
 goto quit
 
 :oneshot
 set /p "goal=  goal> "
 if "%goal%"=="" goto quit
 "%PY%" -m cli --mode agent "%goal%"
-if errorlevel 1 goto error_exit
 goto quit
 
 :perf
@@ -121,7 +115,6 @@ goto quit
 :help
 echo.
 echo   JARVIS.bat [chat^|plan^|controlled^|smart^|oneshot^|perf^|tests^|help]
-echo.
 goto quit
 
 :error_exit
@@ -130,10 +123,8 @@ echo ============================================
 echo   JARVIS exited with an error.
 echo   Check the messages above for details.
 echo ============================================
-echo.
+timeout /t 5 /nobreak >nul 2>&1
 
 :quit
-echo.
-pause
 endlocal
 exit /b
