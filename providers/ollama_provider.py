@@ -65,47 +65,46 @@ def _local_post(url: str, data: bytes, headers: dict | None = None,
     finally:
         resp.close()
 
-# Lane-specific inference profiles — different parameters per model tier
+# Lane-specific inference profiles — tuned for MX130 2GB VRAM, 8GB RAM
 _LANE_PROFILES: dict[str, dict] = {
     # 1.5B interrupt lane: minimize latency, deterministic output
     "interrupt": {
-        "num_ctx": 1536,
-        "num_predict": 384,
-        "temperature": 0.15,
-        "top_k": 8,
-        "top_p": 0.65,
+        "num_ctx": 1024,
+        "num_predict": 256,
+        "temperature": 0.1,
+        "top_k": 5,
+        "top_p": 0.6,
+        "min_p": 0.05,
         "repeat_penalty": 1.0,
         "num_gpu": 999,
-        "num_thread": min(_CPU_COUNT, 4),
+        "num_thread": min(_CPU_COUNT, 6),
         "mirostat": 0,
     },
     # 3B normal coding: balance speed and capability
     "normal": {
         "num_ctx": 4096,
         "num_predict": 1536,
-        "temperature": 0.3,
-        "top_k": 15,
-        "top_p": 0.75,
+        "temperature": 0.25,
+        "top_k": 12,
+        "top_p": 0.7,
+        "min_p": 0.05,
         "repeat_penalty": 1.0,
         "num_gpu": 999,
         "num_thread": _CPU_COUNT,
-        "mirostat": 2,
-        "mirostat_tau": 4.0,
-        "mirostat_eta": 0.1,
+        "mirostat": 0,
     },
-    # 4B heavy reasoning: prioritize quality over speed
+    # 4B heavy reasoning: prioritize quality, but capped for 7GB RAM
     "heavy": {
-        "num_ctx": 8192,
-        "num_predict": 4096,
-        "temperature": 0.4,
-        "top_k": 25,
-        "top_p": 0.85,
-        "repeat_penalty": 1.05,
+        "num_ctx": 4096,
+        "num_predict": 2048,
+        "temperature": 0.35,
+        "top_k": 20,
+        "top_p": 0.8,
+        "min_p": 0.05,
+        "repeat_penalty": 1.0,
         "num_gpu": 999,
         "num_thread": _CPU_COUNT,
-        "mirostat": 2,
-        "mirostat_tau": 6.0,
-        "mirostat_eta": 0.15,
+        "mirostat": 0,
     },
 }
 
@@ -207,17 +206,17 @@ class OllamaProvider(LLMProvider):
 
         Each model tier (1.5B/3B/4B) gets optimized parameters:
         - interrupt: minimize latency (small context, deterministic sampling)
-        - normal: balance speed and capability (medium context, mirostat)
+        - normal: balance speed and capability (medium context)
         - heavy: prioritize quality (larger context, broader sampling)
         """
         lane = self._detect_lane(model or self.config.get("model", "qwen2.5:1.5b"))
         profile = _LANE_PROFILES[lane].copy()
 
         # Priority 1: config overrides (legacy compatibility)
-        for key in ("num_ctx", "num_thread", "top_k", "top_p", "temperature", "num_predict"):
+        for key in ("num_ctx", "num_thread", "top_k", "top_p", "temperature",
+                     "num_predict", "min_p"):
             if key in self.config:
                 profile[key] = self.config[key]
-        # Also support 'max_tokens' config key (maps to num_predict)
         if "max_tokens" in self.config:
             profile["num_predict"] = self.config["max_tokens"]
 

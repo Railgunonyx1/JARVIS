@@ -10,14 +10,15 @@ if not defined PY if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\pyth
 if not defined PY set "PY=python"
 set "PYTHONIOENCODING=utf-8"
 
-REM ── Ollama environment ────────────────────────────────────────────────
-REM Note: keep_alive and model-specific settings live in config/models.toml
-REM and providers/ollama_provider.py — not here. BAT only configures the
-REM daemon process and proxy bypass for localhost connections.
+REM ── Ollama environment (MX130 2GB VRAM, 8GB RAM) ─────────────────────
+REM GPU overhead reserved for desktop compositor (~256MB)
 set "OLLAMA_FLASH_ATTENTION=1"
 set "OLLAMA_HOST=127.0.0.1:11434"
 set "OLLAMA_MAX_LOADED_MODELS=2"
-set "OLLAMA_NUM_PARALLEL=2"
+set "OLLAMA_NUM_PARALLEL=1"
+set "OLLAMA_GPU_OVERHEAD=268435456"
+set "OLLAMA_KV_CACHE_TYPE=q8_0"
+set "OLLAMA_PREFILL_CACHE=1"
 set "NO_PROXY=127.0.0.1,localhost,::1"
 set "no_proxy=127.0.0.1,localhost,::1"
 

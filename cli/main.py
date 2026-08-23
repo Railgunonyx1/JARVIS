@@ -204,12 +204,10 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     _cancel_event = asyncio.Event()  # Set to cancel the current task gracefully
     notifications = notifications if notifications is not None else []
     renderer = getattr(bridge, "renderer", None) if bridge is not None else None
-    # Live display is ALWAYS enabled (except --json pipe mode).
-    # In interactive mode: transient=False shows the Claude-style UI during
-    # execution AND keeps the conversation visible after stop.
-    # The final result is also printed below by _print_collapsed.
-    # In one-shot mode: transient=False keeps the full conversation on screen.
-    use_live = not json_output
+    # Live display is enabled for one-shot (--json disabled, --collapsed disabled).
+    # In interactive (collapsed) mode: we skip the Live display entirely to
+    # avoid duplicate output — _print_collapsed handles the final result.
+    use_live = not json_output and not collapsed
     display = LiveTaskDisplay(
         console=console,
         status_getter=(lambda: _status_getter(loop)),
@@ -513,47 +511,14 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
     _BOOT_PHASES = ["config", "tools", "project", "providers", "memory", "loop"]
     _boot_phase_idx = [0]
 
-    def _update_boot_phase(phase: str) -> None:
-        """Update the header bar with current boot phase."""
-        try:
-            bridge.renderer.state.status_message = f"booting: {phase}..."
-            bridge.renderer.refresh()
-        except Exception:
-            pass
-
     def _boot() -> None:
         try:
             profiler.begin_trace()
             try:
                 profiler.begin("kernel.boot")
-                _update_boot_phase("config")
                 try:
-                    # Import and build in phases with progress updates
-                    from core.agent.loop import AgentLoop as _AL
-                    from core.config import Config as _Cfg
-                    from core.project import ProjectContext as _PC
-                    from memory.mem import get_mem as _gm
-                    from tools import build_default_registry as _bdr
-
-                    _update_boot_phase("config")
-                    _Cfg.instance()
-                    _update_boot_phase("tools")
-                    registry = _bdr()
-                    _update_boot_phase("project")
-                    project = _PC.discover(project_dir) if project_dir else _PC.discover()
-                    _update_boot_phase("providers")
-                    router = _build_router()
-                    _update_boot_phase("memory")
-                    mem = _gm()
-                    _update_boot_phase("loop")
-                    if not getattr(_build_loop, "_mem_cleanup_registered", False):
-                        _build_loop._mem_cleanup_registered = True
-                        import atexit
-                        atexit.register(mem.close)
-                    holder["loop"] = _AL(
-                        router=router, registry=registry, project=project,
-                        mode=mode, max_iterations=max_iterations,
-                        max_tokens=max_tokens, mem=mem,
+                    holder["loop"] = _build_loop(
+                        mode, max_iterations, max_tokens, project_dir,
                         confirmation_handler=bridge.confirmation_call,
                     )
                 finally:
@@ -743,12 +708,19 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
         t.start()
 
         while not _stop_event.is_set():
-            # ── Wait for first input ──
+            # ── Read one input line ──
+            # _input_ready controls the input thread: set = thread reads from stdin,
+            # clear = thread waits. We set it here, read one line, then immediately
+            # clear to prevent the thread from reading ahead while we process.
+            _input_ready.set()
+            try:
+                line = await asyncio.get_event_loop().run_in_executor(None, input_q.get)
+            except Exception:
+                break
+            _input_ready.clear()  # Consumed — prevent input thread from reading ahead
+
+            # ── First iteration: boot + loop setup ──
             if loop is None:
-                try:
-                    line = await asyncio.get_event_loop().run_in_executor(None, input_q.get)
-                except Exception:
-                    break
                 if line is None:
                     break
                 line = line.strip()
@@ -766,7 +738,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 bridge.attach_loop(loop)
                 bridge.pull_status()
                 boot_ms = (time.time() - boot_start) * 1000
-                # Determine connection state based on Ollama availability
                 ollama_ok = False
                 try:
                     for _pname, _pinfo in loop.router.status.items():
@@ -782,25 +753,12 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     bridge.renderer.state.connection = "CLOUD"
                 else:
                     bridge.renderer.state.connection = "OFFLINE"
-                # Show boot phase breakdown in status
-                _boot_phases = []
-                try:
-                    for name, start, end in profiler._phases:
-                        ms = (end - start) * 1000
-                        if ms > 50:
-                            _boot_phases.append(f"{name.split('.')[-1]}:{ms:.0f}ms")
-                except Exception:
-                    pass
-                _phase_str = ' '.join(_boot_phases) if _boot_phases else ''
                 bridge.renderer.state.status_message = f"ready in {boot_ms/1000:.1f}s"
-                if _phase_str:
-                    logger.info("Boot phases: %s", _phase_str)
                 bridge.renderer.refresh()
                 def _forward_provider_event(name, payload):
                     if hasattr(loop.observer, 'on_event'):
                         loop.observer.on_event(name, payload)
                 loop.router.on_provider_event = _forward_provider_event
-                # Defer project doc import — do it in background so UI is responsive
                 def _deferred_project_import():
                     try:
                         loop.mem.import_project_docs(
@@ -809,7 +767,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     except Exception:
                         pass
                 threading.Thread(target=_deferred_project_import, daemon=True).start()
-                # Start Ollama model prewarming in background
                 loop.router.warm()
                 global _interrupt_executor, _interrupt_classifier
                 try:
@@ -827,9 +784,21 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     _interrupt_executor = None
                 if profile_startup:
                     _print_startup_report()
-                # Kernel is ready — allow input thread to read
-                _input_ready.set()
-                continue
+                # Fall through to dispatch this first input
+            else:
+                # ── Subsequent iterations: process input ──
+                if line is None:
+                    _stop_event.set()
+                    break
+                line = line.strip()
+                if not line:
+                    last = getattr(loop, '_last_result', None)
+                    if last is not None:
+                        console.print(render_expanded(last))
+                    _input_ready.set()
+                    continue
+                history.add(line)
+                history.save()
 
 
             # ── Dispatch or queue agent command ──
@@ -912,19 +881,17 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 console.print(Text("  (task running — queued)", style="dim"))
                 pending_main.put(incoming)
 
-            # Main task finished — collect result
+            # Main task finished — result already printed by _run_once.
+            # Clear bridge state to prevent message accumulation.
             try:
                 await _agent_task
             except asyncio.CancelledError:
                 pass
             except Exception:
                 pass
-            _lr = getattr(loop, '_last_result', None)
-            if _lr and _lr.success and _lr.response:
-                import re as _re
-                _clean = _re.sub(r'\x1b\[[0-9;]*m', '', _lr.response)
-                sys.stdout.write('\n' + _clean + '\n\n')
-                sys.stdout.flush()
+            if bridge is not None:
+                bridge.state.messages.clear()
+                bridge.state.plan = None
             # Drain pending main requests from the separate queue
             while not pending_main.empty():
                 try:
@@ -936,12 +903,6 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                     _agent_task = asyncio.ensure_future(_run_agent_async(pending_line.strip()))
                     _input_ready.set()
                     await _agent_task
-                    _lr2 = getattr(loop, '_last_result', None)
-                    if _lr2 and _lr2.success and _lr2.response:
-                        import re as _re2
-                        _clean2 = _re2.sub(r'\x1b\[[0-9;]*m', '', _lr2.response)
-                        sys.stdout.write('\n' + _clean2 + '\n\n')
-                        sys.stdout.flush()
             await asyncio.sleep(0.1)
             _input_ready.set()
             continue
