@@ -105,9 +105,9 @@ model = "qwen2.5:3b"
 max_tokens = 1536
 base_url = "http://127.0.0.1:11434"
 priority = 4
-# Sampling params (temperature, top_k, top_p, num_ctx, mirostat) are
-# lane-specific in ollama_provider.py (_LANE_PROFILES). Config overrides
-# here only force a specific value across all lanes.
+# Lane-specific params are in ollama_provider.py (_LANE_PROFILES).
+# Custom Modelfiles with baked-in params: models/Modelfile.qwen-*
+# After running models\setup.bat, use jarrvis-interrupt/jarrvis-normal/jarrvis-heavy.
 
 [ollama.fallback]
 model = "qwen2.5:1.5b"

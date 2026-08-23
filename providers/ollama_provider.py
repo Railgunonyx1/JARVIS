@@ -391,9 +391,11 @@ class OllamaProvider(LLMProvider):
         kwargs = {}
         if tools:
             kwargs["tools"] = tools
+            kwargs["stream"] = False
 
         is_thinking = "qwen3" in model.lower()
-        if is_thinking:
+        lane = self._detect_lane(model)
+        if is_thinking and lane != "interrupt":
             kwargs["think"] = True
 
         start = time.time()
