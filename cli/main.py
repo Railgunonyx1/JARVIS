@@ -887,8 +887,8 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 await _agent_task
             except asyncio.CancelledError:
                 pass
-            except Exception:
-                pass
+            except Exception as _task_err:
+                console.print(Text(f"  error: {str(_task_err)[:200]}", style="jarvis.error"))
             if bridge is not None:
                 bridge.state.messages.clear()
                 bridge.state.plan = None
@@ -901,8 +901,11 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                 if pending_line and pending_line.strip():
                     console.print(Text(f"  (running queued: {pending_line.strip()[:50]})", style="dim"))
                     _agent_task = asyncio.ensure_future(_run_agent_async(pending_line.strip()))
-                    _input_ready.set()
-                    await _agent_task
+                    # Do NOT set _input_ready here — let the agent finish first
+                    try:
+                        await _agent_task
+                    except Exception as _q_err:
+                        console.print(Text(f"  error: {str(_q_err)[:200]}", style="jarvis.error"))
             await asyncio.sleep(0.1)
             _input_ready.set()
             continue
