@@ -2,11 +2,11 @@
   "identity": {
     "user_name": {
       "value": "TestUser",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     },
     "user_role": {
       "value": "Software developer",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     },
     "project": {
       "value": "JARVIS MK-X - autonomous engineering agent",
@@ -14,15 +14,15 @@
     },
     "test_identity_key": {
       "value": "TestUser",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     },
     "ctx_test_name": {
       "value": "ContextTestUser",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     },
     "instant_test": {
       "value": "should_not_appear",
-      "updated": "2026-08-22"
+      "updated": "2026-08-24"
     }
   },
   "preferences": {
@@ -41,17 +41,17 @@
   "notes": {
     "test_mem_key_unique_xyz": {
       "value": "test_mem_value_unique",
-      "updated": "2026-08-23"
+      "updated": "2026-08-29"
     },
     "persist_test_key": {
       "value": "persist_test_value",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     }
   },
   "priorities": {
     "priority_1": {
       "value": "Ship quality software",
-      "updated": "2026-08-23"
+      "updated": "2026-08-24"
     },
     "priority_2": {
       "value": "Clean Claude Code-style terminal UI",

@@ -26,13 +26,8 @@ _CPU_COUNT = os.cpu_count() or 4
 
 # ── Proxy bypass for localhost connections ─────────────────────────────
 # Ollama runs on 127.0.0.1 — it should NEVER go through a proxy.
-# This affects both urllib (for health checks) and httpx (used by ollama SDK).
-_local_hosts = "127.0.0.1,localhost,::1"
-_existing_noproxy = os.environ.get("NO_PROXY", "")
-if _local_hosts not in _existing_noproxy:
-    sep = "," if _existing_noproxy else ""
-    os.environ["NO_PROXY"] = f"{_existing_noproxy}{sep}{_local_hosts}"
-    os.environ["no_proxy"] = os.environ["NO_PROXY"]
+# We use a custom opener with no proxy for urllib calls.
+# For httpx (used by ollama SDK), we configure the client with no proxy for localhost.
 
 
 def _no_proxy_opener() -> urllib.request.OpenerDirector:
@@ -212,21 +207,13 @@ class OllamaProvider(LLMProvider):
         lane = self._detect_lane(model or self.config.get("model", "qwen2.5:1.5b"))
         profile = _LANE_PROFILES[lane].copy()
 
-        # Priority 1: config overrides (legacy compatibility)
-        for key in ("num_ctx", "num_thread", "top_k", "top_p", "temperature",
-                     "num_predict", "min_p"):
-            if key in self.config:
-                profile[key] = self.config[key]
-        if "max_tokens" in self.config:
-            profile["num_predict"] = self.config["max_tokens"]
-
-        # Priority 2: explicit request parameters (highest)
+        # Explicit request parameters take precedence (request-scoped, thread-safe)
         if max_tokens is not None:
             profile["num_predict"] = max_tokens
         if temperature is not None:
             profile["temperature"] = temperature
 
-        # Disable mirostat if explicitly set to 0 in config
+        # Disable mirostat if explicitly set to 0 in config (static config only)
         if self.config.get("mirostat") == 0:
             profile["mirostat"] = 0
 

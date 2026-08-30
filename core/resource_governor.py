@@ -5,6 +5,8 @@ import logging
 import threading
 import time
 
+from core.config import Config
+
 logger = logging.getLogger("jarvis.resource_governor")
 
 try:
@@ -27,10 +29,11 @@ class ResourceGovernor:
         self._running = False
         self._thread: threading.Thread | None = None
 
-        # Thresholds
-        self.cpu_high = 85.0
-        self.cpu_reduce = 70.0
-        self.ram_high = 85.0
+        # Thresholds — read from config TOML with sensible defaults
+        cfg = Config.instance().get("models", "resource_governor", {})
+        self.cpu_high = cfg.get("cpu_high", 85.0)
+        self.cpu_reduce = cfg.get("cpu_reduce", 70.0)
+        self.ram_high = cfg.get("ram_high", 85.0)
 
     def start(self):
         """Start background monitoring."""

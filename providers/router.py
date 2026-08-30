@@ -298,12 +298,8 @@ class ProviderRouter:
             for provider_name in chain:
                 attempts += 1
                 provider = self._providers[provider_name]
-                # Ollama accepts dotted tool names natively; skip sanitization.
-                if provider_name == "ollama":
-                    tools_param, name_map = tools, {}
-                else:
-                    # Strict OpenAI-compatible upstreams reject dotted tool names.
-                    tools_param, name_map = sanitize_tools(tools)
+                # All providers get sanitized tools; Ollama provider re-maps internally
+                tools_param, name_map = sanitize_tools(tools)
                 # Circuit breaker check — skip if this provider is currently open
                 cb = self._circuit_breakers.get(provider_name)
                 if cb and not cb.is_available(provider_name):
@@ -429,11 +425,8 @@ class ProviderRouter:
         with tracer.span("router.stream") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                # Ollama accepts dotted tool names natively; skip sanitization.
-                if provider_name == "ollama":
-                    tools_param, name_map = tools, {}
-                else:
-                    tools_param, name_map = sanitize_tools(tools)
+                # All providers get sanitized tools; Ollama provider re-maps internally
+                tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 while True:
                     try:
@@ -543,11 +536,8 @@ class ProviderRouter:
         with tracer.span("router.stream_typed") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                # Ollama accepts dotted tool names natively; skip sanitization.
-                if provider_name == "ollama":
-                    tools_param, name_map = tools, {}
-                else:
-                    tools_param, name_map = sanitize_tools(tools)
+                # All providers get sanitized tools; Ollama provider re-maps internally
+                tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 first_chunk = True
                 while True:

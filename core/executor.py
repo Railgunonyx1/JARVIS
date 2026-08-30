@@ -16,6 +16,7 @@ from core.decision_logger import get_decision_logger
 from core.mode_manager import get_mode_manager
 from core.utils import get_project_root as _get_base_dir
 from security.engine import get_security_engine
+from security.redaction import redact_sensitive
 
 logger = logging.getLogger("jarvis.executor")
 
@@ -147,7 +148,7 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
     import google.generativeai as genai
 
     if speak:
-        speak("Writing custom code for this task, sir.")
+        speak(redact_sensitive("Writing custom code for this task, sir."))
 
     home      = Path.home()
     desktop   = home / "Desktop"
@@ -438,7 +439,7 @@ class AgentExecutor:
                 msg = "I couldn't create a valid plan for this task, sir."
                 decision_logger.record(trace_id, "task.failed", {"error": "no plan steps", "goal": goal[:200], "source": "executor"})  # noqa: E501
                 if speak:
-                    speak(msg)
+                    speak(redact_sensitive(msg))
                 return msg
 
             success      = True
@@ -449,7 +450,7 @@ class AgentExecutor:
                 if cancel_flag and cancel_flag.is_set():
                     decision_logger.record(trace_id, "task.cancelled", {"goal": goal[:200], "source": "executor"})
                     if speak:
-                        speak("Task cancelled, sir.")
+                        speak(redact_sensitive("Task cancelled, sir."))
                     return "Task cancelled."
 
                 step_num = step.get("step", "?")
@@ -465,7 +466,7 @@ class AgentExecutor:
                     error_msg = f"Tool '{tool}' not allowed in {mode_manager.get_mode()} mode"
                     logger.warning("Permission denied: %s", error_msg)
                     if speak:
-                        speak(f"I can't do that in {mode_manager.get_mode()} mode, sir.")
+                        speak(redact_sensitive(f"I can't do that in {mode_manager.get_mode()} mode, sir."))
                     step_results[step_num] = f"Permission denied: {error_msg}"
                     success = False
                     failed_step = step
@@ -478,7 +479,7 @@ class AgentExecutor:
                 if not allowed:
                     logger.warning("Security denied: %s", sec_reason)
                     if speak:
-                        speak("Security policy blocked that action, sir.")
+                        speak(redact_sensitive("Security policy blocked that action, sir."))
                     step_results[step_num] = f"Security denied: {sec_reason}"
                     success = False
                     failed_step = step
@@ -513,7 +514,7 @@ class AgentExecutor:
                         user_msg = recovery.get("user_message", "")
 
                         if speak and user_msg:
-                            speak(user_msg)
+                            speak(redact_sensitive(user_msg))
 
                         if decision == ErrorDecision.RETRY:
                             attempt += 1
@@ -539,7 +540,7 @@ class AgentExecutor:
                                 try:
                                     fixed_step = generate_fix(step, error_msg, fix_suggestion)
                                     if speak:
-                                        speak("Trying an alternative approach, sir.")
+                                        speak(redact_sensitive("Trying an alternative approach, sir."))
                                     res = _call_tool(
                                         fixed_step["tool"],
                                         fixed_step["parameters"],

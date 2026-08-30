@@ -304,7 +304,49 @@ Freebuff is an ad-supported service. Prompts, messages, code, files, and reposit
 
 ---
 
+## Batch 7 — Newly Verified Repos (via GitHub API, 2026-08-29)
+
+### Data & BI Platforms
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| evidence-dev/evidence | "Business intelligence as code: build fast, interactive data visualizations in SQL and markdown" | 6,895 | TypeScript | MIT | MEDIUM — data viz/BI patterns for agent reporting; extract ideas not deps |
+| togethercomputer/RedPajama-Data | "The RedPajama-Data repository contains code for preparing large datasets for training large language models." | 4,981 | Python | Apache-2.0 | R&D — dataset preparation pipelines; study data-centric AI patterns |
+
+### Model Serving & Inference
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| bentoml/BentoML | "The easiest way to serve AI apps and models - Build Model Inference APIs, Job queues, LLM apps, Multi-model pipelines, and more!" | 8,813 | Python | Apache-2.0 | MEDIUM — model serving / MLOps patterns; MCP + distributed support ideas |
+| vllm-project/vllm | "A high-throughput and memory-efficient inference and serving engine for LLMs" | 90,394 | Python | Apache-2.0 | MEDIUM — study serving throughput/quantization patterns; GPU-dependent, extract ideas not deps |
+
+### Agent Monitoring & Evaluation
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| AgentOps-AI/agentops | "Python SDK for AI agent monitoring, LLM cost tracking, benchmarking, and more. Integrates with most LLMs and agent frameworks" | 5,804 | Python | MIT | MEDIUM — patterns for JARVIS telemetry/audit; complements existing OpenTelemetry |
+| mem0ai/mem0 | "Universal memory layer for AI Agents" | 64,315 | Python | Apache-2.0 | HIGH — purpose-built memory layer for AI agents; direct JARVIS applicability |
+
+### Reinforcement Learning & Foundations
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| openai/gym | "A toolkit for developing and comparing reinforcement learning algorithms." (note: archived as of 2026) | 37,245 | Python | Other | R&D — RL foundation; evaluate for JARVIS future extensions if needed |
+
+### Vector Search & Embedding Infrastructure (512 MB constraint: prefer embedded)
+
+| Repo | Verified description | Stars | Lang | License | Fit |
+|------|----------------------|-------|------|---------|-----|
+| qdrant/qdrant | "High-performance, massive-scale Vector Database and Vector Search Engine for the next generation of AI." | 34,256 | Rust | Apache-2.0 | R&D — too heavy for 512 MB; study HNSW/quantization patterns vs sqliteai/sqlite-vector |
+| chroma-core/chroma | "Search infrastructure for AI" | 29,182 | Rust | Apache-2.0 | R&D — embedded mode; compare vs sqliteai/sqlite-vector |
+
+---
+
 ## Research Principle
+
+> The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.
+
+---
 
 > The GitHub list is a **research corpus feeding the architecture**, not an installation checklist. Extract patterns, algorithms, and UX ideas — don't blindly install dependencies that contradict JARVIS's terminal-native, low-RAM, daemon-first design.
 

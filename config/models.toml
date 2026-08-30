@@ -167,6 +167,11 @@ temperature = 0.7
 plan_model = "gemini-2.5-flash-lite"
 replan_model = "gemini-2.5-flash"
 
+[resource_governor]
+cpu_high = 85.0
+cpu_reduce = 70.0
+ram_high = 85.0
+
 [executor]
 code_model = "gemini-2.5-flash"
 quick_model = "gemini-2.5-flash-lite"

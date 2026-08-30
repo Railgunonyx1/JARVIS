@@ -194,6 +194,9 @@ _cache_time: float = 0.0
 _CACHE_TTL = 300.0  # 5 minutes
 
 
+MAX_HEALTH_WORKERS = 5  # cap parallel health check threads
+
+
 def run_all_checks() -> list[HealthCheck]:
     """Run all health checks in parallel with per-check timeouts.
 
@@ -223,7 +226,7 @@ def run_all_checks() -> list[HealthCheck]:
         check_ollama_package,
     ]
 
-    with ThreadPoolExecutor(max_workers=len(checks)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(checks), MAX_HEALTH_WORKERS)) as pool:
         futures = {pool.submit(_run_check_with_timeout, fn, 5): fn for fn in checks}
         results = []
         for fn in checks:
@@ -233,7 +236,7 @@ def run_all_checks() -> list[HealthCheck]:
     with _cache_lock:
         _cache_result = results
         _cache_time = time.time()
-    return list(results)
+        return list(results)
 
 
 def force_health_refresh() -> None:

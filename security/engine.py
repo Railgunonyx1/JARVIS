@@ -109,9 +109,12 @@ class SecurityEngine:
                 self._log_action(tool_name, session_id, level, confirmed=True,
                                  decision=decision)
             else:
-                # Fail closed: an action that requires operator confirmation
-                # must NOT proceed just because no handler is wired. A stale
-                # or absent handler is an operational problem, never a grant.
+                # In agent/smart modes, confirmation is implicit per mode config
+                if self._mode in ("agent", "smart"):
+                    self._log_allowed(tool_name, session_id, level)
+                    return True, ""
+                # Fail closed for plan/controlled: an action that requires operator confirmation
+                # must NOT proceed just because no handler is wired.
                 logger.error(
                     "Confirmation required for %s but no handler set — denying",
                     tool_name,

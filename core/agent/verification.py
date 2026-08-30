@@ -128,7 +128,7 @@ class VerificationEngine:
             results.append(result)
             if not result.passed:
                 all_passed = False
-                break  # Stop on first failure
+                # Continue running all steps to collect all failures
 
         total_ms = (time.perf_counter() - total_start) * 1000
         passed = sum(1 for r in results if r.passed)

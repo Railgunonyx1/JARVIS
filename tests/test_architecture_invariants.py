@@ -41,18 +41,39 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
         "__init__.py",
     }
 
-    for py_file in project_root.rglob("*.py"):
-        # Skip test files, archive, quarantine
-        rel = py_file.relative_to(project_root)
-        parts = rel.parts
-        if any(p.startswith("_quarantine") for p in parts):
+    # Exclude directories that should not be scanned
+    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "_quarantine", "node_modules"}
+    
+    # Use os.walk to avoid broken symlinks in node_modules
+    import os
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        # Skip excluded directories
+        rel_dir = os.path.relpath(dirpath, project_root)
+        dir_parts = rel_dir.split(os.sep) if rel_dir != "." else []
+        if any(p in EXCLUDE_DIRS for p in dir_parts):
+            dirnames.clear()  # Don't recurse into this directory
             continue
-        if py_file.name in ALLOWLIST:
-            continue
-        if "test_" in py_file.name or py_file.name.startswith("conftest"):
-            continue
-        if "venv" in parts or "__pycache__" in parts:
-            continue
+        
+        for filename in filenames:
+            if not filename.endswith(".py"):
+                continue
+            
+            py_file = Path(dirpath) / filename
+            try:
+                rel = py_file.relative_to(project_root)
+            except (ValueError, OSError):
+                continue
+            parts = rel.parts
+            
+            # Skip excluded directories
+            if any(p in EXCLUDE_DIRS for p in parts):
+                continue
+            if any(p.startswith("_quarantine") for p in parts):
+                continue
+            if py_file.name in ALLOWLIST:
+                continue
+            if "test_" in py_file.name or py_file.name.startswith("conftest"):
+                continue
 
         try:
             source = py_file.read_text(encoding="utf-8")

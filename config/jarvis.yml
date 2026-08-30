@@ -1,0 +1,99 @@
+# JARVIS MK-X Configuration for DeepSeek Harness
+# 
+# This file configures JARVIS's behavior when running via DSH.
+# DSH reads this file to initialize JARVIS's capabilities.
+
+jarvis:
+  name: JARVIS MK-X
+  version: "0.1.0"
+  description: "Advanced AI assistant with memory, Ollama cascade, verification, and MCP tools"
+
+# Model configuration
+models:
+  primary: ollama
+  cascade:
+    router: gemma3:1b      # Fast responses, simple queries
+    worker: qwen2.5:1.5b   # Tool-using tasks
+    heavy: qwen2.5:3b      # Complex reasoning
+  
+  # Ollama settings
+  ollama:
+    host: http://127.0.0.1:11434
+    max_loaded_models: 2
+    num_parallel: 2
+    flash_attention: true
+    gpu_overhead: 268435456  # 256MB for desktop compositor
+
+# Memory configuration
+memory:
+  enabled: true
+  backend: sqlite
+  vector_store: sqlite-vec
+  cache_size: 1000
+  
+  # Identity memory (always loaded)
+  identity:
+    user_name: Aayan
+    user_role: Software developer
+    project: JARVIS MK-X
+
+# Verification configuration
+verification:
+  enabled: true
+  tests: true
+  lint: true
+  typecheck: true
+  timeout: 30000
+
+# Tool configuration
+tools:
+  filesystem:
+    enabled: true
+    sandboxed: false
+    
+  shell:
+    enabled: true
+    timeout: 30000
+    
+  search:
+    enabled: true
+    web_search: true
+    
+  mcp:
+    enabled: true
+    
+  desktop:
+    enabled: false
+
+# Skill configuration
+skills:
+  enabled: true
+  auto_load: true
+  
+  # JARVIS-specific skills
+  jarvis_skills:
+    - codebase_explorer
+    - debugger
+    - test_engineer
+    - refactoring
+    - code_reviewer
+    - dependency_manager
+    - performance_engineer
+    - api_engineer
+    - database_engineer
+    - documentation_engineer
+
+# UI configuration
+ui:
+  theme: dark
+  show_tools: true
+  show_plan: true
+  show_verification: true
+  compact_mode: true
+
+# Logging
+logging:
+  level: info
+  file: logs/jarvis.log
+  max_size: 10MB
+  backup_count: 5

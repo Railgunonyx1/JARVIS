@@ -18,14 +18,6 @@ from typing import Any
 from core.config import Config
 from core.replay_engine import ReplayEngine
 
-_FAILURE_RECOVERY = {
-    "tool.executed": "retry",
-    "action.executed": "retry",
-    "llm.completed": "replan",
-    "permission.checked": "abort",
-    "llm.failed": "replan",
-}
-
 
 class FailureAnalyzer:
     """Attribute a failed task to the responsible subsystem."""

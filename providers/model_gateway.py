@@ -101,12 +101,14 @@ class ModelGateway:
     COOLDOWN_BASE_SECONDS = 60.0
     COOLDOWN_MAX_SECONDS = 600.0
     FAILURE_THRESHOLD_FOR_COOLDOWN = 3
+    # Session affinity TTL (seconds) - expire stale affinity
+    SESSION_AFFINITY_TTL = 3600.0
 
     def __init__(self) -> None:
         self._models: dict[str, ModelProfile] = {}
         self._combos: dict[str, Combo] = {}
         self._health: dict[str, ProviderHealth] = {}
-        self._session_affinity: dict[str, str] = {}  # session_id -> model_name
+        self._session_affinity: dict[str, tuple[str, float]] = {}  # session_id -> (model_name, timestamp)
 
     def register_model(self, profile: ModelProfile) -> None:
         key = f"{profile.provider}/{profile.name}"
@@ -127,8 +129,10 @@ class ModelGateway:
         h.total_requests += 1
         h.consecutive_failures = 0
         h.healthy = True
+        # Welford's online algorithm for numerically stable running average
         n = h.total_requests
-        h.avg_latency_ms = h.avg_latency_ms * ((n - 1) / n) + latency_ms / n
+        delta = latency_ms - h.avg_latency_ms
+        h.avg_latency_ms += delta / n
 
     def record_failure(self, provider: str) -> None:
         h = self.get_health(provider)
@@ -171,14 +175,18 @@ class ModelGateway:
         """
         exclude = exclude_providers or set()
 
-        # 1. Session affinity
+        # 1. Session affinity (with TTL)
         if session_id and session_id in self._session_affinity:
-            preferred = self._session_affinity[session_id]
-            if preferred in self._models:
-                prof = self._models[preferred]
-                h = self.get_health(prof.provider)
-                if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
-                    return prof
+            preferred, timestamp = self._session_affinity[session_id]
+            # Check TTL
+            if time.time() - timestamp > self.SESSION_AFFINITY_TTL:
+                self._session_affinity.pop(session_id, None)
+            else:
+                if preferred in self._models:
+                    prof = self._models[preferred]
+                    h = self.get_health(prof.provider)
+                    if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
+                        return prof
 
         # 2. Named combo
         if combo_name and combo_name in self._combos:
@@ -188,14 +196,14 @@ class ModelGateway:
                 if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
                     if self._matches(prof, requirements):
                         if session_id:
-                            self._session_affinity[session_id] = f"{prof.provider}/{prof.name}"
+                            self._session_affinity[session_id] = (f"{prof.provider}/{prof.name}", time.time())
                         return prof
             # Fallback: any healthy model in the combo
             for prof in combo.models:
                 h = self.get_health(prof.provider)
                 if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
                     if session_id:
-                        self._session_affinity[session_id] = f"{prof.provider}/{prof.name}"
+                        self._session_affinity[session_id] = (f"{prof.provider}/{prof.name}", time.time())
                     return prof
 
         # 3. Confidence-based model stepping
@@ -219,7 +227,7 @@ class ModelGateway:
                 candidates_conf.sort(key=lambda x: x[0], reverse=True)
                 best_conf = candidates_conf[0][1]
                 if session_id:
-                    self._session_affinity[session_id] = f"{best_conf.provider}/{best_conf.name}"
+                    self._session_affinity[session_id] = (f"{best_conf.provider}/{best_conf.name}", time.time())
                 return best_conf
 
         # 4. Score all models
@@ -239,7 +247,7 @@ class ModelGateway:
         candidates.sort(key=lambda x: x[0], reverse=True)
         best = candidates[0][1]
         if session_id:
-            self._session_affinity[session_id] = f"{best.provider}/{best.name}"
+            self._session_affinity[session_id] = (f"{best.provider}/{best.name}", time.time())
         return best
 
     def _matches(self, prof: ModelProfile, requirements: set[Capability] | None) -> bool:
@@ -267,6 +275,16 @@ class ModelGateway:
     def clear_affinity(self, session_id: str) -> None:
         self._session_affinity.pop(session_id, None)
 
+    def clear_expired_affinities(self) -> None:
+        """Remove expired session affinities."""
+        now = time.time()
+        expired = [
+            sid for sid, (_, ts) in self._session_affinity.items()
+            if now - ts > self.SESSION_AFFINITY_TTL
+        ]
+        for sid in expired:
+            self._session_affinity.pop(sid, None)
+
     def status(self) -> dict[str, Any]:
         return {
             "models": {
@@ -292,4 +310,8 @@ class ModelGateway:
                 for name, c in self._combos.items()
             },
             "sessions": len(self._session_affinity),
+            "session_affinity": {
+                sid: {"model": model, "age_seconds": round(time.time() - ts, 1)}
+                for sid, (model, ts) in self._session_affinity.items()
+            },
         }

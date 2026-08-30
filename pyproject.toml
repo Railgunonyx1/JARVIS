@@ -1,28 +1,47 @@
+[project]
+name = "jarvis1"
+version = "0.1.0"
+description = "JARVIS MK-X — Autonomous Engineering Agent"
+requires-python = ">=3.11"
+license = "MIT"
+
+[tool.uv.workspace]
+members = ["packages/*", "plugins/*", "apps/*", "vendor/*"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 120
 extend-exclude = [
-    "ui/*.tcss",  # Textual CSS - not Python
-    "inference_engine",  # dead - not imported by the live surface
-    "knowledge_graph",   # dead - not imported by the live surface
-    "agents",            # dead - not imported by the live surface
-    "systems",           # dead - not imported by the live surface
+    "ui/*.tcss",
+    "inference_engine",
+    "knowledge_graph",
+    "agents",
+    "systems",
+    "legacy",
 ]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "PLW"]
 ignore = [
-    "BLE001",  # Broad exception catching — intentional in Flask API handlers
-    "S110",    # try-except-pass — intentional for optional subsystems
-    "PLW0603", # Global statements — necessary in Flask server pattern
-    "PLW0602", # Global without assignment — camera/hand_tracker lazy init
-    "PLW1508", # env var default type — int conversion is safe
-    "B023",    # Loop variable binding — closures in async generators are fine
-    "B008",    # Lambda default — mode.lower() in loop body is safe
-    "B007",    # Unused loop variable — intentional in async for
-    "E402",    # Module level import not at top — needed for env setup before imports
-    "PLW2901", # Loop variable overwritten — intentional in strip() and conditional reassignment
+    "BLE001",
+    "S110",
+    "PLW0603",
+    "PLW0602",
+    "PLW1508",
+    "B023",
+    "B008",
+    "B007",
+    "E402",
+    "PLW2901",
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core", "memory", "python"]
+known-first-party = [
+    "jarvis_core", "jarvis_models", "jarvis_tools", "jarvis_memory",
+    "jarvis_mcp", "jarvis_routing", "jarvis_verification", "jarvis_ui",
+    "jarvis_ollama", "jarvis_openrouter", "jarvis_gemini", "jarvis_groq",
+    "core", "memory", "providers", "tools", "runtime", "cli", "security",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

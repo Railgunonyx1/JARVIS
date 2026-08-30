@@ -262,7 +262,7 @@ class AgentLoop:
                     perf=self._end_perf(tracer, root),
                 )
 
-            # INSTANT: tool dispatch — execute directly without LLM
+            # INSTANT: tool dispatch — execute through ToolExecutionService (single boundary)
             if classified.intent == Intent.INSTANT and classified.tool_name:
                 _instant_call = ToolCall(
                     name=classified.tool_name,
@@ -272,6 +272,8 @@ class AgentLoop:
                 tool_result = await self._tool_service.execute_tool(
                     _instant_call,
                     trace_id=trace_id,
+                    append_to_messages=messages,
+                    state=state,
                 )
                 final = tool_result.output if tool_result.success else f"Tool error: {tool_result.error}"
                 self._emit("task.completed", {
@@ -354,7 +356,7 @@ class AgentLoop:
                 if addendum:
                     system_prompt = (system_prompt or "") + addendum
 
-            _run_start = time.time()
+            _run_start = time.monotonic()
             # Latency budgets (seconds) — configurable via harness or defaults
             _budgets = {
                 "intent": 0.05,
@@ -383,7 +385,7 @@ class AgentLoop:
 
             for iteration in range(1, _model_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
-                elapsed = time.time() - _run_start
+                elapsed = time.monotonic() - _run_start
                 if elapsed > _budgets["total"]:
                     self._emit("task.failed", {
                         "goal": goal[:200],
@@ -399,7 +401,7 @@ class AgentLoop:
                         perf=self._end_perf(tracer, root),
                     )
                 state.iteration = iteration
-                _t_compress = time.time()
+                _t_compress = time.monotonic()
                 # Adaptive context budget: temporarily swap, always restore
                 from dataclasses import replace
                 _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))  # noqa: E501
@@ -412,16 +414,16 @@ class AgentLoop:
                         )
                 finally:
                     self.context_manager.budget = _orig_budget
-                _latency_log.append(("context_compress", (time.time() - _t_compress) * 1000))
+                _latency_log.append(("context_compress", (time.monotonic() - _t_compress) * 1000))
                 state.context_usage = report.to_dict()
                 if report.compacted:
                     self._emit("context.compacted", {
                         "messages_tokens": report.messages_tokens,
                         "budget": report.budget.messages,
                     }, trace_id)
-                remaining = max(3.0, _budgets["total"] - (time.time() - _run_start))
+                remaining = max(3.0, _budgets["total"] - (time.monotonic() - _run_start))
                 _call_timeout = min(_budgets["llm_call"], remaining)
-                _t_llm = time.time()
+                _t_llm = time.monotonic()
                 with tracer.span("provider.complete") as span:
                     try:
                         response = await asyncio.wait_for(
@@ -440,10 +442,10 @@ class AgentLoop:
                         span.set_attribute("model", response.model)
                         span.set_attribute("latency_ms", response.latency_ms)
                         span.set_attribute("tokens", response.tokens_used)
-                _latency_log.append(("llm_call", (time.time() - _t_llm) * 1000))
+                _latency_log.append(("llm_call", (time.monotonic() - _t_llm) * 1000))
                 self._latency_router.record(
                     response.model, response.latency_ms,
-                    (time.time() - _t_llm) * 1000, response.has_tool_calls or bool(response.text),
+                    (time.monotonic() - _t_llm) * 1000, response.has_tool_calls or bool(response.text),
                 )
                 state.add_tokens(response.tokens_prompt, response.tokens_completion)
                 state.provider = response.provider
@@ -451,7 +453,7 @@ class AgentLoop:
 
                 self._perf_tracker.record(
                     response.model, response.latency_ms,
-                    (time.time() - _t_llm) * 1000,
+                    (time.monotonic() - _t_llm) * 1000,
                     bool(response.text) or response.has_tool_calls,
                 )
 
@@ -516,6 +518,20 @@ class AgentLoop:
                         if self._verification_enabled:
                             ver_report = await self._run_verification(trace_id)
                             if not ver_report.all_passed:
+                                _verification_retries += 1
+                                if _verification_retries > _max_verification_retries:
+                                    self._emit("task.failed", {
+                                        "goal": goal[:200],
+                                        "error": f"verification failed after {_max_verification_retries} recovery attempts",
+                                    }, trace_id)
+                                    state.transition(TaskStatus.FAILED)
+                                    self._finish_observation(False, "", state, iteration)
+                                    return AgentResult(
+                                        success=False, response=final, trace_id=trace_id,
+                                        state=state, error="verification failed - max retries exceeded",
+                                        observation=self._result_observation(state),
+                                        perf=self._end_perf(tracer, root),
+                                    )
                                 self._emit("verification.failed", {
                                     "steps_run": ver_report.steps_run,
                                     "steps_passed": ver_report.steps_passed,
@@ -558,7 +574,7 @@ class AgentLoop:
                             }, trace_id)
 
                         state.transition(TaskStatus.COMPLETED)
-                        _total_latency = (time.time() - _run_start) * 1000
+                        _total_latency = (time.monotonic() - _run_start) * 1000
                         self._emit("task.completed", {
                             "goal": goal[:200], "iterations": iteration,
                             "tokens": state.tokens_used, "provider": response.provider,
@@ -599,9 +615,9 @@ class AgentLoop:
 
                 for call in response.tool_calls:
                     with tracer.span("tool.execute", {"tool": call.name}):
-                        _t_tool = time.time()
+                        _t_tool = time.monotonic()
                         await self._handle_call(messages, call, state, trace_id, session_id)
-                        _latency_log.append(("tool", (time.time() - _t_tool) * 1000))
+                        _latency_log.append(("tool", (time.monotonic() - _t_tool) * 1000))
 
                 # Safety: if the LLM keeps making tool calls without ever producing
                 # a text response, inject a nudge after 5 consecutive tool-only iterations.

@@ -41,6 +41,7 @@ ENV_TO_KEY = {
     "DEEPSEEK_API_KEY": "deepseek_api_key",
     "HF_API_KEY": "huggingface_api_key",
     "HUGGINGFACE_API_KEY": "huggingface_api_key",
+    "OLLAMA_API_KEY": "ollama_api_key",
 }
 
 

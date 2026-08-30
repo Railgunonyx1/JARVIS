@@ -91,12 +91,13 @@ class MCPAdapter:
             protocol=ProtocolType.MCP,
         )
 
-    async def _call_tool(self, name: str, arguments: dict) -> Any:
+    async def _call_tool(self, name: str, arguments: dict, session_id: str = "") -> Any:
         if self._tool_service is None:
             return {"error": "No tool execution service configured"}
         from providers.types import ToolCall
         call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
-        result = await self._tool_service.execute_tool(call, trace_id="mcp")
+        trace_id = f"mcp_{uuid.uuid4().hex[:8]}"
+        result = await self._tool_service.execute_tool(call, trace_id=trace_id, session_id=session_id)
         return {
             "status": "completed" if result.success else "error",
             "tool": name,
@@ -152,12 +153,13 @@ class ACPAdapter:
             )
         return ProtocolMessage(method=method, error=f"Unknown ACP method: {method}", protocol=ProtocolType.ACP)
 
-    async def _call_tool(self, name: str, arguments: dict) -> Any:
+    async def _call_tool(self, name: str, arguments: dict, session_id: str = "") -> Any:
         if self._tool_service is None:
             return {"error": "No tool execution service configured"}
         from providers.types import ToolCall
         call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
-        result = await self._tool_service.execute_tool(call, trace_id="acp")
+        trace_id = f"acp_{uuid.uuid4().hex[:8]}"
+        result = await self._tool_service.execute_tool(call, trace_id=trace_id, session_id=session_id)
         return {
             "status": "completed" if result.success else "error",
             "tool": name,
@@ -206,13 +208,14 @@ class CodexExecAdapter:
         except Exception as e:
             return {"error": str(e)[:500]}
 
-    async def handle_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def handle_tool(self, name: str, arguments: dict[str, Any], session_id: str = "") -> dict[str, Any]:
         """Direct tool execution through ToolExecutionService."""
         if self._tool_service is None:
             return {"error": "No tool execution service configured"}
         from providers.types import ToolCall
         call = ToolCall(name=name, arguments=arguments, id=uuid.uuid4().hex[:8])
-        result = await self._tool_service.execute_tool(call, trace_id="codex")
+        trace_id = f"codex_{uuid.uuid4().hex[:8]}"
+        result = await self._tool_service.execute_tool(call, trace_id=trace_id, session_id=session_id)
         return {
             "status": "completed" if result.success else "error",
             "tool": name,
