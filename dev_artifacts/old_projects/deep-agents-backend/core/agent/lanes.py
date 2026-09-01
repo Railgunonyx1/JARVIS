@@ -1,0 +1,541 @@
+"""Execution Lanes — interruptible parallel inference for JARVIS MK-X.
+
+Enables lightweight requests (memory lookups, status queries) to run on the
+1B model in parallel with a main 3B/4B coding task, without blocking either.
+
+Architecture:
+    User request
+         │
+         ▼
+    RequestClassifier
+         │
+    ┌────┴─────────────┐
+    │                  │
+    ▼                  ▼
+  MAIN TASK        INTERRUPT
+  3B / 4B           1B
+    │                  │
+    │    (parallel)    │
+    │                  │
+    └────────┬─────────┘
+             ▼
+         Result
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+import time
+import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Any
+
+logger = logging.getLogger("jarvis.lanes")
+
+
+# ── Execution Lane ──────────────────────────────────────────────────────
+
+class ExecutionLane(StrEnum):
+    """Which execution lane a request belongs to."""
+    MAIN = "main"           # Full 3B/4B coding task
+    INTERRUPT = "interrupt"  # Lightweight 1B query (memory, status, etc.)
+
+
+class RequestClass(StrEnum):
+    """How to classify an incoming request."""
+    MAIN_TASK = "main_task"
+    LIGHTWEIGHT_INTERRUPT = "lightweight_interrupt"
+    MAIN_TASK_MODIFICATION = "main_task_modification"
+
+
+# ── Interrupt Capabilities ──────────────────────────────────────────────
+
+# Tools that the 1B interrupt lane is ALLOWED to use.
+# Mostly read-only; memory.remember is a safe write for identity/preferences.
+_INTERRUPT_ALLOWED_TOOLS: frozenset[str] = frozenset({
+    "memory.retrieve",
+    "memory.stats",
+    "memory.remember",  # Safe: identity/preference updates only
+    "system.status",
+    "git.status",
+    "git.branch",
+    "git.log",
+    "filesystem.read",
+    "filesystem.list",
+    "search.code",
+})
+
+# Patterns that indicate a request is a lightweight interrupt.
+_INTERRUPT_PATTERNS: list[re.Pattern] = [
+    # Memory/status queries
+    re.compile(r"^(what|who|how|when|where)\s+(do you|does|is|are|was|were)\s+(know|remember|know about)", re.I),
+    re.compile(r"^(what|who|how)\s+(is|are|was|were)\s+(my|the|our|your)\s+(name|role|project|decision|plan|status)", re.I),  # noqa: E501
+    re.compile(r"^(retrieve|recall|lookup|find|search)\s+(what|our|the|my|info|info about|memory)", re.I),
+    re.compile(r"^(what|tell me)\s+(did we|have we|should we)\s+(decide|choose|agree|plan)", re.I),
+    re.compile(r"^(status|current|what's|whats)\s+(the\s+)?(status|state|progress|plan|decision)", re.I),
+    re.compile(r"^(status|progress|plan)\s+(of|for|on|about)\s+", re.I),
+    re.compile(r"^(show|list|display)\s+(me\s+)?(the\s+)?(memory|status|plan|progress|decision)", re.I),
+    re.compile(r"^(what|which)\s+(files?|code|function|class)\s+(are|is|was)\s+(being|currently|modified|changed)", re.I),  # noqa: E501
+    re.compile(r"^(remember|recall)\s+(that|when|what|how)", re.I),
+    re.compile(r"^(what|how)\s+(is|was)\s+(the|our|my)\s+(architecture|design|approach|strategy)", re.I),
+    re.compile(r"^(do you|did you)\s+(know|remember|have)\s+(any|a|the)\s+(context|info|details?)", re.I),
+]
+
+# Patterns that indicate a request MODIFIES the main task (should NOT be interrupt).
+_MODIFICATION_PATTERNS: list[re.Pattern] = [
+    re.compile(r"\b(remember this|store this|save this|add to memory)\b", re.I),
+    re.compile(r"\b(change|modify|update|rewrite|refactor|fix|implement|add|remove|delete)\b", re.I),
+    re.compile(r"\b(execute|run|deploy|build|install|compile)\b", re.I),
+    re.compile(r"\b(git commit|git push|git merge|git rebase)\b", re.I),
+]
+
+
+# ── Request Classification ──────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class ClassifiedRequest:
+    """Result of classifying an incoming request."""
+    request_class: RequestClass
+    lane: ExecutionLane
+    confidence: float
+    reason: str = ""
+    allowed_tools: tuple[str, ...] = ()
+    parent_task_id: str | None = None  # Set for interrupts
+
+
+class RequestClassifier:
+    """Classifies incoming requests as main task or lightweight interrupt.
+
+    The classifier answers: "Can this run on the 1B model without blocking
+    the current 3B/4B task?"
+    """
+
+    def classify(
+        self,
+        text: str,
+        active_task_id: str | None = None,
+        active_task_status: str | None = None,
+    ) -> ClassifiedRequest:
+        """Classify a request for lane assignment.
+
+        Args:
+            text: The user's request text.
+            active_task_id: ID of the currently running main task (if any).
+            active_task_status: Status of the current main task.
+
+        Returns:
+            ClassifiedRequest with lane and capability constraints.
+        """
+        t = text.strip()
+        if not t:
+            return ClassifiedRequest(
+                request_class=RequestClass.MAIN_TASK,
+                lane=ExecutionLane.MAIN,
+                confidence=0.5,
+                reason="empty request",
+            )
+
+        tl = t.lower()
+
+        # Check if this is a modification request (MUST go to main lane)
+        for pattern in _MODIFICATION_PATTERNS:
+            if pattern.search(tl):
+                return ClassifiedRequest(
+                    request_class=RequestClass.MAIN_TASK_MODIFICATION,
+                    lane=ExecutionLane.MAIN,
+                    confidence=0.9,
+                    reason=f"modification detected: {pattern.pattern[:40]}",
+                )
+
+        # Check if this is a lightweight interrupt
+        for pattern in _INTERRUPT_PATTERNS:
+            if pattern.search(tl):
+                # But only if there's actually a main task running
+                if active_task_id and active_task_status in (None, "executing", "planning"):
+                    return ClassifiedRequest(
+                        request_class=RequestClass.LIGHTWEIGHT_INTERRUPT,
+                        lane=ExecutionLane.INTERRUPT,
+                        confidence=0.85,
+                        reason=f"lightweight pattern: {pattern.pattern[:40]}",
+                        allowed_tools=_INTERRUPT_ALLOWED_TOOLS,
+                        parent_task_id=active_task_id,
+                    )
+
+        # No active task or doesn't match interrupt patterns → main lane
+        return ClassifiedRequest(
+            request_class=RequestClass.MAIN_TASK,
+            lane=ExecutionLane.MAIN,
+            confidence=0.7,
+            reason="default: main task",
+        )
+
+    def can_use_interrupt(self, text: str) -> bool:
+        """Quick check: could this possibly be an interrupt?"""
+        tl = text.strip().lower()
+        if not tl:
+            return False
+        # Must NOT be a modification
+        for pattern in _MODIFICATION_PATTERNS:
+            if pattern.search(tl):
+                return False
+        # Must match an interrupt pattern
+        for pattern in _INTERRUPT_PATTERNS:
+            if pattern.search(tl):
+                return True
+        return False
+
+
+# ── Task Registry ───────────────────────────────────────────────────────
+
+@dataclass
+class TaskHandle:
+    """Handle for a running task."""
+    task_id: str
+    goal: str
+    lane: ExecutionLane
+    model: str
+    start_time: float = field(default_factory=time.time)
+    future: asyncio.Future | None = None
+    parent_task_id: str | None = None
+
+    @property
+    def elapsed_ms(self) -> float:
+        return (time.time() - self.start_time) * 1000
+
+
+class TaskRegistry:
+    """Tracks all running tasks across both lanes.
+
+    Thread-safe: protected by a lock since the CLI input thread and
+    the asyncio event loop can access the registry concurrently.
+    """
+
+    def __init__(self):
+        self._tasks: dict[str, TaskHandle] = {}
+        self._main_task: TaskHandle | None = None
+        import threading as _t
+        self._lock = _t.Lock()
+
+    def register(self, handle: TaskHandle) -> None:
+        with self._lock:
+            self._tasks[handle.task_id] = handle
+            if handle.lane == ExecutionLane.MAIN:
+                self._main_task = handle
+
+    def unregister(self, task_id: str) -> None:
+        with self._lock:
+            self._tasks.pop(task_id, None)
+            if self._main_task and self._main_task.task_id == task_id:
+                self._main_task = None
+
+    @property
+    def main_task(self) -> TaskHandle | None:
+        with self._lock:
+            return self._main_task
+
+    @property
+    def active_interrupts(self) -> list[TaskHandle]:
+        with self._lock:
+            return [
+                h for h in self._tasks.values()
+                if h.lane == ExecutionLane.INTERRUPT
+            ]
+
+    @property
+    def has_active_main(self) -> bool:
+        with self._lock:
+            return (
+                self._main_task is not None
+                and self._main_task.future is not None
+                and not self._main_task.future.done()
+            )
+
+    def summary(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "main": {
+                    "task_id": self._main_task.task_id if self._main_task else None,
+                    "goal": self._main_task.goal[:60] if self._main_task else None,
+                    "model": self._main_task.model if self._main_task else None,
+                    "elapsed_ms": self._main_task.elapsed_ms if self._main_task else 0,
+                },
+                "interrupts_active": len(self.active_interrupts),
+                "total_tasks": len(self._tasks),
+            }
+
+
+# ── Interrupt Executor ──────────────────────────────────────────────────
+
+class InterruptExecutor:
+    """Runs lightweight requests on the 1B model in parallel with the main task.
+
+    The interrupt lane has a STRICT capability profile:
+    - Read-only tools only (memory, status, filesystem.read, search.code)
+    - No code modification
+    - No shell execution
+    - No destructive actions
+    - No complex tool chains
+    - No verification steps
+    """
+
+    def __init__(
+        self,
+        router,  # ProviderRouter
+        registry,  # ToolRegistry
+        mem=None,
+        project=None,
+        tool_service=None,  # ToolExecutionService — MANDATORY security boundary
+    ):
+        self._router = router
+        self._registry = registry
+        self._mem = mem
+        self._project = project
+        if tool_service is None:
+            raise RuntimeError(
+                "InterruptExecutor requires ToolExecutionService. "
+                "Pass tool_service=<ToolExecutionService instance>."
+            )
+        self._tool_service = tool_service
+        self._task_registry = TaskRegistry()
+        self._interrupt_count = 0
+        self._interrupt_results: list[dict[str, Any]] = []
+
+    @property
+    def task_registry(self) -> TaskRegistry:
+        return self._task_registry
+
+    def _generate_interrupt_id(self) -> str:
+        self._interrupt_count += 1
+        return f"interrupt_{self._interrupt_count}_{uuid.uuid4().hex[:8]}"
+
+    async def _execute_tool_safe(self, call, trace_id: str) -> str:
+        """Execute a tool call through ToolExecutionService (security boundary).
+
+        The security boundary is INVARIANT: all tool execution MUST go through
+        ToolExecutionService → PermissionEngine → SecurityEngine → Executor.
+        There is NO fallback path. If tool_service is missing, __init__ raises.
+        """
+        from providers.types import ToolCall as TC
+        tc = TC(name=call.name, arguments=call.arguments, id=call.id or "")
+        try:
+            result = await self._tool_service.execute_tool(
+                tc, trace_id=trace_id,
+            )
+            return result.output if result.success else f"ERROR: {result.error}"
+        except Exception as e:
+            return f"Error: {str(e)[:200]}"
+
+    async def execute(
+        self,
+        text: str,
+        classification: ClassifiedRequest,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    ) -> dict[str, Any]:
+        """Execute a lightweight interrupt on the 1B model.
+
+        Returns a result dict with:
+        - success: bool
+        - response: str
+        - task_id: str
+        - latency_ms: float
+        - model: str
+        """
+        task_id = self._generate_interrupt_id()
+        start = time.time()
+
+        handle = TaskHandle(
+            task_id=task_id,
+            goal=text,
+            lane=ExecutionLane.INTERRUPT,
+            model="gemma3:1b",  # Primary interrupt model (815MB, fastest)
+            parent_task_id=classification.parent_task_id,
+        )
+        self._task_registry.register(handle)
+
+        try:
+            # Build minimal context for the interrupt
+            from core.agent.context import AgentContextBuilder
+            context_builder = AgentContextBuilder(self._registry)
+
+            # For memory queries, include memory context
+            if self._mem is not None:
+                messages, system_prompt = context_builder.build(
+                    text, self._project, self._mem
+                )
+            else:
+                messages = [{"role": "user", "content": text}]
+                system_prompt = "You are JARVIS, an engineering assistant. Be concise."
+
+            # Restrict tools to interrupt-safe set
+            all_tools = self._registry.to_openai_tools()
+            allowed_names = set(classification.allowed_tools)
+            tools = [
+                t for t in all_tools
+                if t.get("function", {}).get("name", "") in allowed_names
+            ]
+
+            # Request-scoped model: gemma3:1b primary, qwen2.5:1.5b fallback
+            _interrupt_model = "gemma3:1b"
+            _interrupt_fallback = "qwen2.5:1.5b"
+
+            # Bounded tool loop — 1B/1.5B can call memory.retrieve etc.
+            # Max 3 iterations, 10s total hard timeout.
+            _MAX_INTERRUPT_ITERATIONS = 3
+            _INTERRUPT_TIMEOUT = 10.0
+            final_text = ""
+            response = None
+
+            for _iter in range(_MAX_INTERRUPT_ITERATIONS):
+                elapsed = time.time() - start
+                if elapsed >= _INTERRUPT_TIMEOUT:
+                    break
+                remaining = _INTERRUPT_TIMEOUT - elapsed
+
+                try:
+                    response = await asyncio.wait_for(
+                        self._router.complete(
+                            messages,
+                            system_prompt=system_prompt,
+                            max_tokens=512,
+                            temperature=0.3,
+                            tools=tools if tools and _iter == 0 else None,
+                            preferred_model=_interrupt_model,
+                        ),
+                        timeout=remaining,
+                    )
+                except Exception:
+                    # Primary model failed — try fallback
+                    if _interrupt_model != _interrupt_fallback:
+                        _interrupt_model = _interrupt_fallback
+                        logger.info("Interrupt fallback: gemma3:1b -> qwen2.5:1.5b")
+                        response = await asyncio.wait_for(
+                            self._router.complete(
+                                messages,
+                                system_prompt=system_prompt,
+                                max_tokens=512,
+                                temperature=0.3,
+                                tools=tools if tools and _iter == 0 else None,
+                                preferred_model=_interrupt_model,
+                            ),
+                            timeout=remaining,
+                        )
+                    else:
+                        raise
+
+                # If no tool calls, we have the final answer
+                if not response.tool_calls:
+                    final_text = (response.text or "").strip()
+                    break
+
+                # Execute tool calls through the restricted set
+                assistant_msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": response.text or None,
+                    "tool_calls": [
+                        {
+                            "id": call.id or f"int_{_iter}_{i}",
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for i, call in enumerate(response.tool_calls)
+                    ],
+                }
+                messages.append(assistant_msg)
+
+                for call in response.tool_calls:
+                    if not call.id:
+                        call.id = f"int_{_iter}_{uuid.uuid4().hex[:6]}"
+                    # Only execute if tool is in the allowed set
+                    if call.name in allowed_names:
+                        # Enforce category restriction on memory.remember
+                        if call.name == "memory.remember":
+                            _allowed_cats = {"identity", "preferences", "priorities"}
+                            _cat = call.arguments.get("category", "notes")
+                            if _cat not in _allowed_cats:
+                                tool_output = f"Interrupt lane only allows memory writes to categories: {_allowed_cats}"
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": call.id,
+                                    "name": call.name,
+                                    "content": tool_output,
+                                })
+                                continue
+                        tool_output = await self._execute_tool_safe(
+                            call, task_id,
+                        )
+                    else:
+                        tool_output = f"Tool '{call.name}' not allowed in interrupt lane"
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "name": call.name,
+                        "content": tool_output,
+                    })
+
+            if not final_text and response:
+                final_text = (response.text or "").strip()
+            latency_ms = (time.time() - start) * 1000
+
+            result = {
+                "success": bool(final_text),
+                "response": final_text,
+                "task_id": task_id,
+                "latency_ms": round(latency_ms, 1),
+                "model": response.model or "qwen2.5:1.5b",
+                "parent_task_id": classification.parent_task_id,
+            }
+
+            self._interrupt_results.append(result)
+            logger.info(
+                "Interrupt completed: %s in %.0fms (model=%s)",
+                task_id, latency_ms, result["model"],
+            )
+            return result
+
+        except TimeoutError:
+            latency_ms = (time.time() - start) * 1000
+            result = {
+                "success": False,
+                "response": "",
+                "task_id": task_id,
+                "latency_ms": round(latency_ms, 1),
+                "model": "qwen2.5:1.5b",
+                "error": "interrupt timeout (10s)",
+                "parent_task_id": classification.parent_task_id,
+            }
+            self._interrupt_results.append(result)
+            return result
+
+        except Exception as e:
+            latency_ms = (time.time() - start) * 1000
+            result = {
+                "success": False,
+                "response": "",
+                "task_id": task_id,
+                "latency_ms": round(latency_ms, 1),
+                "model": "qwen2.5:1.5b",
+                "error": str(e)[:200],
+                "parent_task_id": classification.parent_task_id,
+            }
+            self._interrupt_results.append(result)
+            return result
+
+        finally:
+            self._task_registry.unregister(task_id)
+
+    def get_stats(self) -> dict[str, Any]:
+        """Return interrupt lane statistics."""
+        return {
+            "total_interrupts": self._interrupt_count,
+            "recent_results": self._interrupt_results[-5:],
+            "task_registry": self._task_registry.summary(),
+        }

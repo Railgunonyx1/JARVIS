@@ -23,6 +23,7 @@ logger = logging.getLogger("jarvis.event_bus")
 
 
 CURRENT_SCHEMA_VERSION = 1
+EVENT_LOG_TTL_SECONDS = 3600.0  # 1 hour
 
 
 @dataclass(frozen=True)
@@ -76,8 +77,24 @@ class EventBus:
                 if handler in subs:
                     subs.remove(handler)
 
+    def _evict_expired(self, now: float) -> None:
+        """Remove events older than TTL."""
+        cutoff = now - EVENT_LOG_TTL_SECONDS
+        # Find first event within TTL (log is ordered by insertion time)
+        keep_idx = 0
+        for i, ev in enumerate(self._event_log):
+            if ev.timestamp >= cutoff:
+                keep_idx = i
+                break
+        else:
+            # All events expired
+            keep_idx = len(self._event_log)
+        if keep_idx > 0:
+            self._event_log = self._event_log[keep_idx:]
+
     def publish(self, event: BusEvent) -> None:
         """Dispatch to all matching handlers (sync).  Never raises."""
+        now = time.time()
         with self._lock:
             exact = list(self._handlers.get(event.name, []))
             wild = [
@@ -93,9 +110,13 @@ class EventBus:
             self._event_log.append(event)
             if len(self._event_log) > self._max_log:
                 self._event_log = self._event_log[-self._max_log:]
+            # Periodic TTL eviction (every 100 events)
+            if len(self._event_log) % 100 == 0:
+                self._evict_expired(now)
 
     async def publish_async(self, event: BusEvent) -> None:
         """Dispatch to all matching handlers (async-aware)."""
+        now = time.time()
         with self._lock:
             exact = list(self._handlers.get(event.name, []))
             wild = [
@@ -113,6 +134,8 @@ class EventBus:
             self._event_log.append(event)
             if len(self._event_log) > self._max_log:
                 self._event_log = self._event_log[-self._max_log:]
+            if len(self._event_log) % 100 == 0:
+                self._evict_expired(now)
 
     def recent(self, limit: int = 50) -> list[BusEvent]:
         with self._lock:
@@ -121,6 +144,13 @@ class EventBus:
     def clear(self) -> None:
         with self._lock:
             self._event_log.clear()
+
+    def evict_expired(self) -> int:
+        """Manually evict expired events. Returns number evicted."""
+        with self._lock:
+            before = len(self._event_log)
+            self._evict_expired(time.time())
+            return before - len(self._event_log)
 
 
 def _match_pattern(pattern: str, name: str) -> bool:

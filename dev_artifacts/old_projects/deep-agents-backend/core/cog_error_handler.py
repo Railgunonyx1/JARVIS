@@ -1,0 +1,214 @@
+import json
+import logging
+import re
+from enum import Enum
+
+from core.config import ModelCatalog
+from core.utils import get_project_root as get_base_dir
+
+logger = logging.getLogger("jarvis.error_handler")
+
+BASE_DIR        = get_base_dir()
+API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+
+_ANALYZE_MODEL = ModelCatalog.GEMINI_FLASH_LITE  # "gemini-2.5-flash-lite"
+_FIX_MODEL = ModelCatalog.GEMINI_FLASH_20  # "gemini-2.0-flash"
+
+
+def _error_model(model_key: str, default: str) -> str:
+    """Read a model name from config/models.toml [executor] section."""
+    try:
+        from core.config import Config
+        return Config.instance().get("models", f"executor.{model_key}", default)
+    except Exception:
+        return default
+
+
+class ErrorDecision(Enum):
+    RETRY       = "retry"
+    SKIP        = "skip"
+    REPLAN      = "replan"
+    ABORT       = "abort"
+
+
+ERROR_ANALYST_PROMPT = """You are the error recovery module of MARK XXV AI assistant.
+
+A task step has failed. Analyze the error and decide what to do.
+
+DECISIONS:
+- retry   : Transient error (network timeout, temporary file lock, race condition).
+             The same step can succeed if tried again.
+- skip    : This step is not critical and the task can succeed without it.
+- replan  : The approach was wrong. A different tool or method should be tried.
+- abort   : The task is fundamentally impossible or unsafe to continue.
+
+Also provide:
+- A brief explanation of WHY it failed (1 sentence)
+- A fix suggestion if decision is replan (what to try instead)
+- Max retries: how many times to retry if decision is retry (1 or 2)
+
+Return ONLY valid JSON:
+{
+  "decision": "retry|skip|replan|abort",
+  "reason": "why it failed",
+  "fix_suggestion": "what to try instead (for replan)",
+  "max_retries": 1,
+  "user_message": "Short message to tell the user (max 15 words)"
+}
+"""
+
+
+def _get_api_key() -> str:
+    try:
+        with open(API_CONFIG_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("gemini_api_key", "")
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return ""
+
+
+def analyze_error(
+    step: dict,
+    error: str,
+    attempt: int = 1,
+    max_attempts: int = 2
+) -> dict:
+    """
+    Analyzes a failed step and returns a recovery decision.
+
+    Args:
+        step         : The step dict that failed
+        error        : Error message/traceback
+        attempt      : Current attempt number
+        max_attempts : How many times we've already tried
+
+    Returns:
+        {
+            "decision": ErrorDecision,
+            "reason": str,
+            "fix_suggestion": str,
+            "max_retries": int,
+            "user_message": str
+        }
+    """
+    import google.generativeai as genai
+
+    if attempt >= max_attempts:
+        logger.warning("Max attempts reached for step %s — forcing replan", step.get('step'))
+        return {
+            "decision":      ErrorDecision.REPLAN,
+            "reason":        f"Failed {attempt} times: {error[:100]}",
+            "fix_suggestion": "Try a completely different approach or tool",
+            "max_retries":   0,
+            "user_message":  "Trying a different approach, sir."
+        }
+
+    try:
+        api_key = _get_api_key()
+        if not api_key:
+            raise ValueError("Gemini API key not found")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            model_name=_error_model("analyze_model", _ANALYZE_MODEL),
+            system_instruction=ERROR_ANALYST_PROMPT
+        )
+        prompt = f"""Failed step:
+Tool: {step.get('tool')}
+Description: {step.get('description')}
+Parameters: {json.dumps(step.get('parameters', {}), indent=2)}
+Critical: {step.get('critical', False)}
+
+Error:
+{error[:500]}
+
+Attempt number: {attempt}"""
+        response = model.generate_content(prompt)
+        text     = response.text.strip()
+        text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
+
+        result = json.loads(text)
+        decision_str = result.get("decision", "replan").lower()
+        decision_map = {
+            "retry":  ErrorDecision.RETRY,
+            "skip":   ErrorDecision.SKIP,
+            "replan": ErrorDecision.REPLAN,
+            "abort":  ErrorDecision.ABORT,
+        }
+        result["decision"] = decision_map.get(decision_str, ErrorDecision.REPLAN)
+
+
+        if step.get("critical") and result["decision"] == ErrorDecision.SKIP:
+            result["decision"]     = ErrorDecision.REPLAN
+            result["user_message"] = "This step is critical — finding alternative approach, sir."
+
+        logger.info("Decision: %s — %s", result['decision'].value, result.get('reason', ''))
+        return result
+
+    except Exception as e:
+        logger.warning("Analysis failed: %s — defaulting to replan", e)
+        return {
+            "decision":       ErrorDecision.REPLAN,
+            "reason":         str(e),
+            "fix_suggestion": "Try alternative approach",
+            "max_retries":    1,
+            "user_message":   "Encountered an issue, adjusting approach, sir."
+        }
+
+
+def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
+    """
+    When decision is REPLAN and a fix suggestion exists,
+    generates a replacement step using generated_code as fallback.
+
+    Returns a modified step dict.
+    """
+    import google.generativeai as genai
+
+    try:
+        api_key = _get_api_key()
+        if not api_key:
+            raise ValueError("Gemini API key not found")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name=_error_model("fix_model", _FIX_MODEL))
+
+        prompt = f"""A task step failed. Generate a replacement step.
+
+Original step:
+Tool: {step.get('tool')}
+Description: {step.get('description')}
+Parameters: {json.dumps(step.get('parameters', {}), indent=2)}
+
+Error: {error[:300]}
+Fix suggestion: {fix_suggestion}
+
+Write a Python script that accomplishes the same goal differently.
+Return ONLY the Python code, no explanation."""
+
+        response = model.generate_content(prompt)
+        code = response.text.strip()
+        code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
+
+        return {
+            "step":        step.get("step"),
+            "tool":        "generated_code",
+            "description": f"Auto-fix for: {step.get('description')}",
+            "parameters": {
+                "action":      "run",
+                "description": fix_suggestion,
+                "code":        code,
+                "language":    "python"
+            },
+            "depends_on": step.get("depends_on", []),
+            "critical":   step.get("critical", False)
+        }
+
+    except Exception as e:
+        logger.warning("Fix generation failed: %s", e)
+        return {
+            "step":        step.get("step"),
+            "tool":        "generated_code",
+            "description": f"Fallback for: {step.get('description')}",
+            "parameters":  {"description": step.get("description", "")},
+            "depends_on":  step.get("depends_on", []),
+            "critical":    step.get("critical", False)
+        }

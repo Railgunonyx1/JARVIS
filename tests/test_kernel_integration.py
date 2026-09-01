@@ -359,13 +359,14 @@ class TestVerificationEngine:
         assert not report.all_passed
         assert report.results[0].exit_code == 1
 
-    def test_verify_stops_on_first_failure(self):
+    def test_verify_runs_all_steps(self):
         engine = VerificationEngine(project_root=ROOT)
         from core.agent.verification import VerificationStep
         engine.add_step(VerificationStep(name="fail", command="python -c \"exit(1)\""))
         engine.add_step(VerificationStep(name="pass", command="python -c \"print('ok')\""))
         report = asyncio.run(engine.verify())
-        assert report.steps_run == 1  # stopped after first failure
+        assert report.steps_run == 2  # continues to run all steps
+        assert not report.all_passed
 
     def test_configure_defaults(self):
         engine = VerificationEngine(project_root=ROOT)

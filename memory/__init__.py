@@ -12,6 +12,12 @@ from memory.memory_optimizer import MemoryOptimizer, get_memory_optimizer
 from memory.project_knowledge import ProjectKnowledge, get_project_knowledge
 from memory.store import MemoryEntry, MemoryStore
 from memory.tiered_store import TieredMemoryStore, get_tiered_store
+from memory.user_profile import (
+    USER_PROFILE,
+    ensure_user_profile_in_memory,
+    get_user_profile,
+    inject_into_memory_api,
+)
 from memory.vector_store import VectorMemoryStore
 
 __all__ = [
@@ -29,4 +35,8 @@ __all__ = [
     "Mem",
     "MemoryAPI",
     "get_mem",
+    "USER_PROFILE",
+    "get_user_profile",
+    "inject_into_memory_api",
+    "ensure_user_profile_in_memory",
 ]

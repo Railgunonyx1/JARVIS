@@ -12,7 +12,7 @@ import json
 import re
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from core import events
@@ -157,10 +157,16 @@ class AgentLoop:
             self.max_tool_calls_per_step = hc.max_tool_calls_per_step
             self._verification_enabled = hc.enable_verification
             self._planning_enabled = hc.enable_planning
+            self._max_verification_retries = getattr(hc, "max_verification_retries", 3)
         else:
             self.max_iterations = max_iterations
             self.temperature = temperature
             self.max_tool_calls_per_step = max_tool_calls_per_step
+            # Bounds check: prevent runaway tool loops
+            if self.max_tool_calls_per_step < 1:
+                self.max_tool_calls_per_step = 1
+            elif self.max_tool_calls_per_step > 10:
+                self.max_tool_calls_per_step = 10
             self._verification_enabled = True
             self._planning_enabled = True
 
@@ -232,9 +238,21 @@ class AgentLoop:
             self.observer.start(trace_id, goal)
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
+            # Reset token usage tracking for new session
+            self._token_usage = {"system": 0, "memory": 0, "files": 0, "messages": 0, "response": 0}
+            self._last_budget_check = time.time()
 
             # Pipeline latency tracker
             _latency_log: list[tuple[str, float]] = []
+            # Token usage tracking per section
+            _token_usage: dict[str, int] = {
+                "system": 0,
+                "memory": 0,
+                "files": 0,
+                "messages": 0,
+                "response": 0,
+            }
+            _last_budget_check = time.time()
 
             # ── Stage 1: Intent classification ──
             _t0 = time.time()
@@ -293,6 +311,7 @@ class AgentLoop:
             # SIMPLE uses minimal context; COMPLEX uses full context+memory
 
             # Model Gateway: select model based on harness requirements
+            # with confidence-based cascade fallback
             if self._model_gateway is not None:
                 _t_ms = time.time()
                 requirements = set()
@@ -303,11 +322,47 @@ class AgentLoop:
                             requirements.add(Capability(pref))
                         except ValueError:
                             pass
+                # Try primary model selection with confidence
                 profile = self._model_gateway.select(
                     requirements=requirements or None,
                     session_id=session_id or None,
                     confidence=classified.confidence,
                 )
+                
+                # Confidence-based cascade: if confidence is low or profile is None,
+                # fall back to less expensive models
+                if profile is None or classified.confidence < 0.5:
+                    # Try secondary models with lower precision but faster speed
+                    secondary_requirements = requirements.copy()
+                    # Add secondary model preferences
+                    if self._harness is not None:
+                        for pref in list(self._harness.config.model_preference)[1:3]:
+                            from providers.model_gateway import Capability
+                            try:
+                                secondary_requirements.add(Capability(pref))
+                            except ValueError:
+                                pass
+                    profile = self._model_gateway.select(
+                        requirements=secondary_requirements or None,
+                        session_id=session_id or None,
+                        confidence=max(classified.confidence, 0.3),  # minimum threshold
+                    )
+                
+                # If still no profile, try the most lightweight model available
+                if profile is None:
+                    lightweight_requirements = set()
+                    if self._harness is not None:
+                        for pref in self._harness.config.model_preference[-2:]:
+                            from providers.model_gateway import Capability
+                            try:
+                                lightweight_requirements.add(Capability(pref))
+                            except ValueError:
+                                pass
+                    profile = self._model_gateway.select(
+                        requirements=lightweight_requirements or None,
+                        session_id=session_id or None,
+                        confidence=0.2,  # absolute minimum
+                    )
                 _latency_log.append(("model_select", (time.time() - _t_ms) * 1000))
                 if profile is not None:
                     state.provider = profile.provider
@@ -383,6 +438,22 @@ class AgentLoop:
             elif any(s in _current_model for s in ("4b", "7b")):
                 _budgets["total"] = min(_budgets["total"], 60.0)
 
+            # Adaptive tool timefalls: reduce max tool calls based on
+            # model size, iteration count, and overall confidence
+            _adaptive_tool_limit = self.max_tool_calls_per_step
+            if _current_model and any(s in _current_model for s in ("1.5b", "1b")):
+                # Small models: reduce tool calls significantly
+                _adaptive_tool_limit = max(1, self.max_tool_calls_per_step - 3)
+            elif any(s in _current_model for s in ("3b",)):
+                # Medium models: moderate reduction
+                _adaptive_tool_limit = max(2, self.max_tool_calls_per_step - 2)
+            # Large models keep the full limit
+
+            # Further reduce tool calls as iterations progress
+            # (diminishing returns, risk of low-confidence calls)
+            _progress_factor = (_model_iterations - state.iteration + 1) / _model_iterations
+            _adaptive_tool_limit = max(1, int(_adaptive_tool_limit * _progress_factor))
+
             for iteration in range(1, _model_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
                 elapsed = time.monotonic() - _run_start
@@ -402,9 +473,9 @@ class AgentLoop:
                     )
                 state.iteration = iteration
                 _t_compress = time.monotonic()
-                # Adaptive context budget: temporarily swap, always restore
-                from dataclasses import replace
-                _request_budget = replace(self.context_manager.budget, messages=int(self.context_manager.budget.messages * _ctx_mult))  # noqa: E501
+                # Adaptive context budget: pre-compute token estimate, then temporarily swap, always restore
+                _estimated_tokens = self.context_manager.budget.messages * _ctx_mult
+                _request_budget = replace(self.context_manager.budget, messages=int(_estimated_tokens))  # noqa: E501
                 _orig_budget = self.context_manager.budget
                 self.context_manager.budget = _request_budget
                 try:
@@ -415,6 +486,11 @@ class AgentLoop:
                 finally:
                     self.context_manager.budget = _orig_budget
                 _latency_log.append(("context_compress", (time.monotonic() - _t_compress) * 1000))
+                # Track actual token usage from compressed context
+                if hasattr(self, '_last_memory_prompt') and self._last_memory_prompt is not None:
+                    self._token_usage["memory"] = estimate_tokens(self._last_memory_prompt)
+                if messages:
+                    self._token_usage["messages"] += estimate_tokens(messages)
                 state.context_usage = report.to_dict()
                 if report.compacted:
                     self._emit("context.compacted", {
@@ -593,9 +669,9 @@ class AgentLoop:
                     if not call.id:
                         call.id = self._next_tool_id()
 
-                if len(response.tool_calls) > self.max_tool_calls_per_step:
+                _tool_call_limit = getattr(self, "_adaptive_tool_limit", self.max_tool_calls_per_step)
+                if len(response.tool_calls) > _tool_call_limit:
                     self.logger.record(trace_id, events.TOOL_FAILED, {
-                        "tool": "batch",
                         "error": f"{len(response.tool_calls)} tool calls truncated to {self.max_tool_calls_per_step}",
                     })
                     response.tool_calls = response.tool_calls[:self.max_tool_calls_per_step]

@@ -1,0 +1,173 @@
+# JARVIS MK-X — DeepSeek Harness Profile
+#
+# This profile configures DSH with JARVIS's identity, tools, memory,
+# and personality. It bridges JARVIS's Python capabilities into
+# DSH's Cordis plugin system.
+#
+# Usage:
+#   dsh --profile jarvis
+#   or
+#   dsh --profile jarvis --model ollama/qwen2.5:3b
+
+# ── Identity ────────────────────────────────────────────────────────────────
+
+- id: jarvis-personality
+  name: '@jarvis/dsh-personality'
+  config:
+    name: JARVIS MK-X
+    version: '0.1.0'
+    description: Advanced AI assistant with memory, Ollama cascade, verification, and MCP tools
+
+# ── LLM Provider ────────────────────────────────────────────────────────────
+
+- id: jarvis-ollama
+  name: '@jarvis/dsh-ollama'
+  config:
+    host: http://127.0.0.1:11434
+    cascade:
+      router: gemma3:1b
+      worker: qwen2.5:1.5b
+      heavy: qwen2.5:3b
+    maxLoadedModels: 2
+    numParallel: 2
+    flashAttention: true
+
+# ── Memory ──────────────────────────────────────────────────────────────────
+
+- id: jarvis-memory
+  name: '@jarvis/dsh-memory'
+  config:
+    enabled: true
+    identity:
+      userName: Aayan
+      userRole: Software developer
+      project: JARVIS MK-X
+    cacheSize: 1000
+
+# ── MCP Tools ───────────────────────────────────────────────────────────────
+
+- id: jarvis-tools-mcp
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: jarvis
+    transport: stdio
+    command: python
+    args: ['plugins/jarvis-mcp-server/jarvis_mcp_server.py']
+    toolCallTimeoutMs: 30000
+
+# ── Shell ───────────────────────────────────────────────────────────────────
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+# ── Filesystem ──────────────────────────────────────────────────────────────
+
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── Skills ──────────────────────────────────────────────────────────────────
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── Goals ───────────────────────────────────────────────────────────────────
+
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── Plan Mode ───────────────────────────────────────────────────────────────
+
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              You are JARVIS MK-X in plan mode. Explore first, then plan.
+              Use non-mutating reads, searches, and checks.
+              Do not edit files or run commands during planning.
+              When ready, call exit_plan_mode with the complete plan.
+
+# ── Compaction ──────────────────────────────────────────────────────────────
+
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── Delegation ──────────────────────────────────────────────────────────────
+
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+# ── Remaining Tools ─────────────────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000

@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-mcp-plugin"
+version = "0.1.0"
+description = "JARVIS MCP server plugin"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core", "jarvis-mcp"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

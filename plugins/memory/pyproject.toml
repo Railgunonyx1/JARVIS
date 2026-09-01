@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-memory-plugin"
+version = "0.1.0"
+description = "JARVIS memory backend plugins (KV, vector, decision)"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core", "jarvis-memory"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

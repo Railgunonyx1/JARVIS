@@ -2,11 +2,6 @@
   {
     "name": "filesystem",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\aayan\\Desktop"]
-  },
-  {
-    "name": "sqlite",
-    "command": "python",
-    "args": ["-m", "mcp_server_sqlite", "--db-path", "C:\\Users\\aayan\\Desktop\\JARVIS\\data\\example.db"]
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/jarvis-mcp"]
   }
 ]

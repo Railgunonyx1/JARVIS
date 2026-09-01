@@ -51,16 +51,44 @@ class ProjectContext:
                 return
 
     def _detect_language(self, root: Path) -> None:
-        files = [f.name.lower() for f in root.iterdir() if f.is_file()]
+        files = {f.name.lower(): f for f in root.iterdir() if f.is_file()}
         for lang, markers in _LANGUAGE_MARKERS.items():
             if any(marker.lower() in files for marker in markers):
                 self.language = lang
                 break
+        # Detect project context files for personality/identity
+        self._detect_project_context(files)
         if not self.language:
             if any(root.glob("*.csproj")) or any(root.glob("*.sln")):
                 self.language = "csharp"
         self.config_files = [m for m in _CONFIG_MARKERS if m in files]
         self.framework = self._detect_framework(root, files)
+
+    def _detect_project_context(self, files: dict[str, any]) -> None:
+        """Detect JARVIS.md or CLAUDE.md for per-project personality/identity."""
+        jarvis_file = files.get("jarvis.md") or files.get("JARVIS.md")
+        claude_file = files.get("claude.md") or files.get("CLAUDE.md")
+        if jarvis_file:
+            try:
+                text = jarvis_file.read_text(encoding="utf-8", errors="ignore")
+                # Store key-value pairs or simple directives
+                self.project_context = {
+                    "type": "jarvis",
+                    "content": text.strip(),
+                }
+            except Exception:
+                self.project_context = {"type": "jarvis", "content": ""}
+        elif claude_file:
+            try:
+                text = claude_file.read_text(encoding="utf-8", errors="ignore")
+                self.project_context = {
+                    "type": "claude",
+                    "content": text.strip(),
+                }
+            except Exception:
+                self.project_context = {"type": "claude", "content": ""}
+        else:
+            self.project_context = {}
 
     @staticmethod
     def _detect_framework(root: Path, files: list[str]) -> str:
@@ -94,10 +122,13 @@ class ProjectContext:
         return ""
 
     def to_dict(self) -> dict:
-        return {
+        base = {
             "root_path": str(self.root_path),
             "language": self.language,
             "framework": self.framework,
             "git_root": str(self.git_root) if self.git_root else None,
             "config_files": self.config_files,
         }
+        if hasattr(self, "project_context") and self.project_context:
+            base["project_context"] = self.project_context
+        return base

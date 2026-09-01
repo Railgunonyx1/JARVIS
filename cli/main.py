@@ -35,6 +35,9 @@ for _stream in (sys.stdout, sys.stderr):
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+# Additional silence for library progress bars and telemetry before any provider is imported.
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=FutureWarning,
@@ -393,6 +396,19 @@ def main(
     if mode not in _MODES:
         typer.secho(f"Unknown mode '{mode}'. Choose from {', '.join(_MODES)}.", err=True, fg="red")
         raise typer.Exit(code=1)
+
+    # Conditional startup phases based on mode to reduce first-response time
+    # Plan mode: skip heavy memory loading
+    # Controlled/smart mode: reduced initialization
+    # Agent mode: full initialization with interrupt executor
+    if mode in ("plan", "controlled"):
+        # Skip interrupt executor and heavy memory features
+        _interrupt_executor = None
+        _interrupt_classifier = None
+    elif mode == "smart":
+        # Smart mode: reduced features, no interrupt executor
+        _interrupt_executor = None
+        _interrupt_classifier = None
 
     _setup_logging(verbose)
 

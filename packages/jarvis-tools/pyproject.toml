@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-tools"
+version = "0.1.0"
+description = "JARVIS tool registry, schema, and execution contracts"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

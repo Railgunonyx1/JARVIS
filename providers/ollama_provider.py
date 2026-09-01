@@ -372,6 +372,23 @@ class OllamaProvider(LLMProvider):
             ranked.append(t)
         return ranked
 
+    @staticmethod
+    def restore_dotted_names(tool_calls: list[ToolCall]) -> None:
+        """Convert sanitized tool names (filesystem_read) back to dotted (filesystem.read).
+
+        The router sanitizes all tool names for OpenAI compatibility. Ollama
+        accepts dotted names natively, so we restore them after the router's
+        sanitization.
+        """
+        for call in tool_calls:
+            if "." not in call.name and "_" in call.name:
+                # Heuristic: known tool prefixes
+                for prefix in ("filesystem", "search", "git", "shell", "code", "memory",
+                               "browser", "web", "test", "patch", "system"):
+                    if call.name.startswith(prefix + "_"):
+                        call.name = call.name.replace("_", ".", 1)
+                        break
+
     async def _chat_once(self, client, model: str, full_messages: list,
                          tools: list | None, max_tokens, temperature) -> LLMResponse:
         """Single Ollama chat() call — factored out for fallback reuse."""

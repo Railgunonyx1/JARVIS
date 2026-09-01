@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-gemini"
+version = "0.1.0"
+description = "JARVIS Gemini provider plugin"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core", "jarvis-models"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

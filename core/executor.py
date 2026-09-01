@@ -531,7 +531,7 @@ class AgentExecutor:
                             msg = f"Task aborted, sir. {recovery.get('reason', '')}"
                             decision_logger.record(trace_id, "task.failed", {"error": "abort", "reason": str(recovery.get('reason', ''))[:200], "goal": goal[:200], "source": "executor"})  # noqa: E501
                             if speak:
-                                speak(msg)
+                                speak(redact_sensitive(msg))
                             return msg
 
                         else:
@@ -579,34 +579,6 @@ class AgentExecutor:
                     "error": "max replans exceeded", "goal": goal[:200], "source": "executor",
                 })
                 if speak:
-                    speak(msg)
+                    speak(redact_sensitive(msg))
                 return msg
 
-            if speak:
-                speak("Adjusting my approach, sir.")
-
-            replan_attempts += 1
-            plan = replan(goal, completed_steps, failed_step, failed_error)
-
-    def _summarize(self, goal: str, completed_steps: list, speak: Callable | None) -> str:
-        fallback = f"All done, sir. Completed {len(completed_steps)} steps for: {goal[:60]}."
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=_get_api_key())
-            model     = genai.GenerativeModel(model_name=_executor_model("quick_model", _QUICK_MODEL))
-            steps_str = "\n".join(f"- {s.get('description', '')}" for s in completed_steps)
-            prompt    = (
-                f'User goal: "{goal}"\n'
-                f"Completed steps:\n{steps_str}\n\n"
-                "Write a single natural sentence summarizing what was accomplished. "
-                "Address the user as 'sir'. Be direct and positive."
-            )
-            response = model.generate_content(prompt)
-            summary  = response.text.strip()
-            if speak:
-                speak(summary)
-            return summary
-        except Exception:
-            if speak:
-                speak(fallback)
-            return fallback

@@ -1,0 +1,269 @@
+{
+  "technical_interests": {
+    "core": [
+      "AI agents and LLM systems",
+      "Local AI / Ollama",
+      "AI model routing and fallback systems",
+      "MCP (Model Context Protocol)",
+      "Agentic architectures",
+      "AI memory systems",
+      "Vector databases",
+      "Desktop automation",
+      "Multimodal AI",
+      "Speech-to-text and text-to-speech",
+      "Terminal applications"
+    ],
+    "stack": [
+      "React/TypeScript applications",
+      "Python backends",
+      "Electron",
+      "FastAPI / Flask",
+      "SQLite",
+      "WebSockets",
+      "Vite",
+      "Tailwind CSS",
+      "Zustand",
+      "GitHub repositories"
+    ],
+    "practices": [
+      "Software architecture",
+      "Performance optimization",
+      "Security auditing",
+      "Automated testing",
+      "UI/UX design"
+    ],
+    "philosophy": "Interested in how systems work internally, not just how to use them."
+  },
+  "development_approach": {
+    "audit_style": "Deep audits over superficial reviews \u2014 architecture \u2192 implementation \u2192 integration \u2192 testing \u2192 reliability \u2192 UI \u2192 release readiness all checked.",
+    "workflow": "Iterative: batch changes \u2192 inspect repo \u2192 fix problems \u2192 re-audit \u2192 repeat until issues are small.",
+    "verification": "Frequently asks for second or third verification after changes.",
+    "advice_preference": "Practical over theoretical \u2014 concrete fixes, specific files, specific architectural changes, implementation priorities, actual commands, tests, before/after comparisons."
+  },
+  "ui_preferences": {
+    "favored": [
+      "Clean",
+      "Dense but readable",
+      "Professional",
+      "Functional",
+      "Modern",
+      "Terminal-oriented when appropriate",
+      "Information-rich without being cluttered"
+    ],
+    "reference": "Claude Code's UI philosophy",
+    "disliked": [
+      "Generic",
+      "Overly flashy",
+      "Cluttered",
+      "\"AI-looking\" for the sake of looking AI",
+      "Full of unnecessary controls"
+    ],
+    "philosophy": "Functionality-driven UI design."
+  },
+  "projects": {
+    "StudyCore": {
+      "domain": "Education (CBSE, JEE, NEET)",
+      "frontend": [
+        "React",
+        "Vite",
+        "TypeScript",
+        "Tailwind"
+      ],
+      "desktop": [
+        "Electron"
+      ],
+      "backend": [
+        "SQLite",
+        "Python/Flask"
+      ],
+      "ai": [
+        "Ollama (Mistral, Phi, Llama)"
+      ],
+      "planned_features": [
+        "AI tutor",
+        "OCR",
+        "Flashcards",
+        "Spaced repetition",
+        "Planner",
+        "Knowledge graph",
+        "Exam simulation",
+        "AI-assisted studying"
+      ],
+      "notes": "Multiple visual themes, lightweight desktop experience."
+    },
+    "WealthWise": {
+      "domain": "Finance",
+      "stack": [
+        "React 19",
+        "TypeScript",
+        "Vite",
+        "Tailwind CSS v4",
+        "FastAPI"
+      ],
+      "notes": "Prefers modern frameworks for new projects."
+    }
+  },
+  "hardware_interests": {
+    "components": [
+      "CPUs",
+      "GPUs",
+      "RAM",
+      "SSDs",
+      "NVIDIA hardware"
+    ],
+    "focus": [
+      "Gaming performance",
+      "Windows performance",
+      "Driver issues",
+      "CPU/GPU utilization",
+      "FPS troubleshooting"
+    ],
+    "investigations": "Hardware utilization vs. observed gaming performance mismatches."
+  },
+  "gaming_interests": {
+    "games": [
+      "BeamNG.drive",
+      "Minecraft",
+      "Forza Horizon 5",
+      "Roblox",
+      "F1"
+    ],
+    "beamng_style": "Very difficult career challenges with reasonable progression/multipliers; difficulty through gameplay constraints, not artificial damage multipliers."
+  },
+  "open_source_approach": {
+    "evaluation_criteria": [
+      "What does this project do?",
+      "Is it worth incorporating?",
+      "What architecture does it use?",
+      "What could JARVIS borrow from it?",
+      "What ideas are actually useful?",
+      "What should be added to your roadmap?"
+    ],
+    "philosophy": "Use existing open-source projects as architecture references, not blind copies.",
+    "investigated": [
+      "Open Interpreter",
+      "OpenAI/Codex-related tooling",
+      "Agentic design patterns",
+      "AI memory systems",
+      "Anti-detect browsers",
+      "Other open-source AI-agent infrastructure"
+    ]
+  },
+  "electronics_robotics": {
+    "hardware": [
+      "LCD",
+      "Joystick",
+      "Telemetry",
+      "Multiple telemetry screens",
+      "Screen navigation"
+    ],
+    "interaction_model": "Joystick \u2192 navigate telemetry screens (deliberately simple)",
+    "philosophy": "Display focuses on telemetry, not a general-purpose control panel."
+  },
+  "documentation_philosophy": {
+    "qualities": [
+      "Structured",
+      "Consistent with actual implementation",
+      "Divided into logical sections",
+      "Kept synchronized with architecture changes"
+    ],
+    "practice": "Compare repository changes against existing implementation plan/documentation."
+  },
+  "project_planning": {
+    "style": "Detailed implementation plans with phases, blocks, priorities, architecture contracts, P0/P1/P2 severity, milestones, test requirements, release gates.",
+    "terminology": [
+      "P0",
+      "P1",
+      "P2",
+      "Block 1",
+      "Block 2",
+      "Block 3",
+      "Sprint milestones",
+      "Architecture contract",
+      "Release readiness"
+    ],
+    "preference": "Defined target architecture before large changes."
+  },
+  "performance_concerns": [
+    "Startup time",
+    "Memory usage",
+    "CPU utilization",
+    "Latency",
+    "TTFT",
+    "Model-loading overhead",
+    "Polling",
+    "Event-loop blocking",
+    "Application responsiveness",
+    "Resource consumption"
+  ],
+  "performance_focus": "Making local AI practical on consumer hardware.",
+  "reliability_concerns": [
+    "Graceful fallbacks",
+    "Connection recovery",
+    "Model failures",
+    "Timeouts",
+    "Hung processes",
+    "Startup failures",
+    "WebSocket reliability",
+    "Test reliability",
+    "Dependency problems",
+    "Cross-platform behavior"
+  ],
+  "reliability_philosophy": "\"The feature works when everything goes right\" is not sufficient. Must handle: network disappears, model crashes, tool fails, process hangs, environment isn't what we expected.",
+  "security_concerns": [
+    "Dependency vulnerabilities",
+    "RCE risks",
+    "Authentication",
+    "Token handling",
+    "Tool permissions",
+    "Desktop automation security",
+    "Sandboxing",
+    "Input validation"
+  ],
+  "security_tools": [
+    "pip-audit"
+  ],
+  "feedback_style": {
+    "preference": "Direct criticism",
+    "looking_for": [
+      "What is actually wrong",
+      "What is merely mediocre",
+      "What is good",
+      "What is unnecessary",
+      "What should be deleted",
+      "What should be redesigned",
+      "What is release-blocking",
+      "What can wait"
+    ],
+    "avoid": "Automatic agreement \u2014 bad architectural decisions should be identified as such."
+  },
+  "feature_creep_attitude": {
+    "preference": "Removing unnecessary functionality",
+    "examples": [
+      "Telemetry project: narrowed design rather than adding controls",
+      "JARVIS: moving toward smaller, more coherent architecture"
+    ],
+    "philosophy": "More capability per component, fewer unnecessary components."
+  },
+  "technology_philosophy": "Open source + local-first capability + modular architecture + AI + automation + strong UI + aggressive testing. Intersection: AI \u2192 Agent \u2192 Tools \u2192 Computer \u2192 Automation \u2192 Verification.",
+  "common_requests": [
+    "Audit this repository",
+    "Re-audit it",
+    "Check the changes",
+    "Find remaining errors",
+    "Compare it against the plan",
+    "Find architectural problems",
+    "Optimize it",
+    "Make it more reliable",
+    "Improve the UI",
+    "Find open-source projects worth using",
+    "Research a technology",
+    "Determine whether an idea is actually worth implementing",
+    "Create implementation plans",
+    "Turn plans into concrete changes",
+    "Check whether changes introduced regressions",
+    "Find edge cases",
+    "Determine what should be removed"
+  ],
+  "summary": "Student/developer experimenting with AI agents, software architecture, local LLMs, automation, modern web/desktop stacks, and hardware projects. Prefers ambitious systems but increasingly cares about reducing complexity, improving reliability, and making the final product feel polished rather than merely feature-rich. Uses iterative repository audits and testing as a major part of development process. Prefers direct technical criticism over automatic agreement."
+}

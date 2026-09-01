@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-ui"
+version = "0.1.0"
+description = "JARVIS terminal UI: renderer, bridge, cockpit, commands"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core", "typer", "rich"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

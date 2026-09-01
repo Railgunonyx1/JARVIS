@@ -7,6 +7,7 @@ Only records semantically meaningful events:
 Not every telemetry point — those go to MetricsCollector.
 """
 import json
+import orjson
 import logging
 import sqlite3
 import threading
@@ -80,7 +81,7 @@ class EventStore:
             conn.execute(
                 "INSERT INTO events(name, data, source, trace_id, timestamp) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (event.name, json.dumps(event.data), event.source,
+                (event.name, orjson.dumps(event.data).decode(), event.source,
                  event.trace_id, event.timestamp)
             )
             # Prune oldest if over limit

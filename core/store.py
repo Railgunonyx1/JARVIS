@@ -21,6 +21,7 @@ Persistence is optional and injected via a serializer.
 from __future__ import annotations
 
 import json
+import orjson
 import logging
 import threading
 from collections.abc import Callable
@@ -44,7 +45,8 @@ class EventSerializer:
     @staticmethod
     def serialize(event: CoreEvent) -> str:
         """One event → one JSON line."""
-        return json.dumps({
+        import json as _json
+        return _json.dumps({
             "seq": event.seq,
             "category": event.category.value,
             "name": event.name,
@@ -59,7 +61,7 @@ class EventSerializer:
     def deserialize(line: str) -> CoreEvent | None:
         """One JSON line → one CoreEvent, or None on parse failure."""
         try:
-            d = json.loads(line)
+            d = orjson.loads(line)
             return CoreEvent(
                 seq=d["seq"],
                 category=d["category"],
@@ -84,7 +86,7 @@ class EventSerializer:
         d["verification_status"] = state.verification_status.value
         if state.failure_class:
             d["failure_class"] = state.failure_class.value
-        return json.dumps(d, ensure_ascii=False, default=str)
+        return orjson.dumps(d, default=str).decode()
 
     @staticmethod
     def deserialize_state(data: str) -> SessionState | None:
@@ -99,7 +101,7 @@ class EventSerializer:
                 TaskStatus,
                 VerificationStatus,
             )
-            d = json.loads(data)
+            d = orjson.loads(data)
             d["status"] = TaskStatus(d["status"])
             d["mode"] = Mode(d["mode"])
             d["verification_status"] = VerificationStatus(d["verification_status"])

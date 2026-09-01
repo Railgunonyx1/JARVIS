@@ -1,0 +1,764 @@
+{
+  "llama.cpp": [
+    {
+      "repo": "`ggml-org/llama.cpp`",
+      "description": "LLM inference in C/C++ with GPU acceleration - Run local models efficiently on M"
+    }
+  ],
+  "vLLM": [
+    {
+      "repo": "`vllm-project/vllm`",
+      "description": "High-throughput LLM serving with PagedAttention - Batch inference for memory ana"
+    }
+  ],
+  "Ollama": [
+    {
+      "repo": "`ollama/ollama`",
+      "description": "Run LLMs locally with simple API - Primary model backend for JARVIS"
+    }
+  ],
+  "Unsloth": [
+    {
+      "repo": "`unslothai/unsloth`",
+      "description": "2x faster LLM fine-tuning with 60% less memory - Fine-tune JARVIS models on your"
+    }
+  ],
+  "Axolotl": [
+    {
+      "repo": "`OpenAccess-AI-Collective/axolotl`",
+      "description": "Fine-tuning framework for LLMs - Train custom JARVIS skills"
+    }
+  ],
+  "MLX": [
+    {
+      "repo": "`ml-explore/mlx`",
+      "description": "Apple silicon-optimized ML framework - Future Mac optimization"
+    }
+  ],
+  "GGML": [
+    {
+      "repo": "`ggml-org/ggml`",
+      "description": "Tensor library for LLMs - Model quantization for MX130"
+    }
+  ],
+  "GGUF": [
+    {
+      "repo": "`ggml-org/gguf`",
+      "description": "Format for quantized LLM weights - Store optimized models"
+    }
+  ],
+  "Cursor": [
+    {
+      "repo": "`anysphere/cursor`",
+      "description": "AI-first code editor - Reference architecture for JARVIS UI"
+    }
+  ],
+  "Windsurf": [
+    {
+      "repo": "`Codeium/windsurf`",
+      "description": "AI code editor with Cascade - Multi-file editing pattern"
+    }
+  ],
+  "Zed": [
+    {
+      "repo": "`zed-industries/zed`",
+      "description": "High-performance AI editor - Rust-based editor reference"
+    }
+  ],
+  "Aider": [
+    {
+      "repo": "`paul-gauthier/aider`",
+      "description": "AI pair programming in terminal - Git-integrated code editing"
+    }
+  ],
+  "Continue": [
+    {
+      "repo": "`continuedev/continue`",
+      "description": "Open-source AI code assistant - Pluggable code completion"
+    }
+  ],
+  "Tabby": [
+    {
+      "repo": "`TabbyML/tabby`",
+      "description": "Self-hosted AI coding assistant - Local code completion"
+    }
+  ],
+  "Kilo Code": [
+    {
+      "repo": "`kilocode/kilo`",
+      "description": "Open-source VS Code AI extension - Multi-model code editing"
+    }
+  ],
+  "Roo Code": [
+    {
+      "repo": "`RooVetGit/Roo-Code`",
+      "description": "Autonomous VS Code agent - Multi-mode coding agent"
+    }
+  ],
+  "pytest": [
+    {
+      "repo": "`pytest-dev/pytest`",
+      "description": "Python testing framework - Primary Python test runner"
+    }
+  ],
+  "unittest": [
+    {
+      "repo": "`python/cpython`",
+      "description": "Python built-in testing - Standard library tests"
+    }
+  ],
+  "Jest": [
+    {
+      "repo": "`facebook/jest`",
+      "description": "JavaScript testing framework - JS/TS testing"
+    }
+  ],
+  "Vitest": [
+    {
+      "repo": "`vitest-dev/vitest`",
+      "description": "Vite-native testing - Fast JS testing"
+    }
+  ],
+  "Go test": [
+    {
+      "repo": "`golang/go`",
+      "description": "Go built-in testing - Go unit tests"
+    }
+  ],
+  "cargo test": [
+    {
+      "repo": "`rust-lang/cargo`",
+      "description": "Rust built-in testing - Rust unit tests"
+    }
+  ],
+  "JUnit": [
+    {
+      "repo": "`junit-team/junit5`",
+      "description": "Java testing framework - Java unit tests"
+    }
+  ],
+  "xUnit": [
+    {
+      "repo": "`xunit/xunit`",
+      "description": "- .NET unit tests"
+    }
+  ],
+  "Docker": [
+    {
+      "repo": "`docker/docker-ce`",
+      "description": "Container platform - Package JARVIS for deployment"
+    }
+  ],
+  "Podman": [
+    {
+      "repo": "`containers/podman`",
+      "description": "Rootless container engine - Docker alternative"
+    }
+  ],
+  "nerdctl": [
+    {
+      "repo": "`containerd/nerdctl`",
+      "description": "Docker-compatible CLI for containerd - Lightweight containers"
+    }
+  ],
+  "Buildah": [
+    {
+      "repo": "`containers/buildah`",
+      "description": "OCI image builder - Build without daemon"
+    }
+  ],
+  "Kaniko": [
+    {
+      "repo": "`GoogleContainerTools/kaniko`",
+      "description": "Build images in Kubernetes - CI/CD image building"
+    }
+  ],
+  "BuildKit": [
+    {
+      "repo": "`moby/buildkit`",
+      "description": "Concurrent container builds - Fast image builds"
+    }
+  ],
+  "Dive": [
+    {
+      "repo": "`wagoodman/dive`",
+      "description": "Explore Docker image layers - Optimize image size"
+    }
+  ],
+  "Trivy": [
+    {
+      "repo": "`aquasecurity/trivy`",
+      "description": "Container vulnerability scanner - Security scanning"
+    },
+    {
+      "repo": "`aquasecurity/trivy`",
+      "description": "Comprehensive vulnerability scanner - Container + code scanning"
+    }
+  ],
+  "OWASP ZAP": [
+    {
+      "repo": "`zaproxy/zaproxy`",
+      "description": "Web application security scanner - Find web vulnerabilities"
+    }
+  ],
+  "Nuclei": [
+    {
+      "repo": "`projectdiscovery/nuclei`",
+      "description": "Template-based vulnerability scanner - Automated vulnerability detection"
+    }
+  ],
+  "Grype": [
+    {
+      "repo": "`anchore/grype`",
+      "description": "Container image scanner - Find CVEs in images"
+    }
+  ],
+  "OSV-Scanner": [
+    {
+      "repo": "`google/osv-scanner`",
+      "description": "Vulnerability scanner using OSV - Dependency vulnerability check"
+    }
+  ],
+  "Safety": [
+    {
+      "repo": "`pyupio/safety`",
+      "description": "Python dependency vulnerability check - Find vulnerable packages"
+    }
+  ],
+  "pip-audit": [
+    {
+      "repo": "`pypa/pip-audit`",
+      "description": "Audit Python packages - Check pip dependencies"
+    }
+  ],
+  "npm audit": [
+    {
+      "repo": "`npm/cli`",
+      "description": "Node - Check npm packages"
+    }
+  ],
+  "Apache Spark": [
+    {
+      "repo": "`apache/spark`",
+      "description": "Distributed data processing - Large-scale data analysis"
+    }
+  ],
+  "Apache Flink": [
+    {
+      "repo": "`apache/flink`",
+      "description": "Stream processing framework - Real-time data processing"
+    }
+  ],
+  "Apache Beam": [
+    {
+      "repo": "`apache/beam`",
+      "description": "Unified batch and stream processing - Data pipeline framework"
+    }
+  ],
+  "Ray": [
+    {
+      "repo": "`ray-project/ray`",
+      "description": "Distributed computing - Parallel data processing"
+    }
+  ],
+  "Dask": [
+    {
+      "repo": "`dask/dask`",
+      "description": "Parallel computing - Scalable data processing"
+    }
+  ],
+  "Polars": [
+    {
+      "repo": "`pola-rs/polars`",
+      "description": "Fast DataFrame library - Process memory data"
+    }
+  ],
+  "DuckDB": [
+    {
+      "repo": "`duckdb/duckdb`",
+      "description": "In-process analytics database - Query memory efficiently"
+    }
+  ],
+  "Pandas": [
+    {
+      "repo": "`pandas-dev/pandas`",
+      "description": "Data manipulation library - Data analysis"
+    }
+  ],
+  "React": [
+    {
+      "repo": "`facebook/react`",
+      "description": "UI component library - Build interactive UIs"
+    }
+  ],
+  "Vue.js": [
+    {
+      "repo": "`vuejs/vue`",
+      "description": "Progressive JavaScript framework - Simple reactive UIs"
+    }
+  ],
+  "Angular": [
+    {
+      "repo": "`angular/angular`",
+      "description": "Platform for web apps - Enterprise web apps"
+    }
+  ],
+  "Svelte": [
+    {
+      "repo": "`sveltejs/svelte`",
+      "description": "Compile-time framework - Fast reactive UIs"
+    }
+  ],
+  "Solid": [
+    {
+      "repo": "`solidjs/solid`",
+      "description": "Declarative JavaScript framework - High-performance UIs"
+    }
+  ],
+  "Next.js": [
+    {
+      "repo": "`vercel/next.js`",
+      "description": "React framework with SSR - Full-stack React apps"
+    }
+  ],
+  "Nuxt": [
+    {
+      "repo": "`nuxt/nuxt`",
+      "description": "Vue framework with SSR - Full-stack Vue apps"
+    }
+  ],
+  "SvelteKit": [
+    {
+      "repo": "`sveltejs/kit`",
+      "description": "Svelte web framework - Full-stack Svelte"
+    }
+  ],
+  "React Native": [
+    {
+      "repo": "`facebook/react-native`",
+      "description": "React for mobile - Cross-platform mobile"
+    }
+  ],
+  "Flutter": [
+    {
+      "repo": "`flutter/flutter`",
+      "description": "Dart-based UI toolkit - Beautiful cross-platform"
+    }
+  ],
+  "Expo": [
+    {
+      "repo": "`expo/expo`",
+      "description": "React Native platform - Simplified RN development"
+    }
+  ],
+  "Ionic": [
+    {
+      "repo": "`ionic-team/ionic`",
+      "description": "Web tech for mobile - Hybrid mobile apps"
+    }
+  ],
+  ".NET MAUI": [
+    {
+      "repo": "`dotnet/maui`",
+      "description": "- Cross-platform .NET"
+    }
+  ],
+  "Kotlin Multiplatform": [
+    {
+      "repo": "`JetBrains/kotlin`",
+      "description": "Shared Kotlin code - Business logic sharing"
+    }
+  ],
+  "Compose Multiplatform": [
+    {
+      "repo": "",
+      "description": "Kotlin UI toolkit - Shared UI"
+    }
+  ],
+  "NativeScript": [
+    {
+      "repo": "`NativeScript/NativeScript`",
+      "description": "Native mobile with JS - Native access from JS"
+    }
+  ],
+  "GCC": [
+    {
+      "repo": "`gcc-mirror/gcc`",
+      "description": "GNU Compiler Collection - C/C++ compilation"
+    },
+    {
+      "repo": "`gcc-mirror/gcc`",
+      "description": "GNU Compiler - Optimization passes"
+    }
+  ],
+  "Clang": [
+    {
+      "repo": "`llvm/llvm-project`",
+      "description": "LLVM C/C++ compiler - Fast compilation"
+    },
+    {
+      "repo": "`llvm/llvm-project`",
+      "description": "C/C++ compiler - Fast compilation"
+    }
+  ],
+  "CMake": [
+    {
+      "repo": "`cmake/cmake`",
+      "description": "Cross-platform build system - C/C++ builds"
+    }
+  ],
+  "Meson": [
+    {
+      "repo": "`mesonbuild/meson`",
+      "description": "Fast build system - Modern builds"
+    }
+  ],
+  "Ninja": [
+    {
+      "repo": "`ninja-build/ninja`",
+      "description": "Small build system - Fast builds"
+    }
+  ],
+  "Bazel": [
+    {
+      "repo": "`bazelbuild/bazel`",
+      "description": "Google's build system - Large-scale builds"
+    }
+  ],
+  "vcpkg": [
+    {
+      "repo": "`microsoft/vcpkg`",
+      "description": "C++ package manager - C++ dependencies"
+    }
+  ],
+  "Conan": [
+    {
+      "repo": "`conan-io/conan`",
+      "description": "C/C++ package manager - C++ dependencies"
+    }
+  ],
+  "PostgreSQL": [
+    {
+      "repo": "`postgres/postgres`",
+      "description": "Advanced SQL database - Primary data store"
+    }
+  ],
+  "MySQL": [
+    {
+      "repo": "`mysql/mysql-server`",
+      "description": "Popular SQL database - Relational storage"
+    }
+  ],
+  "SQLite": [
+    {
+      "repo": "`sqlite/sqlite`",
+      "description": "Embedded database - Local storage"
+    }
+  ],
+  "MariaDB": [
+    {
+      "repo": "`MariaDB/server`",
+      "description": "MySQL fork - Open-source MySQL"
+    }
+  ],
+  "CockroachDB": [
+    {
+      "repo": "`cockroachdb/cockroach`",
+      "description": "Distributed SQL - Scalable SQL"
+    }
+  ],
+  "TiDB": [
+    {
+      "repo": "`pingcap/tidb`",
+      "description": "Distributed SQL - MySQL-compatible HTAP"
+    }
+  ],
+  "YugabyteDB": [
+    {
+      "repo": "`yugabyte/yugabyte-db`",
+      "description": "Distributed SQL - PostgreSQL-compatible"
+    }
+  ],
+  "Citus": [
+    {
+      "repo": "`citusdata/citus`",
+      "description": "Distributed PostgreSQL - Scale PostgreSQL"
+    }
+  ],
+  "MkDocs": [
+    {
+      "repo": "`mkdocs/mkdocs`",
+      "description": "Static site generator for docs - Project documentation"
+    }
+  ],
+  "Docusaurus": [
+    {
+      "repo": "`facebook/docusaurus`",
+      "description": "Documentation website builder - Beautiful docs sites"
+    }
+  ],
+  "Sphinx": [
+    {
+      "repo": "`sphinx-doc/sphinx`",
+      "description": "Python documentation - API docs generation"
+    }
+  ],
+  "mdBook": [
+    {
+      "repo": "`rust-lang/mdBook`",
+      "description": "Rust documentation tool - Markdown-based docs"
+    }
+  ],
+  "VuePress": [
+    {
+      "repo": "`vuejs/vuepress`",
+      "description": "Vue-powered static site - Vue-based docs"
+    }
+  ],
+  "Nextra": [
+    {
+      "repo": "`shuding/nextra`",
+      "description": "Next - Modern docs"
+    }
+  ],
+  "Starlight": [
+    {
+      "repo": "`withastro/starlight`",
+      "description": "Astro documentation theme - Beautiful docs"
+    }
+  ],
+  "Lume": [
+    {
+      "repo": "`lumeland/lume`",
+      "description": "Static site generator for Deno - Deno docs"
+    }
+  ],
+  "GDB": [
+    {
+      "repo": "`bminor/binutils-gdb`",
+      "description": "GNU Debugger - C/C++ debugging"
+    }
+  ],
+  "LLDB": [
+    {
+      "repo": "`llvm/llvm-project`",
+      "description": "LLVM Debugger - Modern debugging"
+    }
+  ],
+  "Delve": [
+    {
+      "repo": "`go-delve/delve`",
+      "description": "Go debugger - Go debugging"
+    }
+  ],
+  "pdb": [
+    {
+      "repo": "`python/cpython`",
+      "description": "Python debugger - Python debugging"
+    }
+  ],
+  "pudb": [
+    {
+      "repo": "`inducer/pudb`",
+      "description": "Visual debugger for Python - Terminal UI debugging"
+    }
+  ],
+  "ipdb": [
+    {
+      "repo": "`gotcha/ipdb`",
+      "description": "IPython-enabled pdb - Enhanced Python debug"
+    }
+  ],
+  "rpdb": [
+    {
+      "repo": "`tomek-mistry/rpdb`",
+      "description": "Remote debugger - Debug remotely"
+    }
+  ],
+  "web-pdb": [
+    {
+      "repo": "`crazygweb/web-pdb`",
+      "description": "Web-based Python debugger - Browser debugging"
+    }
+  ],
+  "LLVM": [
+    {
+      "repo": "`llvm/llvm-project`",
+      "description": "Compiler infrastructure - Code optimization"
+    }
+  ],
+  "MSVC": [
+    {
+      "repo": "`microsoft/VCSamples`",
+      "description": "Microsoft compiler - Windows optimization"
+    }
+  ],
+  "Cranelift": [
+    {
+      "repo": "`bytecodealliance/cranelift`",
+      "description": "Compiler framework - JIT compilation"
+    }
+  ],
+  "LibVips": [
+    {
+      "repo": "`libvips/libvips`",
+      "description": "Image processing - Fast image ops"
+    }
+  ],
+  "Pillow": [
+    {
+      "repo": "`python-pillow/Pillow`",
+      "description": "Python imaging - Image processing"
+    }
+  ],
+  "Sharp": [
+    {
+      "repo": "`lovell/sharp`",
+      "description": "Node - Fast image processing"
+    }
+  ],
+  "Clean Architecture": [
+    {
+      "repo": "`N/A`",
+      "description": "Uncle Bob's architecture - JARVIS structure"
+    }
+  ],
+  "Hexagonal Architecture": [
+    {
+      "repo": "`N/A`",
+      "description": "Ports and adapters - Pluggable JARVIS"
+    }
+  ],
+  "Event Sourcing": [
+    {
+      "repo": "`N/A`",
+      "description": "Event-based state - JARVIS state management"
+    }
+  ],
+  "CQRS": [
+    {
+      "repo": "`N/A`",
+      "description": "Command Query Separation - Read/write optimization"
+    }
+  ],
+  "Microservices": [
+    {
+      "repo": "`N/A`",
+      "description": "Service decomposition - JARVIS modularity"
+    }
+  ],
+  "Domain-Driven Design": [
+    {
+      "repo": "`N/A`",
+      "description": "Business-driven design - JARVIS domain modeling"
+    }
+  ],
+  "Repository Pattern": [
+    {
+      "repo": "`N/A`",
+      "description": "Data access abstraction - JARVIS data layer"
+    }
+  ],
+  "Strategy Pattern": [
+    {
+      "repo": "`N/A`",
+      "description": "Algorithm selection - JARVIS model routing"
+    }
+  ],
+  "SonarQube": [
+    {
+      "repo": "`SonarSource/sonarqube`",
+      "description": "Code quality platform - Multi-language quality"
+    }
+  ],
+  "CodeClimate": [
+    {
+      "repo": "`N/A`",
+      "description": "Code quality analytics - Automated reviews"
+    }
+  ],
+  "DeepSource": [
+    {
+      "repo": "`deepsource/deepsourcectl`",
+      "description": "Automated code review - Tech debt tracking"
+    }
+  ],
+  "Codacy": [
+    {
+      "repo": "`N/A`",
+      "description": "Code quality platform - Multi-language analysis"
+    }
+  ],
+  "Scrutinizer": [
+    {
+      "repo": "`N/A`",
+      "description": "Code quality - Continuous analysis"
+    }
+  ],
+  "LGTM": [
+    {
+      "repo": "`N/A`",
+      "description": "Code analysis - Security analysis"
+    }
+  ],
+  "Semgrep": [
+    {
+      "repo": "`semgrep/semgrep`",
+      "description": "Pattern-based analysis - Custom rules"
+    }
+  ],
+  "PMD": [
+    {
+      "repo": "`pmd/pmd`",
+      "description": "Source code analyzer - Find common issues"
+    }
+  ],
+  "Figma": [
+    {
+      "repo": "`N/A`",
+      "description": "Design tool - Design reference"
+    }
+  ],
+  "Sketch": [
+    {
+      "repo": "`N/A`",
+      "description": "Design tool - UI design"
+    }
+  ],
+  "Adobe XD": [
+    {
+      "repo": "`N/A`",
+      "description": "Design tool - Prototyping"
+    }
+  ],
+  "InVision": [
+    {
+      "repo": "`N/A`",
+      "description": "Design platform - Prototyping"
+    }
+  ],
+  "Zeplin": [
+    {
+      "repo": "`N/A`",
+      "description": "Design handoff - Design specs"
+    }
+  ],
+  "Framer": [
+    {
+      "repo": "`N/A`",
+      "description": "Interactive design - Motion design"
+    }
+  ],
+  "Principle": [
+    {
+      "repo": "`N/A`",
+      "description": "Animation tool - Micro-interactions"
+    }
+  ],
+  "Atomic Design": [
+    {
+      "repo": "`N/A`",
+      "description": "Brad Frost's methodology - Component design"
+    }
+  ]
+}

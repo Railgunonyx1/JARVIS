@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-memory"
+version = "0.1.0"
+description = "JARVIS memory seam: authority, contracts, and interfaces"
+requires-python = ">=3.11"
+dependencies = ["jarvis-core"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

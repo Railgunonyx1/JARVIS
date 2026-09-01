@@ -1,0 +1,10 @@
+[project]
+name = "jarvis-verification"
+version = "0.1.0"
+description = "JARVIS post-execution verification engine"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
