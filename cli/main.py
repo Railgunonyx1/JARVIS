@@ -647,6 +647,10 @@ def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
             _cmd_providers(loop)
         elif line == "/status":
             _cmd_status(loop)
+        elif line == "/plugins":
+            _cmd_plugins(loop)
+        elif line == "/tools":
+            _cmd_tools(loop)
         elif line == "/skills":
             _cmd_skills()
         elif line == "/memory prompt":
@@ -1116,8 +1120,8 @@ def _cmd_skills() -> None:
     table.add_column("Risk")
     table.add_column("Description", max_width=50)
 
-    for s in sorted(skill_reg.list_all(), key=lambda x: x.name):
-        tools_ok = sum(1 for t in s.tool_names if t in tool_names)
+    for s in sorted(skill_reg.values(), key=lambda x: x.name):
+        tags_str = ", ".join(s.tags[:3]) if s.tags else ""
         risk_raw = getattr(s, 'risk', '') or ''
         risk_str = (
             "high" if "high" in str(risk_raw)
@@ -1126,15 +1130,60 @@ def _cmd_skills() -> None:
         )
         table.add_row(
             s.name,
-            f"{tools_ok}/{len(s.tool_names)}",
+            tags_str,
             risk_str,
             s.description[:50],
         )
     console.print(table)
     console.print(
-        Text(f"  {len(skill_reg.list_all())} skills, {len(tool_names)} tools",
+        Text(f"  {len(skill_reg)} skills, {len(tool_names)} tools",
              style="dim")
     )
+
+
+
+def _cmd_plugins(loop) -> None:
+    """Show all discovered plugins."""
+    from core.plugin_loader import PluginLoader, list_plugins
+
+    pl = PluginLoader()
+    loaded = pl.discover_and_load()
+
+    from rich.table import Table
+    table = Table(title="JARVIS Plugins")
+    table.add_column("Plugin", style="bold")
+    table.add_column("Description")
+
+    for name, reg in sorted(list_plugins().items()):
+        table.add_row(name, reg.description or "")
+
+    console.print(table)
+    console.print(Text(f"  {len(loaded)} plugins loaded", style="dim"))
+
+
+def _cmd_tools(loop) -> None:
+    """Show all registered tools from the default registry."""
+    from rich.table import Table
+
+    from tools import build_default_registry
+
+    tool_reg = build_default_registry()
+
+    table = Table(title="JARVIS Tools")
+    table.add_column("Tool", style="bold")
+    table.add_column("Category")
+    table.add_column("Permission")
+
+    for tool in tool_reg.list():
+        table.add_row(
+            tool.name,
+            tool.category if tool.category else "",
+            tool.permission if tool.permission else "",
+        )
+
+    console.print(table)
+    console.print(
+        Text(f"  {len(tool_reg)} tools registered", style="dim"))
 
 
 

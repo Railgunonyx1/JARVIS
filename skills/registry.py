@@ -15,6 +15,7 @@ from core.capability_registry import (
     Capability,
     CapabilityCategory,
     CapabilityRisk,
+    CapabilityTree,
     get_capability,
     merge_capabilities,
 )
@@ -80,10 +81,8 @@ def _manifest_to_capability(m: dict[str, Any]) -> Capability | None:
         latency="medium",
         provider="local",
         examples=[f"skills/{name}"],
+        metadata={"preferred_models": preferred_models},
     )
-
-    # Attach preferred_models as metadata for the executor
-    cap.metadata["preferred_models"] = preferred_models
 
     return cap
 
@@ -111,19 +110,21 @@ def build_default_skill_registry() -> dict[str, Capability]:
         return {}
 
     # Merge all capabilities into the global tree via atomic merge
-    merged = CapabilityTree.build_branch(capabilities)
-    _get_tree().merge(merged)
+    tree = CapabilityTree()
+    for cap in capabilities:
+        tree.merge(CapabilityTree.build_branch([cap]))
 
     # Return flat cache
-    from core.capability_registry import _get_tree as _gt
-    _gt._ensure_cache()
-    return _gt._flat_cache.copy()
+    tree._ensure_cache()
+    return tree._flat_cache.copy()
 
 
 def get_skill(name: str) -> Capability | None:
     """Resolve a skill by its manifest name."""
-    from core.capability_registry import _get_tree
-    return _get_tree().resolve(f"skills.{name}")
+    registry = build_default_skill_registry()
+    # Accept both "architecture_auditor" and "skills.architecture_auditor"
+    key = name if name.startswith("skills.") else f"skills.{name}"
+    return registry.get(key)
 
 
 def list_skills(
@@ -132,21 +133,30 @@ def list_skills(
     max_risk: CapabilityRisk | None = None,
 ) -> list[Capability]:
     """Search skills by tags, risk, or max_risk."""
-    from core.capability_registry import _get_tree
-    return _get_tree().search(tags=tags, risk=risk, max_risk=max_risk)
+    registry = build_default_skill_registry()
+    results: list[Capability] = []
+
+    from core.capability_registry import CapabilityRisk as CR
+    all_skills = registry.values() if registry else []
+
+    if tags:
+        tag_set = set(tags)
+        results = [c for c in all_skills if tag_set & set(c.tags)]
+
+    if risk:
+        results = [c for c in results if c.risk == risk]
+
+    if max_risk:
+        risk_order = {r: i for i, r in enumerate(CapabilityRisk)}
+        results = [
+            c for c in results
+            if risk_order.get(c.risk, 99) <= risk_order.get(max_risk, 99)
+        ]
+
+    return results
 
 
 def list_all_skills() -> list[Capability]:
     """List all registered skills."""
-    from core.capability_registry import _get_tree
-    _get_tree._ensure_cache()
-    return list(_get_tree._flat_cache.values())
-
-
-# Auto-load manifests on import so the registry is populated when skills is imported
-_AUTOMERGED = build_default_skill_registry()
-
-if _AUTOMERGED:
-    logger.info("Loaded %d skill manifests into capability registry", len(_AUTOMERGED))
-else:
-    logger.warning("No skill manifests loaded — check skills/manifests/ directory")
+    registry = build_default_skill_registry()
+    return list(registry.values()) if registry else []
