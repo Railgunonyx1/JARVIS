@@ -1,271 +1,112 @@
-"""
-JARVIS MCP Server
+"""JARVIS MCP Server — expose JARVIS's real tool catalog to MCP clients.
 
-Exposes JARVIS's tools via MCP (Model Context Protocol) so DSH can use them.
-This server runs as a subprocess and communicates via stdio.
+Built on the official Model Context Protocol SDK. Reads the live tool
+registry from ``tools.build_default_registry`` so DSH (or any MCP client)
+sees JARVIS's actual tools with their real JSON schemas.
 
-Usage:
-    python jarvis_mcp_server.py
-    
-DSH connects via:
-    - id: jarvis-tools
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: jarvis
-        transport: stdio
-        command: python
-        args: ['plugins/jarvis-mcp-server/jarvis_mcp_server.py']
+Usage (spawned by DSH's dsh-mcp-client):
+    python plugins/jarvis-mcp-server/jarvis_mcp_server.py
 """
+
+from __future__ import annotations
 
 import json
-import sys
+import logging
 import os
-import asyncio
-from typing import Any, Dict, List, Optional
+import sys
 
-# Add JARVIS to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-# ── MCP Protocol Implementation ────────────────────────────────────────────
+import anyio
 
-class MCPServer:
-    """Minimal MCP server implementation over stdio."""
-    
-    def __init__(self):
-        self.tools: Dict[str, Dict] = {}
-        self._register_tools()
-    
-    def _register_tools(self):
-        """Register all JARVIS tools."""
-        
-        # Filesystem tools
-        self.tools["filesystem.read"] = {
-            "name": "filesystem.read",
-            "description": "Read file contents from the filesystem",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "File path to read"},
-                    "offset": {"type": "integer", "description": "Line offset (optional)"},
-                    "limit": {"type": "integer", "description": "Max lines to read (optional)"},
-                },
-                "required": ["path"],
-            },
-        }
-        
-        self.tools["filesystem.write"] = {
-            "name": "filesystem.write",
-            "description": "Write content to a file",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "File path to write"},
-                    "content": {"type": "string", "description": "Content to write"},
-                },
-                "required": ["path", "content"],
-            },
-        }
-        
-        self.tools["filesystem.search"] = {
-            "name": "filesystem.search",
-            "description": "Search for files matching a pattern",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Glob pattern to match"},
-                    "path": {"type": "string", "description": "Directory to search in"},
-                },
-                "required": ["pattern"],
-            },
-        }
-        
-        # Shell tools
-        self.tools["shell.execute"] = {
-            "name": "shell.execute",
-            "description": "Execute a shell command",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string", "description": "Command to execute"},
-                    "cwd": {"type": "string", "description": "Working directory (optional)"},
-                    "timeout": {"type": "integer", "description": "Timeout in seconds (optional)"},
-                },
-                "required": ["command"],
-            },
-        }
-        
-        # Memory tools
-        self.tools["memory.recall"] = {
-            "name": "memory.recall",
-            "description": "Recall memories related to a query",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Query to search memories"},
-                    "limit": {"type": "integer", "description": "Max memories to return (optional)"},
-                },
-                "required": ["query"],
-            },
-        }
-        
-        self.tools["memory.remember"] = {
-            "name": "memory.remember",
-            "description": "Store a new memory",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "key": {"type": "string", "description": "Memory key/category"},
-                    "value": {"type": "string", "description": "Memory content"},
-                },
-                "required": ["key", "value"],
-            },
-        }
-        
-        # Search tools
-        self.tools["web.search"] = {
-            "name": "web.search",
-            "description": "Search the web for information",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                },
-                "required": ["query"],
-            },
-        }
-        
-        # Verification tools
-        self.tools["verification.run_tests"] = {
-            "name": "verification.run_tests",
-            "description": "Run project tests",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Test file pattern (optional)"},
-                },
-            },
-        }
-        
-        self.tools["verification.run_lint"] = {
-            "name": "verification.run_lint",
-            "description": "Run linter on project",
-            "inputSchema": {
-                "type": "object",
-                "properties": {},
-            },
-        }
-    
-    def handle_request(self, request: Dict) -> Dict:
-        """Handle an MCP request."""
-        method = request.get("method")
-        params = request.get("params", {})
-        request_id = request.get("id")
-        
-        if method == "initialize":
-            return self._handle_initialize(request_id, params)
-        elif method == "tools/list":
-            return self._handle_list_tools(request_id)
-        elif method == "tools/call":
-            return self._handle_call_tool(request_id, params)
-        else:
-            return self._error(request_id, -32601, f"Method not found: {method}")
-    
-    def _handle_initialize(self, request_id: Any, params: Dict) -> Dict:
-        """Handle initialize request."""
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                },
-                "serverInfo": {
-                    "name": "jarvis-mcp-server",
-                    "version": "0.1.0",
-                },
-            },
-        }
-    
-    def _handle_list_tools(self, request_id: Any) -> Dict:
-        """Handle tools/list request."""
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "tools": list(self.tools.values()),
-            },
-        }
-    
-    def _handle_call_tool(self, request_id: Any, params: Dict) -> Dict:
-        """Handle tools/call request."""
-        tool_name = params.get("name")
-        arguments = params.get("arguments", {})
-        
-        if tool_name not in self.tools:
-            return self._error(request_id, -32602, f"Unknown tool: {tool_name}")
-        
+from mcp.server.lowlevel import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import CallToolResult, TextContent, Tool
+
+from tools.registry import ToolRegistry
+from tools.schema import ToolResult
+
+
+def main() -> None:
+    """Build and run the JARVIS MCP server over stdio."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    logger = logging.getLogger("jarvis.mcp")
+
+    registry = _load_registry()
+    server = Server("jarvis-mcp-server")
+    tools: dict[str, Tool] = {}
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return list(tools.values())
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict | None) -> CallToolResult:
+        tool = tools.get(name)
+        if tool is None:
+            return CallToolResult(
+                isError=True,
+                content=[TextContent(type="text", text=f"Unknown tool: {name}")],
+            )
+        args = arguments or {}
         try:
-            result = self._execute_tool(tool_name, arguments)
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": json.dumps(result, indent=2),
-                        }
-                    ],
-                },
-            }
-        except Exception as e:
-            return self._error(request_id, -32000, str(e))
-    
-    def _execute_tool(self, tool_name: str, arguments: Dict) -> Any:
-        """Execute a JARVIS tool."""
-        from core.agent.tools import ToolRegistry
-        
-        tr = ToolRegistry()
-        return tr.execute(tool_name, arguments)
-    
-    def _error(self, request_id: Any, code: int, message: str) -> Dict:
-        """Create an error response."""
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "error": {
-                "code": code,
-                "message": message,
-            },
-        }
+            raw = _execute_handler(registry, name, args)
+            text = _render_result(raw)
+            return CallToolResult(
+                isError=False,
+                content=[TextContent(type="text", text=text)],
+            )
+        except Exception as exc:  # noqa: BLE001 - surface any handler failure as a tool error
+            logger.exception("tool %s failed", name)
+            return CallToolResult(
+                isError=True,
+                content=[TextContent(type="text", text=f"{type(exc).__name__}: {exc}")],
+            )
 
-# ── Main Loop ──────────────────────────────────────────────────────────────
+    async def serve() -> None:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
 
-def main():
-    """Run the MCP server."""
-    server = MCPServer()
-    
-    # Read from stdin, write to stdout
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        
-        try:
-            request = json.loads(line)
-            response = server.handle_request(request)
-            print(json.dumps(response), flush=True)
-        except json.JSONDecodeError as e:
-            response = {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {
-                    "code": -32700,
-                    "message": f"Parse error: {e}",
-                },
-            }
-            print(json.dumps(response), flush=True)
+    def build_tool_views() -> None:
+        for tool in registry.list():
+            tools[tool.name] = Tool(
+                name=tool.name,
+                description=tool.description,
+                inputSchema=tool.parameters,
+            )
+
+    build_tool_views()
+    logger.info("JARVIS MCP server exposing %d tools", len(tools))
+    anyio.run(serve)
+
+
+def _load_registry() -> ToolRegistry:
+    from tools import build_default_registry
+    return build_default_registry()
+
+
+def _execute_handler(registry: ToolRegistry, name: str, arguments: dict) -> object:
+    tool = registry.get(name)
+    if tool is None:
+        raise KeyError(f"Unknown tool: {name}")
+    return tool.handler(arguments)
+
+
+def _render_result(raw: object) -> str:
+    """Normalize a handler result (str / dict / ToolResult) to text."""
+    if isinstance(raw, ToolResult):
+        if not raw.success and raw.error:
+            return f"error: {raw.error}"
+        return raw.output if raw.output else json.dumps(raw.metadata, default=str)
+    if isinstance(raw, dict):
+        return json.dumps(raw, default=str, indent=2)
+    if raw is None:
+        return "(no output)"
+    return str(raw)
+
 
 if __name__ == "__main__":
     main()

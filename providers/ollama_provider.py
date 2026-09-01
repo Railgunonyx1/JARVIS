@@ -207,9 +207,14 @@ class OllamaProvider(LLMProvider):
         lane = self._detect_lane(model or self.config.get("model", "qwen2.5:1.5b"))
         profile = _LANE_PROFILES[lane].copy()
 
-        # Explicit request parameters take precedence (request-scoped, thread-safe)
+        # Request-scoped explicit parameters win, then config-level defaults,
+        # then lane profile defaults. Only omit a key when no source provides it.
+        if max_tokens is None:
+            max_tokens = self.config.get("max_tokens")
         if max_tokens is not None:
             profile["num_predict"] = max_tokens
+        if temperature is None:
+            temperature = self.config.get("temperature")
         if temperature is not None:
             profile["temperature"] = temperature
 

@@ -62,7 +62,7 @@ _CACHE_LOCK = threading.Lock()
 
 
 def _settings() -> dict[str, Any]:
-    return Config.instance().get_section("worldmonitor") or {}
+    return Config().get_section("worldmonitor") or {}
 
 
 def _base_url() -> str:
