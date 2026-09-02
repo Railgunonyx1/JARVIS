@@ -13,6 +13,37 @@ import enum
 from dataclasses import dataclass
 from typing import Any
 
+# Canonical tool-name aliases so whitelists/blacklists work regardless of
+# naming convention. Tool names are dotted-namespaced (e.g. shell.execute),
+# but legacy/internal references may use underscore or bare forms. Every
+# entry normalizes to the canonical dotted name used by the registry.
+_TOOL_NAME_ALIASES: dict[str, str] = {
+    "web_search": "web.search",
+    "web_search_tool": "web.search",
+    "web_fetch": "browser.open",
+    "browser_fetch": "browser.open",
+    "file_read": "filesystem.read",
+    "read_file": "filesystem.read",
+    "file_write": "filesystem.write",
+    "write_file": "filesystem.write",
+    "bash": "shell.execute",
+    "shell": "shell.execute",
+    "shell_cmd": "shell.execute",
+    "shell.cmd": "shell.execute",
+    "code_search": "search.code",
+    "search_code": "search.code",
+    "grep": "search.code",
+    "list_files": "filesystem.list",
+    "file_list": "filesystem.list",
+}
+
+
+def _canonical_tool_name(name: str) -> str:
+    """Resolve a tool name to its canonical dotted form (identity if unknown)."""
+    if not name:
+        return name
+    return _TOOL_NAME_ALIASES.get(name.strip(), name.strip())
+
 
 class HarnessType(enum.Enum):
     NATIVE = "native"
@@ -68,7 +99,7 @@ _HARNESS_PRESETS: dict[HarnessType, HarnessConfig] = {
         description="Optimized for analysis, search, and information gathering",
         max_iterations=12,
         max_tool_calls_per_step=4,
-        tool_whitelist=("web_search", "web_fetch", "file_read", "bash", "code_search"),
+        tool_whitelist=("web.search", "browser.open", "filesystem.read", "shell.execute", "search.code"),
         model_preference=("reasoning",),
         system_prompt_addendum=(
             "\nYou are a research-focused agent. Prioritize gathering information "
@@ -122,16 +153,30 @@ class Harness:
     def build_system_prompt_addendum(self) -> str:
         return self._config.system_prompt_addendum
 
-    def filter_tools(self, tools: list[dict]) -> list[dict]:
-        """Filter tool list based on whitelist/blacklist."""
+    def filter_tools(self, tools: list | None) -> list:
+        """Filter tool list based on whitelist/blacklist.
+
+        Matching is canonical-name aware: underscore and legacy spellings are
+        normalized to dotted names before comparison, so a whitelist written
+        against either convention still works (and a stale list never silently
+        strips every tool). Malformed entries are skipped defensively.
+        """
+        if not tools:
+            return list(tools) if tools is not None else []
         if not self._config.tool_whitelist and not self._config.tool_blacklist:
-            return tools
+            return list(tools)
+        whitelist = {_canonical_tool_name(n) for n in self._config.tool_whitelist}
+        blacklist = {_canonical_tool_name(n) for n in self._config.tool_blacklist}
         filtered = []
         for t in tools:
-            name = t.get("function", {}).get("name", "")
-            if self._config.tool_blacklist and name in self._config.tool_blacklist:
+            try:
+                name = t.get("function", {}).get("name", "") if isinstance(t, dict) else ""
+            except AttributeError:
+                name = ""
+            canonical = _canonical_tool_name(name)
+            if blacklist and canonical in blacklist:
                 continue
-            if self._config.tool_whitelist and name not in self._config.tool_whitelist:
+            if whitelist and canonical not in whitelist:
                 continue
             filtered.append(t)
         return filtered
@@ -151,11 +196,16 @@ class HarnessSelector:
         return self._active
 
     def select(self, harness_type: HarnessType) -> Harness:
-        self._active = self._harnesses[harness_type]
+        try:
+            self._active = self._harnesses[harness_type]
+        except (KeyError, TypeError):
+            self._active = self._harnesses[HarnessType.NATIVE]
         return self._active
 
-    def auto_select(self, goal: str) -> Harness:
+    def auto_select(self, goal: str | None) -> Harness:
         """Heuristic: pick harness based on goal content."""
+        if not goal:
+            return self.select(HarnessType.NATIVE)
         goal_lower = goal.lower()
         if any(w in goal_lower for w in ("debug", "fix", "error", "bug", "crash")):
             return self.select(HarnessType.DEBUG)

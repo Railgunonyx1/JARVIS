@@ -138,6 +138,75 @@ class TestHarnessSelector:
         assert len(items) == 6
         assert any(h["type"] == "coding" for h in items)
 
+    def test_filter_tools_canonicalizes_names(self):
+        hc = HarnessConfig(
+            harness_type=HarnessType.RESEARCH,
+            tool_whitelist=("web_search", "file_read", "bash"),
+        )
+        h = Harness(hc)
+        tools = [
+            {"function": {"name": "web.search"}},
+            {"function": {"name": "filesystem.read"}},
+            {"function": {"name": "shell.execute"}},
+            {"function": {"name": "search.code"}},
+        ]
+        filtered = h.filter_tools(tools)
+        names = {t["function"]["name"] for t in filtered}
+        assert names == {"web.search", "filesystem.read", "shell.execute"}
+
+    def test_filter_tools_blacklist_canonicalizes_names(self):
+        hc = HarnessConfig(
+            harness_type=HarnessType.NATIVE,
+            tool_blacklist=("shell.cmd",),
+        )
+        h = Harness(hc)
+        tools = [
+            {"function": {"name": "shell.execute"}},
+            {"function": {"name": "web.search"}},
+        ]
+        filtered = h.filter_tools(tools)
+        assert {t["function"]["name"] for t in filtered} == {"web.search"}
+
+    def test_filter_tools_handles_malformed_entries(self):
+        hc = HarnessConfig(
+            harness_type=HarnessType.NATIVE,
+            tool_whitelist=("web.search",),
+        )
+        h = Harness(hc)
+        tools = [
+            "not-a-dict",
+            {"function": None},
+            {"function": {}},
+            {"function": {"name": "web.search"}},
+            None,
+        ]
+        filtered = h.filter_tools(tools)
+        assert len(filtered) == 1
+        assert filtered[0]["function"]["name"] == "web.search"
+
+    def test_research_preset_whitelist_matches_real_tools(self):
+        from tools import build_default_registry
+        sel = HarnessSelector()
+        h = sel.select(HarnessType.RESEARCH)
+        real_tools = build_default_registry().to_openai_tools()
+        name_set = {t["function"]["name"] for t in real_tools}
+        filtered = h.filter_tools(real_tools)
+        kept = {t["function"]["name"] for t in filtered}
+        assert kept, "research whitelist must keep at least one real tool"
+        assert kept.issubset(name_set)
+        assert kept == set(h.config.tool_whitelist) & name_set
+
+    def test_auto_select_empty_goal_falls_back_native(self):
+        sel = HarnessSelector()
+        assert sel.auto_select("").type == HarnessType.NATIVE
+        assert sel.auto_select(None).type == HarnessType.NATIVE
+
+    def test_select_invalid_type_falls_back_native(self):
+        sel = HarnessSelector()
+        h = sel.select("nonsense")  # type: ignore[arg-type]
+        assert h.type == HarnessType.NATIVE
+        assert sel.active.type == HarnessType.NATIVE
+
 
 # ── ModelGateway tests ────────────────────────────────────────────────
 
