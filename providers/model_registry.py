@@ -168,7 +168,9 @@ _QUICK_PATTERNS = [
 _DETERMINISTIC_COMMANDS = frozenset({
     "/help", "/exit", "/quit", "/clear", "/cockpit", "/notifications",
     "/verbose", "/plan", "/tokens", "/compact", "/tree", "/resume",
-    "/memory", "/history", "/model", "/palette", "/perf", "/audit",
+    "/memory", "/history", "/model", "/models", "/palette", "/perf", "/audit",
+    "/skills", "/tools", "/plugins", "/providers", "/status",
+    "/mode", "/context", "/sessions", "/debug", "/permissions",
 })
 
 

@@ -152,6 +152,30 @@ def test_commands_model_uses_renderer_state():
     assert reg.dispatch("/model") is True
 
 
+def test_commands_models_alias_renders():
+    r = Renderer()
+    reg = CommandRegistry(r)
+    assert "models" in reg.list_commands()
+    assert reg.dispatch("/models") is True
+    assert reg.dispatch("/model status") is True
+
+
+def test_commands_discoverable_listings_registered():
+    r = Renderer()
+    reg = CommandRegistry(r)
+    for name in ("models", "skills", "plugins", "providers", "history"):
+        assert name in reg.list_commands(), f"missing discoverable command /{name}"
+    # Dispatch each — none should raise and all should be handled deterministically.
+    for line in ("/models", "/skills", "/plugins", "/providers", "/history"):
+        assert reg.dispatch(line) is True
+
+
+def test_listing_commands_are_llm_deterministic():
+    from providers.model_registry import _is_deterministic_command
+    for line in ("/models", "/tools", "/skills", "/plugins", "/providers", "/status"):
+        assert _is_deterministic_command(line), f"{line} should bypass the LLM"
+
+
 def test_commands_unknown_mode_rejected():
     r = Renderer()
     reg = CommandRegistry(r)

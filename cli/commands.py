@@ -193,11 +193,56 @@ class CommandRegistry:
 
         def model_cmd(args: list[str]) -> None:
             s = r.state
-            if args:
-                r.print_error("model switching not wired", "Only status is available in this session")
+            from rich.table import Table as RichTable
+
+            try:
+                from providers.model_registry import MODEL_CATALOG, ModelRegistry
+                registry = ModelRegistry.instance()
+            except Exception:
+                r.print(f"Model    : {s.model}")
+                r.print(f"Tokens   : {s.tokens_used}/{s.tokens_limit}")
                 return
-            r.print(f"Model    : {s.model}")
-            r.print(f"Tokens   : {s.tokens_used}/{s.tokens_limit}")
+
+            if args and args[0] == "status":
+                status = registry.get_status()
+                lines = [
+                    f"Active : {status['active_model'] or 'auto'}",
+                    f"Auto   : {status['auto_mode']}",
+                    f"Cascade: {status['cascade_mode']}",
+                ]
+                if status.get("cascade_mode"):
+                    lines += [
+                        f"  Router: {status['cascade_router']}",
+                        f"  Worker: {status['cascade_worker']}",
+                        f"  Heavy : {status['cascade_heavy']}",
+                        f"  Deterministic: {status.get('deterministic_count', 0)}x",
+                    ]
+                for line_ in lines:
+                    r.print(line_)
+                return
+
+            active = registry.active_model or str(getattr(s, "model", "") or "")
+            table = RichTable(title="Available Models")
+            table.add_column("Model", style="bold")
+            table.add_column("Size")
+            table.add_column("Speed")
+            table.add_column("Strengths")
+            table.add_column("Description", max_width=40)
+            for m in MODEL_CATALOG:
+                is_active = m.name == active
+                marker = " ●" if is_active else ""
+                style = "bold cyan" if is_active else None
+                table.add_row(
+                    f"{m.name}{marker}",
+                    f"{m.size_gb:.1f} GB",
+                    m.speed,
+                    ", ".join(st.value for st in m.strengths),
+                    m.description,
+                    style=style,
+                )
+            r.print(table)
+            mode_str = "auto" if registry.auto_mode else f"locked to {registry.active_model}"
+            r.print(f"Mode: {mode_str}")
 
         def context_cmd(args: list[str]) -> None:
             if self.bridge is None:
@@ -296,6 +341,96 @@ class CommandRegistry:
                 pass
             r.print(table)
 
+        def skills_cmd(args: list[str]) -> None:
+            from rich.table import Table as RichTable
+
+            try:
+                from skills import build_default_skill_registry
+                from tools import build_default_registry
+            except Exception:
+                r.print_error("skills backend not available")
+                return
+            skill_reg = build_default_skill_registry()
+            tool_reg = build_default_registry()
+            table = RichTable(title="JARVIS Skills")
+            table.add_column("Skill", style="bold")
+            table.add_column("Tags")
+            table.add_column("Risk")
+            table.add_column("Description", max_width=50)
+            for s in sorted(skill_reg.values(), key=lambda x: x.name):
+                tags_str = ", ".join((getattr(s, "tags", None) or [])[:3])
+                risk_raw = str(getattr(s, "risk", "") or "")
+                risk_str = ("high" if "high" in risk_raw
+                            else "medium" if "medium" in risk_raw else "low")
+                table.add_row(s.name, tags_str, risk_str, s.description[:50])
+            r.print(table)
+            r.print(f"{len(skill_reg)} skills, {len(tool_reg.list())} tools")
+
+        def plugins_cmd(args: list[str]) -> None:
+            from rich.table import Table as RichTable
+
+            try:
+                from core.plugin_loader import PluginLoader, list_plugins
+                pl = PluginLoader()
+                loaded = pl.discover_and_load()
+            except Exception:
+                r.print_error("plugins backend not available")
+                return
+            table = RichTable(title="JARVIS Plugins")
+            table.add_column("Plugin", style="bold")
+            table.add_column("Description")
+            for name, reg in sorted(list_plugins().items()):
+                table.add_row(name, (reg.description or ""))
+            r.print(table)
+            r.print(f"{len(loaded)} plugins loaded")
+
+        def providers_cmd(args: list[str]) -> None:
+            from rich.table import Table as RichTable
+            from rich.text import Text
+
+            loop = self.bridge.loop if self.bridge else None
+            if loop is None or not getattr(loop, "router", None):
+                r.print_error("provider backend not connected")
+                return
+            status = getattr(loop.router, "status", {})
+            table = RichTable(title="Provider Status")
+            table.add_column("Provider", style="bold")
+            table.add_column("Model")
+            table.add_column("Status")
+            table.add_column("Latency")
+            table.add_column("Errors")
+            for name, info in status.items():
+                available = bool(info.get("available", False))
+                status_text = "online" if available else "offline"
+                status_style = "green" if available else "red"
+                latency = info.get("latency_ms", 0)
+                table.add_row(
+                    name,
+                    str(info.get("model", "-"))[:30],
+                    Text(status_text, style=status_style),
+                    f"{latency:.0f}ms" if latency else "-",
+                    str(info.get("errors", 0) or 0),
+                )
+            r.print(table)
+
+        def history_cmd(args: list[str]) -> None:
+            try:
+                from core.event_store import get_event_store
+                traces = get_event_store().recent_traces(limit=10)
+            except Exception:
+                r.print_error("history backend not available")
+                return
+            if not traces:
+                r.print("No task history yet")
+                return
+            r.print("RECENT TASKS")
+            for trace in traces:
+                ts = __import__("time").strftime(
+                    "%Y-%m-%d %H:%M:%S",
+                    __import__("time").localtime(trace["timestamp"]),
+                )
+                r.print(f"  {trace['trace_id']}  {ts}")
+
         def not_connected(name: str) -> Callable[[list[str]], None]:
             def _h(args: list[str]) -> None:
                 r.print_error(f"{name} backend not connected", "Wire the real component first.")
@@ -315,12 +450,17 @@ class CommandRegistry:
         self._register(Command("audit", "Open audit workspace", audit_cmd))
         self._register(Command("code", "Open code workspace", code_cmd))
         self._register(Command("exit", "Exit JARVIS", exit_cmd, ["quit", "q"]))
-        self._register(Command("model", "Show model + token status", model_cmd))
+        self._register(Command("model", "Show models + token status (/model status)", model_cmd))
+        self._register(Command("models", "List available models", model_cmd))
         self._register(Command("context", "Show context window", context_cmd))
         self._register(Command("sessions", "List recent tasks", sessions_cmd))
         self._register(Command("resume", "Resume the last goal", resume_cmd))
         self._register(Command("permissions", "Show permission/mode status", status_cmd, ["perms"]))
         self._register(Command("debug", "Show full runtime diagnostics", debug_cmd))
+        self._register(Command("skills", "Show all skills and tool coverage", skills_cmd))
+        self._register(Command("plugins", "Show discovered plugins", plugins_cmd))
+        self._register(Command("providers", "Show provider status", providers_cmd))
+        self._register(Command("history", "Show recent task history", history_cmd))
 
     def dispatch(self, line: str) -> bool:
         line = line.strip()
