@@ -70,6 +70,8 @@ class PermissionEngine:
             reason = f"Tool '{tool.name}' is not allowed in {self.mode} mode"
             self.logger.record(trace_id, events.PERMISSION_CHECKED, {
                 "tool": tool.name, "allowed": False, "reason": reason,
+                "risk": getattr(tool, "risk", "safe"),
+                "is_destructive": bool(getattr(tool, "is_destructive", False)),
             })
             return False, reason
 
@@ -78,5 +80,7 @@ class PermissionEngine:
         )
         self.logger.record(trace_id, events.PERMISSION_CHECKED, {
             "tool": tool.name, "allowed": allowed, "reason": reason or "",
+            "risk": getattr(tool, "risk", "safe"),
+            "is_destructive": bool(getattr(tool, "is_destructive", False)),
         })
         return allowed, reason

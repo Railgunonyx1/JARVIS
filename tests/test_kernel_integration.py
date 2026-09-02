@@ -405,6 +405,27 @@ class TestToolExecutionService:
         assert result.failure_class == FailureClass.TIMEOUT
         assert "timed out" in result.error
 
+    def test_permission_checked_event_carries_risk_metadata(self):
+        from core.agent.permissions import PermissionEngine
+
+        class RecordingLogger(StubLogger):
+            def __init__(self):
+                self.events = []
+            def record(self, trace_id, name, data=None, **kw):
+                self.events.append((name, dict(data or {})))
+
+        logger = RecordingLogger()
+        perm = PermissionEngine(logger, mode="agent")
+        tool = build_default_registry().get("shell.execute")
+        assert tool is not None
+        allowed, _reason = asyncio.run(perm.check(tool, {"command": "echo hi"}, "trace1"))
+        assert allowed
+        checked = [p for (n, p) in logger.events if n == "permission.checked"]
+        assert checked, "expected at least one permission.checked event"
+        last = checked[-1]
+        assert last["risk"] == "critical"
+        assert last["is_destructive"] is True
+
 
 # ── AgentLoop + Harness integration ────────────────────────────────────
 
