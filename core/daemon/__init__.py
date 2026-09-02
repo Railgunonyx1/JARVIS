@@ -24,10 +24,6 @@ from core.daemon.events import _emit, BusEvent, SCHEMA_VERSION, make_session_id,
 # Model Gateway (P0-2) — single model selection authority
 from core.model_gateway import ModelGateway
 
-# Import prefix cache plugin (P0 optimization)
-from core.daemon.plugins.prefix_cache import get_prefix_cache, PrefixCachePlugin
-from core.tool_execution_service import ToolExecutionService
-
 # Import skill registry (P1 optimization - Cordis microkernel adaptation).
 # Backed by the manifest-driven skills/registry (skills/manifests/*.json).
 from skills.registry import SkillRegistry, SkillMetadata, SkillContract
@@ -72,7 +68,10 @@ class JARVISDaemon:
         # enabling reliable event-to-session association across the event bus.
         self._session_id: str = make_session_id()
 
-        # Initialize prefix cache plugin (P0 optimization)
+        # Initialize prefix cache plugin (P0 optimization).
+        # Imported lazily so `import core.daemon` does not require optional
+        # modules at package-load time.
+        from core.daemon.plugins.prefix_cache import get_prefix_cache, PrefixCachePlugin
         self.prefix_cache: PrefixCachePlugin = get_prefix_cache()
 
         # Initialize skill registry (P1 optimization)
@@ -102,6 +101,7 @@ class JARVISDaemon:
         self._session_affinity_lock = threading.Lock()
 
         # Initialize ToolExecutionService — the single boundary for all tool execution
+        from core.agent.tool_service import ToolExecutionService
         self.tool_execution_service: ToolExecutionService = ToolExecutionService(
             skill_registry=self.skill_registry,
             skill_dirs=skill_dirs,
@@ -622,4 +622,8 @@ def reset_daemon() -> None:
     """Reset the singleton daemon instance (for testing)."""
     global _daemon_instance
     _daemon_instance = None
-    reset_prefix_cache()
+    try:
+        from core.daemon.plugins.prefix_cache import reset_prefix_cache
+        reset_prefix_cache()
+    except ModuleNotFoundError:
+        pass
