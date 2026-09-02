@@ -328,7 +328,7 @@ class AgentLoop:
                     session_id=session_id or None,
                     confidence=classified.confidence,
                 )
-                
+
                 # Confidence-based cascade: if confidence is low or profile is None,
                 # fall back to less expensive models
                 if profile is None or classified.confidence < 0.5:
@@ -347,7 +347,7 @@ class AgentLoop:
                         session_id=session_id or None,
                         confidence=max(classified.confidence, 0.3),  # minimum threshold
                     )
-                
+
                 # If still no profile, try the most lightweight model available
                 if profile is None:
                     lightweight_requirements = set()
@@ -454,20 +454,29 @@ class AgentLoop:
             _progress_factor = (_model_iterations - state.iteration + 1) / _model_iterations
             _adaptive_tool_limit = max(1, int(_adaptive_tool_limit * _progress_factor))
 
+            # Verification retry budget — incremented on each failed verification pass.
+            _verification_retries = 0
+
             for iteration in range(1, _model_iterations + 1):
                 # Hard wall-time timeout — prevents infinite tool-call loops
                 elapsed = time.monotonic() - _run_start
                 if elapsed > _budgets["total"]:
+                    from core.agent.state import FailureClass
+                    error = f"timeout after {elapsed:.0f}s"
+                    state.errors.append(error)
+                    state.failure_class = pick_worst_failure(
+                        state.failure_class, FailureClass.TIMEOUT
+                    )
                     self._emit("task.failed", {
                         "goal": goal[:200],
-                        "error": f"timeout after {elapsed:.0f}s",
+                        "error": error,
                     }, trace_id)
                     state.transition(TaskStatus.FAILED)
                     final = self._extract_last_assistant_text(messages)
                     self._finish_observation(False, final or "", state, iteration)
                     return AgentResult(
                         success=False, response=final, trace_id=trace_id,
-                        state=state, error=f"timeout after {elapsed:.0f}s",
+                        state=state, error=error,
                         observation=self._result_observation(state),
                         perf=self._end_perf(tracer, root),
                     )
@@ -540,13 +549,17 @@ class AgentLoop:
                     else:
                         final = self._strip_thinking(response.text).strip()
                         if not final:
+                            from core.agent.state import FailureClass
                             if response.finish_reason == "timeout":
                                 error = f"LLM call timed out after {_call_timeout:.0f}s"
+                                fc = FailureClass.TIMEOUT
                             else:
                                 error = "provider returned an empty response"
                                 if response.finish_reason and response.finish_reason != "stop":
                                     error += f" (finish_reason={response.finish_reason})"
+                                fc = FailureClass.MODEL_FAILURE
                             state.errors.append(error)
+                            state.failure_class = pick_worst_failure(state.failure_class, fc)
                             self.logger.record(trace_id, events.TASK_FAILED, {
                                 "goal": goal[:200], "error": error,
                             })
@@ -595,10 +608,13 @@ class AgentLoop:
                             ver_report = await self._run_verification(trace_id)
                             if not ver_report.all_passed:
                                 _verification_retries += 1
-                                if _verification_retries > _max_verification_retries:
+                                if _verification_retries > self._max_verification_retries:
                                     self._emit("task.failed", {
                                         "goal": goal[:200],
-                                        "error": f"verification failed after {_max_verification_retries} recovery attempts",
+                                        "error": (
+                                            f"verification failed after "
+                                            f"{self._max_verification_retries} recovery attempts"
+                                        ),
                                     }, trace_id)
                                     state.transition(TaskStatus.FAILED)
                                     self._finish_observation(False, "", state, iteration)
@@ -712,6 +728,29 @@ class AgentLoop:
 
                 state.transition(TaskStatus.OBSERVING)
                 state.transition(TaskStatus.EXECUTING)
+        except asyncio.CancelledError:
+            # External cancellation (e.g. client disconnect, task abort). Classify
+            # deterministically as CANCELLED, mark state, then re-raise so the
+            # cancellation semantics are preserved for the caller.
+            from core.agent.state import FailureClass
+            from core.agent.state import TerminalReason as _TR
+            state.failure_class = pick_worst_failure(
+                state.failure_class, FailureClass.CANCELLED
+            )
+            state.terminal_reason = _TR.CANCELLED
+            state.errors.append("task cancelled while running")
+            self.logger.record(trace_id, events.TASK_FAILED, {
+                "goal": goal[:200], "error": "cancelled",
+            })
+            self._emit("task.failed", {
+                "goal": goal[:200], "error": "cancelled", "failure_class": "cancelled",
+            }, trace_id)
+            try:
+                state.transition(TaskStatus.CANCELLED)
+            except ValueError:
+                pass
+            self._finish_observation(False, "", state, state.iteration)
+            raise
         except Exception as e:
             error = str(e)[:500]
             state.errors.append(error)

@@ -501,6 +501,23 @@ class TestFailureClassification:
         s.transition(TaskStatus.EXECUTING)
         assert s.status == TaskStatus.EXECUTING
 
+    def test_state_cancel_from_executing(self):
+        from core.agent.state import AgentState, TaskStatus
+        s = AgentState(task_id="t", goal="g")
+        s.transition(TaskStatus.CLASSIFYING)
+        s.transition(TaskStatus.EXECUTING)
+        s.transition(TaskStatus.CANCELLED)
+        assert s.status == TaskStatus.CANCELLED
+        assert s.failure_class is None  # set explicitly by the loop's CancelledError handler
+
+    def test_timeout_failure_class_is_recorded(self):
+        from core.agent.state import AgentState, FailureClass, pick_worst_failure
+        s = AgentState(task_id="t", goal="g")
+        s.failure_class = pick_worst_failure(s.failure_class, FailureClass.TIMEOUT)
+        assert s.failure_class == FailureClass.TIMEOUT
+        d = s.to_dict()
+        assert d["failure_class"] == "timeout"
+
     def test_state_dict_includes_failure_class(self):
         from core.agent.state import AgentState, FailureClass
         s = AgentState(task_id="t", goal="g")
