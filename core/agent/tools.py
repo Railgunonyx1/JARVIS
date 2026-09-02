@@ -106,10 +106,13 @@ class AgentToolExecutor:
                 # Cooperative tools can check this to stop early.
                 cancel_event = threading.Event()
                 self._active_cancellations[name] = cancel_event
+                # Inner thread safety margin: up to 5s under the service timeout
+                # so the outer asyncio.wait_for (ToolExecutionService) fires first.
+                inner_timeout = max(0.5, float(getattr(tool, "timeout_seconds", 60.0)) - 5.0)
                 try:
                     raw = await asyncio.wait_for(
                         asyncio.to_thread(self._run_with_cancel, tool.handler, arguments, cancel_event, name),
-                        timeout=55.0,  # 5s less than the outer 60s timeout
+                        timeout=inner_timeout,
                     )
                 except TimeoutError:
                     # Thread is still running — mark as abandoned

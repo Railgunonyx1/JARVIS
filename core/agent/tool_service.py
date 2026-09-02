@@ -133,8 +133,8 @@ class ToolExecutionService:
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
 
-        # Execute (with timeout to prevent hangs)
-        _tool_timeout = 60.0
+        # Execute (with a per-tool timeout from declarative metadata)
+        _tool_timeout = max(1.0, float(getattr(tool, "timeout_seconds", 60.0)))
         try:
             result = await asyncio.wait_for(
                 self._executor.execute(

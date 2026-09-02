@@ -11,6 +11,7 @@ import tempfile
 import time
 
 from core.agent.loop import AgentLoop
+from core.agent.state import FailureClass
 from core.agent.tool_service import ToolExecutionResult, ToolExecutionService
 from core.agent.verification import VerificationEngine
 from core.harness import Harness, HarnessConfig, HarnessSelector, HarnessType
@@ -382,6 +383,27 @@ class TestToolExecutionService:
         for p in (tmp1, tmp2):
             if os.path.exists(p):
                 os.remove(p)
+
+    def test_execute_respects_declarative_timeout(self):
+        from tools.schema import Tool
+
+        async def slow_handler(_):
+            await asyncio.sleep(30.0)
+            return {"success": True, "output": "late"}
+
+        from tools.registry import ToolRegistry
+        reg = ToolRegistry()
+        reg.register(Tool(
+            name="test.slow", description="slow", parameters={},
+            permission="filesystem.read", handler=slow_handler,
+            category="testing", timeout_seconds=0.2,
+        ))
+        svc = ToolExecutionService(registry=reg)
+        call = ToolCall(name="test.slow", arguments={}, id="t_slow")
+        result = asyncio.run(svc.execute_tool(call))
+        assert not result.success
+        assert result.failure_class == FailureClass.TIMEOUT
+        assert "timed out" in result.error
 
 
 # ── AgentLoop + Harness integration ────────────────────────────────────
