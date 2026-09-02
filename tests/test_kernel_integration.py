@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+import time
 
 from core.agent.loop import AgentLoop
 from core.agent.tool_service import ToolExecutionResult, ToolExecutionService
@@ -237,6 +238,52 @@ class TestModelGateway:
             gw.record_failure("provider-a")
         best = gw.select(requirements={Capability.CODING})
         assert best is None  # provider in cooldown
+
+    def test_provider_recovers_after_cooldown_expires(self):
+        gw = ModelGateway()
+        gw.register_model(ModelProfile(
+            name="model-a", provider="provider-a",
+            capabilities=(Capability.CODING,),
+        ))
+        for _ in range(5):
+            gw.record_failure("provider-a")
+        h = gw.get_health("provider-a")
+        assert not h.healthy and h.is_in_cooldown
+        # Fast-forward past the cooldown window.
+        h.cooldown_until = time.time() - 1
+        best = gw.select(requirements={Capability.CODING})
+        assert best is not None, "provider must become eligible again after cooldown"
+        assert best.provider == "provider-a"
+        assert gw.get_health("provider-a").healthy
+
+    def test_confidence_stepping_respects_explicit_requirements(self):
+        gw = ModelGateway()
+        gw.register_model(ModelProfile(
+            name="fast", provider="groq",
+            capabilities=(Capability.FAST, Capability.CHEAP),
+        ))
+        gw.register_model(ModelProfile(
+            name="smart", provider="gemini",
+            capabilities=(Capability.CODING, Capability.REASONING),
+        ))
+        # High confidence normally prefers FAST/CHEAP, but the task explicitly
+        # requires CODING -- the fast-only model must never be returned.
+        best = gw.select(requirements={Capability.CODING}, confidence=0.95)
+        assert best is not None
+        assert Capability.CODING in best.capabilities
+
+    def test_exclude_providers_is_respected_in_confidence_step(self):
+        gw = ModelGateway()
+        gw.register_model(ModelProfile(
+            name="a", provider="pa", capabilities=(Capability.CODING, Capability.FAST),
+        ))
+        gw.register_model(ModelProfile(
+            name="b", provider="pb", capabilities=(Capability.CODING, Capability.FAST),
+        ))
+        best = gw.select(requirements={Capability.CODING}, confidence=0.95,
+                         exclude_providers={"pa"})
+        assert best is not None
+        assert best.provider == "pb"
 
     def test_session_affinity(self):
         gw = ModelGateway()

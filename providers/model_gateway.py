@@ -122,7 +122,21 @@ class ModelGateway:
     def get_health(self, provider: str) -> ProviderHealth:
         if provider not in self._health:
             self._health[provider] = ProviderHealth()
-        return self._health[provider]
+        h = self._health[provider]
+        # Re-eligibility: once the cooldown window has passed, a provider
+        # that was marked unhealthy should be eligible again. The sticky
+        # `healthy` flag would otherwise exclude it forever (it can never
+        # be selected to record a success and recover).
+        if not h.healthy and not h.is_in_cooldown:
+            h.healthy = True
+            h.consecutive_failures = 0
+        return h
+
+    def _is_provider_eligible(self, provider: str, exclude: set[str]) -> bool:
+        if provider in exclude:
+            return False
+        h = self.get_health(provider)
+        return h.healthy and not h.is_in_cooldown
 
     def record_success(self, provider: str, latency_ms: float) -> None:
         h = self.get_health(provider)
@@ -184,27 +198,26 @@ class ModelGateway:
             else:
                 if preferred in self._models:
                     prof = self._models[preferred]
-                    h = self.get_health(prof.provider)
-                    if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
+                    if self._is_provider_eligible(prof.provider, exclude):
                         return prof
 
         # 2. Named combo
         if combo_name and combo_name in self._combos:
             combo = self._combos[combo_name]
             for prof in combo.models:
-                h = self.get_health(prof.provider)
-                if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
-                    if self._matches(prof, requirements):
-                        if session_id:
-                            self._session_affinity[session_id] = (f"{prof.provider}/{prof.name}", time.time())
-                        return prof
-            # Fallback: any healthy model in the combo
-            for prof in combo.models:
-                h = self.get_health(prof.provider)
-                if h.healthy and not h.is_in_cooldown and prof.provider not in exclude:
+                if not self._is_provider_eligible(prof.provider, exclude):
+                    continue
+                if self._matches(prof, requirements):
                     if session_id:
                         self._session_affinity[session_id] = (f"{prof.provider}/{prof.name}", time.time())
                     return prof
+            # Fallback: any eligible model in the combo
+            for prof in combo.models:
+                if not self._is_provider_eligible(prof.provider, exclude):
+                    continue
+                if session_id:
+                    self._session_affinity[session_id] = (f"{prof.provider}/{prof.name}", time.time())
+                return prof
 
         # 3. Confidence-based model stepping
         if confidence is not None:
@@ -216,12 +229,16 @@ class ModelGateway:
                 prefer_caps = {Capability.REASONING}
             candidates_conf = []
             for key, prof in self._models.items():
-                h = self.get_health(prof.provider)
-                if not h.healthy or h.is_in_cooldown or prof.provider in exclude:
+                if not self._is_provider_eligible(prof.provider, exclude):
+                    continue
+                # Explicit task requirements are always binding; never return
+                # a model that lacks a required capability just because it is
+                # cheaper/faster for the current confidence level.
+                if requirements and not self._matches(prof, requirements):
                     continue
                 if prefer_caps and not self._matches(prof, prefer_caps):
                     continue
-                score = self._score(prof, h, prefer_caps or requirements)
+                score = self._score(prof, self.get_health(prof.provider), prefer_caps or requirements)
                 candidates_conf.append((score, prof))
             if candidates_conf:
                 candidates_conf.sort(key=lambda x: x[0], reverse=True)
@@ -233,12 +250,11 @@ class ModelGateway:
         # 4. Score all models
         candidates = []
         for key, prof in self._models.items():
-            h = self.get_health(prof.provider)
-            if not h.healthy or h.is_in_cooldown or prof.provider in exclude:
+            if not self._is_provider_eligible(prof.provider, exclude):
                 continue
             if requirements and not self._matches(prof, requirements):
                 continue
-            score = self._score(prof, h, requirements)
+            score = self._score(prof, self.get_health(prof.provider), requirements)
             candidates.append((score, prof))
 
         if not candidates:
