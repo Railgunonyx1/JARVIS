@@ -6,6 +6,7 @@ wrappers live in core/agent/tools.py; individual tool handlers in tools/*.
 
 from __future__ import annotations
 
+from tools.classification import classify_tool
 from tools.registry import ToolRegistry
 from tools.schema import Tool, ToolResult, tool_result
 
@@ -93,7 +94,7 @@ def build_default_registry() -> ToolRegistry:
     )
 
     registry = ToolRegistry()
-    registry.register_many([
+    registry.register_many([classify_tool(t) for t in [
         Tool(
             name="filesystem.write",
             description=(
@@ -1290,7 +1291,7 @@ def build_default_registry() -> ToolRegistry:
             ),
             category="audit",
         ),
-    ])
+    ]])
     return registry
 
 

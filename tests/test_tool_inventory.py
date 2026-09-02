@@ -183,3 +183,107 @@ def test_no_duplicate_tool_names():
     names = [t.name for t in registry.list()]
     duplicates = [n for n in names if names.count(n) > 1]
     assert not duplicates, f"Duplicate tool names: {set(duplicates)}"
+
+
+# ---------------------------------------------------------------------------
+# Declarative metadata (risk, capabilities, timeout, destructive, side effects)
+# ---------------------------------------------------------------------------
+
+RISK_LEVELS = {"safe", "low", "medium", "high", "critical"}
+
+
+def test_every_tool_has_metadata():
+    """Every registered tool must expose all declarative metadata fields."""
+    registry = build_default_registry()
+    for t in registry.list():
+        assert t.risk in RISK_LEVELS, f"{t.name}: invalid risk {t.risk!r}"
+        assert t.timeout_seconds > 0, f"{t.name}: timeout must be positive"
+        assert isinstance(t.is_destructive, bool), f"{t.name}: is_destructive must be bool"
+        assert isinstance(t.capabilities, tuple), f"{t.name}: capabilities must be tuple"
+        assert isinstance(t.side_effects, tuple), f"{t.name}: side_effects must be tuple"
+        assert t.max_output_chars > 0, f"{t.name}: max_output_chars must be positive"
+
+
+def test_destructive_tools_are_high_risk_or_shell():
+    """A tool flagged destructive should justify it via risk or shell permission."""
+    from tools.classification import _DESTRUCTIVE_PERMISSIONS
+
+    registry = build_default_registry()
+    for t in registry.list():
+        if t.is_destructive:
+            assert t.risk in ("high", "critical") or t.permission in _DESTRUCTIVE_PERMISSIONS, \
+                f"{t.name}: destructive but risk={t.risk}"
+
+
+def test_dangerous_risk_set_is_destructive():
+    """The P0 DANGEROUS_TOOLS set must all be flagged destructive."""
+    registry = build_default_registry()
+
+    def by_name(n):
+        return registry.get(n)
+
+    for n in DANGEROUS_TOOLS:
+        t = by_name(n)
+        assert t is not None and t.is_destructive, f"{n} should be flagged destructive"
+
+
+def test_safe_category_tools_not_destructive():
+    """Read-only tools must never be flagged destructive."""
+    registry = build_default_registry()
+    for n in READ_ONLY_TOOLS:
+        t = registry.get(n)
+        assert t is not None and not t.is_destructive, f"{n} should be non-destructive"
+
+
+def test_classify_tool_preserves_explicit_metadata():
+    """classify_tool must not overwrite explicitly-set metadata."""
+    from tools.classification import classify_tool
+    from tools.schema import Tool
+
+    async def noop(_):
+        return None
+
+    t = Tool(
+        name="custom.write",
+        description="x",
+        parameters={},
+        permission="filesystem.write",
+        handler=noop,
+        risk="low",
+        capabilities=("custom",),
+        timeout_seconds=10.0,
+        is_destructive=False,
+        side_effects=("fs_write",),
+    )
+    result = classify_tool(t)
+    assert result.risk == "low"
+    assert result.capabilities == ("custom",)
+    assert result.timeout_seconds == 10.0
+    assert result.is_destructive is False
+
+
+def test_classify_tool_fills_defaults():
+    """classify_tool fills unset metadata for a bare tool."""
+    from tools.classification import classify_tool
+    from tools.schema import Tool
+
+    async def noop(_):
+        return None
+
+    t = classify_tool(Tool(
+        name="web.search", description="x", parameters={},
+        permission="web.search", handler=noop, category="web",
+    ))
+    assert t.risk == "low"
+    assert t.timeout_seconds == 30.0
+    assert t.is_destructive is False
+
+
+def test_to_dict_exposes_metadata():
+    """to_dict serialization includes the declarative metadata keys."""
+    from tools import build_default_registry
+
+    tool = build_default_registry().get("shell.execute")
+    d = tool.to_dict()
+    for key in ("risk", "capabilities", "timeout_seconds", "is_destructive", "side_effects", "max_output_chars"):
+        assert key in d, f"to_dict missing {key}"

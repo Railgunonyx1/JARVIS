@@ -21,7 +21,14 @@ class ToolResult:
 
 @dataclass
 class Tool:
-    """A capability exposed to the agent, described by a JSON schema."""
+    """A capability exposed to the agent, described by a JSON schema.
+
+    ``risk``, ``capabilities``, ``timeout_seconds``, ``is_destructive`` and
+    ``side_effects`` are declarative metadata used by the harness, permission
+    engine, verification gate, and tool executor. They default to safe/empty
+    values; callers can override them, or derive them with
+    :func:`tools.classification.classify_tool`.
+    """
 
     name: str
     description: str
@@ -29,6 +36,12 @@ class Tool:
     permission: str
     handler: ToolHandler
     category: str = ""
+    capabilities: tuple[str, ...] = ()
+    risk: str = "safe"
+    timeout_seconds: float = 60.0
+    is_destructive: bool = False
+    side_effects: tuple[str, ...] = ()
+    max_output_chars: int = 8000
 
     def to_openai(self) -> dict[str, Any]:
         """Serialize to an OpenAI-style function tool definition."""
@@ -48,6 +61,12 @@ class Tool:
             "parameters": self.parameters,
             "permission": self.permission,
             "category": self.category,
+            "risk": self.risk,
+            "capabilities": list(self.capabilities),
+            "timeout_seconds": self.timeout_seconds,
+            "is_destructive": self.is_destructive,
+            "side_effects": list(self.side_effects),
+            "max_output_chars": self.max_output_chars,
         }
 
 
