@@ -238,6 +238,11 @@ class AgentLoop:
             self.observer.start(trace_id, goal)
             self._emit("task.started", {"goal": goal[:200], "session_id": session_id}, trace_id)
             state = AgentState(task_id=trace_id, goal=goal)
+            # Conversation messages for the model. Seed from any pre-loaded
+            # history in state.messages, otherwise start with the user goal.
+            messages = list(state.messages)
+            if not messages:
+                messages = [{"role": "user", "content": goal}]
             # Reset token usage tracking for new session
             self._token_usage = {"system": 0, "memory": 0, "files": 0, "messages": 0, "response": 0}
             self._last_budget_check = time.time()

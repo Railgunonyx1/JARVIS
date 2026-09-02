@@ -331,6 +331,34 @@ class TestAgentLoopHarnessIntegration:
         result = asyncio.run(loop.run("implement feature"))
         assert result.success
 
+    def test_instant_tool_dispatch_binds_messages(self):
+        # Regression: the INSTANT tool-dispatch path referenced the local
+        # `messages` list before it was ever initialized, raising
+        # NameError. It must be bound (seeded from state.messages/goal)
+        # so append_to_messages receives a real list.
+        seen = {}
+
+        class StubToolService:
+            async def execute_tool(self, call, trace_id=None, session_id=None,
+                                   append_to_messages=None, state=None):
+                seen["append_to_messages"] = append_to_messages
+                return ToolExecutionResult(
+                    tool_name=call.name, call_id=call.id, success=True,
+                    output="listed", failure_class=None,
+                )
+
+        loop = AgentLoop(
+            router=FakeRouter([_resp("done.")]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            tool_service=StubToolService(),
+        )
+        result = asyncio.run(loop.run("list the files"))
+        assert result.success
+        assert isinstance(seen["append_to_messages"], list)
+        assert seen["append_to_messages"][0]["role"] == "user"
+
 
 # ── VerificationEngine tests ──────────────────────────────────────────
 
