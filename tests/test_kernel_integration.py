@@ -426,6 +426,50 @@ class TestToolExecutionService:
         assert last["risk"] == "critical"
         assert last["is_destructive"] is True
 
+    def test_risk_gate_optin_confirms_destructive_tool(self):
+        from core.agent.permissions import PermissionEngine
+
+        def deny(_tool, _params):
+            return "deny"
+
+        perm = PermissionEngine(StubLogger(), mode="agent", confirmation_handler=deny)
+        tool = build_default_registry().get("shell.execute")
+        allowed, reason = asyncio.run(perm.check(tool, {"command": "rm -rf /"}, "trace_risk"))
+        assert not allowed
+        assert "denied" in reason.lower()
+
+    def test_risk_gate_optin_run_allows_destructive_tool(self):
+        from core.agent.permissions import PermissionEngine
+
+        def run(_tool, _params):
+            return "run"
+
+        perm = PermissionEngine(StubLogger(), mode="agent", confirmation_handler=run)
+        tool = build_default_registry().get("shell.execute")
+        allowed, _reason = asyncio.run(perm.check(tool, {"command": "git status"}, "trace_gate"))
+        assert allowed
+
+    def test_risk_gate_no_handler_is_noop(self):
+        from core.agent.permissions import PermissionEngine
+
+        perm = PermissionEngine(StubLogger(), mode="agent")
+        tool = build_default_registry().get("shell.execute")
+        allowed, _reason = asyncio.run(perm.check(tool, {"command": "echo hi"}, "trace_nohandler"))
+        assert allowed
+
+    def test_risk_gate_skips_non_destructive_tool(self):
+        from core.agent.permissions import PermissionEngine
+
+        def deny(_tool, _params):
+            return "deny"
+
+        perm = PermissionEngine(StubLogger(), mode="agent", confirmation_handler=deny)
+        tool = build_default_registry().get("filesystem.read")
+        assert tool is not None
+        assert tool.is_destructive is False
+        allowed, _reason = asyncio.run(perm.check(tool, {"path": "x"}, "trace_safe"))
+        assert allowed
+
 
 # ── AgentLoop + Harness integration ────────────────────────────────────
 
