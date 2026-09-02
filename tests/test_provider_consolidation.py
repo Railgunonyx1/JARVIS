@@ -293,6 +293,18 @@ class TestClassifyProviderError:
         from providers.types import classify_provider_error, ErrorKind
         assert classify_provider_error("resource_exhausted") == ErrorKind.QUOTA_EXHAUSTED
 
+    def test_context_window_substrings(self):
+        from providers.types import classify_provider_error, ErrorKind
+        assert classify_provider_error(
+            "This model's maximum context length is 128000 tokens."
+        ) == ErrorKind.CONTEXT_WINDOW
+        assert classify_provider_error(
+            "context_length_exceeded: reduce the length of the messages"
+        ) == ErrorKind.CONTEXT_WINDOW
+        assert classify_provider_error(
+            "maximum context length exceeded", 400
+        ) == ErrorKind.CONTEXT_WINDOW
+
     def test_auth_errors(self):
         from providers.types import classify_provider_error, ErrorKind
         assert classify_provider_error("unauthorized", 401) == ErrorKind.AUTH

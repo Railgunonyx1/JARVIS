@@ -72,6 +72,27 @@ _FAILURE_PRECEDENCE: dict[FailureClass, int] = {
 }
 
 
+_CONTEXT_OVERFLOW_MARKERS: tuple[str, ...] = (
+    "maximum context length",
+    "context length is",
+    "context_length_exceeded",
+    "max context length",
+    "max_model_len",
+    "ctx length",
+    "reduce the length of the messages",
+    "input is too long",
+    "token limit exceeded",
+    "exceeds the maximum",
+    "reduce input",
+)
+
+
+def is_context_overflow_error(error: str) -> bool:
+    """Return True if an error string indicates the model context window was exceeded."""
+    err = error.lower()
+    return any(marker in err for marker in _CONTEXT_OVERFLOW_MARKERS)
+
+
 def classify_failure(error: str, *, is_timeout: bool = False,
                      is_permission: bool = False, is_verification: bool = False,
                      is_cancelled: bool = False, is_context_overflow: bool = False,
@@ -86,7 +107,11 @@ def classify_failure(error: str, *, is_timeout: bool = False,
     if is_context_overflow:
         return FailureClass.CONTEXT_OVERFLOW
     if is_provider:
+        if is_context_overflow_error(error):
+            return FailureClass.CONTEXT_OVERFLOW
         return FailureClass.PROVIDER_FAILURE
+    if is_context_overflow_error(error):
+        return FailureClass.CONTEXT_OVERFLOW
     err = error.lower()
     if "not registered" in err or "unknown tool" in err:
         return FailureClass.MALFORMED_TOOL

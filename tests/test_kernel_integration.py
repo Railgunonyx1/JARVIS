@@ -424,6 +424,30 @@ class TestFailureClassification:
         fc = classify_failure("too many tokens", is_context_overflow=True)
         assert fc == FailureClass.CONTEXT_OVERFLOW
 
+    def test_classify_context_overflow_from_error_string(self):
+        from core.agent.state import FailureClass, classify_failure
+        cases = [
+            "This model's maximum context length is 128000 tokens.",
+            "context_length_exceeded: reduce the length of the messages",
+            "Prompt is too long and exceeds the maximum context window",
+            "The input is too long; please reduce it and retry.",
+        ]
+        for msg in cases:
+            fc = classify_failure(msg)
+            assert fc == FailureClass.CONTEXT_OVERFLOW, f"{msg!r} -> {fc}"
+
+    def test_classify_context_overflow_beats_provider_failure(self):
+        from core.agent.state import FailureClass, classify_failure, is_context_overflow_error
+        assert is_context_overflow_error(
+            "This model's maximum context length is 128000 tokens."
+        )
+        # Through the explicit flag path:
+        fc = classify_failure(
+            "This model's maximum context length is 128000 tokens.",
+            is_provider=True,
+        )
+        assert fc == FailureClass.CONTEXT_OVERFLOW
+
     def test_precedence_cancelled_wins(self):
         from core.agent.state import FailureClass, classify_failure
         fc = classify_failure("error", is_cancelled=True, is_timeout=True)

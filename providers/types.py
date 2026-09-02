@@ -69,7 +69,27 @@ class ErrorKind(StrEnum):
     OVERLOADED = "overloaded"           # 503 / server overloaded
     NETWORK = "network"                 # connection error
     SERVER_ERROR = "server_error"       # other 5xx
+    CONTEXT_WINDOW = "context_window"   # input exceeds the model context window
     UNKNOWN = "unknown"
+
+
+_CONTEXT_WINDOW_MARKERS: tuple[str, ...] = (
+    "maximum context length",
+    "context length is",
+    "context_length_exceeded",
+    "max context length",
+    "max_model_len",
+    "reduce the length of the messages",
+    "input is too long",
+    "token limit exceeded",
+    "exceeds the maximum",
+    "reduce input",
+)
+
+
+def _is_context_window_error(error_str: str) -> bool:
+    lower = error_str.lower()
+    return any(m in lower for m in _CONTEXT_WINDOW_MARKERS)
 
 
 def classify_provider_error(error_str: str, status_code: int | None = None) -> ErrorKind:
@@ -89,6 +109,9 @@ def classify_provider_error(error_str: str, status_code: int | None = None) -> E
     if status_code == 401 or status_code == 403:
         return ErrorKind.AUTH
     if status_code == 400 or status_code == 422:
+        # A 400 often accompanies an oversized-input / context-exceeded error.
+        if _is_context_window_error(lower):
+            return ErrorKind.CONTEXT_WINDOW
         return ErrorKind.INVALID_REQUEST
     if status_code == 504:
         return ErrorKind.TIMEOUT
@@ -113,6 +136,8 @@ def classify_provider_error(error_str: str, status_code: int | None = None) -> E
         return ErrorKind.TIMEOUT
     if any(m in lower for m in ("connection", "connect", "network", "dns")):
         return ErrorKind.NETWORK
+    if _is_context_window_error(error_str):
+        return ErrorKind.CONTEXT_WINDOW
     if any(m in lower for m in ("overloaded", "capacity", "503", "service unavailable")):
         return ErrorKind.OVERLOADED
     if any(m in lower for m in ("unauthorized", "invalid key", "bad key", "authentication")):
