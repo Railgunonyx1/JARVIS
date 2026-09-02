@@ -11,11 +11,14 @@ optional runtime contract: risk, timeout, preferred_models).
 """
 
 from skills.registry import (
+    Skill,
     SkillContract,
     SkillMetadata,
     SkillRegistry,
-    Skill,
     build_default_skill_registry,
+    get_skill,
+    list_all_skills,
+    list_skills,
     reset_skill_registry_cache,
 )
 
@@ -26,4 +29,7 @@ __all__ = [
     "Skill",
     "build_default_skill_registry",
     "reset_skill_registry_cache",
+    "get_skill",
+    "list_all_skills",
+    "list_skills",
 ]

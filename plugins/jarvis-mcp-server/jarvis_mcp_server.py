@@ -19,7 +19,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 import anyio
-
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, TextContent, Tool

@@ -44,6 +44,12 @@
 ## C/C++
 - gcc-mirror/gcc - GCC compiler
 - llvm/llvm-project - LLVM compiler
+- cmake/cmake - Cross-platform build system
+- mesonbuild/meson - Fast build system
+- ninja-build/ninja - Small build system
+- bazelbuild/bazel - Large-scale build system
+- microsoft/vcpkg - C++ package manager
+- conan-io/conan - C/C++ package manager
 - CGAL/cgal - Computational geometry
 - nlohmann/json - JSON library
 - abseil/abseil - C++ library

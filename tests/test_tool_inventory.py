@@ -10,10 +10,7 @@ Proves:
 
 from __future__ import annotations
 
-import pytest
-
 from tools import build_default_registry
-
 
 # ---------------------------------------------------------------------------
 # Risk classification — every tool MUST be in exactly one set
@@ -45,6 +42,8 @@ READ_ONLY_TOOLS = {
     "test.discover", "test.failed", "test.benchmark",
     # Security (read)
     "security.check_permissions",
+    # Self-audit (read)
+    "self.audit",
     # World monitor (read)
     "world_monitor.get_event", "world_monitor.get_alerts",
     "world_monitor.get_region", "world_monitor.get_sources",

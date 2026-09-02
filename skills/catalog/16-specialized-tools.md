@@ -86,6 +86,13 @@
 - Code_Aster - Structural mechanics
 - Salome - Pre/post processing
 
+## Performance Optimization
+- bytecodealliance/cranelift - Compiler framework with JIT compilation
+- microsoft/VCSamples - MSVC / Windows compiler samples
+- libvips/libvips - High-performance image processing
+- python-pillow/Pillow - Python imaging library
+- lovell/sharp - Fast Node.js image processing
+
 ## Architecture
 - Blender - 3D modeling
 - SketchUp - 3D modeling

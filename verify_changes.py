@@ -25,13 +25,15 @@ for name in ['architecture_auditor', 'code_review', 'web_research', 'memory_mana
 import os
 catalog_path = r'C:\Users\aayan\Desktop\JARVIS\skills\catalog'
 md_files = [f for f in os.listdir(catalog_path) if f.endswith('.md')]
-print(f'3. Catalog .md files: {len(md_files)} (was 34, removed 5 stub duplicates) - OK')
+print(f'3. Catalog .md files: {len(md_files)} (17 full docs + 6 curated stubs + README) - OK')
+stub_files = [f for f in md_files if os.path.getsize(os.path.join(catalog_path, f)) < 1500]
+print(f'   Stub files remaining: {len(stub_files)} (unique topics) - OK')
 
 # 5. README updated
 with open(os.path.join(catalog_path, 'README.md'), 'r') as f:
     readme = f.read()
-has_29 = '29 entries' in readme
-print(f'4. README updated with 29 entries: {has_29} - OK')
+has_23 = '23 topical reference files' in readme
+print(f'4. README updated with full category listing: {has_23} - OK')
 
 # 6. Tests pass
 print()

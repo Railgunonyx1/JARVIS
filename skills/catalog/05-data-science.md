@@ -46,6 +46,14 @@
 
 ## Data Processing
 - apache/airflow - Workflow orchestration
+- apache/spark - Distributed data processing
+- apache/flink - Stream processing framework
+- apache/beam - Unified batch and stream processing
+- ray-project/ray - Distributed computing
+- dask/dask - Parallel computing
+- pola-rs/polars - Fast DataFrame library
+- duckdb/duckdb - In-process analytics database
+- pandas-dev/pandas - Data manipulation library
 - dagster/dagster - Data orchestration
 - mage-ai/mage - Data pipeline
 - prefecthq/prefect - Workflow orchestration

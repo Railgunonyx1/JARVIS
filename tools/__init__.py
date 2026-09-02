@@ -12,6 +12,7 @@ from tools.schema import Tool, ToolResult, tool_result
 
 def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
+    from tools.audit import run_audit, run_pytest
     from tools.browser import (
         browser_click,
         browser_extract,
@@ -1267,6 +1268,27 @@ def build_default_registry() -> ToolRegistry:
             permission="filesystem.read",
             handler=security_scan_code,
             category="security",
+        ),
+
+        # ── Self-audit ──────────────────────────────────────────────
+        Tool(
+            name="self.audit",
+            description="Run read-only JARVIS self-audit checks (security scan + dependency basics). Optionally audit a test path with pytest when 'path' is provided.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Optional test path/pattern to include a pytest run."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=lambda args: tool_result(
+                True,
+                str(run_audit(str(args.get("path", ".")))),
+                error="",
+                audit="full",
+            ),
+            category="audit",
         ),
     ])
     return registry

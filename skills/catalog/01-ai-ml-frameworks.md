@@ -26,6 +26,11 @@
 - ollama/ollama - Run LLMs locally
 - vllm-project/vllm - High-throughput LLM serving
 - ggml-org/llama.cpp - LLM inference in C++
+- unslothai/unsloth - 2x faster fine-tuning with 60% less memory
+- OpenAccess-AI-Collective/axolotl - Fine-tuning framework for LLMs
+- ml-explore/mlx - Apple silicon-optimized ML framework
+- ggml-org/ggml - Tensor library for LLMs (quantization)
+- ggml-org/gguf - Format for quantized LLM weights
 - ggerganov/whisper.cpp - Speech recognition
 - huggingface/transformers - State-of-the-art ML
 - tensorflow/tensorflow - ML framework

@@ -11,6 +11,7 @@
 - hugo/hugo - Go static
 - Eleventy - Simple static
 - Astro - Modern static
+- lumeland/lume - Static site generator for Deno
 
 ## Documentation Tools
 - swagger-api/swagger-ui - API docs

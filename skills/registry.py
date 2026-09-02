@@ -117,7 +117,6 @@ class SkillRegistry:
         if not isinstance(data, dict):
             logger.warning("Skipping non-object manifest %s", path)
             return None
-        name = data.get("name") or path.stem
         if not data.get("description"):
             logger.debug("Manifest %s has no description; still registering", path)
         return data
@@ -172,6 +171,21 @@ def reset_skill_registry_cache() -> None:
     build_default_skill_registry._cache = None
 
 
+def list_all_skills() -> dict[str, Skill]:
+    """Convenience: return the name -> Skill map for all loaded skills."""
+    return build_default_skill_registry()
+
+
+def list_skills() -> list[str]:
+    """Convenience: return the sorted names of all loaded skills."""
+    return sorted(build_default_skill_registry().keys())
+
+
+def get_skill(name: str) -> Skill | None:
+    """Convenience: fetch one skill by name, or None."""
+    return build_default_skill_registry().get(name)
+
+
 __all__ = [
     "SkillContract",
     "SkillMetadata",
@@ -179,4 +193,7 @@ __all__ = [
     "Skill",
     "build_default_skill_registry",
     "reset_skill_registry_cache",
+    "get_skill",
+    "list_all_skills",
+    "list_skills",
 ]

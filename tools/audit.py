@@ -7,34 +7,56 @@ All audit findings must be evidence-backed.
 import subprocess
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
+from core.utils import get_project_root
 from tools.intent_classifier import IntentClassifier, TaskType
 
 # ── AUDIT POLICY ──────────────────────────────────────────────────────
 
-# These tools are ALLOWED during audits (read-only)
+# Tools allowed during audits (read-only, from the live tool catalog)
 AUDIT_ALLOWED = {
     "filesystem.read": True,
-    "shell.readonly": True,
-    "pytest": True,
-    "ruff": True,
-    "dependency.audit": True,
-    "memory.read": True,
-    "knowledge.search": True,
+    "filesystem.list": True,
+    "filesystem.diff": True,
+    "filesystem.tree": True,
+    "search.code": True,
+    "search.find": True,
+    "test.discover": True,
+    "test.failed": True,
+    "git.status": True,
+    "git.diff": True,
+    "git.log": True,
+    "git.branch": True,
+    "code.symbol": True,
+    "code.references": True,
+    "code.imports": True,
+    "code.ast": True,
+    "security.scan_secrets": True,
+    "security.check_permissions": True,
+    "security.scan_code": True,
+    "memory.retrieve": True,
+    "memory.stats": True,
+    "system.status": True,
 }
 
 # These tools are DENIED during audits (modify environment)
 AUDIT_DENIED = {
     "filesystem.write": False,
-    "shell.execute": False,  # Only specific readonly commands allowed
-    "pip_install": False,
-    "pip_remove": False,
-    "package.install": False,
-    "package.remove": False,
-    "registry.write": False,
-    "system.modify": False,
+    "filesystem.delete": False,
+    "filesystem.copy": False,
+    "filesystem.move": False,
+    "shell.execute": False,  # Only specific readonly commands allowed via test.run
+    "git.commit": False,
+    "git.push": False,
+    "git.merge": False,
+    "git.rebase": False,
+    "git.reset": False,
+    "patch.replace": False,
+    "patch.insert": False,
+    "patch.delete": False,
+    "memory.remember": False,
+    "memory.forget": False,
 }
 
 
@@ -55,8 +77,8 @@ def run_pytest(path: str = ".") -> dict[str, Any]:
             [sys.executable, "-m", "pytest", path, "--tb=short", "-q"],
             capture_output=True,
             text=True,
-            cwd=Path(path).parent.parent,  # Run from project root
-            timeout=60,
+            cwd=get_project_root(),
+            timeout=120,
             check=False,
         )
         return {
@@ -78,8 +100,8 @@ def run_ruff(path: str = ".") -> dict[str, Any]:
             [sys.executable, "-m", "ruff", "check", path, "--select", "E,F,W"],
             capture_output=True,
             text=True,
-            cwd=Path(path).parent.parent,
-            timeout=30,
+            cwd=get_project_root(),
+            timeout=60,
             check=False,
         )
         return {
@@ -125,7 +147,7 @@ def check_python_dependencies(path: str = ".") -> dict[str, Any]:
     """Audit Python package dependencies. Read-only."""
     import importlib.metadata
 
-    project_path = Path(path).parent.parent
+    project_path = get_project_root()
     requirements_file = project_path / "requirements.txt"
 
     result = {
@@ -167,7 +189,7 @@ def check_security_basics(path: str = ".") -> dict[str, Any]:
     """Basic security checks. Read-only."""
 
     result = {"status": "complete", "findings": []}
-    project_path = Path(path).parent.parent
+    project_path = get_project_root()
 
     # Check for sensitive files
     sensitive = [".env", "config.py", "secrets.py", "credentials.py"]
@@ -189,18 +211,27 @@ def check_security_basics(path: str = ".") -> dict[str, Any]:
 # ── MAIN AUDIT PIPELINE ──────────────────────────────────────────────
 
 def run_audit(project_path: str = ".") -> dict[str, Any]:
-    """Run full audit pipeline. Read-only - never modifies environment.
+    """Run read-only audit pipeline. Never modifies environment.
+
+    Runs quick checks (security + dependency) always. Pytest/ruff runs are
+    gated: pass a specific path (e.g. ``tests/test_x.py`` or ``tests/``) to
+    include them; the default ``"."`` skips the heavy subprocess runs so the
+    ``self.audit`` tool stays fast.
 
     Returns evidence-backed report. Never claims 'no bugs' without evidence.
     """
-    project_path = Path(project_path)
-    project_root = project_path.parent.parent if project_path.parent.name != "web" else project_path.parent
+    project_root = get_project_root()
 
     timestamp = datetime.now().isoformat()
 
-    # Run all read-only checks
-    pytest_results = run_pytest(str(project_root))
-    ruff_results = run_ruff(str(project_root))
+    # Heavy checks only when the caller targets a specific path/pattern.
+    run_heavy = project_path not in ("", ".")
+    pytest_results = run_pytest(project_path) if run_heavy else {
+        "status": "skipped", "passed": 0, "failed": 0,
+    }
+    ruff_results = run_ruff(project_path) if run_heavy else {
+        "status": "skipped", "errors": 0,
+    }
     dep_results = check_python_dependencies(str(project_root))
     security_results = check_security_basics(str(project_root))
 
@@ -252,9 +283,7 @@ def run_audit(project_path: str = ".") -> dict[str, Any]:
 
 def audit_filesystem(path: str = ".") -> dict[str, Any]:
     """Audit filesystem read-only. Part of the audit pipeline."""
-    from pathlib import Path
-
-    project_path = Path(path).parent.parent if Path(path).parent.name != "web" else Path(path).parent
+    project_path = get_project_root()
 
     result = {
         "status": "complete",
