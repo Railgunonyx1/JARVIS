@@ -12,6 +12,7 @@ the single tool execution boundary.
 
 from __future__ import annotations
 
+import asyncio
 import ast
 import textwrap
 from pathlib import Path
@@ -38,6 +39,7 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
     ALLOWLIST = {
         "tool_service.py",   # owns the executor/permissions
         "loop.py",           # creates the service (constructor only)
+        "tools.py",          # defines AgentToolExecutor itself
         "__init__.py",
     }
 
@@ -82,6 +84,13 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
             continue
 
         for node in ast.walk(tree):
+            # Look for: AgentToolExecutor(...) direct construction outside owner files
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "AgentToolExecutor":
+                    line_no = node.lineno
+                    line_text = source.splitlines()[line_no - 1].strip()
+                    violations.append((str(rel), line_no, line_text))
             # Look for: something.permissions.check(...) or something.executor.execute(...)
             if isinstance(node, ast.Attribute):
                 if node.attr in ("check", "execute") and isinstance(node.value, ast.Attribute):
@@ -104,6 +113,48 @@ def test_no_direct_executor_bypass():
             msg += f"  {f}:{ln}  {code}\n"
         msg += "\nAll tool execution must go through ToolExecutionService."
         pytest.fail(msg)
+
+
+# ---------------------------------------------------------------------------
+# 1b. Runtime proof that protocol adapters delegate to tool_service.execute_tool
+# ---------------------------------------------------------------------------
+
+def _assert_route_to_service(adapter):
+    mock_svc = MagicMock()
+    mock_svc.execute_tool = AsyncMock(return_value=MagicMock(
+        success=True, output="ok", error="",
+    ))
+    adapter = adapter(tool_service=mock_svc)
+    name = adapter.__class__.__name__
+
+    async def dispatch():
+        if name == "CodexExecAdapter":
+            await adapter.handle_tool("shell.execute", {"command": "echo hi"})
+        else:
+            await adapter.handle_request(
+                "tools/call", {"name": "shell.execute", "arguments": {"command": "echo hi"}},
+            )
+
+    asyncio.run(dispatch())
+    assert mock_svc.execute_tool.called, f"{name} did not route to ToolExecutionService"
+    call = mock_svc.execute_tool.call_args[0][0]
+    assert call.name == "shell.execute"
+    assert call.arguments == {"command": "echo hi"}
+
+
+def test_mcp_delegates_to_tool_service_execute_tool():
+    from runtime.protocols import MCPAdapter
+    _assert_route_to_service(MCPAdapter)
+
+
+def test_acp_delegates_to_tool_service_execute_tool():
+    from runtime.protocols import ACPAdapter
+    _assert_route_to_service(ACPAdapter)
+
+
+def test_codex_delegate_to_tool_service_execute_tool():
+    from runtime.protocols import CodexExecAdapter
+    _assert_route_to_service(CodexExecAdapter)
 
 
 # ---------------------------------------------------------------------------
