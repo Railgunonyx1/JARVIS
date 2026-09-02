@@ -2,6 +2,6 @@
   {
     "name": "filesystem",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/jarvis-mcp"]
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\aayan\\Desktop\\JARVIS\\.sandbox"]
   }
 ]

@@ -1,24 +1,29 @@
-"""JARVIS Daemon Skills Package.
+"""JARVIS MK-X Skills Package.
 
-Adapted from Cordis microkernel philosophy — "everything is a plugin".
+Provides a manifest-driven skill registry. Each skill is a ``skills/manifests/*.json``
+capability declaration (name, description, tags, the live tools it draws on, and an
+optional runtime contract: risk, timeout, preferred_models).
 
-Provides:
-- build_default_skill_registry(): Load skill manifests into capability registry
-- get_skill(): Resolve a skill by name
-- list_skills(): Search skills by tags/risk
-- list_all_skills(): List all registered skills
+- ``SkillRegistry``: Auto-discovers and loads skill manifests.
+- ``SkillMetadata``: Parsed manifest metadata.
+- ``SkillContract``: Runtime contract for skill execution with sandbox limits.
+- ``build_default_skill_registry``: Warm entrypoint used by the CLI ``/skills`` command.
 """
 
-from .registry import (
+from skills.registry import (
+    SkillContract,
+    SkillMetadata,
+    SkillRegistry,
+    Skill,
     build_default_skill_registry,
-    get_skill,
-    list_skills,
-    list_all_skills,
-)  # noqa: F401
+    reset_skill_registry_cache,
+)
 
 __all__ = [
+    "SkillRegistry",
+    "SkillMetadata",
+    "SkillContract",
+    "Skill",
     "build_default_skill_registry",
-    "get_skill",
-    "list_skills",
-    "list_all_skills",
+    "reset_skill_registry_cache",
 ]

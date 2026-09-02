@@ -35,6 +35,9 @@ temp/
 scratch/
 *.tmp
 
+# MCP file-server sandbox root
+.sandbox/
+
 # Benchmark runtime output
 benchmark/results/
 

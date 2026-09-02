@@ -1,162 +1,182 @@
-"""Skill Registry — loads skill manifests and integrates with the mode system.
+"""JARVIS MK-X — Skill manifest registry.
 
-Maps skills/manifests/*.json into the JARVIS capability registry so skills
-are discoverable, searchable, and usable at runtime via the tool executor.
+Loads ``skills/manifests/*.json`` capability manifests into lightweight
+dataclasses. Each manifest declares a named skill: a description the agent
+can match against a task, the real tool names it draws on (from the live
+``tools.build_default_registry`` catalog), and optional runtime contract
+metadata (risk, timeout, preferred models).
+
+Progressive disclosure: the registry only advertises lightweight metadata
+(name/description/tags/risk); heavy per-skill instructions can be loaded on
+demand via ``get``/``load``. This keeps the agent's context lean (see the
+research notes in AGENTS.md — skills follow the same advertise-then-load
+pattern as industry Agent Skills).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from core.capability_registry import (
-    Capability,
-    CapabilityCategory,
-    CapabilityRisk,
-    CapabilityTree,
-    get_capability,
-    merge_capabilities,
-)
+from core.utils import get_project_root
 
-logger = logging.getLogger("jarvis.skills.registry")
+logger = logging.getLogger("jarvis.skills")
 
-_MANIFESTS_DIR = Path(__file__).resolve().parent / "manifests"
+_MANIFESTS_DIR = get_project_root() / "skills" / "manifests"
+
+_CORE_KEYS = ("name", "description", "tools", "tags", "version")
 
 
-def _load_manifests() -> list[dict[str, Any]]:
-    """Load all skill manifests from the manifests directory."""
-    if not _MANIFESTS_DIR.is_dir():
+@dataclass
+class SkillMetadata:
+    """Parsed manifest front-matter (advertised metadata)."""
+
+    name: str = ""
+    description: str = ""
+    tags: list[str] = field(default_factory=list)
+    version: str = ""
+
+
+@dataclass
+class SkillContract:
+    """Runtime contract for a loaded skill (sandbox + routing limits)."""
+
+    tools: list[str] = field(default_factory=list)
+    risk: str = "medium"
+    timeout: int = 90
+    preferred_models: list[str] = field(default_factory=list)
+    metadata: SkillMetadata = field(default_factory=SkillMetadata)
+
+
+@dataclass
+class Skill:
+    """One discovered skill (metadata + contract)."""
+
+    name: str
+    description: str
+    contracts: dict[str, SkillContract] = field(default_factory=lambda: {})
+    enabled: bool = True
+
+    @property
+    def tags(self) -> list[str]:
+        for contract in self.contracts.values():
+            return contract.metadata.tags
         return []
-    manifests: list[dict[str, Any]] = []
-    for path in sorted(_MANIFESTS_DIR.glob("*.json")):
+
+    @property
+    def risk(self) -> str:
+        risks = {c.risk for c in self.contracts.values()}
+        if "high" in risks:
+            return "high"
+        if "medium" in risks:
+            return "medium"
+        return "low"
+
+    @property
+    def tools(self) -> list[str]:
+        seen: list[str] = []
+        for contract in self.contracts.values():
+            for tool in contract.tools:
+                if tool not in seen:
+                    seen.append(tool)
+        return seen
+
+
+class SkillRegistry:
+    """Discovers and loads skill manifests from ``skills/manifests``."""
+
+    def __init__(self, manifests_dir: str | Path | None = None) -> None:
+        self.manifests_dir: Path = (
+            Path(manifests_dir)
+            if manifests_dir is not None
+            else _MANIFESTS_DIR
+        )
+        self.skills: dict[str, Skill] = {}
+
+    def discover_and_load(self) -> dict[str, Skill]:
+        """Load every ``*.json`` manifest in ``manifests_dir``."""
+        if not self.manifests_dir.is_dir():
+            return {}
+        for path in sorted(self.manifests_dir.glob("*.json")):
+            data = self._read_manifest(path)
+            if data is None:
+                continue
+            self._register(data)
+        return self.skills
+
+    def _read_manifest(self, path: Path) -> dict[str, Any] | None:
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            manifests.append(data)
-        except Exception as e:
-            logger.warning("Failed to load manifest %s: %s", path, e)
-    return manifests
+            with path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Skipping malformed skill manifest %s: %s", path, e)
+            return None
+        if not isinstance(data, dict):
+            logger.warning("Skipping non-object manifest %s", path)
+            return None
+        name = data.get("name") or path.stem
+        if not data.get("description"):
+            logger.debug("Manifest %s has no description; still registering", path)
+        return data
+
+    def _register(self, data: dict[str, Any]) -> None:
+        name = str(data.get("name") or "")
+        if not name:
+            return
+
+        metadata = SkillMetadata(
+            name=name,
+            description=str(data.get("description", "")),
+            tags=[str(t) for t in data.get("tags", [])],
+            version=str(data.get("version", "1.0.0")),
+        )
+        contract = SkillContract(
+            tools=[str(t) for t in data.get("tools", []) if t],
+            risk=str(data.get("risk", "medium")),
+            timeout=int(data.get("timeout", 90)),
+            preferred_models=[str(m) for m in data.get("preferred_models", [])],
+            metadata=metadata,
+        )
+
+        skill = self.skills.get(name)
+        if skill is None:
+            skill = Skill(name=name, description=metadata.description)
+            self.skills[name] = skill
+        skill.contracts["default"] = contract
+
+    def get_skill(self, name: str) -> Skill | None:
+        return self.skills.get(name)
+
+    def source_files(self) -> int:
+        if not self.manifests_dir.is_dir():
+            return 0
+        return len(list(self.manifests_dir.glob("*.json")))
 
 
-def _manifest_to_capability(m: dict[str, Any]) -> Capability | None:
-    """Convert a skill manifest dict into a Capability instance."""
-    name = m.get("name", "")
-    description = m.get("description", "")
-    tools = m.get("tools", [])
-    tags = m.get("tags", [])
-    version = m.get("version", "1.0.0")
-
-    # Map risk from manifest (default to SAFE if not specified)
-    risk_str = m.get("risk", "low")
-    risk_map = {
-        "low": CapabilityRisk.LOW,
-        "medium": CapabilityRisk.MEDIUM,
-        "high": CapabilityRisk.HIGH,
-    }
-    risk = risk_map.get(risk_str, CapabilityRisk.SAFE)
-
-    # Map timeout to cost (simple heuristic: higher timeout = higher cost)
-    timeout = m.get("timeout")
-    cost = round(timeout / 60, 2) if timeout else 0.0
-
-    # Preferred models from manifest
-    preferred_models = m.get("preferred_models", [])
-
-    # Build capability name from manifest name
-    cap_name = f"skills.{name}"
-
-    # Build description combining manifest description with tool info
-    tool_descriptions = "; ".join(tools) if tools else "No tools configured"
-    full_description = f"{description}. Tools: {tool_descriptions}"
-
-    cap = Capability(
-        name=cap_name,
-        category=CapabilityCategory.MEMORY,  # Skills are memory-adjacent
-        risk=risk,
-        description=full_description,
-        tags=tags,
-        cost=cost,
-        latency="medium",
-        provider="local",
-        examples=[f"skills/{name}"],
-        metadata={"preferred_models": preferred_models},
-    )
-
-    return cap
+def build_default_skill_registry() -> dict[str, Skill]:
+    """Build and load the default skill registry once."""
+    _cache = getattr(build_default_skill_registry, "_cache", None)
+    if _cache is None:
+        reg = SkillRegistry()
+        reg.discover_and_load()
+        _cache = reg.skills
+        build_default_skill_registry._cache = _cache
+    return dict(_cache)
 
 
-def build_default_skill_registry() -> dict[str, Capability]:
-    """Build a capability registry from all skill manifests.
-
-    Scans ``skills/manifests/*.json``, converts each into a ``Capability``,
-    and merges them into the global capability tree via the atomic merge
-    protocol.  Returns the flat registry dict keyed by capability name.
-
-    Returns:
-        dict[str, Capability]: Flat map of all registered skills.
-    """
-    manifests = _load_manifests()
-    capabilities: list[Capability] = []
-
-    for m in manifests:
-        cap = _manifest_to_capability(m)
-        if cap and cap.name:
-            capabilities.append(cap)
-
-    if not capabilities:
-        logger.warning("No skill manifests found in %s", _MANIFESTS_DIR)
-        return {}
-
-    # Merge all capabilities into the global tree via atomic merge
-    tree = CapabilityTree()
-    for cap in capabilities:
-        tree.merge(CapabilityTree.build_branch([cap]))
-
-    # Return flat cache
-    tree._ensure_cache()
-    return tree._flat_cache.copy()
+def reset_skill_registry_cache() -> None:
+    """Clear the module-level registry cache (for tests)."""
+    build_default_skill_registry._cache = None
 
 
-def get_skill(name: str) -> Capability | None:
-    """Resolve a skill by its manifest name."""
-    registry = build_default_skill_registry()
-    # Accept both "architecture_auditor" and "skills.architecture_auditor"
-    key = name if name.startswith("skills.") else f"skills.{name}"
-    return registry.get(key)
-
-
-def list_skills(
-    tags: list[str] | None = None,
-    risk: CapabilityRisk | None = None,
-    max_risk: CapabilityRisk | None = None,
-) -> list[Capability]:
-    """Search skills by tags, risk, or max_risk."""
-    registry = build_default_skill_registry()
-    results: list[Capability] = []
-
-    from core.capability_registry import CapabilityRisk as CR
-    all_skills = registry.values() if registry else []
-
-    if tags:
-        tag_set = set(tags)
-        results = [c for c in all_skills if tag_set & set(c.tags)]
-
-    if risk:
-        results = [c for c in results if c.risk == risk]
-
-    if max_risk:
-        risk_order = {r: i for i, r in enumerate(CapabilityRisk)}
-        results = [
-            c for c in results
-            if risk_order.get(c.risk, 99) <= risk_order.get(max_risk, 99)
-        ]
-
-    return results
-
-
-def list_all_skills() -> list[Capability]:
-    """List all registered skills."""
-    registry = build_default_skill_registry()
-    return list(registry.values()) if registry else []
+__all__ = [
+    "SkillContract",
+    "SkillMetadata",
+    "SkillRegistry",
+    "Skill",
+    "build_default_skill_registry",
+    "reset_skill_registry_cache",
+]

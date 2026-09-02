@@ -10,6 +10,7 @@ Usage (spawned by DSH's dsh-mcp-client):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -53,7 +54,7 @@ def main() -> None:
             )
         args = arguments or {}
         try:
-            raw = _execute_handler(registry, name, args)
+            raw = await _execute_handler(registry, name, args)
             text = _render_result(raw)
             return CallToolResult(
                 isError=False,
@@ -88,11 +89,14 @@ def _load_registry() -> ToolRegistry:
     return build_default_registry()
 
 
-def _execute_handler(registry: ToolRegistry, name: str, arguments: dict) -> object:
+async def _execute_handler(registry: ToolRegistry, name: str, arguments: dict) -> object:
     tool = registry.get(name)
     if tool is None:
         raise KeyError(f"Unknown tool: {name}")
-    return tool.handler(arguments)
+    handler = tool.handler
+    if asyncio.iscoroutinefunction(handler):
+        return await handler(arguments)
+    return await asyncio.to_thread(handler, arguments)
 
 
 def _render_result(raw: object) -> str:

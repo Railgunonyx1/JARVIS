@@ -30,8 +30,8 @@ Config file (create this yourself): config/mcp_servers.json
   }
 ]
 
-Each entry is a server JARVIS can talk to over stdio. This file is not
-included — you decide which servers you trust enough to connect.
+Each entry is a server JARVIS can talk to over stdio. A starter file lives at
+config/mcp_servers.json (you decide which servers you trust enough to connect).
 """
 
 from __future__ import annotations
@@ -49,10 +49,10 @@ logger = logging.getLogger("jarvis.plugins.mcp_client")
 _CONFIG_PATH = get_project_root() / "config" / "mcp_servers.json"
 
 # One persistent event loop + set of live sessions, so we don't pay
-# stdio-process-spawn cost on every single tool call.
+# stdio-process-spawn cost on every single tool call. Sessions are only
+# touched from the single worker loop, so no cross-thread lock is needed.
 _loop: asyncio.AbstractEventLoop | None = None
 _sessions: dict[str, Any] = {}
-_sessions_lock = asyncio.Lock() if False else None  # created lazily inside the loop
 
 
 def _load_server_configs() -> list[dict]:

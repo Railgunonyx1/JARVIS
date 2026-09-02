@@ -21,8 +21,7 @@ from tools import build_default_registry
 
 READ_ONLY_TOOLS = {
     # Filesystem (read)
-    "filesystem.read", "filesystem.list", "filesystem.find", "filesystem.stat",
-    "filesystem.diff", "filesystem.tree",
+    "filesystem.read", "filesystem.list", "filesystem.diff", "filesystem.tree",
     # Git (read)
     "git.status", "git.diff", "git.log", "git.show", "git.branch", "git.blame",
     "git.fetch",
@@ -54,7 +53,7 @@ READ_ONLY_TOOLS = {
 
 MUTATING_TOOLS = {
     # Filesystem (write)
-    "filesystem.write", "filesystem.edit", "filesystem.copy", "filesystem.move",
+    "filesystem.write", "filesystem.copy", "filesystem.move",
     # Git (write)
     "git.add", "git.commit", "git.create_branch", "git.stash",
     "git.push", "git.merge", "git.rebase", "git.reset",
@@ -95,6 +94,18 @@ def test_all_registered_tools_are_risk_classified():
     assert not unclassified, (
         f"Tools not risk-classified: {unclassified}. "
         f"Add them to READ_ONLY_TOOLS, MUTATING_TOOLS, or DANGEROUS_TOOLS."
+    )
+
+
+def test_no_ghost_tools_in_risk_sets():
+    """Every risk-set entry must be a real registered tool (no ghosts)."""
+    registry = build_default_registry()
+    registered = {t.name for t in registry.list()}
+
+    ghosts = ALL_RISK_TOOLS - registered
+    assert not ghosts, (
+        f"Risk sets reference tools that are not registered: {ghosts}. "
+        f"Remove them (or implement + register them in tools/__init__.py)."
     )
 
 

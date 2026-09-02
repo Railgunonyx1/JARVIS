@@ -28,8 +28,9 @@ from core.model_gateway import ModelGateway
 from core.daemon.plugins.prefix_cache import get_prefix_cache, PrefixCachePlugin
 from core.tool_execution_service import ToolExecutionService
 
-# Import skill registry (P1 optimization - Cordis microkernel adaptation)
-from core.daemon.skills.registry import SkillRegistry, SkillMetadata, SkillContract
+# Import skill registry (P1 optimization - Cordis microkernel adaptation).
+# Backed by the manifest-driven skills/registry (skills/manifests/*.json).
+from skills.registry import SkillRegistry, SkillMetadata, SkillContract
 
 # Import configuration
 from core.config import Config, ModelCatalog

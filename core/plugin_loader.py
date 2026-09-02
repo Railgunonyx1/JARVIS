@@ -124,6 +124,11 @@ class PluginLoader:
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
+        # Per-plugin convention: if a module exposes register_plugin(),
+        # invoke it once after import so it can log or wire up state.
+        register = getattr(module, "register_plugin", None)
+        if callable(register):
+            register()
 
 
 __all__ = [
