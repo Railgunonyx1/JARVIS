@@ -749,6 +749,44 @@ class TestAgentLoopHarnessIntegration:
         assert seen["append_to_messages"][0]["role"] == "user"
 
 
+# ── EventBus wildcard matching ─────────────────────────────────────────
+
+
+class TestEventBusWildcard:
+    @staticmethod
+    def _match(pattern: str, name: str) -> bool:
+        from runtime.event_bus import _match_pattern
+        return _match_pattern(pattern, name)
+
+    def test_exact_match(self):
+        assert self._match("tool.executed", "tool.executed")
+        assert not self._match("tool.executed", "tool.denied")
+
+    def test_single_segment_star(self):
+        assert self._match("tool.*", "tool.executed")
+        assert not self._match("tool.*", "tool.executed.extra")
+        assert not self._match("tool.*", "other.executed")
+
+    def test_double_star_matches_zero_or_more(self):
+        assert self._match("tool.**", "tool")
+        assert self._match("tool.**", "tool.executed")
+        assert self._match("tool.**", "tool.executed.extra.deep")
+
+    def test_double_star_followed_by_segment(self):
+        assert self._match("tool.**.done", "tool.done")
+        assert self._match("tool.**.done", "tool.a.done")
+        assert self._match("tool.**.done", "tool.a.b.done")
+        assert not self._match("tool.**.done", "tool.a.b.other")
+
+    def test_double_star_not_crossing_root(self):
+        assert not self._match("tool.**.done", "other.a.done")
+        assert not self._match("tool.**", "other.executed")
+
+    def test_root_double_star(self):
+        assert self._match("**", "anything.at.all")
+        assert self._match("**", "single")
+
+
 # ── VerificationEngine tests ──────────────────────────────────────────
 
 
