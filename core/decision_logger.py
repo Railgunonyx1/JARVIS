@@ -6,7 +6,7 @@ Bridges the two existing stores that were previously unwired:
   - AuditLog  (audit.db):  per-tool execution record (allowed / success / ms).
 
 Wiring points: core/jarvis.py (process_text, process_text_streaming,
-_handle_action) and core/executor.py (AgentExecutor).
+_handle_action) and the quarantined _quarantine/core/executor.py (AgentExecutor).
 """
 from __future__ import annotations
 
