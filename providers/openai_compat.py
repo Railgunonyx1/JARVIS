@@ -175,6 +175,7 @@ class OpenAICompatibleProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         full_messages = self._build_messages(messages, system_prompt)
         tool_param = openai_tools_param(tools)
@@ -191,7 +192,7 @@ class OpenAICompatibleProvider(LLMProvider):
                 if tool_param:
                     kwargs["tools"] = tool_param
                 stream = await client.chat.completions.create(
-                    model=self.config.get("model", self.default_model),
+                    model=model or self.config.get("model", self.default_model),
                     messages=full_messages,
                     max_tokens=max_tokens or self.config.get("max_tokens", 4096),
                     temperature=temperature or self.config.get("temperature", 0.7),
