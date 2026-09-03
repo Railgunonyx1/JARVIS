@@ -220,15 +220,16 @@ async def _run_once(goal: str, loop, json_output: bool = False,
     # Cascade routing: confidence-based with draft-then-verify
     # 1B handles simple tasks directly, 3B handles tools, 4B for complex.
     # Medium-confidence tasks: 1B drafts, then 3B verifies.
-    _cascade = None
-    _draft_first = False
+    # Model selection is delegated to the wired ModelGateway (the single
+    # model-selection authority). The registry's cascade/auto routing below is
+    # kept only for deterministic-command detection and informational logging —
+    # it must NOT mutate loop._preferred_model, which the loop owns.
     try:
         from core.agent.loop import AgentResult
         from providers.model_registry import ModelRegistry
         _registry = ModelRegistry.instance()
         if _registry.cascade_mode:
             _cascade = _registry.resolve_cascade(goal)
-            _draft_first = _cascade.get("draft_first", False)
             if _cascade.get("deterministic"):
                 # Deterministic command — skip LLM, handle inline
                 logger.info("Deterministic command: %s", goal[:60])
@@ -241,65 +242,22 @@ async def _run_once(goal: str, loop, json_output: bool = False,
                 _print_collapsed(result)
                 sys.stdout.flush()
                 return
-            _worker = _cascade.get("worker") or _cascade.get("heavy")
-            if _worker:
-                loop._preferred_model = _worker
-                logger.info("Cascade: %s (conf=%.2f) → %s for: %s",
-                            _cascade["task_type"], _cascade["confidence"],
-                            _worker, goal[:60])
+            logger.info("Cascade: %s (conf=%.2f) → gateway-selected model for: %s",
+                        _cascade["task_type"], _cascade["confidence"], goal[:60])
         else:
             _resolved = _registry.resolve_model(goal)
-            if _resolved:
-                loop._preferred_model = _resolved
-                logger.info("Auto-routed to %s for: %s", _resolved, goal[:60])
+            logger.info("Auto-routed to %s for: %s", _resolved, goal[:60])
     except Exception:
         pass  # Auto-routing is best-effort
     try:
-        if _draft_first:
-            # Draft-then-verify: 1B generates draft, 3B verifies/fixes
-            # First run with 1B router to get a draft
-            _router_model = _cascade.get("router") or "qwen2.5:1.5b"
-            loop._preferred_model = _router_model
-            logger.info("Draft phase: using %s for initial draft", _router_model)
-            if bridge is not None:
-                async def _on_chunk_draft(delta: str) -> None:
-                    bridge.stream_delta(delta)
-                    if use_live:
-                        display.stream_delta(delta)
-                draft_result = await loop.run(goal, on_chunk=_on_chunk_draft)
-            else:
-                draft_result = await loop.run(goal)
-            # If 1B produced a text response, pass it to 3B for verification
-            if draft_result.success and draft_result.response:
-                _verify_model = _cascade.get("worker")
-                if _verify_model:
-                    loop._preferred_model = _verify_model
-                    logger.info("Verify phase: using %s to check draft", _verify_model)
-                verify_goal = (
-                    f"Here is a draft response to the user's request. "
-                    f"Verify it is correct, fix any issues, and return the improved version.\n\n"
-                    f"User request: {goal}\n\nDraft response:\n{draft_result.response}\n\n"
-                    f"Please verify and return the corrected response."
-                )
-                if bridge is not None:
-                    async def _on_chunk_verify(delta: str) -> None:
-                        bridge.stream_delta(delta)
-                        if use_live:
-                            display.stream_delta(delta)
-                    result = await loop.run(verify_goal, on_chunk=_on_chunk_verify)
-                else:
-                    result = await loop.run(verify_goal)
-            else:
-                result = draft_result
+        if bridge is not None:
+            async def _on_chunk(delta: str) -> None:
+                bridge.stream_delta(delta)
+                if use_live:
+                    display.stream_delta(delta)
+            result = await loop.run(goal, on_chunk=_on_chunk)
         else:
-            if bridge is not None:
-                async def _on_chunk(delta: str) -> None:
-                    bridge.stream_delta(delta)
-                    if use_live:
-                        display.stream_delta(delta)
-                result = await loop.run(goal, on_chunk=_on_chunk)
-            else:
-                result = await loop.run(goal)
+            result = await loop.run(goal)
     except Exception as exc:
         if bridge is not None:
             bridge.fail_run(str(exc))
