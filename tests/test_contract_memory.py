@@ -210,3 +210,25 @@ class TestMemoryContractTools:
             fnames = {t["function"]["name"] for t in filtered}
             has_mem = bool(fnames & {"memory.retrieve", "memory.remember", "memory.forget"})
             assert has_mem, f"Query '{query}' lost memory tools"
+
+    def test_select_tools_baseline_fallback_when_no_keyword_match(self):
+        """Goals with no keyword intent should get a curated core subset, not
+        the entire ~76-tool catalog, while keeping general-purpose tools."""
+        from core.agent.intent import IntentClassifier
+        from tools import build_default_registry
+
+        registry = build_default_registry()
+        clf = IntentClassifier(registry)
+        all_tools = registry.to_openai_tools()
+        baseline = clf._BASELINE_TOOLS
+
+        for goal in (
+            "explain how the payment service works",
+            "analyze the performance of the check worker",
+            "compare two implementations",
+        ):
+            filtered = clf.select_tools(goal, all_tools)
+            names = {t["function"]["name"] for t in filtered}
+            assert len(filtered) < len(all_tools), f"goal '{goal}' sent full catalog"
+            for tool in baseline:
+                assert tool in names, f"baseline tool '{tool}' missing for '{goal}'"

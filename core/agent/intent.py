@@ -292,15 +292,25 @@ class IntentClassifier:
 
         return ClassifiedIntent(Intent.COMPLEX, 0.0, context_level="deep")
 
+    _BASELINE_TOOLS: tuple[str, ...] = (
+        "filesystem.read", "filesystem.write", "filesystem.list",
+        "patch.replace", "search.code", "shell.execute", "system.status",
+        "git.status", "git.diff", "memory.retrieve",
+    )
+
     def select_tools(self, text: str, all_tools: list[dict]) -> list[dict]:
         tl = text.lower()
         selected_names: set[str] = set()
         for pattern, tool_names in _TOOL_SELECTION:
             if pattern.search(tl):
                 selected_names.update(tool_names)
-        if not selected_names:
-            return all_tools
         tool_map = {t.get("function", {}).get("name", ""): t for t in all_tools}
+        if not selected_names:
+            # No keyword intent matched: fall back to a curated core subset so
+            # general tasks still have the full tool surface they need without
+            # dumping the entire ~76-tool catalog at the model.
+            baseline = [tool_map[n] for n in self._BASELINE_TOOLS if n in tool_map]
+            return baseline or all_tools
         result = [tool_map[n] for n in selected_names if n in tool_map]
         if not result:
             return all_tools
