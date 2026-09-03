@@ -77,27 +77,27 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
             if "test_" in py_file.name or py_file.name.startswith("conftest"):
                 continue
 
-        try:
-            source = py_file.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(rel))
-        except Exception:
-            continue
+            try:
+                source = py_file.read_text(encoding="utf-8")
+                tree = ast.parse(source, filename=str(rel))
+            except Exception:
+                continue
 
-        for node in ast.walk(tree):
-            # Look for: AgentToolExecutor(...) direct construction outside owner files
-            if isinstance(node, ast.Call):
-                func = node.func
-                if isinstance(func, ast.Name) and func.id == "AgentToolExecutor":
-                    line_no = node.lineno
-                    line_text = source.splitlines()[line_no - 1].strip()
-                    violations.append((str(rel), line_no, line_text))
-            # Look for: something.permissions.check(...) or something.executor.execute(...)
-            if isinstance(node, ast.Attribute):
-                if node.attr in ("check", "execute") and isinstance(node.value, ast.Attribute):
-                    if node.value.attr in ("permissions", "executor"):
+            for node in ast.walk(tree):
+                # Look for: AgentToolExecutor(...) direct construction outside owner files
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    if isinstance(func, ast.Name) and func.id == "AgentToolExecutor":
                         line_no = node.lineno
                         line_text = source.splitlines()[line_no - 1].strip()
                         violations.append((str(rel), line_no, line_text))
+                # Look for: something.permissions.check(...) or something.executor.execute(...)
+                if isinstance(node, ast.Attribute):
+                    if node.attr in ("check", "execute") and isinstance(node.value, ast.Attribute):
+                        if node.value.attr in ("permissions", "executor"):
+                            line_no = node.lineno
+                            line_text = source.splitlines()[line_no - 1].strip()
+                            violations.append((str(rel), line_no, line_text))
 
     return violations
 
@@ -278,3 +278,37 @@ def test_agentloop_delegates_mode_to_service():
     # Verify the property and method exist on AgentLoop
     assert hasattr(AgentLoop, "mode"), "AgentLoop must have .mode property"
     assert hasattr(AgentLoop, "set_mode"), "AgentLoop must have .set_mode method"
+
+
+def test_loop_wires_tool_verifier_to_service():
+    """AgentLoop must wire ToolResultVerifier to its ToolExecutionService so
+    post-tool verification actually executes instead of silently skipping."""
+    from core.agent.loop import AgentLoop
+    from core.agent.tool_service import ToolExecutionService
+    from core.harness import Harness, HarnessConfig, HarnessType
+    from core.project import ProjectContext
+    from tools.registry import ToolRegistry
+
+    def _resp(text: str):
+        from providers.types import LLMResponse
+        return LLMResponse(text=text, model="fake", provider="fake")
+
+    class _FakeRouter:
+        def __init__(self, responses):
+            self._responses = list(responses)
+
+        async def complete(self, *args, **kwargs):
+            return self._responses.pop(0)
+
+    registry = ToolRegistry()
+    loop = AgentLoop(
+        router=_FakeRouter([_resp("done.")]),
+        registry=registry,
+        project=ProjectContext(root_path=Path(__file__).resolve().parents[1]),
+        decision_logger=None,
+        harness=Harness(HarnessConfig(harness_type=HarnessType.MINIMAL,
+                                      enable_verification=True)),
+    )
+    assert loop._tool_verifier._tool_service is loop._tool_service
+    assert loop._tool_verifier._enabled is True
+    assert isinstance(loop._tool_service, ToolExecutionService)

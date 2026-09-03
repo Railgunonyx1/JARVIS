@@ -103,7 +103,7 @@ class ToolResultVerifier:
         try:
             from providers.types import ToolCall
             call = ToolCall(name="filesystem.read", arguments={"path": path}, id="verify_0")
-            result = await self._tool_service.execute_tool(call)
+            result = await self._tool_service.execute_tool(call, internal=True)
             if result.success:
                 return VerificationResult(
                     verified=True, check_name="exists", expected="file exists",

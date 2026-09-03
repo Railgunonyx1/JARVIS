@@ -193,6 +193,11 @@ class AgentLoop:
                 mode=mode,
             )
 
+        # Wire the per-tool verifier to the shared tool service so filesystem
+        # write / patch verification actually runs, and honor the harness gate.
+        self._tool_verifier._tool_service = self._tool_service
+        self._tool_verifier._enabled = self._verification_enabled
+
     # ── Mode management (delegates to ToolExecutionService) ────────────────
 
     @property

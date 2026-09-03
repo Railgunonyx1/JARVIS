@@ -83,14 +83,18 @@ class ToolExecutionService:
         session_id: str = "",
         append_to_messages: list[dict[str, Any]] | None = None,
         state: Any | None = None,
+        internal: bool = False,
     ) -> ToolExecutionResult:
         """Execute a single tool call with full permission + observer lifecycle.
 
         Returns a ToolExecutionResult.  If append_to_messages is provided,
         the tool response is appended to it (for AgentLoop compatibility).
+
+        Pass ``internal=True`` for internal/verification tool calls so they do
+        not surface as task steps in the observation.
         """
         start = time.perf_counter()
-        has_obs = self._observer.observation is not None
+        has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 
         # Look up tool
