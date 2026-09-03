@@ -4,63 +4,47 @@
 
 ### *Terminal-First Autonomous Engineering Agent*
 
-[![CI Status](https://github.com/Railgunonyx1/JARVIS/actions/workflows/ci.yml/badge.svg)](https://github.com/Railgunonyx1/JARVIS/actions)
 [![Python Version](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Architecture: In--Process](https://img.shields.io/badge/Architecture-In--Process-blueviolet)](#architecture)
-
-<p align="center">
-  <b>JARVIS MK-X</b> is a lightning-fast, terminal-native autonomous software engineering agent built for precision, local privacy, and zero-latency in-process execution.
-</p>
-
-[Quick Start](#-quick-start) •
-[Key Features](#-key-features) •
-[Execution Modes](#-execution-modes) •
-[CLI Commands](#-cli-commands) •
-[Architecture](#-architecture) •
-[LLM Router](#-multi-tiered-llm-routing) •
-[Contributing](#-contributing)
-
----
 
 </div>
 
-## 🌟 Highlights
+**JARVIS MK-X** is a terminal-native autonomous software-engineering agent. It runs a goal-driven agent loop in-process, routes across multiple local and hosted LLM providers with resilient fallback, and exposes a strict **single tool-execution boundary** so every tool call — from the agent loop or any external protocol (MCP, ACP, Codex) — passes through one permissioned, observable pipeline.
 
-- ⚡ **Low-Overhead In-Process Loop**: Runs directly inside your terminal process without heavy daemons or network hops.
-- 🎨 **Rich UI & Live Telemetry**: Live updating terminal UI with streaming telemetry, plans, tool outputs, and status gauges.
-- 🧠 **Multi-Provider Fallback Router**: Auto-falls back across Groq (Llama 3.1 8B), Google Gemini Flash, OpenRouter, and local Ollama.
-- 🛡️ **Multi-Tier Autonomy & Safety**: 4 distinct execution modes ranging from strict read-only planning to full autonomous execution with interactive confirmations.
-- 💾 **Persistent Categorized Memory**: SQLite & Vector store (`sqlite-vec`) for persistent long-term knowledge, facts, and developer preferences.
-- 🔍 **Integrated Developer Tooling**: Built-in AST file analysis, regex grep, file modifications, sandboxed command execution, and performance benchmarks.
+---
+
+## 🔑 Highlights
+
+- **Single tool boundary.** *All* tool execution flows through `ToolExecutionService`. Agent protocol adapters (MCP / ACP / Codex) and the loop itself delegate to it; there is no bypass path. Enforced by architecture-invariant tests.
+- **Hardened agent loop.** ReAct-style goal loop with `OBSERVING → VERIFYING → RECOVERING → EXECUTING` state transitions, a post-execution verification gate, deterministic failure classification (`CANCELLED > TIMEOUT > PERMISSION_DENIED > …`), and **parallel execution of read-only tool calls** (bounded by `Policy.max_concurrent_actions`).
+- **Multi-tier LLM routing.** Resilient provider chain across Groq, Google Gemini, OpenRouter, and local Ollama, with a `ModelGateway` that gates providers by capability and confidence.
+- **Declarative tool system.** ~76 tools carry metadata — `risk`, `timeout_seconds`, `is_destructive`, `side_effects` — driving automatic classification, timeout enforcement, and security policy.
+- **Goal-aware tool-hinting.** A curated core tool subset is offered to the model when no keyword intent matches, cutting token usage without dropping capabilities.
+- **Multi-tier security.** Modes from strict read-only planning to full autonomy, opt-in risk gating for destructive tools, secret redaction, and sandboxed command execution.
+- **Persistent memory.** SQLite + `sqlite-vec` vector store for long-term knowledge, facts, and developer preferences, plus a per-authority memory layer.
+- **Rich terminal UI.** Live streaming telemetry, tool-result panels, a telemetry cockpit, and unified discoverable slash commands.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Installation
-
 ```bash
-# Clone the repository
 git clone https://github.com/Railgunonyx1/JARVIS.git
 cd JARVIS
 
-# Create and activate virtual environment
 python -m venv venv
-# On Windows:
+# Windows:
 .\venv\Scripts\Activate.ps1
-# On Linux/macOS:
+# Linux/macOS:
 source venv/bin/activate
 
-# Install dependencies
-python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Keys
+### Configure API Keys
 
-Set your preferred provider keys in environment variables or create a `.env` file:
+Set provider keys in a `.env` file or environment variables:
 
 ```env
 GROQ_API_KEY=gsk_...
@@ -68,16 +52,22 @@ GEMINI_API_KEY=AIza...
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-*(Local Ollama offline models work without API keys!)*
+*(Local Ollama offline models work without any API keys.)*
 
-### 3. Launch
+### Launch
 
 ```bash
-# Launch interactive agent interface
-python -m cli
+# Interactive agent interface
+.\venv\Scripts\python.exe -m cli
 
-# Or execute a one-shot task directly
-python -m cli "inspect repository structure and summarize findings"
+# One-shot task (returns JSON / NDJSON automatically)
+.\venv\Scripts\python.exe -m cli "inspect repository structure and summarize findings"
+
+# Fast (JSON) one-shot mode
+.\venv\Scripts\python.exe -m cli.fast "explain the layout module"
+
+# Windows launcher (Interactive, agent mode)
+JARVIS.bat
 ```
 
 ---
@@ -86,34 +76,37 @@ python -m cli "inspect repository structure and summarize findings"
 
 | Mode | Flag | Description | Risk Profile |
 | :--- | :--- | :--- | :--- |
-| **Plan** | `--mode plan` | Generates execution plans without modifying files or running commands | 🟢 Read-Only (Zero Risk) |
-| **Controlled** | `--mode controlled` | Requests user confirmation before executing any tool or command | 🟡 High Oversight |
-| **Smart** | `--mode smart` | Auto-executes read operations; prompts confirmation for destructive changes | 🔵 Balanced Autonomy |
-| **Agent** | `--mode agent` | Fully autonomous goal solving loop with automatic tool execution | 🟣 Full Autonomy |
+| **Plan** | `--mode plan` | Generates plans without modifying files or running commands | 🟢 Read-Only |
+| **Controlled** | `--mode controlled` | Requests confirmation before destructive tool calls | 🟡 High Oversight |
+| **Smart** | `--mode smart` | Auto-executes reads; prompts for destructive changes | 🔵 Balanced |
+| **Agent** | `--mode agent` | Fully autonomous goal-solving loop | 🟣 Full Autonomy |
 
 ```bash
-python -m cli --mode smart
+.\venv\Scripts\python.exe -m cli --mode smart
 ```
 
 ---
 
-## 💻 Interactive Terminal Commands
+## 💻 Interactive Slash Commands
 
-Inside the interactive terminal session, control JARVIS using fast built-in slash commands:
+Discover commands inside the terminal with `/help`. Core set:
 
 ```
-  /help                  Show help system and available commands
-  /mode <name>           Switch active mode (plan | controlled | smart | agent)
-  /model                 Inspect active LLM provider and token telemetry
-  /status                Show system diagnostics and memory state
-  /context               View token window usage and budget breakdown
-  /memory search <q>     Search semantic memory
-  /memory add <k>=<v>    Store a user preference or fact
+  /help                  Help system and available commands
+  /mode <name>           Switch mode (plan | controlled | smart | agent)
+  /models                Inspect available models (sizes, speeds, strengths)
+  /model status          Deep-dive on the active provider + token telemetry
+  /status                System diagnostics and memory state
+  /context               Token window usage and budget breakdown
+  /tools                 List registered tools
+  /skills                List skills
+  /plugins               List plugins
+  /providers             List configured providers
   /history               List previous tasks and goals
-  /audit                 View security action audit log
-  /tree                  Render project directory tree
-  /cockpit               Open diagnostic telemetry dashboard
-  /clear                 Clear terminal viewport
+  /audit                 View the security action audit log
+  /tree                  Render the project directory tree
+  /cockpit               Open the diagnostic telemetry dashboard
+  /clear                 Clear the terminal viewport
   /exit                  Quit session
 ```
 
@@ -122,45 +115,69 @@ Inside the interactive terminal session, control JARVIS using fast built-in slas
 ## 🏗️ Architecture
 
 ```
-JARVIS MK-X
-├── cli/                          # Terminal Rendering & UX
-│   ├── main.py                   # CLI entry point & interactive loop
-│   ├── renderer.py               # Rich UI layout & panels
-│   ├── bridge.py                 # Agent event translation bridge
-│   ├── input.py                  # Low-latency Windows msvcrt / POSIX input
-│   └── cockpit.py                # Telemetry dashboard & analytics
+USER / CLIENT -> INTENT ROUTER -> AGENT KERNEL -> HARNESS -> MODEL GATEWAY
+    -> PROVIDER ROUTER -> MODEL -> TOOL EXECUTOR -> SANDBOX + PERMISSIONS
+    -> OBSERVATION -> VERIFICATION -> BUS EVENT -> {TUI, Persistence, MCP, ACP}
+```
+
+```
+JARVIS/
+├── cli/                       # Terminal rendering, cockpit, slash commands
+│   ├── main.py                # CLI entry point & interactive loop
+│   ├── fast.py                # Fast (JSON/NDJSON) one-shot entry
+│   ├── commands.py            # Unified slash-command dispatch
+│   ├── renderer.py / layout.py / bridge.py / input.py / theme.py
+│   └── cockpit.py             # Telemetry dashboard
 │
-├── core/agent/                   # Autonomous Agent Core
-│   ├── loop.py                   # ReAct decision & execution loop
-│   ├── observer.py               # Real-time event streams & hooks
-│   └── event_store.py            # Event persistence
+├── core/agent/                # Autonomous agent kernel
+│   ├── loop.py                # Goal-driven decision & execution loop
+│   ├── tool_service.py        # SINGLE tool-execution boundary
+│   ├── tools.py               # AgentToolExecutor
+│   ├── permissions.py         # Permission engine + risk gating
+│   ├── tool_verifier.py       # Post-tool result verification
+│   ├── verification.py        # Verification engine (post-execution gate)
+│   ├── state.py               # Agent state machine
+│   ├── intent.py              # Zero-LLM intent routing & tool selection
+│   ├── observer.py            # Event streams & observations
+│   └── contexts.py, lanes.py, quality_evaluator.py, …
 │
-├── providers/                    # Multi-LLM Provider Engine
-│   ├── router.py                 # Resilient fallback routing chain
-│   ├── groq_provider.py          # Ultra-fast Groq Llama 3.1 8B
-│   ├── gemini_provider.py        # Gemini Flash reasoning
-│   ├── openrouter_provider.py    # OpenRouter API integration
-│   └── ollama_provider.py        # Local offline Ollama provider
+├── providers/                 # Multi-LLM engine
+│   ├── router.py              # Resilient fallback routing chain
+│   ├── model_gateway.py       # Capability/confidence model selection
+│   ├── groq_provider.py / gemini_provider.py / openrouter_provider.py / ollama_provider.py
+│   └── types.py               # LLMResponse, ToolCall, schema utilities
 │
-├── tools/                        # Safe Tool Registry
-│   ├── filesystem/               # Scoped file read / write / patch
-│   ├── grep/                     # Fast ripgrep / regex search
-│   └── bash/                     # Command runner with security isolation
+├── tools/                     # Declarative tool registry
+│   ├── schema.py              # Tool metadata (risk, timeout, destructive, …)
+│   ├── classification.py      # Automatic tool risk classification
+│   ├── registry.py            # Tool catalog (~76 tools)
+│   ├── shell.py, filesystem, search, browser, git, …
+│   └── plugin_bridge.py       # Plugin -> tool bridging
 │
-├── memory/                       # Knowledge & Persistence
-│   ├── store.py                  # SQLite storage backend
-│   └── vector_store.py           # sqlite-vec vector embeddings
+├── runtime/protocols/         # External agent protocols (all route through the boundary)
+│   ├── __init__.py            # MCP / ACP / Codex adapters
+│   └── event_bus.py           # BusEvent pub/sub
 │
-└── benchmark/                    # Continuous Performance Gates
-    ├── gate.py                   # Automated regression prevention
-    └── baseline.json             # Ground truth performance metrics
+├── memory/                    # SQLite + sqlite-vec persistence
+├── security/                  # Policies, redaction, engine
+├── config/modes/              # Per-mode tool + behavior policies
+├── core/harness/              # Harness selector & presets
+└── tests/                     # 570+ tests incl. architecture invariants
 ```
 
 ---
 
-## 🔄 Multi-Tiered LLM Routing
+## 🛡️ Security Model
 
-JARVIS MK-X employs a tiered fallback chain to guarantee high availability and sub-second responses:
+- **Single boundary**: every tool call — from the agent loop or MCP/ACP/Codex — goes through `ToolExecutionService` → `PermissionEngine` → executor → redaction.
+- **Risk-aware**: tools carry `risk` / `is_destructive` metadata; modes and an opt-in risk gate restrict destructive tools.
+- **Sandboxed execution** for shell commands; secrets **redacted** from all tool output (including parallel execution paths).
+- **Audit trail**: every permission decision and tool execution emits structured `BusEvent`s with `schema_version` / `session_id`.
+- **Verification gate**: after the execution phase, key actions (file writes, patches, commits) are verified against the filesystem/state; failures transition to recovery with structured context. Verified tool calls are marked `internal` so they don't pollute task observations.
+
+---
+
+## 🔄 Multi-Tiered LLM Routing
 
 ```mermaid
 flowchart LR
@@ -171,31 +188,33 @@ flowchart LR
     E -- Fallback --> F[Template System]
 ```
 
+A `ModelGateway` sits in front of the providers, gating by capability (`Capability.CODING`, `Capability.TOOL_USE`, …) and confidence, with provider recovery on failure.
+
 ---
 
 ## 🧪 Testing & CI
 
-JARVIS MK-X includes a multi-tiered test suite and automated CI workflow:
-
 ```bash
-# Run safety linter
-ruff check . --select E9,F63,F7,F82
+# Lint
+ruff check .
 
-# Run full test suite
+# Full test suite
 pytest tests/ -q
 
-# Run benchmark performance gate
-python -m benchmark.gate --baseline benchmark/baseline.json --ci
+# Architecture invariants (single-boundary enforcement)
+pytest tests/test_architecture_invariants.py
 ```
+
+The suite includes an AST-based static scan that fails the build if any code outside the owner files constructs an executor directly or bypasses the boundary, plus runtime delegation tests for the MCP / ACP / Codex adapters.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please check out [CONTRIBUTING.md](CONTRIBUTING.md) and our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details on getting started, coding standards, and PR workflows.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for coding standards and PR workflows.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT — see the [LICENSE](LICENSE) file.
