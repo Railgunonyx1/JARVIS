@@ -257,7 +257,7 @@ def run_offline_benchmark() -> dict[str, Any]:
     """Full offline pass: startup + microbenchmarks + deterministic tasks."""
     from runtime.kernel import build_kernel, close_kernel
 
-    loop = build_kernel("agent", 10)
+    loop = build_kernel("agent", 10).agent_loop
     try:
         startup = measure_startup()
         micro: dict[str, Any] = {}
@@ -282,7 +282,7 @@ def run_online_benchmark() -> dict[str, Any]:
     """Online pass: full AgentLoop tasks (requires a configured LLM provider)."""
     from runtime.kernel import build_kernel, close_kernel
 
-    loop = build_kernel("agent", 10)
+    loop = build_kernel("agent", 10).agent_loop
     try:
         if not loop.router._get_available_chain():
             raise RuntimeError("No LLM providers available — online benchmark skipped.")

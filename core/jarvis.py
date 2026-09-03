@@ -32,7 +32,8 @@ class JarvisMKX:
         # Lazily build the active kernel so the legacy path still works
         # for smoke tests and old benchmarks.
         from runtime.kernel import build_kernel
-        self._loop = build_kernel()
+        self._runtime = build_kernel()
+        self._loop = self._runtime.agent_loop
         self.session_id = getattr(self._loop, "trace_id", "legacy")
         # Expose commonly-used legacy attributes as pass-throughs
         self.router = self._loop.router
@@ -61,4 +62,4 @@ class JarvisMKX:
     def shutdown(self) -> None:
         """Legacy cleanup."""
         from runtime.kernel import close_kernel
-        close_kernel(self._loop)
+        close_kernel(self._runtime)

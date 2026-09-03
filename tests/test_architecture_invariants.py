@@ -40,6 +40,7 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
         "tool_service.py",   # owns the executor/permissions
         "loop.py",           # creates the service (constructor only)
         "tools.py",          # defines AgentToolExecutor itself
+        "kernel.py",         # composition root — wires the single boundary
         "__init__.py",
     }
 

@@ -377,6 +377,11 @@ class AgentLoop:
                 if profile is not None:
                     state.provider = profile.provider
                     state.model = profile.name
+                    # Route the gateway's selection to the provider as the
+                    # request-scoped model so the actual inference call honours
+                    # it. The ModelGateway is the single model-selection
+                    # authority; nothing else should mutate _preferred_model.
+                    self._preferred_model = profile.name
                     self._emit("model.selected", {
                         "provider": profile.provider,
                         "model": profile.name,
