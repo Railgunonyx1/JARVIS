@@ -102,11 +102,9 @@ class JARVISDaemon:
 
         # Initialize ToolExecutionService — the single boundary for all tool execution
         from core.agent.tool_service import ToolExecutionService
+        from tools import ToolRegistry as _ToolRegistry
         self.tool_execution_service: ToolExecutionService = ToolExecutionService(
-            skill_registry=self.skill_registry,
-            skill_dirs=skill_dirs,
-            max_memory_mb=getattr(self.config, "max_memory_mb", 512),
-            max_timeout_seconds=getattr(self.config, "max_timeout_seconds", 120),
+            registry=_ToolRegistry(),
         )
 
         # Initialize ModelGateway (P0-2) — the canonical model selection authority.
@@ -466,16 +464,19 @@ class JARVISDaemon:
 
             # Execute through the single boundary (ToolExecutionService)
             try:
-                result = await self.tool_execution_service.execute_tool(
-                    tool_name=skill_name,
-                    tool_call_id=f"call_{skill_name}_{int(time.time())}",
-                    args=args,
+                from providers.types import ToolCall as _ToolCall
+                call = _ToolCall(name=skill_name, arguments=args, id=f"call_{skill_name}_{int(time.time())}")
+                tel_result = await self.tool_execution_service.execute_tool(
+                    call=call,
                     session_id=self._session_id,
-                    timeout=contract.metadata.timeout_seconds,
                 )
-                results.append(
-                    {"skill": skill_name, "result": result.output, "error": None}
-                )
+                results.append({
+                    "skill": skill_name,
+                    "result": tel_result.output,
+                    "error": tel_result.error or None,
+                    "success": tel_result.success,
+                    "permission_denied": tel_result.permission_denied,
+                })
             except ToolExecutionError as e:
                 results.append(
                     {"skill": skill_name, "error": e.message, "tool_call_id": e.tool_call_id}
