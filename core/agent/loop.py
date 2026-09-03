@@ -710,12 +710,11 @@ class AgentLoop:
                     ],
                 })
 
-                for call in response.tool_calls:
-                    with tracer.span("tool.execute", {"tool": call.name}):
-                        _t_tool = time.monotonic()
-                        await self._handle_call(messages, call, state, trace_id, session_id)
-                        _latency_log.append(("tool", (time.monotonic() - _t_tool) * 1000))
-
+                _t_start = time.monotonic()
+                await self._execute_tool_batch(
+                    response.tool_calls, messages, state, trace_id, session_id,
+                )
+                _latency_log.append(("tool_batch", (time.monotonic() - _t_start) * 1000))
                 # Safety: if the LLM keeps making tool calls without ever producing
                 # a text response, inject a nudge after 5 consecutive tool-only iterations.
                 if iteration >= 5 and not any(
@@ -975,3 +974,69 @@ class AgentLoop:
                     }, trace_id)
             except Exception:
                 pass
+
+    def _is_parallel_safe(self, call) -> bool:
+        """Tool calls that may run concurrently with other tool calls.
+
+        Only read-only, low/medium-risk tools are parallel-safe. Destructive
+        and high/critical-risk tools are excluded so their side effects never
+        overlap. Unknown tools are treated as serialized (safe default).
+        """
+        tool = self.registry.get(call.name) if call else None
+        if tool is None:
+            return False
+        if getattr(tool, "is_destructive", False):
+            return False
+        return getattr(tool, "risk", "safe") not in ("high", "critical")
+
+    async def _execute_tool_batch(self, calls, messages, state, trace_id,
+                                  session_id) -> None:
+        """Execute a batch of tool calls, parallelizing read-only runs.
+
+        Tool calls execute in the order the model requested them. Consecutive
+        parallel-safe (read-only) calls are gathered into a run and executed
+        concurrently via ``ToolExecutionService.execute_tools``; their tool
+        messages are appended to ``messages`` in input order. Destructive /
+        high-risk calls execute alone, at their position in the sequence, so
+        their side effects never overlap and relative ordering is preserved.
+        Verification runs for every call afterward.
+        """
+        for call in calls:
+            self.logger.record(trace_id, events.TOOL_REQUESTED, {"tool": call.name})
+
+        pending_safe: list = []
+        for call in calls:
+            if self._is_parallel_safe(call):
+                pending_safe.append(call)
+                continue
+            if pending_safe:
+                await self._run_safe_batch(pending_safe, messages, state, trace_id, session_id)
+                pending_safe = []
+            await self._handle_call(messages, call, state, trace_id, session_id)
+        if pending_safe:
+            await self._run_safe_batch(pending_safe, messages, state, trace_id, session_id)
+
+    async def _run_safe_batch(self, calls, messages, state, trace_id, session_id) -> None:
+        """Execute a run of parallel-safe calls concurrently (ordered appends)."""
+        if len(calls) == 1:
+            await self._handle_call(messages, calls[0], state, trace_id, session_id)
+            return
+        await self._tool_service.execute_tools(
+            calls, trace_id=trace_id, session_id=session_id,
+            append_to_messages=messages, state=state, parallel=True,
+        )
+        for call in calls:
+            await self._verify_tool(call, trace_id)
+
+    async def _verify_tool(self, call, trace_id: str) -> None:
+        """Run post-execution verification for a single tool call if enabled."""
+        if not self._tool_verifier.should_verify(call.name):
+            return
+        try:
+            vr = await self._tool_verifier.verify(call.name, call.arguments, "")
+            if vr and not vr.verified:
+                self._emit("tool.verification_failed", {
+                    "tool": call.name, "check": vr.check_name, "message": vr.message,
+                }, trace_id)
+        except Exception:
+            pass

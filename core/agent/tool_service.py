@@ -222,13 +222,62 @@ class ToolExecutionService:
         session_id: str = "",
         append_to_messages: list[dict[str, Any]] | None = None,
         state: Any | None = None,
+        *,
+        parallel: bool = True,
     ) -> list[ToolExecutionResult]:
-        """Execute multiple tool calls sequentially."""
-        results = []
-        for call in calls:
-            result = await self.execute_tool(call, trace_id, session_id, append_to_messages, state)
-            results.append(result)
-        return results
+        """Execute multiple tool calls.
+
+        When ``parallel`` is set (default), independent tool calls run
+        concurrently (bounded by ``Policy.max_concurrent_actions``) and their
+        tool messages are appended to ``append_to_messages`` in the original
+        input order so the model sees deterministic results. Pass
+        ``parallel=False`` to force strict sequential execution (used when a
+        caller must never overlap side effects).
+        """
+        # Resolve the concurrency cap from the active security policy. This is
+        # the enforcement of Policy.max_concurrent_actions, which was previously
+        # declared but unused. Falls back to a sane default.
+        concurrency = self._max_concurrency()
+        if not parallel or concurrency <= 1 or len(calls) <= 1:
+            results: list[ToolExecutionResult] = []
+            for call in calls:
+                result = await self.execute_tool(
+                    call, trace_id, session_id, append_to_messages, state,
+                )
+                results.append(result)
+            return results
+
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _run(call: ToolCall) -> ToolExecutionResult:
+            async with sem:
+                # No append here — appends are re-applied in order below.
+                return await self.execute_tool(
+                    call, trace_id, session_id, None, state,
+                )
+
+        results = await asyncio.gather(*(_run(call) for call in calls))
+        if append_to_messages is not None:
+            for call, res in zip(calls, results, strict=True):
+                # Mirror execute_tool's append semantics (including secret
+                # redaction) so parallel results are identical to sequential.
+                content = res.output if res.success else f"ERROR: {res.error}"
+                content = redact_sensitive(content)
+                append_to_messages.append({
+                    "role": "tool", "tool_call_id": res.call_id,
+                    "name": res.tool_name, "content": content,
+                })
+        return list(results)
+
+    def _max_concurrency(self) -> int:
+        """Concurrency cap for parallel tool execution from the security policy."""
+        try:
+            from security.engine import get_security_engine
+            eng = get_security_engine()
+            raw = getattr(eng.policy, "max_concurrent_actions", 5)
+            return max(1, int(raw))
+        except Exception:
+            return 5
 
     def list_tools(self) -> list[dict]:
         """Return the tool catalog in OpenAI function-calling format."""

@@ -405,6 +405,68 @@ class TestToolExecutionService:
         assert result.failure_class == FailureClass.TIMEOUT
         assert "timed out" in result.error
 
+    def test_execute_tools_parallel_preserves_order(self):
+        from tools.registry import ToolRegistry
+        from tools.schema import Tool
+
+        overlap = {"n": 0, "max": 0}
+
+        async def slow_tool(args):
+            overlap["n"] += 1
+            overlap["max"] = max(overlap["max"], overlap["n"])
+            try:
+                await asyncio.sleep(0.2)
+                return {"success": True, "output": f"done {args.get('id')}"}
+            finally:
+                overlap["n"] -= 1
+
+        reg = ToolRegistry()
+        for i in range(4):
+            reg.register(Tool(
+                name=f"test.slow_{i}", description="d", parameters={},
+                permission="filesystem.read", handler=slow_tool,
+                category="testing", timeout_seconds=5.0,
+                is_destructive=False, risk="low",
+            ))
+        svc = ToolExecutionService(registry=reg, mode="agent")
+        calls = [ToolCall(name=f"test.slow_{i}", arguments={"id": i}, id=f"c{i}") for i in range(4)]
+        msgs = []
+        results = asyncio.run(svc.execute_tools(calls, append_to_messages=msgs))
+        # Concurrency hint: the calls should have overlapped (not strictly serial).
+        assert results[0].success
+        assert overlap["max"] > 1, f"expected overlap, got max concurrency {overlap['max']}"
+        # Message order must match the input order.
+        assert [m["tool_call_id"] for m in msgs] == ["c0", "c1", "c2", "c3"]
+        assert [m["content"] for m in msgs] == ["done 0", "done 1", "done 2", "done 3"]
+
+    def test_execute_tools_sequential_when_disabled(self):
+        from tools.registry import ToolRegistry
+        from tools.schema import Tool
+
+        overlap = {"n": 0, "max": 0}
+
+        async def slow_tool(args):
+            overlap["n"] += 1
+            overlap["max"] = max(overlap["max"], overlap["n"])
+            try:
+                await asyncio.sleep(0.2)
+                return {"success": True, "output": "ok"}
+            finally:
+                overlap["n"] -= 1
+
+        reg = ToolRegistry()
+        for i in range(3):
+            reg.register(Tool(
+                name=f"test.seq_{i}", description="d", parameters={},
+                permission="filesystem.read", handler=slow_tool,
+                category="testing", timeout_seconds=5.0,
+                is_destructive=False, risk="low",
+            ))
+        svc = ToolExecutionService(registry=reg, mode="agent")
+        calls = [ToolCall(name=f"test.seq_{i}", arguments={}, id=f"s{i}") for i in range(3)]
+        asyncio.run(svc.execute_tools(calls, parallel=False))
+        assert overlap["max"] == 1, f"expected serial execution, got max concurrency {overlap['max']}"
+
     def test_permission_checked_event_carries_risk_metadata(self):
         from core.agent.permissions import PermissionEngine
 
@@ -533,6 +595,72 @@ class TestAgentLoopHarnessIntegration:
         assert loop.max_iterations == 20
         result = asyncio.run(loop.run("implement feature"))
         assert result.success
+
+    def test_loop_batch_parallel_safe_serializes_destructive(self):
+        """The loop runs read-only tool calls concurrently but never overlaps
+        destructive/high-risk tools, and appends tool messages in input order.
+        """
+        from providers.types import ToolCall
+        from tools.registry import ToolRegistry
+        from tools.schema import Tool
+
+        state = {"n": 0, "max": 0, "order": []}
+
+        async def read_tool(args):
+            state["n"] += 1
+            state["max"] = max(state["max"], state["n"])
+            try:
+                await asyncio.sleep(0.2)
+                state["order"].append(args["id"])
+                return {"success": True, "output": f"read {args['id']}"}
+            finally:
+                state["n"] -= 1
+
+        async def destructive_tool(args):
+            state["n"] += 1
+            state["max"] = max(state["max"], state["n"])
+            try:
+                await asyncio.sleep(0.2)
+                return {"success": True, "output": "destroyed"}
+            finally:
+                state["n"] -= 1
+
+        reg = ToolRegistry()
+        for i in range(4):
+            reg.register(Tool(
+                name=f"test.read_{i}", description="d", parameters={},
+                permission="filesystem.read", handler=read_tool,
+                category="testing", risk="low", is_destructive=False,
+            ))
+        reg.register(Tool(
+            name="test.destroy", description="d", parameters={},
+            permission="filesystem.delete", handler=destructive_tool,
+            category="testing", risk="critical", is_destructive=True,
+        ))
+
+        tool_calls = [
+            ToolCall(name=f"test.read_{i}", arguments={"id": i}, id=f"r{i}") for i in range(4)
+        ]
+        tool_calls.append(ToolCall(name="test.destroy", arguments={}, id="del"))
+
+        fake = FakeRouter([_resp("", tool_calls=tool_calls), _resp("done.")])
+        from core.harness import Harness, HarnessConfig, HarnessType
+        hc = HarnessConfig(harness_type=HarnessType.MINIMAL, enable_verification=False)
+        loop = AgentLoop(
+            router=fake,
+            registry=reg,
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            harness=Harness(hc),
+            max_iterations=2,
+        )
+        result = asyncio.run(loop.run("test"))
+        assert result.success
+        # Read-only calls overlapped (concurrent), proving the batch path.
+        assert state["max"] > 1, f"expected parallel reads, got max {state['max']}"
+        # All four reads executed and produced output in deterministic order.
+        assert len(state["order"]) == 4
+        assert sorted(state["order"]) == [0, 1, 2, 3]
 
     def test_instant_tool_dispatch_binds_messages(self):
         # Regression: the INSTANT tool-dispatch path referenced the local
