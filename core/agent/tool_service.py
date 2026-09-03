@@ -75,6 +75,7 @@ class ToolExecutionService:
         self._logger = _logger
         self._bus = bus
         self._mode = mode
+        self._session_id: str = ""  # session identity stamped on emitted events
 
     async def execute_tool(
         self,
@@ -94,6 +95,8 @@ class ToolExecutionService:
         not surface as task steps in the observation.
         """
         start = time.perf_counter()
+        if session_id:
+            self._session_id = session_id
         has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 
@@ -101,7 +104,7 @@ class ToolExecutionService:
         tool = self._registry.get(call.name)
         if tool is None:
             error = f"Tool '{call.name}' is not registered"
-            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "error", 0.0, error)
             if append_to_messages is not None:
@@ -116,13 +119,13 @@ class ToolExecutionService:
             )
 
         # Permission check
-        self._emit("tool.requested", {"tool": call.name}, trace_id)
+        self._emit("tool.requested", {"tool": call.name}, trace_id, session_id)
         allowed, reason = await self._permissions.check(
             tool, call.arguments, trace_id, session_id,
         )
         self._observer.observe_permission(call.name, allowed, reason) if has_obs else None
         if not allowed:
-            self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
+            self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "denied", 0.0, reason)
             if append_to_messages is not None:
@@ -159,7 +162,7 @@ class ToolExecutionService:
                 "Tool '%s' timed out — background thread abandoned (%d total abandoned)",
                 call.name, abandoned + 1,
             )
-            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "error", _tool_timeout * 1000, error)
             if append_to_messages is not None:
@@ -190,9 +193,9 @@ class ToolExecutionService:
             })
 
         if result.success:
-            self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
+            self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id, session_id)
         else:
-            self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id, session_id)
 
         # Record tool result in AgentState if provided
         if state is not None:
@@ -301,7 +304,7 @@ class ToolExecutionService:
         return self._permissions.set_mode(mode)
 
     def _emit(self, name: str, payload: dict[str, Any] | None = None,
-              trace_id: str = "") -> None:
+              trace_id: str = "", session_id: str = "") -> None:
         if self._bus is None:
             return
         try:
@@ -309,6 +312,7 @@ class ToolExecutionService:
             self._bus.publish(BusEvent(
                 name=name, payload=payload or {},
                 source="tool_execution_service", trace_id=trace_id,
+                session_id=session_id or self._session_id,
             ))
         except Exception:
             pass

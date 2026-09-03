@@ -172,6 +172,7 @@ class AgentLoop:
 
         self._tool_counter = 0
         self._preferred_model: str | None = None  # request-scoped model override
+        self._session_id: str = ""  # current session identity stamped on BusEvents
 
         # Single tool execution boundary -- permissions and executor live
         # inside ToolExecutionService; nothing outside may access them.
@@ -225,6 +226,7 @@ class AgentLoop:
                 payload=payload or {},
                 source="agent_loop",
                 trace_id=trace_id,
+                session_id=self._session_id,
             ))
         except Exception:
             pass  # Best-effort: bus publish failure must not crash the agent
@@ -238,6 +240,8 @@ class AgentLoop:
         tracer = get_tracer()
         root = tracer.begin(f"run: {goal[:80]}", {"goal": goal[:200]})
         try:
+            if session_id:
+                self._session_id = session_id
             trace_id = self.logger.begin_task(goal, source="agent_loop")
             self.logger.record(trace_id, events.AGENT_REASONING_STARTED, {"goal": goal[:200]})
             self.observer.start(trace_id, goal)

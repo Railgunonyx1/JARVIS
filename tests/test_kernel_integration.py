@@ -596,6 +596,26 @@ class TestAgentLoopHarnessIntegration:
         result = asyncio.run(loop.run("implement feature"))
         assert result.success
 
+    def test_loop_stamps_session_id_on_bus_events(self):
+        """BusEvents emitted by the loop carry the active session_id."""
+        from runtime.event_bus import get_event_bus
+
+        bus = get_event_bus()
+        bus.clear()
+        hc = HarnessConfig(harness_type=HarnessType.MINIMAL, enable_verification=False)
+        loop = AgentLoop(
+            router=FakeRouter([_resp("done.")]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            harness=Harness(hc),
+            event_bus=bus,
+        )
+        asyncio.run(loop.run("hello", session_id="sess-abc"))
+        started = [e for e in bus.recent(100) if e.name == "task.started"]
+        assert started, "task.started event was not emitted"
+        assert started[-1].session_id == "sess-abc"
+
     def test_loop_batch_parallel_safe_serializes_destructive(self):
         """The loop runs read-only tool calls concurrently but never overlaps
         destructive/high-risk tools, and appends tool messages in input order.
