@@ -192,6 +192,7 @@ def build_kernel(mode: str = "agent", max_iterations: int = 10,
         harness=harness.active,
         model_gateway=model_gateway,
         tool_service=tool_service,
+        confirmation_handler=confirmation_handler,
     )
 
     return JarvisRuntime(

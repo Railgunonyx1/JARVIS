@@ -74,47 +74,23 @@ def _setup_logging(verbose: bool) -> None:
     _configure_noise(verbose)
 
 
-def _build_router():
-    from core.config import Config
-    from providers.router import ProviderRouter
-    config = Config.instance()
-    return ProviderRouter(config.get_section("models"), config.api_keys)
-
-
 def _build_loop(mode: str, max_iterations: int, max_tokens: int | None,
                 project_dir: str | None, confirmation_handler=None):
     from cli.startup_profile import get_profiler
-    from core.agent.loop import AgentLoop
-    from core.config import Config
-    from core.project import ProjectContext
-    from memory.mem import get_mem
-    from tools import build_default_registry
 
     profiler = get_profiler()
     profiler.begin_trace()
     try:
-        with profiler.phase("config.load"):
-            Config.instance()
-        with profiler.phase("tools.registry"):
-            registry = build_default_registry()
-        with profiler.phase("project.discover"):
-            project = ProjectContext.discover(project_dir) if project_dir else ProjectContext.discover()
-        with profiler.phase("providers.router"):
-            router = _build_router()
-        with profiler.phase("memory.open"):
-            mem = get_mem()
-        # Defer project doc import — expensive, not needed for first response
-        # Will be done in background after UI is ready
-        if not getattr(_build_loop, "_mem_cleanup_registered", False):
-            _build_loop._mem_cleanup_registered = True
-            import atexit
-            atexit.register(mem.close)
-        return AgentLoop(
-            router=router, registry=registry, project=project,
-            mode=mode, max_iterations=max_iterations,
-            max_tokens=max_tokens, mem=mem,
-            confirmation_handler=confirmation_handler,
-        )
+        from runtime.kernel import build_kernel
+        with profiler.phase("kernel.build"):
+            runtime = build_kernel(
+                mode=mode,
+                max_iterations=max_iterations,
+                max_tokens=max_tokens,
+                project_dir=project_dir,
+                confirmation_handler=confirmation_handler,
+            )
+        return runtime.agent_loop
     finally:
         profiler.end_trace()
 
