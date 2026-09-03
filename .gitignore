@@ -57,3 +57,30 @@ audit.log
 Thumbs.db
 .DS_Store
 node_modules/
+
+# Vendored / archived reference trees (never commit)
+migration/
+dev_artifacts/
+vendor/
+benchmark/results/optimizer/
+
+# Random dev scratch (never commit throwaway one-off scripts/logs)
+fix*.py
+fix2.py
+fix3.py
+optimize_*.py
+optimize_budget_integration.py
+verify_*.py
+verify.ps1
+check_*.py
+tokenhance.py
+tokentracking.py
+token_monitoring.py
+quick_fix.py
+*.log
+*.bak
+*.tsbuildinfo
+web_boot.log
+
+# Placeholder leftovers
+path/
