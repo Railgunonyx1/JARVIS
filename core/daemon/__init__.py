@@ -22,7 +22,7 @@ from typing import Dict, Any, Optional, List
 from core.daemon.events import _emit, BusEvent, SCHEMA_VERSION, make_session_id, make_trace_id
 
 # Model Gateway (P0-2) — single model selection authority
-from core.model_gateway import ModelGateway
+from providers.model_gateway import ModelGateway
 
 # Import skill registry (P1 optimization - Cordis microkernel adaptation).
 # Backed by the manifest-driven skills/registry (skills/manifests/*.json).
@@ -111,10 +111,7 @@ class JARVISDaemon:
         # All model routing, draft/verification selection, and capability-aware
         # model selection goes through this gateway, NOT via direct
         # `loop._preferred_model` or similar private state manipulation.
-        self.model_gateway: ModelGateway = ModelGateway(
-            config=self.config,
-            skill_registry=self.skill_registry,
-        )
+        self.model_gateway: ModelGateway = ModelGateway()
 
         # Initialize HarnessSelector (P0-3) — the canonical harness selection
         # authority. All harness selection should go through this selector,
