@@ -86,6 +86,14 @@ _CONTEXT_OVERFLOW_MARKERS: tuple[str, ...] = (
     "reduce input",
 )
 
+_MODEL_FAILURE_MARKERS: tuple[str, ...] = (
+    "empty response",
+    "provider returned an empty response",
+    "finish_reason=",
+    "invalid response format",
+    "failed to parse model",
+)
+
 
 def is_context_overflow_error(error: str) -> bool:
     """Return True if an error string indicates the model context window was exceeded."""
@@ -93,8 +101,14 @@ def is_context_overflow_error(error: str) -> bool:
     return any(marker in err for marker in _CONTEXT_OVERFLOW_MARKERS)
 
 
+def is_model_failure_error(error: str) -> bool:
+    """Return True if an error string indicates a model-level generation failure."""
+    err = error.lower()
+    return any(marker in err for marker in _MODEL_FAILURE_MARKERS)
+
+
 def classify_failure(error: str, *, is_timeout: bool = False,
-                     is_permission: bool = False, is_verification: bool = False,
+                     is_permission: bool = False,
                      is_cancelled: bool = False, is_context_overflow: bool = False,
                      is_provider: bool = False) -> FailureClass:
     """Deterministic failure classification. Always returns the highest-precedence match."""
@@ -115,6 +129,8 @@ def classify_failure(error: str, *, is_timeout: bool = False,
     err = error.lower()
     if "not registered" in err or "unknown tool" in err:
         return FailureClass.MALFORMED_TOOL
+    if is_model_failure_error(error):
+        return FailureClass.MODEL_FAILURE
     return FailureClass.TOOL_FAILURE
 
 

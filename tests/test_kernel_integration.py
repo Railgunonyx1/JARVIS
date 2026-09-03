@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+import threading
 import time
 
 from core.agent.loop import AgentLoop
@@ -404,6 +405,43 @@ class TestToolExecutionService:
         assert not result.success
         assert result.failure_class == FailureClass.TIMEOUT
         assert "timed out" in result.error
+
+    def test_cancellation_keyed_by_tool_call_id(self):
+        from core.agent.tools import AgentToolExecutor
+        from tools.registry import ToolRegistry
+        from tools.schema import Tool
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_handler(_):
+            started.set()
+            release.wait(10.0)
+            return {"success": True, "output": "done"}
+
+        reg = ToolRegistry()
+        reg.register(Tool(
+            name="test.blocking", description="blocking", parameters={},
+            permission="filesystem.read", handler=blocking_handler,
+            category="testing", timeout_seconds=20.0,
+        ))
+        svc = ToolExecutionService(registry=reg)
+        call = ToolCall(name="test.blocking", arguments={}, id="call-abc-123")
+
+        async def run():
+            task = asyncio.create_task(svc.execute_tool(call))
+            await asyncio.to_thread(started.wait, 3.0)
+            try:
+                cancel = AgentToolExecutor.current_cancellation("call-abc-123")
+                assert cancel is not None, "current_cancellation must return the live event"
+                assert not cancel.is_set()
+                assert AgentToolExecutor.current_cancellation("other-id") is None
+            finally:
+                release.set()
+                await asyncio.wait_for(task, timeout=5.0)
+            assert AgentToolExecutor.current_cancellation("call-abc-123") is None
+
+        asyncio.run(run())
 
     def test_execute_tools_parallel_preserves_order(self):
         from tools.registry import ToolRegistry
@@ -917,10 +955,15 @@ class TestFailureClassification:
         s.terminal_reason = TerminalReason.VERIFICATION_FAIL
         assert s.terminal_reason == TerminalReason.VERIFICATION_FAIL
 
-    def test_failure_class_not_verification(self):
+    def test_failure_class_plain_tool(self):
         from core.agent.state import FailureClass, classify_failure
-        fc = classify_failure("tests failed", is_verification=True)
+        fc = classify_failure("tests failed")
         assert fc == FailureClass.TOOL_FAILURE
+
+    def test_failure_class_model_failure(self):
+        from core.agent.state import FailureClass, classify_failure
+        fc = classify_failure("provider returned an empty response")
+        assert fc == FailureClass.MODEL_FAILURE
 
     def test_failure_class_not_max_iterations(self):
         from core.agent.state import FailureClass, classify_failure

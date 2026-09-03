@@ -146,7 +146,7 @@ class ToolExecutionService:
             result = await asyncio.wait_for(
                 self._executor.execute(
                     call.name, call.arguments, trace_id,
-                    mode=self._mode, session_id=session_id,
+                    mode=self._mode, session_id=session_id, tool_call_id=call.id,
                 ),
                 timeout=_tool_timeout,
             )
