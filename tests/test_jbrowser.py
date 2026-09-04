@@ -517,3 +517,88 @@ class TestResourceBlocking:
         assert backend._blocking["kinds"]  # default kinds populated
 
 
+class TestToolExecutionServiceIntegration:
+    """J-Browser tools must execute through the single boundary (no bypass)."""
+
+    def _svc_with_fake(self):
+        import asyncio
+
+        from core.agent.tool_service import ToolExecutionService
+        from tools import build_default_registry
+        reset_controller()
+        import jbrowser.controller as jbc
+        with jbc._controller_lock:
+            jbc._controller = BrowserController(backend=_FakeBackend())
+        return asyncio, ToolExecutionService(registry=build_default_registry())
+
+    def _run(self, svc, asyncio, name, arguments, tool_id):
+        from providers.types import ToolCall
+        return asyncio.run(svc.execute_tool(ToolCall(
+            name=name, arguments=arguments, id=tool_id)))
+
+    def test_status_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.status", {}, "jb1")
+        assert res.success is True
+        assert "Browser backend" in res.output
+        assert "fake" in res.output
+
+    def test_new_tab_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.new_tab",
+                        {"url": "https://ex.com"}, "jb2")
+        assert res.success is True
+        assert res.metadata["tab_id"].startswith("tab_")
+
+    def test_tabs_listing_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        self._run(svc, asyncio, "browser.new_tab", {"url": "https://a.com"}, "jb3")
+        res = self._run(svc, asyncio, "browser.tabs", {}, "jb4")
+        assert res.success is True
+        assert len(res.metadata["tabs"]) >= 1
+
+    def test_read_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        self._run(svc, asyncio, "browser.new_tab", {"url": "https://ex.com"}, "jb5")
+        res = self._run(svc, asyncio, "browser.read", {}, "jb6")
+        assert res.success is True
+        assert res.metadata["url"]
+
+    def test_unknown_tool_still_rejected(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.not_a_tool", {}, "jb7")
+        assert res.success is False
+
+
+class TestSessionPersistence:
+    def test_persistent_profile_roundtrip(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.sessions import BrowserSession, SessionManager, profile_dir
+        root = Path(tempfile.mkdtemp())
+        sid = "sess_persist"
+        session = BrowserSession(sid, persistent=True, profile_root=root)
+        expected = profile_dir(root, sid)
+        assert session.user_data_dir == expected
+        assert expected.exists()
+        manager = SessionManager()
+        again = manager.get_or_create(sid, persistent=True, profile_root=root)
+        assert again is not session  # new manager instance
+        assert again.user_data_dir == expected
+        assert expected.exists()
+
+    def test_ephemeral_session_no_profile_dir(self):
+        from jbrowser.sessions import BrowserSession
+        session = BrowserSession(persistent=False)
+        assert session.user_data_dir is None
+        assert session.persistent is False
+
+    def test_session_describe(self):
+        from jbrowser.sessions import BrowserSession
+        session = BrowserSession("s1")
+        desc = session.describe()
+        assert desc["session_id"] == "s1"
+        assert desc["persistent"] is False
+
+
