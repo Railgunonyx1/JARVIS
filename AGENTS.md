@@ -71,6 +71,34 @@ its gate live in `security/code_scan.py` (`check_generated_code`,
 
 **Test strategy:** Build all implementation first, run full test suite once at end of Phase A.
 
+## Phase B — J-Browser (Chromium agent browser)
+
+Built on `jbrowser` branch (from clean `main`). J-Browser is an optimized
+Chromium agent-browser platform that inherits JARVIS's full agent stack
+(skills, tools, memory, EventBus) on the same branch — no copy.
+
+| Area | Where |
+|------|-------|
+| Optimized launch flags | `jbrowser/optimization.py` (GPU raster, QUIC, num-raster-threads, tab freezing, 12-tab cap) |
+| Engine abstraction | `jbrowser/backend/base.py` (ABC) + `jbrowser/backend/playwright.py` (headed+persistent, WebScraper fallback) |
+| Tabs / Sessions | `jbrowser/tabs.py` (stable tab ids), `jbrowser/sessions.py` (persistent profiles under `config/browser_profiles/`) |
+| Page context | `jbrowser/page_context.py` (`[elN]` handles for agent reasoning) |
+| Events | `jbrowser/events.py` (`browser.*` BusEvents via `runtime.event_bus`) |
+| Permissions | `jbrowser/permissions.py` (low/medium/high, approval gating) |
+| Facade + tools | `jbrowser/controller.py` (`get_controller()`), `jbrowser/tools.py` (`browser.*` handlers) |
+| Skills transfer | `jbrowser/skills.py` — surfaces the canonical `skills/` registry (browser_automation, web_research, ...) |
+| CLI | `python -m apps.jbrowser open/tabs/read/screenshot/status/repl` |
+
+Playwright is optional (lazy import); J-Browser tests mock the backend so the
+suite passes without it (`pip install playwright` + `playwright install chromium`
+to actually browse). Known dual-path: legacy `tools/browser.py` handlers still
+call `external/browser_agent` (single-page); new `browser.*` tools route via
+`get_controller()`. Both go through `ToolExecutionService` (no bypass).
+Legacy-path refactor onto `PlaywrightBackend` is a follow-up.
+
+**Test strategy:** run full suite once at end of Phase B (was 613 passed / 14
+skipped with J-Browser tests green).
+
 ## Research Pipeline
 
 ```text

@@ -13,6 +13,17 @@ from tools.schema import Tool, ToolResult, tool_result
 
 def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
+    from jbrowser.tools import (
+        browser_close_tab,
+        browser_find,
+        browser_new_tab,
+        browser_permissions,
+        browser_profile,
+        browser_read,
+        browser_scroll,
+        browser_switch_tab,
+        browser_tabs,
+    )
     from tools.audit import run_audit, run_pytest
     from tools.browser import (
         browser_click,
@@ -412,6 +423,132 @@ def build_default_registry() -> ToolRegistry:
             },
             permission="browser.read",
             handler=browser_status,
+            category="browser",
+        ),
+        Tool(
+            name="browser.new_tab",
+            description=(
+                "Open a new browser tab (optionally at a URL) and return its stable "
+                "tab_id. Use for multi-tab research; tabs keep their own state."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Optional URL to open in the new tab."},
+                },
+                "required": [],
+            },
+            permission="browser.low",
+            handler=browser_new_tab,
+            category="browser",
+        ),
+        Tool(
+            name="browser.close_tab",
+            description=("Close a browser tab by its tab_id."),
+            parameters={
+                "type": "object",
+                "properties": {"tab_id": {"type": "string", "description": "Stable tab id from browser.tabs/new_tab."}},
+                "required": ["tab_id"],
+            },
+            permission="browser.low",
+            handler=browser_close_tab,
+            category="browser",
+        ),
+        Tool(
+            name="browser.tabs",
+            description=(
+                "List all open browser tabs (id, session, title, url). Use to see "
+                "what research state exists before operating on a specific tab."
+            ),
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="browser.low",
+            handler=browser_tabs,
+            category="browser",
+        ),
+        Tool(
+            name="browser.switch_tab",
+            description=("Make a specific tab the active target for subsequent browser tools."),
+            parameters={
+                "type": "object",
+                "properties": {"tab_id": {"type": "string", "description": "Stable tab id."}},
+                "required": ["tab_id"],
+            },
+            permission="browser.low",
+            handler=browser_switch_tab,
+            category="browser",
+        ),
+        Tool(
+            name="browser.read",
+            description=(
+                "Read the current (or named) page as a structured context: URL, title, "
+                "interactive element handles [elN], links, forms, and visible text. "
+                "Prefer this over browser.extract for agent reasoning; use the [elN] "
+                "handles with browser.click/type."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {"tab_id": {"type": "string", "description": "Optional tab id."}},
+                "required": [],
+            },
+            permission="browser.low",
+            handler=browser_read,
+            category="browser",
+        ),
+        Tool(
+            name="browser.find",
+            description=("Find occurrences of a query in the page text of a tab."),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Text to search for."},
+                    "tab_id": {"type": "string", "description": "Optional tab id."},
+                },
+                "required": ["query"],
+            },
+            permission="browser.low",
+            handler=browser_find,
+            category="browser",
+        ),
+        Tool(
+            name="browser.scroll",
+            description=("Scroll a page: direction one of up/down/top/bottom."),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "direction": {"type": "string", "enum": ["up", "down", "top", "bottom"]},
+                    "amount": {"type": "integer", "description": "Pixels for up/down."},
+                    "tab_id": {"type": "string"},
+                },
+                "required": ["direction"],
+            },
+            permission="browser.low",
+            handler=browser_scroll,
+            category="browser",
+        ),
+        Tool(
+            name="browser.profile",
+            description=(
+                "Report the active browser session: persistent profile dir (cookies/"
+                "storage kept on disk so logged-in sessions survive restarts)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {"session_id": {"type": "string"}},
+                "required": [],
+            },
+            permission="browser.low",
+            handler=browser_profile,
+            category="browser",
+        ),
+        Tool(
+            name="browser.permissions",
+            description=(
+                "Show which browser actions are low (auto), medium, or high risk "
+                "(high requires explicit approval before execution)."
+            ),
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="browser.low",
+            handler=browser_permissions,
             category="browser",
         ),
         Tool(

@@ -1,7 +1,7 @@
 {
   "name": "browser_automation",
   "description": "Automate web browsing: open pages, click elements, fill forms, extract text, take screenshots",
-  "tools": ["browser.open", "browser.click", "browser.type", "browser.extract", "browser.screenshot", "browser.status"],
+  "tools": ["browser.open", "browser.click", "browser.type", "browser.extract", "browser.screenshot", "browser.status", "browser.read", "browser.find", "browser.scroll", "browser.tabs", "browser.new_tab", "browser.close_tab", "browser.switch_tab", "browser.profile", "browser.permissions"],
   "tags": ["web", "browser", "automation", "research"],
   "risk": "low",
   "timeout": 120,

@@ -32,6 +32,7 @@ rich==15.0.0
 textual==8.2.8
 
 # === Optional (lazy, guarded imports) ===
+# playwright==1.48.0            # J-Browser Chromium engine (then: playwright install chromium)
 # sentence-transformers==5.6.1   # memory embeddings (~2GB torch)
 # aiosqlite>=0.19.0              # runtime.telemetry persistence
 # sounddevice==0.5.5             # audio health check
