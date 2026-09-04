@@ -15,6 +15,9 @@ from typing import Any
 
 MAX_CTX_TEXT = 6000
 MAX_INTERACTIVES = 60
+# Bound the per-element scan on very large pages (e.g. ~100K-node DOMs) so a
+# single read never walks the whole tree; handles are stable within the scan.
+MAX_SCAN_ELEMENTS = 200
 
 
 @dataclass
@@ -94,7 +97,7 @@ def _extract_interactives(page: Any) -> list[dict[str, Any]]:
         elements = page.query_selector_all(_SELECTOR)
     except Exception:
         return out
-    for idx, el in enumerate(elements):
+    for idx, el in enumerate(elements[:MAX_SCAN_ELEMENTS]):
         handle = f"el{idx}"
         try:
             tag = (el.evaluate("e => e.tagName") or "").lower()

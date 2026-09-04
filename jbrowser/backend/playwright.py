@@ -20,7 +20,7 @@ import time
 from typing import Any
 
 from jbrowser.backend.base import BrowserBackend, TabInfo
-from jbrowser.optimization import build_launch_kwargs
+from jbrowser.optimization import DEFAULT_TAB_LIMIT, build_launch_kwargs
 from jbrowser.page_context import build_page_context
 from jbrowser.tabs import TabContext, TabManager, new_tab_id
 
@@ -34,7 +34,8 @@ class PlaywrightBackend(BrowserBackend):
 
     def __init__(self, *, headless: bool | None = None,
                  timeout_ms: int = 30_000,
-                 preserve_tabs: bool = False) -> None:
+                 preserve_tabs: bool = False,
+                 block_resources: bool | frozenset[str] | None = None) -> None:
         self.headless = (
             os.environ.get("JARVIS_BROWSER_HEADED", "0") != "0"
             if headless is None else headless
@@ -52,6 +53,12 @@ class PlaywrightBackend(BrowserBackend):
         # defer lazy import of playwright to keep module importable everywhere
         self._playwright_module = None
         self._chromium = None
+        self._blocking: dict[str, Any] | None = None
+        if block_resources:
+            from jbrowser.optimization import build_resource_blocking
+            self._blocking = build_resource_blocking(
+                block_resources if isinstance(block_resources, frozenset) else None
+            )
 
     # ---------------------------------------------------------- lifecycle
     def _check_playwright(self) -> bool:
@@ -99,6 +106,8 @@ class PlaywrightBackend(BrowserBackend):
                 "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 JBrowser"
             ),
         )
+        if self._blocking is not None:
+            self._context.route(self._blocking["pattern"], self._blocking["handler"])
 
     # ------------------------------------------------------------ sessions
     def create_session(self, session_id: str, *, persistent: bool = False) -> None:
@@ -125,6 +134,8 @@ class PlaywrightBackend(BrowserBackend):
             "tabs": len(self.tabs),
             "active_tab": self._active_page,
             "preserve_tabs": self.preserve_tabs,
+            "tab_limit": DEFAULT_TAB_LIMIT,
+            "blocking": bool(self._blocking),
         }
 
     # --------------------------------------------------------------- tabs
@@ -146,7 +157,32 @@ class PlaywrightBackend(BrowserBackend):
         self.switch_tab(tab_id)
         if url:
             self.navigate(url, tab_id=tab_id)
+        self._enforce_cap()
         return self.tabs.get(tab_id) if False else info
+
+    def _enforce_cap(self) -> int:
+        """Close the least-recently-active tabs beyond the memory cap.
+
+        Only applied when tab state is not being preserved (memory-saver mode).
+        The active tab is never closed. Returns number of tabs closed.
+        """
+        if self.preserve_tabs:
+            return 0
+        from jbrowser.optimization import DEFAULT_TAB_LIMIT, enforce_tab_limit
+        over = enforce_tab_limit(len(self.tabs), DEFAULT_TAB_LIMIT)
+        if over <= 0:
+            return 0
+        closed = 0
+        candidates = sorted(self.tabs.list(),
+                            key=lambda t: t.created_at)
+        for ctx in candidates:
+            if closed >= over:
+                break
+            if ctx.active:
+                continue
+            if self.close_tab(ctx.tab_id):
+                closed += 1
+        return closed
 
     def close_tab(self, tab_id: str) -> bool:
         page = self._pages.pop(tab_id, None)

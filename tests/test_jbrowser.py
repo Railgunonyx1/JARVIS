@@ -43,6 +43,33 @@ class TestOptimizationProfile:
         assert isinstance(kwargs["args"], list)
         assert all(isinstance(a, str) for a in kwargs["args"])
 
+    def test_memory_and_startup_flags_present(self):
+        joined = " ".join(as_chromium_args())
+        for flag in ("mute-audio", "disable-extensions", "no-first-run",
+                     "disable-background-networking", "hide-scrollbars",
+                     "disable-background-timer-throttling"):
+            assert f"--{flag}" in joined, flag
+
+    def test_occlusion_flags_present(self):
+        args = as_chromium_args()
+        assert "--disable-backgrounding-occluded-windows" in args
+        assert "CalculateNativeWinOcclusion" in " ".join(args)
+
+    def test_screenshot_kinds_keep_layout(self):
+        from jbrowser.optimization import (
+            RESOURCE_BLOCK_KEEP_FOR_SCREENSHOT,
+            RESOURCE_BLOCK_KINDS,
+        )
+        kept = RESOURCE_BLOCK_KEEP_FOR_SCREENSHOT
+        assert kept < RESOURCE_BLOCK_KINDS
+        assert "image" in kept and "stylesheet" in kept
+
+    def test_tab_limit_math(self):
+        from jbrowser.optimization import DEFAULT_TAB_LIMIT, enforce_tab_limit
+        assert enforce_tab_limit(5) == 0
+        assert enforce_tab_limit(DEFAULT_TAB_LIMIT) == 0
+        assert enforce_tab_limit(DEFAULT_TAB_LIMIT + 3) == 3
+
 
 # ---------------------------------------------------------------------------
 # Risk permissions
@@ -442,4 +469,51 @@ class TestLegacyBrowserCompatibility:
         assert agent.type_text("#q", "x") is True
         assert agent.extract_text("#c") == "selector text"
         assert agent.status()["backend"] == "fake"
+
+
+class _FakeRoute:
+    def __init__(self, resource_type):
+        self.request = type("R", (), {"resource_type": resource_type})()
+        self.aborted = False
+        self.continued = False
+
+    def abort(self):
+        self.aborted = True
+
+    def continue_(self):
+        self.continued = True
+
+
+class TestResourceBlocking:
+    def test_handler_aborts_blocked_kinds(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking()
+        route = _FakeRoute("image")
+        cfg["handler"](route)
+        assert route.aborted is True
+
+    def test_handler_continues_other_kinds(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking()
+        route = _FakeRoute("script")
+        cfg["handler"](route)
+        assert route.continued is True
+
+    def test_custom_kinds_respected(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking(frozenset({"font"}))
+        assert cfg["kinds"] == frozenset({"font"})
+        blocked = _FakeRoute("font")
+        cfg["handler"](blocked)
+        assert blocked.aborted is True
+        passed = _FakeRoute("image")
+        cfg["handler"](passed)
+        assert passed.continued is True
+
+    def test_playwright_backend_installs_routing(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        backend = PlaywrightBackend(block_resources=True)
+        assert backend._blocking is not None
+        assert backend._blocking["kinds"]  # default kinds populated
+
 
