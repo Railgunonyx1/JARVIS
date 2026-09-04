@@ -163,6 +163,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _agent(self) -> None:
         """Launch a Strawberry-style agent. Phase 3 seam — not implemented."""
+        self._read_json()  # drain the request body so the client reads a clean 501
         self._json(501, {
             "ok": False,
             "code": "not_implemented",
@@ -176,6 +177,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         (ToolExecutionService -> BrowserController -> CDP), never through this
         endpoint. This guard prevents a second execution/control surface.
         """
+        self._read_json()  # drain the request body so the client reads a clean 501
         self._json(501, {
             "ok": False,
             "code": "not_implemented",

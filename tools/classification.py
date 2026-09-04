@@ -62,8 +62,17 @@ _BROWSER_ACTION_RISK: dict[str, str] = {
 
 
 def browser_risk_for_tool(name: str) -> str:
-    """Map a ``browser.<verb>`` tool name to its canonical risk level."""
-    verb = name[len("browser."):] if name.startswith("browser.") else name
+    """Map a ``browser.<verb>`` / ``orbit.<verb>`` tool to canonical risk.
+
+    ``_BROWSER_ACTION_RISK`` remains the single source of truth for browser
+    actions; the ``orbit.`` product namespace routes through it identically.
+    """
+    for prefix in ("browser.", "orbit."):
+        if name.startswith(prefix):
+            verb = name[len(prefix):]
+            break
+    else:
+        verb = name
     verb = verb.replace(".", "_")
     action = next(
         (k for k in _BROWSER_ACTION_RISK if verb == k or verb.endswith("_" + k)),
@@ -147,7 +156,7 @@ def _derive_risk(name: str, permission: str, category: str) -> str:
         return "high"
     if permission.startswith(("filesystem.write", "shell", "git.write")):
         return "medium"
-    if category == "browser" and name.startswith("browser."):
+    if category in ("browser", "orbit") and name.startswith(("browser.", "orbit.")):
         return browser_risk_for_tool(name)
     if category in ("testing", "runtime", "memory", "web", "world", "search", "security", "code"):
         return "low"
@@ -170,7 +179,7 @@ def _side_effects_for(name: str, permission: str) -> tuple[str, ...]:
         effects.append("fs_write")
     if permission in ("shell.execute", "shell.run"):
         effects.append("process_spawn")
-    if name.startswith("web.") or name.startswith("browser."):
+    if name.startswith("web.") or name.startswith("browser.") or name.startswith("orbit."):
         effects.append("network_egress")
     if name.startswith("git."):
         effects.append("git_mutation")
