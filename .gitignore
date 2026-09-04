@@ -25,6 +25,9 @@ memory/*.db
 memory/*.db-journal
 memory/sessions/
 
+# JARVIS Orbit Chromium profiles (runtime state, never commit)
+config/browser_profiles/
+
 # Logs
 logs/
 *.log
