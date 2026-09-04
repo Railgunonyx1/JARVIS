@@ -51,16 +51,23 @@ USER / CLIENT -> INTENT ROUTER -> AGENT KERNEL -> HARNESS -> MODEL GATEWAY
 | Permissions | `core/agent/permissions.py` |
 | Protocols | `runtime/protocols/__init__.py` |
 | Authority memory | `memory/authority.py` |
+| Composition root | `runtime/kernel.py` |
+| Code-scan gate | `security/code_scan.py` |
 
 ## Current Sprint: Phase A — Kernel Integration
 
-| Sprint | What |
-|--------|------|
-| 20K | AgentLoop -> ToolExecutionService (single boundary) |
-| 20L | VerificationEngine as post-execution gate |
-| 20M | ACP/Codex route through ToolExecutionService |
-| 20N | RECOVERING state + deterministic FailureClass |
-| 20P | Unified pipeline tests + no-bypass architecture test |
+| Sprint | What | Status |
+|--------|------|--------|
+| 20K | AgentLoop -> ToolExecutionService (single boundary) | Done |
+| 20L | VerificationEngine as post-execution gate | Done |
+| 20M | ACP/Codex route through ToolExecutionService | Done |
+| 20N | RECOVERING state + deterministic FailureClass | Done |
+| 20P | Unified pipeline tests + no-bypass architecture test | Done |
+
+**Legacy execution chain** (`core/executor.py`, `core/task_queue.py`,
+`workflows/`) is quarantined under `_quarantine/`. Generated-code scanning and
+its gate live in `security/code_scan.py` (`check_generated_code`,
+`FORBIDDEN_CODE_PATTERNS`, `generated_code_enabled`, `run_generated_code`).
 
 **Test strategy:** Build all implementation first, run full test suite once at end of Phase A.
 

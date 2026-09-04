@@ -84,6 +84,7 @@ _CONTEXT_OVERFLOW_MARKERS: tuple[str, ...] = (
     "token limit exceeded",
     "exceeds the maximum",
     "reduce input",
+    "too many tokens",
 )
 
 _MODEL_FAILURE_MARKERS: tuple[str, ...] = (
