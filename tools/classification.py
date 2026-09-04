@@ -42,10 +42,34 @@ _RISK_OVERRIDES: dict[str, str] = {
     "git.push": "high",
     "git.reset": "medium",
     "git.rebase": "medium",
-    "browser.click": "high",
-    "browser.type": "high",
-    "browser.screenshot": "low",
 }
+
+# Canonical browser action -> risk. This is the SINGLE source of truth for
+# browser tools; jbrowser.permissions is a thin adapter over it (see below).
+# Browser mutations (click/type/submit/...) are HIGH + destructive so an agent
+# cannot silently mutate a page or trigger consequential actions.
+_BROWSER_ACTION_RISK: dict[str, str] = {
+    # low: observe / navigate / tab & session management
+    "open": "low", "navigate": "low", "read": "low", "extract": "low",
+    "screenshot": "low", "status": "low", "tabs": "low", "find": "low",
+    "scroll": "low", "switch_tab": "low", "new_tab": "low", "close_tab": "low",
+    "profile": "low", "permissions": "low",
+    # high: consequential / side-effecting / irreversible page actions
+    "click": "high", "type": "high", "select": "high", "submit": "high",
+    "send": "high", "delete": "high", "purchase": "high",
+    "account_change": "high", "execute_script": "high",
+}
+
+
+def browser_risk_for_tool(name: str) -> str:
+    """Map a ``browser.<verb>`` tool name to its canonical risk level."""
+    verb = name[len("browser."):] if name.startswith("browser.") else name
+    verb = verb.replace(".", "_")
+    action = next(
+        (k for k in _BROWSER_ACTION_RISK if verb == k or verb.endswith("_" + k)),
+        verb,
+    )
+    return _BROWSER_ACTION_RISK.get(action, "low")
 
 _TIMEOUT_OVERRIDES: dict[str, float] = {
     "shell.execute": 120.0,
@@ -123,8 +147,8 @@ def _derive_risk(name: str, permission: str, category: str) -> str:
         return "high"
     if permission.startswith(("filesystem.write", "shell", "git.write")):
         return "medium"
-    if category in ("browser",) and name.startswith("browser."):
-        return "medium"
+    if category == "browser" and name.startswith("browser."):
+        return browser_risk_for_tool(name)
     if category in ("testing", "runtime", "memory", "web", "world", "search", "security", "code"):
         return "low"
     return "safe"

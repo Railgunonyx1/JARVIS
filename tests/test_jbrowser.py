@@ -8,6 +8,8 @@ event emission on the EventBus.
 
 from __future__ import annotations
 
+import pytest
+
 from jbrowser.controller import BrowserController, get_controller, reset_controller
 from jbrowser.optimization import as_chromium_args, build_launch_kwargs
 from jbrowser.page_context import build_page_context
@@ -80,25 +82,31 @@ class TestPermissions:
         assert risk_for_tool("browser.read").value == "low"
         assert risk_for_tool("browser.navigate").value == "low"
         assert risk_for_tool("browser.tabs").value == "low"
+        assert risk_for_tool("browser.scroll").value == "low"
 
-    def test_medium_risk(self):
-        assert risk_for_tool("browser.click").value == "medium"
+    def test_high_risk_mutations(self):
+        # click/type are page mutations -> canonical HIGH (matches the P0
+        # classification / inventory DANGEROUS_TOOLS set), not medium.
+        assert risk_for_tool("browser.click").value == "high"
+        assert risk_for_tool("browser.type").value == "high"
 
     def test_high_risk_requires_approval(self):
         assert requires_approval("browser.submit")
         assert requires_approval("browser.execute_script")
         assert requires_approval("browser.delete")
+        assert requires_approval("browser.click")
         assert not requires_approval("browser.read")
 
     def test_permission_key_tiered(self):
         assert permission_key_for_tool("browser.submit") == "browser.high"
+        assert permission_key_for_tool("browser.click") == "browser.high"
         assert permission_key_for_tool("browser.open") == "browser.low"
 
     def test_describe_permissions_has_all_tiers(self):
         perms = describe_permissions()
         assert set(perms) == {"low", "medium", "high"}
         assert "browser.read" in perms["low"]
-        assert "browser.click" in perms["medium"]
+        assert "browser.click" in perms["high"]
         assert "browser.execute_script" in perms["high"]
 
 
@@ -600,5 +608,84 @@ class TestSessionPersistence:
         desc = session.describe()
         assert desc["session_id"] == "s1"
         assert desc["persistent"] is False
+
+
+# ---------------------------------------------------------------------------
+# Lazy launch + session isolation (real backend, NO browser launch)
+# ---------------------------------------------------------------------------
+
+class TestLazyLaunchAndIsolation:
+    def _backend(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        return PlaywrightBackend(headless=True)
+
+    def test_create_session_does_not_launch(self):
+        """Logical session creation must NOT create a context or a driver."""
+        b = self._backend()
+        b.create_session("lazy_s1")
+        assert b._contexts == {}
+        assert b._pw is None
+
+    def test_persistent_session_tracks_profile_without_launch(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.sessions import profile_dir
+        b = self._backend()
+        root = Path(tempfile.mkdtemp())
+        b.create_session("persist_s1", persistent=True, profile_root=root)
+        assert b._persistent["persist_s1"] == str(profile_dir(root, "persist_s1"))
+        assert b._contexts == {}
+        assert b._pw is None
+
+    def test_close_session_scoped_to_session(self):
+        """close_session must only tear down the requested session's pages."""
+        b = self._backend()
+        # simulate two sessions with a tab each (no real browser required)
+        b._session_of["tabA"] = "s_a"
+        b._session_of["tabB"] = "s_b"
+        b.close_session("s_a")
+        assert "tabB" in b._session_of
+        assert "tabA" not in b._session_of
+
+    def test_shutdown_releases_driver_state(self):
+        b = self._backend()
+        # fresh backend: shutdown is a no-op but must not raise
+        b.shutdown()
+        assert b._pw is None
+
+    def test_navigate_validates_private_network(self):
+        """Navigation to a private/loopback target must be blocked before goto."""
+        from jbrowser.network import NetworkPolicyError
+        b = self._backend()
+        with pytest.raises(NetworkPolicyError):
+            b._validate_target("http://127.0.0.1:8080/admin")
+
+    def test_navigate_allows_public_target(self):
+        b = self._backend()
+        assert b._validate_target("example.com") == "https://example.com"
+        assert b._validate_target("https://example.com/x") == "https://example.com/x"
+
+
+class TestControllerPersistentWiring:
+    def test_ensure_session_persistent_propagates(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.backend.playwright import PlaywrightBackend
+        from jbrowser.sessions import profile_dir
+
+        root = Path(tempfile.mkdtemp())
+        b = PlaywrightBackend(headless=True, profile_root=root)
+        ctl = BrowserController(backend=b, profile_root=root)
+        sid = ctl.ensure_session(persistent=True)
+        assert b._persistent[sid] == str(profile_dir(root, sid))
+
+    def test_close_session_clears_session(self):
+        b = _FakeBackend()
+        ctl = BrowserController(backend=b)
+        sid = ctl.ensure_session()
+        ctl.close_session(sid)
+        assert ctl.session_info(sid) == {}
 
 

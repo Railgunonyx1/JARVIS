@@ -89,16 +89,46 @@ Chromium agent-browser platform that inherits JARVIS's full agent stack
 | Skills transfer | `jbrowser/skills.py` — surfaces the canonical `skills/` registry (browser_automation, web_research, ...) |
 | CLI | `python -m apps.jbrowser open/tabs/read/screenshot/status/repl` |
 
-Playwright is optional (lazy import); J-Browser tests mock the backend so the
+Playwright is optional (lazy import); J-Browser unit tests mock the backend so the
 suite passes without it (`pip install playwright` + `playwright install chromium`
 to actually browse). Single-engine discipline holds: legacy `tools/browser.py`
 handlers AND `external/browser_agent.py` both route through `get_controller()`
-→ `PlaywrightBackend` (one Playwright process). `BrowserAgent` is retained as a
+→ `PlaywrightBackend` (one Playwright engine). `BrowserAgent` is retained as a
 deprecated compatibility adapter. Everything flows through
 `ToolExecutionService` (no bypass).
 
-**Test strategy:** run full suite once at end of Phase B (was 613 passed / 14
-skipped with J-Browser tests green).
+Implementation notes (accuracy contract — doc matches code):
+- **Lazy launch (implemented):** `create_session` is logical only and never
+  launches Chromium. The browser/context starts on the first page-needing
+  operation (`create_tab`/`navigate`/`read`).
+- **Session isolation (implemented):** each session maps to its own Playwright
+  `BrowserContext`, so cookies/storage/auth are isolated between sessions.
+  Persistent sessions use `launch_persistent_context(profile_dir)` (survive
+  restarts); ephemeral sessions each get a fresh `new_context()` on one shared
+  browser. `close_session` is scoped to that session; `shutdown()` releases all
+  native resources.
+- **Network governance (implemented):** `jbrowser.network.BrowserNetworkPolicy`
+  denies private/loopback/link-local destinations by default *before* `goto`,
+  so an agent browse cannot pivot into localhost/private services.
+- **Browser risk (single source of truth):** `tools/classification` owns
+  `browser_risk_for_tool`; `jbrowser.permissions` is a thin adapter. Mutations
+  (click/type/submit/...) are HIGH + destructive (approval-gated); reads/nav are
+  LOW.
+- **Controller serialization (implemented):** public `BrowserController`
+  operations are serialized under an RLock so concurrent tool threads cannot
+  corrupt the non-thread-safe Playwright engine.
+- **Live integration tests (opt-in):** `tests/test_jbrowser_live.py` is gated
+  behind `JARVIS_RUN_BROWSER_LIVE=1` and marked `@pytest.mark.browser` so the
+  default suite stays hermetic (never starts a Playwright driver). Run with
+  `JARVIS_RUN_BROWSER_LIVE=1 pytest tests/test_jbrowser_live.py`.
+- **Known limitation (documented, not a bug fix yet):** the standalone CLI
+  (`python -m apps.jbrowser ...`) runs each subcommand in a fresh process, so
+  `open` then `tabs/read` in separate invocations do not share tabs. A persistent
+  daemon/client split is future work; within one process (REPL, agent tools) tabs
+  persist normally.
+
+**Test strategy:** run full suite once at end of Phase B (was 660 passed /
+19 skipped with J-Browser unit tests green; live tests are opt-in).
 
 ## Research Pipeline
 

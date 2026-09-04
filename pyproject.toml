@@ -45,3 +45,6 @@ known-first-party = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: live Chromium/Playwright integration tests (opt-in via JARVIS_RUN_BROWSER_LIVE=1)",
+]

@@ -7,6 +7,25 @@ the two hard constraints:
   - lazy launch / never-resident (daemon-first, 512MB),
   - graceful WebScraper fallback when Playwright (or its binary) is absent.
 
+Session model
+-------------
+Every logical session maps to a *distinct* Playwright :class:`BrowserContext`,
+which gives real cookie/storage/auth isolation between sessions:
+
+    session_id -> BrowserContext -> pages
+
+  * ephemeral sessions share one lazily-launched browser, each getting its own
+    ``new_context()`` (isolated cookies/localStorage/sessionStorage).
+  * persistent sessions get their own ``launch_persistent_context(profile_dir)``
+    so cookies/auth survive restarts (logged-in operation without passwords).
+
+``create_session`` is *logical only* — it never launches Chromium. The browser
+and the per-session context are created on the first operation that needs a
+page (``create_tab`` / ``navigate`` / ``read``).
+
+Navigation is governed by :class:`BrowserNetworkPolicy`, which denies
+private/loopback/link-local destinations by default *before* ``goto``.
+
 Optimizations from :mod:`jbrowser.optimization` are applied to the Chromium
 launch automatically.
 """
@@ -17,43 +36,55 @@ import logging
 import os
 import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 from jbrowser.backend.base import BrowserBackend, TabInfo
+from jbrowser.network import BrowserNetworkPolicy
 from jbrowser.optimization import DEFAULT_TAB_LIMIT, build_launch_kwargs
 from jbrowser.page_context import build_page_context
+from jbrowser.sessions import profile_dir
 from jbrowser.tabs import TabContext, TabManager, new_tab_id
 
 logger = logging.getLogger("jbrowser.backend.playwright")
 
 _SCREENSHOT_DIR = os.path.join(tempfile.gettempdir(), "jbrowser_screenshots")
 
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 JBrowser"
+)
+
 
 class PlaywrightBackend(BrowserBackend):
-    """Playwright-backed, multi-tab, session-aware backend."""
+    """Playwright-backed, multi-tab, multi-session backend."""
 
     def __init__(self, *, headless: bool | None = None,
                  timeout_ms: int = 30_000,
                  preserve_tabs: bool = False,
-                 block_resources: bool | frozenset[str] | None = None) -> None:
+                 block_resources: bool | frozenset[str] | None = None,
+                 network_policy: BrowserNetworkPolicy | None = None,
+                 profile_root: Path | None = None) -> None:
         self.headless = (
             os.environ.get("JARVIS_BROWSER_HEADED", "0") != "0"
             if headless is None else headless
         )
         self.timeout_ms = timeout_ms
         self.preserve_tabs = preserve_tabs
+        self.profile_root = profile_root or Path(".")
         self.tabs = TabManager()
         self._pw = None
         self._browser = None
-        self._context = None
         self._checked = False
         self._pages: dict[str, Any] = {}
         self._session_of: dict[str, str] = {}
+        self._contexts: dict[str, Any] = {}
+        self._persistent: dict[str, str] = {}
         self._active_page: str | None = None
-        # defer lazy import of playwright to keep module importable everywhere
         self._playwright_module = None
         self._chromium = None
         self._blocking: dict[str, Any] | None = None
+        self._network = network_policy or BrowserNetworkPolicy.default()
         if block_resources:
             from jbrowser.optimization import build_resource_blocking
             self._blocking = build_resource_blocking(
@@ -63,17 +94,21 @@ class PlaywrightBackend(BrowserBackend):
     # ---------------------------------------------------------- lifecycle
     def _check_playwright(self) -> bool:
         if self._checked:
-            return self._browser is not None or self._playwright_module is not None
+            return self._browser is not None or self._pw is not None
         self._checked = True
         try:
             import playwright.sync_api as _p
-            with _p.sync_playwright() as p:
-                path = p.chromium.executable_path
-                if path and os.path.exists(path):
-                    self._playwright_module = _p.sync_playwright
-                    self._chromium = p.chromium
-                    return True
-                logger.warning("Chromium not installed (run: playwright install chromium)")
+            # Start-and-KEEP one driver instance. We must NOT open/close a
+            # `with sync_playwright()` here: that stops the process-wide sync
+            # driver, so the real launch later fails with "Event loop closed".
+            if self._pw is None:
+                self._pw = _p.sync_playwright().start()
+            self._chromium = self._pw.chromium
+            path = self._chromium.executable_path
+            if path and os.path.exists(path):
+                self._playwright_module = _p.sync_playwright
+                return True
+            logger.warning("Chromium not installed (run: playwright install chromium)")
         except Exception as exc:
             logger.warning("Playwright unavailable: %s", exc)
         self._playwright_module = None
@@ -83,65 +118,144 @@ class PlaywrightBackend(BrowserBackend):
     def available(self) -> bool:
         return self._check_playwright()
 
-    def _ensure_browser(self) -> None:
-        if self._context is not None:
-            return
+    def _ensure_session_context(self, session_id: str) -> Any:
+        """Lazy-create + return the Playwright context for a session.
+
+        This is where Chromium actually launches (on first page-needing
+        operation), not in ``create_session``.
+        """
+        ctx = self._contexts.get(session_id)
+        if ctx is not None:
+            return ctx
         if not self._check_playwright():
             raise RuntimeError(
                 "Playwright browser not available. Install: pip install playwright "
                 "&& playwright install chromium"
             )
-        if self._pw is None:
-            self._pw = self._playwright_module().start()
-        if self._browser is None:
-            launch_kwargs = build_launch_kwargs(preserve_tabs=self.preserve_tabs)
-            self._browser = self._chromium.launch(
+        launch_args = build_launch_kwargs(preserve_tabs=self.preserve_tabs)["args"]
+        persistent_dir = self._persistent.get(session_id)
+        if persistent_dir:
+            ctx = self._chromium.launch_persistent_context(
+                user_data_dir=persistent_dir,
                 headless=self.headless,
-                args=launch_kwargs["args"],
+                args=launch_args,
+                viewport={"width": 1280, "height": 800},
+                user_agent=_USER_AGENT,
             )
-        self._context = self._browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 JBrowser"
-            ),
-        )
+        else:
+            if self._browser is None:
+                self._browser = self._chromium.launch(
+                    headless=self.headless,
+                    args=launch_args,
+                )
+            ctx = self._browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent=_USER_AGENT,
+            )
         if self._blocking is not None:
-            self._context.route(self._blocking["pattern"], self._blocking["handler"])
+            ctx.route(self._blocking["pattern"], self._blocking["handler"])
+        self._contexts[session_id] = ctx
+        return ctx
+
+    def _validate_target(self, url: str) -> str:
+        """Normalize + enforce the network policy before navigation."""
+        raw = str(url).strip()
+        if not raw:
+            return ""
+        if not raw.startswith(("http://", "https://")):
+            raw = "https://" + raw
+        return self._network.validate(raw)
 
     # ------------------------------------------------------------ sessions
-    def create_session(self, session_id: str, *, persistent: bool = False) -> None:
-        # Today all tabs share one browser context (single engine process);
-        # the session is tracked per-tab via TabContext.session_id. A future
-        # engine (WebView2/CEF) can split genuine per-session contexts here.
-        self._ensure_browser()
+    def create_session(self, session_id: str, *, persistent: bool = False,
+                       profile_root: Path | None = None) -> None:
+        # LOGICAL ONLY — never launches Chromium. The context is created lazily
+        # on the first page-needing operation (create_tab/navigate/read).
+        if persistent:
+            root = profile_root or self.profile_root
+            self._persistent[session_id] = str(profile_dir(root, session_id))
 
     def close_session(self, session_id: str | None = None) -> None:
+        target_ids = list(self._session_of.keys())
+        if session_id is None:
+            pass  # close every session
+        else:
+            target_ids = [t for t in target_ids
+                          if self._session_of.get(t) == session_id]
+        for tab_id in target_ids:
+            page = self._pages.pop(tab_id, None)
+            if page is not None:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+            self._session_of.pop(tab_id, None)
+            self.tabs.remove(tab_id)
+        if session_id is None:
+            ctx_ids = list(self._contexts.keys())
+            for cid in ctx_ids:
+                self._close_context(cid)
+        else:
+            self._close_context(session_id)
+            self._persistent.pop(session_id, None)
+        if self._active_page not in self._pages:
+            self._active_page = None
+
+    def _close_context(self, session_id: str) -> None:
+        ctx = self._contexts.pop(session_id, None)
+        if ctx is None:
+            return
+        try:
+            ctx.close()
+        except Exception:
+            pass
+
+    def shutdown(self) -> None:
+        """Release every native resource (pages, contexts, browser, driver)."""
         for page in list(self._pages.values()):
             try:
                 page.close()
             except Exception:
                 pass
         self._pages.clear()
-        self._active_page = None
+        for cid in list(self._contexts.keys()):
+            self._close_context(cid)
+        if self._browser is not None:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+        if self._pw is not None:
+            try:
+                self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
+            self._checked = False
 
     def status(self) -> dict:
         return {
             "backend": "playwright" if self.available else "web_scraper",
             "available": self.available,
-            "launched": self._context is not None,
+            "launched": bool(self._contexts) or self._browser is not None,
             "headless": self.headless,
             "tabs": len(self.tabs),
             "active_tab": self._active_page,
+            "sessions_declared": len(self._persistent) + sum(
+                1 for _ in self._contexts if _ not in self._persistent),
+            "contexts": len(self._contexts),
+            "persistent": bool(self._persistent),
             "preserve_tabs": self.preserve_tabs,
             "tab_limit": DEFAULT_TAB_LIMIT,
             "blocking": bool(self._blocking),
+            "network_policy": "default",
         }
 
     # --------------------------------------------------------------- tabs
     def create_tab(self, session_id: str, url: str = "") -> TabInfo:
-        self._ensure_browser()
-        page = self._context.new_page()
+        ctx = self._ensure_session_context(session_id)
+        page = ctx.new_page()
         page.set_default_timeout(self.timeout_ms)
         tab_id = new_tab_id()
         self._pages[tab_id] = page
@@ -191,6 +305,7 @@ class PlaywrightBackend(BrowserBackend):
                 page.close()
             except Exception:
                 pass
+        self._session_of.pop(tab_id, None)
         if self._active_page == tab_id:
             self._active_page = None
         return self.tabs.remove(tab_id)
@@ -241,7 +356,8 @@ class PlaywrightBackend(BrowserBackend):
     def navigate(self, url: str, tab_id: str | None = None) -> TabInfo:
         page = self._page_of(tab_id)
         key = tab_id or self._active_page
-        page.goto(self._normalize(url), wait_until="domcontentloaded")
+        target = self._validate_target(url)
+        page.goto(target, wait_until="domcontentloaded")
         try:
             page.wait_for_load_state("networkidle", timeout=5_000)
         except Exception:
