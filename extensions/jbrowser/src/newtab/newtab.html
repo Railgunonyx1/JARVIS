@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JARVIS</title>
+    <link rel="stylesheet" href="newtab.css" />
+  </head>
+  <body>
+    <div class="nt-wrap">
+      <header class="nt-brand">
+        <span class="nt-dot" id="nt-dot"></span>
+        <span class="nt-name">JARVIS</span>
+        <span class="nt-status" id="nt-status">checking…</span>
+      </header>
+
+      <section class="nt-hero">
+        <h1 class="nt-greeting" id="nt-greeting">Good to see you.</h1>
+        <p class="nt-sub">What would you like to do?</p>
+
+        <div class="nt-omnibox">
+          <input
+            type="text"
+            id="nt-input"
+            placeholder="Ask JARVIS, take an action, or run an agent…  (Enter to go / Shift+Enter for a chat)"
+            autofocus
+          />
+          <button id="nt-btn" title="Go">➤</button>
+        </div>
+      </section>
+
+      <section class="nt-quick" id="nt-quick" hidden>
+        <h2 class="nt-section-title">Agent actions</h2>
+        <div class="nt-chips" id="nt-chips"></div>
+      </section>
+
+      <main id="nt-thread" class="nt-thread" aria-live="polite"></main>
+
+      <script type="module" src="newtab.js"></script>
+    </div>
+  </body>
+</html>

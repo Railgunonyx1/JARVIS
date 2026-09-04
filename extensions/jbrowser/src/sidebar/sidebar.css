@@ -1,0 +1,257 @@
+:root {
+  --jb-bg: #1b1d23;
+  --jb-bg-elev: #23252d;
+  --jb-bg-input: #2a2d37;
+  --jb-border: #33363f;
+  --jb-text: #e8e9ed;
+  --jb-muted: #9aa0ae;
+  --jb-accent: #5b8cff;
+  --jb-user: #3d4b6b;
+  --jb-jarvis: #23252d;
+  --jb-online: #37d67a;
+  --jb-offline: #f0625d;
+  --jb-radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--jb-bg);
+  color: var(--jb-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.jb-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--jb-border);
+  background: var(--jb-bg-elev);
+}
+
+.jb-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.jb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--jb-muted);
+}
+
+.jb-dot.online {
+  background: var(--jb-online);
+  box-shadow: 0 0 6px var(--jb-online);
+}
+
+.jb-dot.offline {
+  background: var(--jb-offline);
+}
+
+.jb-status-label {
+  color: var(--jb-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.jb-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.jb-icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--jb-muted);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.jb-icon-btn:hover {
+  background: var(--jb-bg-input);
+  color: var(--jb-text);
+}
+
+.jb-page-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--jb-border);
+  background: var(--jb-bg);
+}
+
+.jb-page-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jb-page-title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.jb-page-url {
+  font-size: 10px;
+  color: var(--jb-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.jb-listen-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--jb-muted);
+  white-space: nowrap;
+}
+
+.jb-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.jb-msg {
+  max-width: 90%;
+  padding: 9px 12px;
+  border-radius: var(--jb-radius);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.jb-msg.user {
+  align-self: flex-end;
+  background: var(--jb-user);
+}
+
+.jb-msg.jarvis {
+  align-self: flex-start;
+  background: var(--jb-jarvis);
+  border: 1px solid var(--jb-border);
+}
+
+.jb-msg .jb-role {
+  display: block;
+  font-size: 10px;
+  color: var(--jb-muted);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.jb-msg.error {
+  border-color: var(--jb-offline);
+}
+
+.jb-composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--jb-border);
+  background: var(--jb-bg-elev);
+  align-items: flex-end;
+}
+
+.jb-composer textarea {
+  flex: 1;
+  resize: none;
+  background: var(--jb-bg-input);
+  border: 1px solid var(--jb-border);
+  color: var(--jb-text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  max-height: 120px;
+  outline: none;
+}
+
+.jb-composer textarea:focus {
+  border-color: var(--jb-accent);
+}
+
+.jb-send-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: var(--jb-accent);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.jb-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.jb-settings {
+  padding: 12px;
+  border-top: 1px solid var(--jb-border);
+  background: var(--jb-bg-elev);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jb-settings-title {
+  font-weight: 700;
+}
+
+.jb-settings-note {
+  color: var(--jb-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.jb-settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.jb-link-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--jb-accent);
+  cursor: pointer;
+  font-size: 12px;
+}

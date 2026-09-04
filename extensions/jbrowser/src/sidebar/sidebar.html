@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JARVIS</title>
+    <link rel="stylesheet" href="sidebar.css" />
+  </head>
+  <body>
+    <header class="jb-topbar">
+      <div class="jb-brand">
+        <span class="jb-dot" id="jb-status-dot"></span>
+        <span class="jb-title">JARVIS</span>
+        <span class="jb-status-label" id="jb-status-label">checking…</span>
+      </div>
+      <div class="jb-actions">
+        <button id="jb-clear" class="jb-icon-btn" title="Clear conversation">↺</button>
+        <button id="jb-toggle-control" class="jb-icon-btn" title="Browser control settings">⚙</button>
+      </div>
+    </header>
+
+    <section id="jb-page-bar" class="jb-page-bar">
+      <div class="jb-page-meta">
+        <span class="jb-page-title" id="jb-page-title">No page</span>
+        <span class="jb-page-url" id="jb-page-url"></span>
+      </div>
+      <label class="jb-listen-switch" title="JARVIS can see this page">
+        <span>Listening</span>
+        <input type="checkbox" id="jb-listen" checked />
+      </label>
+    </section>
+
+    <main id="jb-thread" class="jb-thread" aria-live="polite"></main>
+
+    <footer class="jb-composer">
+      <textarea
+        id="jb-input"
+        rows="1"
+        placeholder="Ask JARVIS about this page…  (Ctrl+Enter to send)"
+      ></textarea>
+      <button id="jb-send" class="jb-send-btn" title="Send">➤</button>
+    </footer>
+
+    <section id="jb-settings" class="jb-settings" hidden>
+      <div class="jb-settings-title">Browser control (chrome.debugger)</div>
+      <p class="jb-settings-note">
+        Enables privileged page control for autonomous agents. Each agent action
+        still requires your explicit approval.
+      </p>
+      <label class="jb-settings-row">
+        <span>Enable control</span>
+        <input type="checkbox" id="jb-control-enabled" />
+      </label>
+      <button id="jb-settings-close" class="jb-link-btn">Close</button>
+    </section>
+
+    <script type="module" src="sidebar.js"></script>
+  </body>
+</html>

@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "JARVIS — J-Browser",
+  "version": "0.1.0",
+  "description": "JARVIS as a first-class AI layer in Chrome. Page-aware chat sidebar, JARVIS new-tab home, and browser/agent control via CDP.",
+  "minimum_chrome_version": "125",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage",
+    "bookmarks",
+    "history",
+    "contextMenus",
+    "debugger",
+    "clipboardWrite",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8170/*",
+    "http://localhost:8170/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidebar/sidebar.html"
+  },
+  "chrome_url_overrides": {
+    "newtab": "src/newtab/newtab.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/context.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Open JARVIS",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "commands": {
+    "toggle-sidebar": {
+      "suggested_key": { "default": "Ctrl+Shift+J", "mac": "Command+Shift+J" },
+      "description": "Toggle the JARVIS sidebar"
+    },
+    "listen-to-page": {
+      "suggested_key": { "default": "Ctrl+Shift+Space", "mac": "Command+Shift+Space" },
+      "description": "Ask JARVIS about the current page"
+    }
+  },
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  }
+}
