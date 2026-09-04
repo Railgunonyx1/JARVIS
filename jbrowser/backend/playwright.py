@@ -267,6 +267,14 @@ class PlaywrightBackend(BrowserBackend):
             "viewport": ctx.viewport,
         }
 
+    def get_selector_text(self, selector: str | None = None,
+                          tab_id: str | None = None) -> str:
+        page = self._page_of(tab_id)
+        if selector:
+            el = page.query_selector(selector)
+            return (el.inner_text() if el else "")[:5000]
+        return (page.evaluate("() => document.body.innerText") or "")[:5000]
+
     def screenshot(self, path: str | None = None, tab_id: str | None = None) -> str:
         page = self._page_of(tab_id)
         if path is None:
@@ -300,6 +308,22 @@ class PlaywrightBackend(BrowserBackend):
         el = self._el(handle, page)
         if el is None:
             raise RuntimeError(f"element not found: {handle}")
+        el.fill(text)
+        return True
+
+    def click_selector(self, selector: str, tab_id: str | None = None) -> bool:
+        page = self._page_of(tab_id)
+        el = page.query_selector(selector)
+        if el is None:
+            raise RuntimeError(f"element not found: {selector}")
+        el.click()
+        return True
+
+    def type_selector(self, selector: str, text: str, tab_id: str | None = None) -> bool:
+        page = self._page_of(tab_id)
+        el = page.query_selector(selector)
+        if el is None:
+            raise RuntimeError(f"element not found: {selector}")
         el.fill(text)
         return True
 

@@ -148,6 +148,17 @@ class BrowserController:
             viewport=dom.get("viewport", {}),
         )
 
+    def extract_text(self, selector: str | None = None,
+                     tab_id: str | None = None) -> str:
+        self.ensure_session()
+        return self.backend.get_selector_text(selector, tab_id=tab_id)
+
+    def current_url(self, tab_id: str | None = None) -> str:
+        try:
+            return self.backend.get_url(tab_id)
+        except Exception:
+            return ""
+
     def screenshot(self, tab_id: str | None = None) -> str:
         self.ensure_session()
         return self.backend.screenshot(tab_id=tab_id)
@@ -171,6 +182,20 @@ class BrowserController:
         ok = self.backend.type_text(handle, text, tab_id=tab_id)
         self.emit_action_completed("type", {"handle": handle})
         return {"typed": ok, "handle": handle, "chars": len(text)}
+
+    def click_selector(self, selector: str, tab_id: str | None = None) -> dict:
+        self.ensure_session()
+        self.emit_agent_action("click", {"selector": selector})
+        ok = self.backend.click_selector(selector, tab_id=tab_id)
+        self.emit_action_completed("click", {"selector": selector})
+        return {"clicked": ok, "selector": selector}
+
+    def type_selector(self, selector: str, text: str, tab_id: str | None = None) -> dict:
+        self.ensure_session()
+        self.emit_agent_action("type", {"selector": selector, "chars": len(text)})
+        ok = self.backend.type_selector(selector, text, tab_id=tab_id)
+        self.emit_action_completed("type", {"selector": selector})
+        return {"typed": ok, "selector": selector, "chars": len(text)}
 
     def scroll(self, direction: str, amount: int = 500, tab_id: str | None = None) -> None:
         self.ensure_session()

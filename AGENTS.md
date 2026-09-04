@@ -91,10 +91,11 @@ Chromium agent-browser platform that inherits JARVIS's full agent stack
 
 Playwright is optional (lazy import); J-Browser tests mock the backend so the
 suite passes without it (`pip install playwright` + `playwright install chromium`
-to actually browse). Known dual-path: legacy `tools/browser.py` handlers still
-call `external/browser_agent` (single-page); new `browser.*` tools route via
-`get_controller()`. Both go through `ToolExecutionService` (no bypass).
-Legacy-path refactor onto `PlaywrightBackend` is a follow-up.
+to actually browse). Single-engine discipline holds: legacy `tools/browser.py`
+handlers AND `external/browser_agent.py` both route through `get_controller()`
+→ `PlaywrightBackend` (one Playwright process). `BrowserAgent` is retained as a
+deprecated compatibility adapter. Everything flows through
+`ToolExecutionService` (no bypass).
 
 **Test strategy:** run full suite once at end of Phase B (was 613 passed / 14
 skipped with J-Browser tests green).

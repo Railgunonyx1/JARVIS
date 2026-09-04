@@ -288,10 +288,14 @@ class _FakeBackend:
     def get_dom_snapshot(self, tab_id=None):
         return {"url": "u", "title": "t", "interactives": [], "links": [],
                 "forms": [], "viewport": {"w": 1000, "h": 800}}
+    def get_selector_text(self, selector=None, tab_id=None):
+        return "selector text" if selector else "page text"
     def screenshot(self, path=None, tab_id=None):
         return "/tmp/fake.png"
     def click(self, handle, tab_id=None): return True
     def type_text(self, handle, text, tab_id=None): return True
+    def click_selector(self, selector, tab_id=None): return True
+    def type_selector(self, selector, text, tab_id=None): return True
     def scroll(self, direction, amount=500, tab_id=None): pass
     def execute_script(self, script, tab_id=None): return "42"
 
@@ -362,3 +366,80 @@ class TestSkillsTransfer:
         # every browser skill must also appear in the inherited set
         inherited = {s.name for s in __import__("jbrowser.skills", fromlist=["inherited_skills"]).inherited_skills()}
         assert names <= inherited
+
+
+class TestLegacyBrowserCompatibility:
+    """Legacy tools/browser.py handlers must route through the controller."""
+
+    def _controller_with_fake(self) -> BrowserController:
+        reset_controller()
+        import jbrowser.controller as jbc
+        with jbc._controller_lock:
+            jbc._controller = BrowserController(backend=_FakeBackend())
+        return jbc.get_controller()
+
+    def test_open_delegates_to_controller(self):
+        from tools.browser import browser_open
+        self._controller_with_fake()
+        res = browser_open({"url": "example.com"})
+        assert res.success is True
+        assert res.output
+        assert res.metadata["url"]
+
+    def test_open_requires_url(self):
+        from tools.browser import browser_open
+        self._controller_with_fake()
+        res = browser_open({"url": "  "})
+        assert res.success is False
+
+    def test_click_selector_delegates(self):
+        from tools.browser import browser_click
+        self._controller_with_fake()
+        res = browser_click({"selector": "#btn"})
+        assert res.success is True
+        assert res.metadata["selector"] == "#btn"
+
+    def test_click_requires_selector(self):
+        from tools.browser import browser_click
+        self._controller_with_fake()
+        res = browser_click({"selector": ""})
+        assert res.success is False
+
+    def test_type_delegates(self):
+        from tools.browser import browser_type
+        self._controller_with_fake()
+        res = browser_type({"selector": "#q", "text": "hello"})
+        assert res.success is True
+        assert res.metadata["chars"] == 5
+
+    def test_extract_delegates(self):
+        from tools.browser import browser_extract
+        self._controller_with_fake()
+        res = browser_extract({"selector": "#content"})
+        assert res.success is True
+        assert res.metadata["chars"] >= 0
+
+    def test_status_delegates(self):
+        from tools.browser import browser_status
+        self._controller_with_fake()
+        res = browser_status({})
+        assert res.success is True
+        assert "backend" in res.output
+
+    def test_screenshot_delegates(self):
+        from tools.browser import browser_screenshot
+        self._controller_with_fake()
+        res = browser_screenshot({})
+        assert res.success is True
+        assert res.metadata["path"]
+
+    def test_browser_agent_adapter_delegates(self):
+        from external.browser_agent import BrowserAgent
+        self._controller_with_fake()
+        agent = BrowserAgent()
+        assert agent.open("example.org")["backend"] == "fake"
+        assert agent.click("#b") is True
+        assert agent.type_text("#q", "x") is True
+        assert agent.extract_text("#c") == "selector text"
+        assert agent.status()["backend"] == "fake"
+

@@ -107,6 +107,11 @@ class BrowserBackend(ABC):
         """Return a structured page context (interactive elements, links, forms)."""
 
     @abstractmethod
+    def get_selector_text(self, selector: str | None = None,
+                          tab_id: str | None = None) -> str:
+        """Return visible text from the whole page or a single CSS selector."""
+
+    @abstractmethod
     def screenshot(self, path: str | None = None, tab_id: str | None = None) -> str:
         """Capture a screenshot; returns the file path."""
 
@@ -118,6 +123,14 @@ class BrowserBackend(ABC):
     @abstractmethod
     def type_text(self, handle: str, text: str, tab_id: str | None = None) -> bool:
         """Type text into an input identified by its handle."""
+
+    @abstractmethod
+    def click_selector(self, selector: str, tab_id: str | None = None) -> bool:
+        """Click the first element matching a CSS selector (selector-based API)."""
+
+    @abstractmethod
+    def type_selector(self, selector: str, text: str, tab_id: str | None = None) -> bool:
+        """Fill the first element matching a CSS selector (selector-based API)."""
 
     @abstractmethod
     def scroll(self, direction: str, amount: int = 500, tab_id: str | None = None) -> None:
