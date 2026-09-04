@@ -9,7 +9,18 @@ Endpoints
 GET  /status     -> {"ok": bool, "kernel": "online"|"offline", ...}
 POST /v1/chat    -> SSE stream of {"type":"start|delta|done|error"}
 POST /v1/agent   -> launch a Strawberry-style agent (Phase seam)
-POST /v1/cdp     -> delegate a chrome.debugger/CDP command to the engine (seam)
+POST /v1/cdp     -> NOT a raw control path; always 501. Browser control is
+                    performed ONLY through JARVIS tools (ToolExecutionService
+                    -> BrowserController -> CDP), never through this endpoint.
+
+Security (G1 hardenings)
+------------------------
+* Loopback-only bind (127.0.0.1).
+* CORS restricted to ``chrome-extension://`` origins — never ``*``.
+* Optional bearer-token auth: when ``serve(..., require_auth=True)`` every
+  state-changing request must send ``Authorization: Bearer <token>``. The
+  token is provided by the caller (env ``J_BROWSER_BRIDGE_TOKEN``) or
+  auto-generated per server. The G6 extension client sends this token.
 
 The backend is pluggable (see backend.py). Default is the deterministic
 EchoBackend so the AI layer works end-to-end without a kernel attached.
@@ -20,7 +31,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
+import secrets
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -30,26 +43,43 @@ logger = logging.getLogger("jbrowser-bridge")
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8170
+TOKEN_ENV = "J_BROWSER_BRIDGE_TOKEN"
 
 _SAFE_ORIGINS = re.compile(r"^chrome-extension://[a-p]{32}$")
+_SAFE_ORIGIN = "chrome-extension://"
 
 
 class BridgeHandler(BaseHTTPRequestHandler):
     server_version = "JBrowserBridge/0.1.0"
     backend: object = None  # injected by server factory
+    auth_token: str | None = None  # injected; None => auth not required
 
     # ── CORS / plumbing ────────────────────────────────────────────────────
-    def _cors(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
+    def _cors(self, origin: str | None) -> None:
+        """Restrict CORS to JARVIS Orbit chrome-extension origins."""
+        safe = origin if (origin and _SAFE_ORIGINS.match(origin)) else None
+        if safe:
+            self.send_header("Access-Control-Allow-Origin", safe)
+            self.send_header("Vary", "Origin")
+        else:
+            # No Origin (direct call) or untrusted origin: no CORS allowance.
+            self.send_header("Access-Control-Allow-Origin", "")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "content-type")
+        self.send_header("Access-Control-Allow-Headers", "content-type, authorization")
+
+    def _authorized(self) -> bool:
+        """Enforce bearer-token auth when a token is configured."""
+        if self.auth_token is None:
+            return True
+        expected = f"Bearer {self.auth_token}"
+        return self.headers.get("Authorization") == expected
 
     def _json(self, code: int, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self._cors()
+        self._cors(self.headers.get("Origin"))
         self.end_headers()
         self.wfile.write(body)
 
@@ -72,7 +102,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     # ── HTTP verbs ─────────────────────────────────────────────────────────
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
-        self._cors()
+        self._cors(self.headers.get("Origin"))
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -82,6 +112,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._authorized():
+            self._json(401, {"ok": False, "error": "unauthorized", "code": "unauthorized"})
+            return
         if self.path == "/v1/chat":
             self._chat()
             return
@@ -109,7 +142,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
-        self._cors()
+        self._cors(self.headers.get("Origin"))
         self.end_headers()
 
         def emit(event: dict) -> None:
@@ -137,21 +170,40 @@ class BridgeHandler(BaseHTTPRequestHandler):
         })
 
     def _cdp(self) -> None:
-        """Delegate a chrome.debugger/CDP command. Phase 2 seam — not implemented."""
+        """Permanently 501: NOT a raw control path.
+
+        Browser control is performed only through JARVIS tools
+        (ToolExecutionService -> BrowserController -> CDP), never through this
+        endpoint. This guard prevents a second execution/control surface.
+        """
         self._json(501, {
             "ok": False,
             "code": "not_implemented",
-            "message": "cdp endpoint is a Phase-2 seam; wire to jbrowser engine",
+            "message": "cdp endpoint is intentionally closed; control goes through JARVIS tools only",
         })
 
 
 def serve(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
-          backend_kind: str = "echo", engine=None) -> ThreadingHTTPServer:
+          backend_kind: str = "echo", engine=None,
+          require_auth: bool = False, auth_token: str | None = None,
+          ) -> ThreadingHTTPServer:
+    """Start the bridge server.
+
+    ``require_auth=True`` enables bearer-token auth: the token is taken from
+    ``auth_token`` or the ``J_BROWSER_BRIDGE_TOKEN`` env var, or auto-generated
+    (available via ``httpd.bridge_token``). The G6 extension client sends this
+    token on every state-changing request.
+    """
     backend = make_backend(backend_kind, engine=engine)
+    token = None
+    if require_auth:
+        token = auth_token or os.environ.get(TOKEN_ENV) or secrets.token_hex(16)
     handler = type(
-        "JBridgeHandler", (BridgeHandler,), {"backend": backend}
+        "JBridgeHandler", (BridgeHandler,),
+        {"backend": backend, "auth_token": token},
     )
     httpd = ThreadingHTTPServer((host, port), handler)
+    httpd.bridge_token = token
     httpd.daemon_threads = True
     return httpd
 
@@ -162,6 +214,8 @@ def main(argv=None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--backend", default="echo",
                         choices=["echo", "kernel"])
+    parser.add_argument("--auth", action="store_true",
+                        help="require bearer-token auth (J_BROWSER_BRIDGE_TOKEN or generated)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -169,9 +223,11 @@ def main(argv=None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         stream=sys.stdout,
     )
-    httpd = serve(args.host, args.port, backend_kind=args.backend)
-    logger.info("JBrowserBridge listening on http://%s:%d backend=%s",
-                args.host, args.port, args.backend)
+    httpd = serve(args.host, args.port, backend_kind=args.backend,
+                  require_auth=args.auth)
+    logger.info("JBrowserBridge listening on http://%s:%d backend=%s auth=%s",
+                args.host, args.port, args.backend,
+                "on" if args.auth else "off")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
