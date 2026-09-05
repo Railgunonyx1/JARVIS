@@ -130,6 +130,76 @@ Implementation notes (accuracy contract — doc matches code):
 **Test strategy:** run full suite once at end of Phase B (was 660 passed /
 19 skipped with J-Browser unit tests green; live tests are opt-in).
 
+## Phase C — JARVIS Orbit (standalone browser product)
+
+JARVIS **Orbit** is the daily-driver browser whose intelligence layer is JARVIS
+itself. Two halves, one contract:
+
+- **Chromium owns browsing.** Unbranded Chromium (runtime resolved via
+  `J_BROWSER_CHROMIUM_PATH` or `orbit.cdp._find_chromium()` — a Playwright
+  build, never the user's installed Chrome profile) runs tabs, DOM, network,
+  and hosts the MV3 extension surfaces (sidebar + new-tab home that talk to the
+  DSH bridge at `127.0.0.1:8170`).
+- **JARVIS owns agency.** The kernel (AgentLoop → ToolExecutionService → the
+  `orbit.*` tool catalog) supplies all reasoning, planning, tool use, memory,
+  verification, and security. Chromium is controlled only through the single
+  browser facade: `BrowserController` → `CDPBackend` → CDP websocket.
+  `chrome.debugger` is FORBIDDEN in the extension — the 501 `DEREAL` control
+  duck test is the seam, not a control surface.
+
+| Area | Where |
+|------|-------|
+| CDP transport | `orbit/cdp.py` (`CDPConnection` sync recv-while-wait under one RLock; `CDPBackend` implements `BrowserBackend`) |
+| Tab registry | `orbit/registry.py` (stable `tab_id` ↔ CDP target_id; USER/AGENT/SYSTEM ownership via `core.locks.ResourceLock`) |
+| Facade + tools | `orbit/controller.py` (`get_orbit_controller`), `orbit/tools.py` (`orbit.*` handlers, single ToolExecutionService boundary) |
+| Vertical slice | `orbit/runtime.py` (`OrbitRuntime`, DSH-style commands; readback seam imports `orbit.tools.get_orbit_controller`) |
+| Risk + consent | `tools/classification.py` `browser_risk_for_tool` (single source); `core/agent/permissions.py` sensitive-site gate, fail-closed |
+| Sensitive sites | `security/sensitive_sites.py` (banking/webmail/account/cloud origins; host + subdomain match) |
+| Network policy | `jbrowser.network.BrowserNetworkPolicy` — default-deny private/loopback/link-local before `goto` |
+| Extension | `extensions/jbrowser/` (MV3, NO `chrome.debugger`; authenticated `BridgeClient` sends `Bearer` token) |
+| Bridge | `jbrowser-bridge/server.py` (loopback-only, CORS chrome-extension, optional bearer auth; `/v1/agent` + `/v1/cdp` permanent 501) |
+
+### Phase C invariants (extend the FREEEZE)
+
+7. **One browser control path.** Every individual browser action passes through
+   `BrowserController`, owned by `OrbitRuntime` and surfaced only as `orbit.*`
+   tools through `ToolExecutionService`. Legacy `tools/browser.py` handlers
+   route through the same facade.
+8. **Ownership beats blocking.** Tab access is serialized by stable-id
+   ownership: a contested tab yields the deterministic `RESOURCE_LOCKED`
+   signal (structured ToolResult: `reason`, `owner`, `key`), never a
+   silent wait or a raw throw.
+9. **Consent is mode-independent.** Low/medium auto-approve per mode; high/
+   critical AND navigation to a sensitive origin always require explicit
+   operator approval. No consent channel wired = deny (fail closed).
+10. **Declarative tool metadata.** Every tool carries `retry_semantics`
+    (READ/IDEMPOTENT/CONDITIONALLY/NON) and `concurrency`
+    (parallel/serialized) from the shared classification engine.
+
+### Phase C gates
+
+| Gate | What | Status |
+|------|------|--------|
+| G0 | subsystem audit + classification map | Done |
+| G1 | bridge + ownership locks + DSH bridge hardening | Done |
+| G2 | unbundled-Chromium runtime spike | Done |
+| G3 | CDP subsystem (connection, registry, backend) | Done |
+| G4 | vertical slice through ToolExecutionService | Done |
+| G5 | browser tool hardening (retry, concurrency, consent, RESOURCE_LOCKED) | Done |
+| G6 | extension rewrite (no chrome.debugger, auth'd bridge client, AGENTS.md) | Done |
+| G7 | kernel integration (KernelBackend→ModelGateway, budgets, tab ownership, WAITING_BROWSER) | Next |
+| G8 | end-to-end vertical slice (DSH→bridge→agent→tools→CDP) | Pending |
+| G9 | security + tests (sensitive sites, scan gate, audit) | Pending |
+| G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Pending |
+| G11 | import wizard (CSV password guidance only — no stored secrets) | Pending |
+| G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Pending |
+| G13 | E2E/perf (P50/P95/P99), packaging, first-run, docs, CI, final report | Pending |
+
+Bridge extension client is **authenticated** (bearer token via
+`chrome.storage` `jb:bridgeToken`); the bridge is fail-closed on state-changing
+requests when `--auth` is set. Orbit unit tests are hermetic (fake transport);
+live CDP tests are opt-in via `JARVIS_RUN_BROWSER_LIVE=1`.
+
 ## Research Pipeline
 
 ```text

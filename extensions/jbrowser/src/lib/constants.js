@@ -35,4 +35,5 @@ export const STORAGE = Object.freeze({
   conversations: "jb:conversations",
   settings: "jb:settings",
   installState: "jb:installed",
+  bridgeToken: "jb:bridgeToken",
 });

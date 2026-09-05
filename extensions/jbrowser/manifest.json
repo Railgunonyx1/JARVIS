@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "JARVIS — J-Browser",
   "version": "0.1.0",
-  "description": "JARVIS as a first-class AI layer in Chrome. Page-aware chat sidebar, JARVIS new-tab home, and browser/agent control via CDP.",
+  "description": "JARVIS as a first-class AI layer in Chromium. Page-aware chat sidebar and JARVIS new-tab home; browser control is delegated to JARVIS tools over CDP, never chrome.debugger.",
   "minimum_chrome_version": "125",
   "permissions": [
     "sidePanel",
@@ -13,7 +13,6 @@
     "bookmarks",
     "history",
     "contextMenus",
-    "debugger",
     "clipboardWrite",
     "notifications"
   ],

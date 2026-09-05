@@ -13,7 +13,8 @@ const clearBtn = document.getElementById("jb-clear");
 const settingsEl = document.getElementById("jb-settings");
 const settingsBtn = document.getElementById("jb-toggle-control");
 const settingsClose = document.getElementById("jb-settings-close");
-const controlEnabled = document.getElementById("jb-control-enabled");
+const settingsSave = document.getElementById("jb-settings-save");
+const bridgeTokenInput = document.getElementById("jb-bridge-token");
 
 let sessionId = null;
 let messages = [];
@@ -182,12 +183,12 @@ function updateStatus(status) {
 }
 
 async function loadSettings() {
-  const { settings } = await chrome.storage.local.get("settings");
-  controlEnabled.checked = !!(settings && settings.controllerEnabled === true);
+  const { [STORAGE.bridgeToken]: token } = await chrome.storage.local.get(STORAGE.bridgeToken);
+  bridgeTokenInput.value = typeof token === "string" ? token : "";
 }
 
 function storeSettings() {
-  return sendMessage({ type: "jb:settings", controllerEnabled: controlEnabled.checked }).catch(
+  return sendMessage({ type: "jb:settings", bridgeToken: bridgeTokenInput.value }).catch(
     () => {}
   );
 }
@@ -217,7 +218,10 @@ settingsBtn.addEventListener("click", () => {
 settingsClose.addEventListener("click", () => {
   settingsEl.hidden = true;
 });
-controlEnabled.addEventListener("change", storeSettings);
+settingsSave.addEventListener("click", async () => {
+  await storeSettings();
+  settingsEl.hidden = true;
+});
 
 chrome.tabs.onActivated.addListener(refreshPageBar);
 chrome.tabs.onUpdated.addListener((_id, info) => {

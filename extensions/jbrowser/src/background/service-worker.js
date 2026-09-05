@@ -1,9 +1,19 @@
 import { BridgeClient } from "../bridge/bridge-client.js";
 import { Msg, STORAGE, BRIDGE } from "../lib/constants.js";
 import { onMessage, broadcastType } from "../lib/messaging.js";
-import * as Controller from "../controller/controller.js";
 
-const bridge = new BridgeClient();
+async function getBridgeToken() {
+  const { [STORAGE.bridgeToken]: token } = await chrome.storage.local.get(STORAGE.bridgeToken);
+  return typeof token === "string" && token.trim() ? token.trim() : undefined;
+}
+
+async function setBridgeToken(token) {
+  const value = typeof token === "string" && token.trim() ? token.trim() : "";
+  await chrome.storage.local.set({ [STORAGE.bridgeToken]: value });
+  return value || undefined;
+}
+
+const bridge = new BridgeClient({ tokenProvider: getBridgeToken });
 const liveChats = new Set();
 let statusTask = null;
 let statusCached = { ok: false, kernel: "offline", checkedAt: 0 };
@@ -137,12 +147,8 @@ onMessage(async (message) => {
     case Msg.CAPTURE_PAGE:
       return captureActiveTabContext();
     case "jb:settings": {
-      const enabled = !!message.controllerEnabled;
-      await chrome.storage.local.set({
-        settings: { ...(await chrome.storage.local.get("settings")).settings, controllerEnabled: enabled },
-      });
-      await Controller.setEnabled(enabled);
-      return { ok: true, controllerEnabled: enabled };
+      const token = await setBridgeToken(message.bridgeToken);
+      return { ok: true, bridgeToken: token };
     }
     default:
       return undefined;
@@ -219,5 +225,4 @@ chrome.commands.onCommand.addListener(async (command) => {
 refreshStatus(true).catch(() => {});
 startStatusLoop();
 
-void Controller;
 void BRIDGE;

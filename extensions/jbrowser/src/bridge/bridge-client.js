@@ -1,10 +1,24 @@
 import { BRIDGE } from "../lib/constants.js";
 
+function bearer(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export class BridgeClient {
-  constructor({ base = BRIDGE.base, timeoutMs = BRIDGE.connectTimeoutMs } = {}) {
+  constructor({ base = BRIDGE.base, timeoutMs = BRIDGE.connectTimeoutMs, token, tokenProvider } = {}) {
     this.base = base;
     this.timeoutMs = timeoutMs;
+    this._token = token;
+    this._tokenProvider = tokenProvider || (async () => undefined);
     this._aborters = new Map();
+  }
+
+  async _auth() {
+    const staticToken = this._token;
+    const token = staticToken !== undefined
+      ? staticToken
+      : await this._tokenProvider();
+    return bearer(typeof token === "string" ? token.trim() : undefined);
   }
 
   async status() {
@@ -31,7 +45,10 @@ export class BridgeClient {
     try {
       body = await fetch(`${this.base}${BRIDGE.endpoints.chat}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(await this._auth()),
+        },
         body: JSON.stringify({ session_id: sessionId, messages, page }),
         signal: controller.signal,
         cache: "no-store",

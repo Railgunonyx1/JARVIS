@@ -42,15 +42,17 @@
     </footer>
 
     <section id="jb-settings" class="jb-settings" hidden>
-      <div class="jb-settings-title">Browser control (chrome.debugger)</div>
+      <div class="jb-settings-title">Bridge connection</div>
       <p class="jb-settings-note">
-        Enables privileged page control for autonomous agents. Each agent action
-        still requires your explicit approval.
+        Optional bearer token for the JARVIS bridge
+        (<code>127.0.0.1:8170</code>). Required only when the bridge runs with
+        <code>--auth</code>. Browser control always goes through JARVIS tools.
       </p>
       <label class="jb-settings-row">
-        <span>Enable control</span>
-        <input type="checkbox" id="jb-control-enabled" />
+        <span>Bridge token</span>
+        <input type="text" id="jb-bridge-token" autocomplete="off" spellcheck="false" />
       </label>
+      <button id="jb-settings-save" class="jb-link-btn">Save</button>
       <button id="jb-settings-close" class="jb-link-btn">Close</button>
     </section>
 

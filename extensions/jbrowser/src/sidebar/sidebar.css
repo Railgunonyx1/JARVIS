@@ -247,6 +247,22 @@ body {
   font-size: 12px;
 }
 
+.jb-settings-note code {
+  font-family: var(--jb-mono, monospace);
+  font-size: 10px;
+}
+
+.jb-settings-row input[type="text"] {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--jb-border);
+  border-radius: 6px;
+  background: var(--jb-bg);
+  color: var(--jb-fg);
+  font-size: 12px;
+}
+
 .jb-link-btn {
   align-self: flex-start;
   background: none;
