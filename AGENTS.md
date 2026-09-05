@@ -190,8 +190,8 @@ itself. Two halves, one contract:
 | G7 | kernel integration (KernelBackend→ModelGateway, budgets, tab ownership, WAITING_BROWSER) | Done |
 | G8 | end-to-end vertical slice (DSH→bridge→agent→tools→CDP) | Done |
 | G9 | security + tests (sensitive sites, scan gate, audit) | Done |
-| G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Next |
-| G11 | import wizard (CSV password guidance only — no stored secrets) | Pending |
+| G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Done |
+| G11 | import wizard (CSV password guidance only — no stored secrets) | Next |
 | G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Pending |
 | G13 | E2E/perf (P50/P95/P99), packaging, first-run, docs, CI, final report | Pending |
 

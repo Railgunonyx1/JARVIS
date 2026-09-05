@@ -55,6 +55,7 @@ def build_orbit_agent_loop(
     from tools.registry import ToolRegistry
 
     from orbit.tools import build_orbit_tools
+    from orbit.recovery import BrowserRecovery
 
     registry = ToolRegistry()
     registry.register_many(build_orbit_tools())
@@ -80,6 +81,7 @@ def build_orbit_agent_loop(
         decision_logger=logger,
         harness=harness,
         confirmation_handler=confirmation_handler,
+        browser_recovery=BrowserRecovery(),
     )
 
 
