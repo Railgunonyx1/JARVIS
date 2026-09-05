@@ -9,6 +9,9 @@ from pathlib import Path
 
 logger = logging.getLogger("jarvis.memory")
 
+# G12 BLOB mode cap: artifacts are bounded so they never bloat the store.
+BLOB_MAX_BYTES = 16 * 1024 * 1024  # 16 MiB
+
 # Pre-prime CPU percent so first real call is non-blocking
 try:
     import psutil
@@ -109,7 +112,36 @@ class MemoryStore:
         except Exception as e:
             logger.debug("FTS5 not available: %s", e)
             self._fts_available = False
+        self._ensure_ownership_schema()
         self._conn.commit()
+
+    def _ensure_ownership_schema(self) -> None:
+        """Idempotent migration: owner column + BLOB table (G12 selective memory).
+
+        Existing databases predate ownership; ``ALTER TABLE ... ADD COLUMN``
+        with a NOT NULL DEFAULT is safe and idempotent across runs.
+        """
+        try:
+            self._conn.execute(
+                "ALTER TABLE memories ADD COLUMN owner TEXT NOT NULL DEFAULT 'user'"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already present
+        self._conn.executescript("""
+            CREATE TABLE IF NOT EXISTS memory_blobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                owner TEXT NOT NULL DEFAULT 'user',
+                mime TEXT NOT NULL DEFAULT 'application/octet-stream',
+                size INTEGER NOT NULL,
+                data BLOB NOT NULL,
+                category TEXT DEFAULT 'artifact',
+                meta TEXT DEFAULT '',
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner);
+            CREATE INDEX IF NOT EXISTS idx_blobs_owner ON memory_blobs(owner);
+        """)
 
     def _rebuild_from_json(self) -> None:
         """Rebuild the SQLite memories table from long_term.json.
@@ -159,6 +191,7 @@ class MemoryStore:
             CREATE INDEX IF NOT EXISTS idx_conv_timestamp ON conversations(timestamp);
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
         """)
+        self._ensure_ownership_schema()
         self._conn.commit()
         # Rebuild from JSON
         try:
@@ -181,18 +214,20 @@ class MemoryStore:
         except Exception as e:
             logger.error("Failed to rebuild from JSON: %s", e)
 
-    def store(self, key: str, value: str, category: str = "general", importance: float = 0.5):
-        """Store a key-value memory."""
+    def _upsert(self, key: str, value: str, category: str, importance: float,
+                owner: str = "user") -> None:
+        """Insert or update one memory row with its owner."""
         now = time.time()
         with self._lock:
             self._conn.execute("""
-                INSERT INTO memories (key, value, category, created_at, updated_at, importance)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO memories (key, value, category, created_at, updated_at,
+                                     importance, owner)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(key) DO UPDATE SET
                     value = excluded.value,
                     updated_at = excluded.updated_at,
                     importance = excluded.importance
-            """, (key, value, category, now, now, importance))
+            """, (key, value, category, now, now, importance, owner))
             # Sync FTS5 index
             if getattr(self, '_fts_available', False):
                 try:
@@ -209,13 +244,33 @@ class MemoryStore:
             self._conn.commit()
         logger.info("Memory stored: %s [%s]", key, category)
 
-    def recall(self, key: str) -> str | None:
-        """Recall a memory by key."""
+    def store(self, key: str, value: str, category: str = "general", importance: float = 0.5):
+        """Store a key-value memory (legacy surface; rows are user-owned)."""
+        self._upsert(key, value, category, importance, owner="user")
+
+    def store_owned(self, key: str, value: str, owner: str,
+                    category: str = "general", importance: float = 0.5) -> None:
+        """Ownership-enforced store under the constellation keyspace (G12).
+
+        Raises ``ValueError`` for malformed keys and ``PermissionError`` when
+        ``owner`` may not write the key's namespace.
+        """
+        from memory.keyspace import can_write, parse_key
+
+        parse_key(key)  # ValueError on malformed keyspace key
+        if not can_write(key, owner):
+            raise PermissionError(f"{owner!r} may not write memory key {key!r}")
+        self._upsert(key, value, category, importance, owner=owner)
+
+    def recall(self, key: str, owner: str | None = None) -> str | None:
+        """Recall a memory by key; ``owner`` scopes reads (None = admin)."""
+        from memory.keyspace import can_read
+
         with self._lock:
             row = self._conn.execute(
-                "SELECT value FROM memories WHERE key = ?", (key,)
+                "SELECT key, value, owner FROM memories WHERE key = ?", (key,)
             ).fetchone()
-            if row:
+            if row and (owner is None or can_read(row["key"], owner)):
                 self._conn.execute(
                     "UPDATE memories SET access_count = access_count + 1 WHERE key = ?",
                     (key,)
@@ -223,6 +278,15 @@ class MemoryStore:
                 self._conn.commit()
                 return row["value"]
         return None
+
+    def delete_owned(self, key: str, owner: str) -> bool:
+        """Delete a memory only when ``owner`` may write its key."""
+        from memory.keyspace import can_write, parse_key
+
+        parse_key(key)
+        if not can_write(key, owner):
+            raise PermissionError(f"{owner!r} may not delete memory key {key!r}")
+        return self.delete(key)
 
     def delete(self, key: str) -> bool:
         """Delete a memory by key."""
@@ -241,8 +305,88 @@ class MemoryStore:
             self._conn.commit()
         return cur.rowcount > 0
 
-    def search(self, query: str, category: str | None = None, limit: int = 10) -> list[dict]:
-        """Search memories by value content."""
+    # ── G12: BLOB mode (binary / large artifacts) ────────────────────────────
+
+    def put_blob(self, key: str, data: bytes, owner: str = "user",
+                 mime: str = "application/octet-stream",
+                 category: str = "artifact", meta: str = "") -> int:
+        """Store a binary artifact under the keyspace; returns its size.
+
+        Ownership rules mirror text memories. Blobs never appear in text
+        recall/search — they are retrieved by key reference only.
+        """
+        from memory.keyspace import can_write, parse_key
+
+        parse_key(key)
+        if not can_write(key, owner):
+            raise PermissionError(f"{owner!r} may not write blob key {key!r}")
+        if data is None or not isinstance(data, (bytes, bytearray)):
+            raise ValueError("blob data must be bytes")
+        size = len(data)
+        if size > BLOB_MAX_BYTES:
+            raise ValueError(
+                f"blob {size} bytes exceeds cap of {BLOB_MAX_BYTES} bytes"
+            )
+        now = time.time()
+        with self._lock:
+            self._conn.execute("""
+                INSERT INTO memory_blobs (key, owner, mime, size, data, category,
+                                         meta, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    owner = excluded.owner,
+                    mime = excluded.mime,
+                    size = excluded.size,
+                    data = excluded.data,
+                    category = excluded.category,
+                    meta = excluded.meta,
+                    created_at = excluded.created_at
+            """, (key, owner, mime, size, bytes(data), category, meta, now))
+            self._conn.commit()
+        return size
+
+    def get_blob(self, key: str, owner: str | None = None) -> dict | None:
+        """Return ``{key, data, mime, size, category, meta, created_at}``."""
+        from memory.keyspace import can_read, parse_key
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT key, owner, mime, size, data, category, meta, created_at "
+                "FROM memory_blobs WHERE key = ?", (key,)
+            ).fetchone()
+        if row is None:
+            return None
+        if owner is not None and not can_read(row["key"], owner):
+            return None
+        return dict(row)
+
+    def blob_info(self, key: str, owner: str | None = None) -> dict | None:
+        """Metadata for a blob, never its payload."""
+        blob = self.get_blob(key, owner=owner)
+        if blob is None:
+            return None
+        blob.pop("data", None)
+        return blob
+
+    def list_blobs(self, owner: str | None = None, limit: int = 50) -> list[dict]:
+        """Metadata rows for stored blobs, newest first (never payloads)."""
+        from memory.keyspace import can_read
+
+        with self._lock:
+            rows = [dict(r) for r in self._conn.execute(
+                "SELECT key, owner, mime, size, category, meta, created_at "
+                "FROM memory_blobs ORDER BY created_at DESC LIMIT ?",
+                (max(1, min(limit, 500)),),
+            )]
+        if owner is not None:
+            rows = [r for r in rows if can_read(r["key"], owner)]
+        return rows
+
+    def search(self, query: str, category: str | None = None, limit: int = 10,
+               owner: str | None = None) -> list[dict]:
+        """Search memories by value content; ``owner`` scopes the results."""
+        from memory.keyspace import can_read
+
         sql = "SELECT key, value, category, importance FROM memories WHERE value LIKE ?"
         params = [f"%{query}%"]
         if category:
@@ -253,7 +397,10 @@ class MemoryStore:
 
         with self._lock:
             rows = self._conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        rows = [dict(r) for r in rows]
+        if owner is not None:
+            rows = [r for r in rows if can_read(r["key"], owner)]
+        return rows
 
     def search_lexical(self, query: str, limit: int = 10) -> list[dict]:
         """Token-overlap scored search via FTS5 (fast) or selector (fallback).

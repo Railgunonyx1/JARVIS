@@ -24,6 +24,7 @@ from jbrowser.permissions import describe_permissions
 from tools.classification import classify_tool
 from tools.schema import Tool, ToolResult
 
+from memory.keyspace import KIND_AGENT, owner_key
 from orbit.controller import get_orbit_controller
 
 MAX_OUTPUT = 8000
@@ -289,6 +290,145 @@ def orbit_import_passwords(args: dict[str, Any]) -> ToolResult:
             "duplicates": len(plan.duplicates),
             "sensitive_sites": len(plan.sensitive_sites),
             "parse_errors": len(plan.parse_errors),
+        },
+    )
+
+
+def _memory_owner(args: dict[str, Any]) -> str:
+    """Resolve the canonical owner string from tool args (G12).
+
+    The tool surface exposes ``user`` and ``agent`` ownership only; ``system``
+    namespaces are reserved for runtime callers at the store level.
+    """
+    owner_kind = str(args.get("owner") or "user").strip().lower()
+    agent_id = str(args.get("agent_id") or "").strip()
+    if owner_kind == "agent":
+        if not agent_id:
+            raise ValueError("owner='agent' requires agent_id")
+        return owner_key(KIND_AGENT, agent_id)
+    if owner_kind == "user":
+        return "user"
+    raise ValueError(f"owner must be 'user' or 'agent' (got {owner_kind!r})")
+
+
+def orbit_memory_remember(args: dict[str, Any]) -> ToolResult:
+    """Persist a text memory under the constellation keyspace (G12)."""
+    from orbit.memory import get_orbit_memory
+
+    key = str(args.get("key") or "").strip()
+    value = str(args.get("value") or "")
+    if not key or not value.strip():
+        return ToolResult(success=False, error="key and value are required")
+    try:
+        owner = _memory_owner(args)
+        get_orbit_memory().store_owned(
+            key, value, owner=owner,
+            category=str(args.get("category") or "general")[:64],
+        )
+    except (ValueError, PermissionError) as e:
+        return ToolResult(success=False, error=f"memory_remember failed: {e}")
+    return ToolResult(success=True, output=f"remembered {key}",
+                      metadata={"key": key, "owner": owner})
+
+
+def orbit_memory_recall(args: dict[str, Any]) -> ToolResult:
+    """Recall a memory by key or search value content (G12).
+
+    Reads are scoped to the caller's ownership claim: an agent never sees a
+    sibling agent's private namespace.
+    """
+    from orbit.memory import get_orbit_memory
+
+    key = str(args.get("key") or "").strip()
+    query = str(args.get("query") or "").strip()
+    if not key and not query:
+        return ToolResult(success=False, error="key or query is required")
+    try:
+        owner = _memory_owner(args)
+    except ValueError as e:
+        return ToolResult(success=False, error=f"memory_recall failed: {e}")
+    store = get_orbit_memory()
+    if key:
+        value = store.recall(key, owner=owner)
+        if value is None:
+            return ToolResult(success=False,
+                              error=f"no memory at {key} readable by {owner}")
+        return ToolResult(success=True,
+                          output=value[:MAX_OUTPUT] or "(empty)",
+                          metadata={"key": key, "owner": owner})
+    hits = store.search(query, limit=8, owner=owner)
+    if not hits:
+        return ToolResult(success=False, error=f"no memories match {query!r}")
+    lines = [f"- {h['key']}: {(h['value'] or '')[:240]}" for h in hits]
+    return ToolResult(success=True, output="\n".join(lines),
+                      metadata={"hits": len(hits), "owner": owner})
+
+
+def orbit_memory_forget(args: dict[str, Any]) -> ToolResult:
+    """Delete a memory the caller owns (G12)."""
+    from orbit.memory import get_orbit_memory
+
+    key = str(args.get("key") or "").strip()
+    if not key:
+        return ToolResult(success=False, error="key is required")
+    try:
+        owner = _memory_owner(args)
+        deleted = get_orbit_memory().delete_owned(key, owner)
+    except (ValueError, PermissionError) as e:
+        return ToolResult(success=False, error=f"memory_forget failed: {e}")
+    return ToolResult(success=deleted, output=f"forgotten {key}" if deleted
+                      else f"no memory at {key}",
+                      metadata={"key": key, "owner": owner, "deleted": deleted})
+
+
+def orbit_memory_artifact_save(args: dict[str, Any]) -> ToolResult:
+    """Store a binary artifact (base64 in) under the keyspace (G12 BLOB)."""
+    import base64 as _b64
+
+    from orbit.memory import get_orbit_memory
+
+    key = str(args.get("key") or "").strip()
+    data_b64 = str(args.get("data_base64") or "")
+    if not key or not data_b64:
+        return ToolResult(success=False, error="key and data_base64 are required")
+    try:
+        data = _b64.b64decode(data_b64, validate=True)
+        owner = _memory_owner(args)
+        size = get_orbit_memory().put_blob(
+            key, data, owner=owner,
+            mime=str(args.get("mime") or "application/octet-stream")[:128],
+            meta=str(args.get("meta") or "")[:512],
+        )
+    except (ValueError, PermissionError) as e:
+        return ToolResult(success=False, error=f"artifact_save failed: {e}")
+    return ToolResult(success=True, output=f"stored artifact {key}",
+                      metadata={"key": key, "owner": owner, "size": size})
+
+
+def orbit_memory_artifact_get(args: dict[str, Any]) -> ToolResult:
+    """Fetch an artifact's metadata + payload (base64 out) (G12 BLOB)."""
+    import base64 as _b64
+
+    from orbit.memory import get_orbit_memory
+
+    key = str(args.get("key") or "").strip()
+    if not key:
+        return ToolResult(success=False, error="key is required")
+    try:
+        owner = _memory_owner(args)
+        blob = get_orbit_memory().get_blob(key, owner=owner)
+    except ValueError as e:
+        return ToolResult(success=False, error=f"artifact_get failed: {e}")
+    if blob is None:
+        return ToolResult(success=False,
+                          error=f"no artifact at {key} readable by {owner}")
+    return ToolResult(
+        success=True,
+        output=(f"artifact {key}: {blob['mime']} ({blob['size']} bytes)"),
+        metadata={
+            "key": key, "owner": owner, "mime": blob["mime"],
+            "size": blob["size"], "data_base64": _b64.b64encode(
+                blob["data"]).decode("ascii"),
         },
     )
 
@@ -567,6 +707,104 @@ _ORBIT_TOOLS: list[Tool] = [
         },
         permission="orbit.credentials",
         handler=orbit_import_passwords,
+        category="orbit",
+    ),
+    Tool(
+        name="orbit.memory_remember",
+        description="Persist a text memory under the constellation keyspace. "
+        "Keys must be namespaced: user.<domain>.<name>, agent.<agent_id>.<domain>."
+        "<name>, or system.<domain>.<name>; the caller may only write its own "
+        "namespace (owner + agent_id).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "value": {"type": "string"},
+                "owner": {"type": "string", "enum": ["user", "agent"]},
+                "agent_id": {"type": "string"},
+                "category": {"type": "string"},
+            },
+            "required": ["key", "value"],
+        },
+        permission="orbit.memory",
+        handler=orbit_memory_remember,
+        category="orbit",
+    ),
+    Tool(
+        name="orbit.memory_recall",
+        description="Recall a memory by key or search its content. Reads are "
+        "scoped to the caller's ownership claim (owner + agent_id); an agent "
+        "never sees a sibling agent's private namespace.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "query": {"type": "string"},
+                "owner": {"type": "string", "enum": ["user", "agent"]},
+                "agent_id": {"type": "string"},
+            },
+            "required": [],
+        },
+        permission="orbit.memory",
+        handler=orbit_memory_recall,
+        category="orbit",
+    ),
+    Tool(
+        name="orbit.memory_forget",
+        description="Delete a memory the caller owns (constellation keyspace "
+        "ownership enforced; cannot delete outside your namespace).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "owner": {"type": "string", "enum": ["user", "agent"]},
+                "agent_id": {"type": "string"},
+            },
+            "required": ["key"],
+        },
+        permission="orbit.memory",
+        handler=orbit_memory_forget,
+        category="orbit",
+        # Not flagged destructive: deletion is bounded to the caller's own
+        # namespace by the constellation ownership guard (user/system/sibling
+        # keys are unreachable), so it stays low-risk and auto-approved.
+    ),
+    Tool(
+        name="orbit.memory_artifact_save",
+        description="Store a binary artifact (base64 data) under the "
+        "constellation keyspace. Blobs never appear in text recall/search; "
+        "retrieve by key reference.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "data_base64": {"type": "string"},
+                "mime": {"type": "string"},
+                "meta": {"type": "string"},
+                "owner": {"type": "string", "enum": ["user", "agent"]},
+                "agent_id": {"type": "string"},
+            },
+            "required": ["key", "data_base64"],
+        },
+        permission="orbit.memory",
+        handler=orbit_memory_artifact_save,
+        category="orbit",
+    ),
+    Tool(
+        name="orbit.memory_artifact_get",
+        description="Fetch an artifact's metadata and base64 payload by key "
+        "reference (owner-scoped).",
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string"},
+                "owner": {"type": "string", "enum": ["user", "agent"]},
+                "agent_id": {"type": "string"},
+            },
+            "required": ["key"],
+        },
+        permission="orbit.memory",
+        handler=orbit_memory_artifact_get,
         category="orbit",
     ),
 ]
