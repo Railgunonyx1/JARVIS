@@ -8,7 +8,10 @@ Endpoints
 ---------
 GET  /status     -> {"ok": bool, "kernel": "online"|"offline", ...}
 POST /v1/chat    -> SSE stream of {"type":"start|delta|done|error"}
-POST /v1/agent   -> launch a Strawberry-style agent (Phase seam)
+POST /v1/agent   -> SSE stream of the same protocol; runs a JARVIS agent task
+                    (AgentLoop -> ToolExecutionService -> orbit.* -> CDP).
+                    Only available when a kernel backend with an engine is
+                    attached; otherwise answers 501 (fail closed).
 POST /v1/cdp     -> NOT a raw control path; always 501. Browser control is
                     performed ONLY through JARVIS tools (ToolExecutionService
                     -> BrowserController -> CDP), never through this endpoint.
@@ -19,7 +22,8 @@ Backends
 * ``kernel``  — drives the real JARVIS stack through a ``StreamEngine``
   (see engine.py). ``serve(..., backend_kind="kernel", engine=engine)``:
   the default ``ModelGatewayEngine`` streams chat through the JARVIS model
-  gateway (ProviderRouter fallback) with input/output budgets.
+  gateway (ProviderRouter fallback) with input/output budgets. Supply
+  :class:`agent.AgentEngine` for task-driven (DSH-style) browsing.
 
 Security (G1 hardenings)
 ------------------------
@@ -45,9 +49,14 @@ import secrets
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from backend import make_backend
+from backend import KernelBackend, make_backend
 
 logger = logging.getLogger("jbrowser-bridge")
+
+
+def _agent_capable(backend) -> bool:
+    """An agent task can only stream through a kernel backend with an engine."""
+    return isinstance(backend, KernelBackend) and getattr(backend, "engine", None) is not None
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8170
@@ -135,17 +144,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not found"})
 
     # ── endpoints ──────────────────────────────────────────────────────────
-    def _chat(self) -> None:
-        data = self._read_json()
-        if data is None:
-            self._json(400, {"ok": False, "error": "invalid json body"})
-            return
-        messages = data.get("messages") or []
-        if not messages and data.get("text"):
-            messages = [{"role": "user", "content": data.get("text")}]
-        session_id = str(data.get("session_id") or "anon")
-        page = data.get("page")
-
+    def _stream_chat(self, session_id: str, messages: list,
+                     page: dict | None) -> None:
+        """Emit the backend's stream as SSE, catching engine failures."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -169,14 +170,47 @@ class BridgeHandler(BaseHTTPRequestHandler):
         # so clients that also read to EOF release cleanly.
         self.close_connection = True
 
+    def _chat(self) -> None:
+        data = self._read_json()
+        if data is None:
+            self._json(400, {"ok": False, "error": "invalid json body"})
+            return
+        messages = data.get("messages") or []
+        if not messages and data.get("text"):
+            messages = [{"role": "user", "content": data.get("text")}]
+        session_id = str(data.get("session_id") or "anon")
+        page = data.get("page")
+        self._stream_chat(session_id, messages, page)
+
     def _agent(self) -> None:
-        """Launch a Strawberry-style agent. Phase 3 seam — not implemented."""
-        self._read_json()  # drain the request body so the client reads a clean 501
-        self._json(501, {
-            "ok": False,
-            "code": "not_implemented",
-            "message": "agent endpoint is a Phase-3 seam; wire to the agent runtime",
-        })
+        """Launch a JARVIS agent task (DSH-style) over the kernel engine.
+
+        Real only when the backend is a kernel backend with an attached
+        engine; otherwise this remains the Phase-3 seam and answers 501 so a
+        silent downgrade is impossible (fail closed).
+        """
+        if not _agent_capable(self.backend):
+            self._read_json()  # drain the body so the client reads a clean 501
+            self._json(501, {
+                "ok": False,
+                "code": "not_implemented",
+                "message": "agent endpoint needs a kernel backend with an engine attached",
+            })
+            return
+        data = self._read_json()
+        if data is None:
+            self._json(400, {"ok": False, "error": "invalid json body"})
+            return
+        task = str(data.get("task") or data.get("text") or "").strip()
+        messages = data.get("messages") or []
+        if not messages:
+            if not task:
+                self._json(400, {"ok": False, "error": "missing 'task'"})
+                return
+            messages = [{"role": "user", "content": task}]
+        session_id = str(data.get("session_id") or "anon")
+        page = data.get("page")
+        self._stream_chat(session_id, messages, page)
 
     def _cdp(self) -> None:
         """Permanently 501: NOT a raw control path.

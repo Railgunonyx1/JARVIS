@@ -187,9 +187,9 @@ itself. Two halves, one contract:
 | G4 | vertical slice through ToolExecutionService | Done |
 | G5 | browser tool hardening (retry, concurrency, consent, RESOURCE_LOCKED) | Done |
 | G6 | extension rewrite (no chrome.debugger, auth'd bridge client, AGENTS.md) | Done |
-| G7 | kernel integration (KernelBackend→ModelGateway, budgets, tab ownership, WAITING_BROWSER) | Next |
-| G8 | end-to-end vertical slice (DSH→bridge→agent→tools→CDP) | Pending |
-| G9 | security + tests (sensitive sites, scan gate, audit) | Pending |
+| G7 | kernel integration (KernelBackend→ModelGateway, budgets, tab ownership, WAITING_BROWSER) | Done |
+| G8 | end-to-end vertical slice (DSH→bridge→agent→tools→CDP) | Done |
+| G9 | security + tests (sensitive sites, scan gate, audit) | Next |
 | G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Pending |
 | G11 | import wizard (CSV password guidance only — no stored secrets) | Pending |
 | G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Pending |
