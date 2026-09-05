@@ -64,6 +64,7 @@ def build_orbit_agent_loop(
         logger,
         mode="agent",
         confirmation_handler=confirmation_handler,
+        fail_closed_risky=True,
     )
     _verified = os.environ.get("JARVIS_ORBIT_VERIFY", "0") in ("1", "true")
     harness = Harness(HarnessConfig(

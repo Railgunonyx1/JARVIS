@@ -133,6 +133,14 @@ class ToolExecutionService:
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
                     "content": f"PERMISSION DENIED: {reason}",
                 })
+            # Every verdict is auditable: a decision to deny is as important
+            # as an executed tool. The executor only records run tools, so the
+            # service records denials here (single boundary, no bypass).
+            self._logger.record_tool(
+                trace_id, tool.permission, call.arguments,
+                allowed=False, success=False, error=reason,
+                mode=self._mode, session_id=session_id,
+            )
             return ToolExecutionResult(
                 tool_name=call.name, call_id=call.id,
                 permission_denied=True, permission_reason=reason,

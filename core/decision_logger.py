@@ -32,6 +32,21 @@ def _params_hash(params: dict[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()[:12]
 
 
+def _scrub_params_values(text: str, params: dict[str, Any]) -> str:
+    """Strip any argument values that leaked into a persisted message.
+
+    Defense-in-depth for the audit store: reasons, errors, and other
+    diagnostics may embed parameter values (e.g. a URL in a sensitive-site
+    denial). Raw values never reach the store — only the params_hash does.
+    """
+    if not text:
+        return text
+    for value in (params or {}).values():
+        if isinstance(value, str) and len(value) >= 3 and value in text:
+            text = text.replace(value, f"<redacted:{len(value)}>")
+    return text
+
+
 class DecisionLogger:
     """Lazy-singleton facade over EventStore + AuditLog."""
 
@@ -115,7 +130,9 @@ class DecisionLogger:
                 allowed=allowed,
                 duration_ms=round(duration_ms, 1),
                 success=success,
-                error=(error or "")[:300],
+                error=_scrub_params_values(
+                    (error or "")[:300], params or {},
+                ),
                 params_hash=_params_hash(params or {}),
                 mode=mode,
                 trace_id=trace_id,

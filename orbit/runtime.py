@@ -41,7 +41,9 @@ class OrbitRuntime:
         else:
             self.service = ToolExecutionService(
                 registry=self.registry,
-                permissions=permissions or PermissionEngine(get_decision_logger(), mode="agent"),
+                permissions=permissions or PermissionEngine(
+                    get_decision_logger(), mode="agent", fail_closed_risky=True,
+                ),
             )
 
     @staticmethod
