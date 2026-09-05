@@ -13,6 +13,14 @@ POST /v1/cdp     -> NOT a raw control path; always 501. Browser control is
                     performed ONLY through JARVIS tools (ToolExecutionService
                     -> BrowserController -> CDP), never through this endpoint.
 
+Backends
+--------
+* ``echo``    — deterministic offline stub (default; no kernel required).
+* ``kernel``  — drives the real JARVIS stack through a ``StreamEngine``
+  (see engine.py). ``serve(..., backend_kind="kernel", engine=engine)``:
+  the default ``ModelGatewayEngine`` streams chat through the JARVIS model
+  gateway (ProviderRouter fallback) with input/output budgets.
+
 Security (G1 hardenings)
 ------------------------
 * Loopback-only bind (127.0.0.1).

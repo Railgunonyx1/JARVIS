@@ -10,6 +10,10 @@ Failure paths:
     → BLOCKED → FAILED
     → FAILED
     → CANCELLED
+
+Browser coordination:
+    → WAITING_BROWSER (the agent is parked until a browser tab it needs is
+      released; a sibling agent or the operator owns it) → EXECUTING
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ class TaskStatus(StrEnum):
     BLOCKED = "blocked"
     CANCELLED = "cancelled"
     ROLLED_BACK = "rolled_back"
+    WAITING_BROWSER = "waiting_browser"
 
 
 class FailureClass(StrEnum):
@@ -151,9 +156,11 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PLANNING: {TaskStatus.EXECUTING, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.EXECUTING: {
         TaskStatus.OBSERVING, TaskStatus.FAILED, TaskStatus.BLOCKED, TaskStatus.CANCELLED,
+        TaskStatus.WAITING_BROWSER,
     },
     TaskStatus.OBSERVING: {
         TaskStatus.VERIFYING, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED,
+        TaskStatus.WAITING_BROWSER,
     },
     TaskStatus.VERIFYING: {
         TaskStatus.COMPLETED, TaskStatus.RECOVERING, TaskStatus.FAILED,
@@ -163,6 +170,10 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
         TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED,
     },
     TaskStatus.BLOCKED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
+    TaskStatus.WAITING_BROWSER: {
+        TaskStatus.EXECUTING, TaskStatus.OBSERVING, TaskStatus.BLOCKED,
+        TaskStatus.CANCELLED, TaskStatus.FAILED,
+    },
     TaskStatus.ROLLED_BACK: {TaskStatus.FAILED, TaskStatus.EXECUTING},
     # Terminal states
     TaskStatus.COMPLETED: set(),

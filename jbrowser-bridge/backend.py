@@ -87,10 +87,11 @@ class EchoBackend(Backend):
 class KernelBackend(Backend):
     """Seam for driving the real JARVIS agent stack.
 
-    Not yet wired end-to-end. ``stream_chat`` currently delegates to a thin
-    responder and records that kernel integration is pending; replace
-    ``_run_engine`` with a call into the JARVIS agent loop (core/agent/loop.py)
-    or a streaming model gateway call.
+    ``engine`` is a :class:`jbrowser_bridge.engine.StreamEngine` (the default
+    kernel engine is :class:`ModelGatewayEngine`, which routes chat through
+    ProviderRouter.complete_stream with budgets). With no engine attached,
+    ``stream_chat`` produces a clear "not attached" notice so the browser AI
+    layer still functions as a UX before a kernel is wired.
     """
 
     name = "kernel"
@@ -98,40 +99,43 @@ class KernelBackend(Backend):
     def __init__(self, engine=None) -> None:
         self._engine = engine
 
+    @property
+    def engine(self):
+        return self._engine
+
     def status(self) -> dict[str, Any]:
-        if self._engine is None:
-            return {
-                "ok": True,
-                "backend": self.name,
-                "kernel": "offline",
-                "name": "JBrowserBridge",
-                "version": "0.1.0",
-                "note": "kernel engine not attached",
-            }
-        return {
+        payload = {
             "ok": True,
             "backend": self.name,
-            "kernel": "online",
             "name": "JBrowserBridge",
             "version": "0.1.0",
             "streaming": True,
         }
+        if self._engine is None:
+            payload["kernel"] = "offline"
+            payload["note"] = "kernel engine not attached"
+        else:
+            payload["kernel"] = "online"
+            payload["engine"] = self._engine.name
+        return payload
 
-    def _run_engine(self, session_id: str, messages: list[dict[str, Any]],
-                    page: dict[str, Any] | None, emit: Emitter) -> None:
-        # TODO(Phase kernel): route into the JARVIS agent loop / model gateway
-        # and stream tokens via emit({"type":"delta","text": token}).
+    def _not_attached(self, session_id: str, emit: Emitter) -> str:
         emit({"type": "start", "session_id": session_id, "backend": self.name})
-        emit({
-            "type": "delta",
-            "text": "Kernel backend selected, but the engine is not attached yet. "
-                    "See docs/jbrowser/ for the kernel integration seam.",
-        })
+        note = (
+            "The JARVIS kernel is not attached to this bridge yet. "
+            "Start the bridge with a kernel engine (see docs/jbrowser/) to "
+            "enable live intelligence for the browser."
+        )
+        emit({"type": "delta", "text": note})
         emit({"type": "done", "id": session_id, "backend": self.name})
+        return note
 
     def stream_chat(self, session_id: str, messages: list[dict[str, Any]],
                     page: dict[str, Any] | None, emit: Emitter) -> None:
-        self._run_engine(session_id, messages, page, emit)
+        if self._engine is not None:
+            self._engine.stream_chat(session_id, messages, page, emit)
+            return
+        self._not_attached(session_id, emit)
 
 
 def make_backend(kind: str | None = None, engine=None) -> Backend:
