@@ -66,11 +66,15 @@ def _find_chromium() -> Path | None:
     env = os.environ.get(DEFAULT_CHROMIUM)
     if env and Path(env).exists():
         return Path(env)
-    local = Path(os.environ.get("LOCALAPPDATA", "")) or Path.home() / "AppData" / "Local"
-    local = local / "ms-playwright" if (local / "ms-playwright").exists() else local
-    if (local / "ms-playwright").exists():
-        local = local / "ms-playwright"
-        found = sorted(local.glob("chromium-*/chrome-win64/chrome.exe"), reverse=True)
+    base = Path(os.environ.get("LOCALAPPDATA", "") or "")
+    if not base.is_dir():
+        base = Path.home() / "AppData" / "Local"
+    playwright_root = base / "ms-playwright"
+    if playwright_root.is_dir():
+        found = sorted(
+            playwright_root.glob("chromium-*/chrome-win64/chrome.exe"),
+            reverse=True,
+        )
         if found:
             return found[0]
     return None
@@ -83,110 +87,119 @@ class CDPError(RuntimeError):
 class CDPConnection:
     """Thread-safe request/response + event client over a DevTools WebSocket.
 
-    A background reader thread routes CDP responses to the pending caller and
-    buffers ``method`` events so ``wait_for_event`` can observe page lifecycle.
+    ``websockets.sync`` serializes *all* operations (send + recv) under an
+    internal connection lock, so a background ``recv()`` thread would starve
+    ``send()``. Instead every operation runs its own receive loop while holding
+    a single transport lock: at most one thread touches the socket, unrelated
+    messages (events / other ids) are buffered opportunistically, and requests
+    block until their matching response arrives.
     """
-
-    READER_STOP = "__stop__"
 
     def __init__(self, ws_url: str, timeout: float = 20.0) -> None:
         self._ws_url = ws_url
         self._timeout = timeout
         self._ws = ws_connect(ws_url, timeout=timeout)
-        self._send_lock = threading.Lock()
-        self._pending: dict[int, "list[dict]"] = {}
+        self._op_lock = threading.RLock()
         self._events: list[dict] = []
-        self._events_lock = threading.Lock()
-        self._reader: threading.Thread | None = None
         self._closed = False
         self._id = 0
-        self._start_reader()
-
-    def _start_reader(self) -> None:
-        def _loop():
-            while not self._closed:
-                try:
-                    raw = self._ws.recv()
-                except Exception:
-                    self._closed = True
-                    for p in list(self._pending.values()):
-                        for e in p:
-                            e.set()
-                    return
-                try:
-                    msg = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                if "id" in msg and msg["id"] in self._pending:
-                    with self._send_lock:
-                        waiter = self._pending.pop(msg["id"], None)
-                    if waiter:
-                        waiter.append(msg)
-                        waiter.set()
-                elif "method" in msg:
-                    with self._events_lock:
-                        self._events.append(msg)
-
-        self._reader = threading.Thread(target=_loop, daemon=True, name="cdp-reader")
-        self._reader.start()
 
     def _next_id(self) -> int:
-        with self._send_lock:
+        with self._op_lock:
             self._id += 1
             return self._id
 
-    def call(self, method: str, params: dict | None = None) -> dict:
+    def _deadline(self, timeout: float | None) -> float:
+        return time.time() + (timeout if timeout is not None else self._timeout)
+
+    def call(self, method: str, params: dict | None = None,
+             timeout: float | None = None) -> dict:
         """Send a CDP command and wait for its response."""
-        if self._closed:
-            raise CDPError(f"CDP connection closed for {method}")
-        rid = self._next_id()
-        waiter: list[dict] = []
-        with self._send_lock:
-            self._pending[rid] = waiter
-        payload = json.dumps({"id": rid, "method": method, "params": params or {}})
-        try:
-            with self._send_lock:
-                self._ws.send(payload)
-        except Exception as e:
-            self._pending.pop(rid, None)
-            raise CDPError(f"CDP send {method} failed: {e}") from e
-        deadline = time.time() + self._timeout
-        while time.time() < deadline:
-            if waiter:
-                msg = waiter[0]
-                if "error" in msg:
-                    err = msg["error"]
-                    raise CDPError(f"CDP {method} error: {err.get('message', err)}")
-                return msg.get("result", {})
+        with self._op_lock:
             if self._closed:
-                break
-            time.sleep(0.005)
-        self._pending.pop(rid, None)
-        raise CDPError(f"CDP {method} timed out after {self._timeout:.0f}s")
+                raise CDPError(f"CDP connection closed for {method}")
+            rid = self._next_id()
+            payload = json.dumps({"id": rid, "method": method, "params": params or {}})
+            try:
+                self._ws.send(payload)
+            except Exception as e:
+                raise CDPError(f"CDP send {method} failed: {e}") from e
+            deadline = self._deadline(timeout)
+            while time.time() < deadline:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                try:
+                    raw = self._ws.recv(timeout=remaining)
+                except TimeoutError:
+                    continue
+                except Exception as e:
+                    self._closed = True
+                    raise CDPError(f"CDP {method} connection lost: {e}") from e
+                try:
+                    msg = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                self._route_message(msg)
+                if msg.get("id") == rid:
+                    if "error" in msg:
+                        err = msg["error"]
+                        raise CDPError(
+                            f"CDP {method} error: {err.get('message', err)}"
+                        )
+                    return msg.get("result", {})
+            raise CDPError(f"CDP {method} timed out after {(timeout or self._timeout):.0f}s")
+
+    def _route_message(self, msg: dict) -> dict | None:
+        """Buffer events / foreign responses; return the message for inspection."""
+        if "id" not in msg and "method" in msg:
+            with self._op_lock:
+                self._events.append(msg)
+        return msg
 
     def events_since(self, marker: int) -> list[dict]:
-        with self._events_lock:
+        with self._op_lock:
             return list(self._events[marker:])
 
     def wait_for_event(self, method_prefix: str, *, timeout: float = 10.0,
                        predicate=None) -> dict | None:
-        """Wait for an event whose ``method`` starts with ``method_prefix``."""
-        start = time.time()
-        while time.time() - start < timeout:
-            with self._events_lock:
-                for ev in self._events:
-                    if ev["method"].startswith(method_prefix):
-                        if predicate is None or predicate(ev.get("params", {})):
-                            return ev
-            if self._closed:
-                return None
-            time.sleep(0.02)
-        return None
+        """Wait for an event whose ``method`` starts with ``method_prefix``.
+
+        Buffers passive events encountered on the wire while waiting.
+        """
+        with self._op_lock:
+            deadline = time.time() + timeout
+            for ev in self._events:
+                if ev["method"].startswith(method_prefix):
+                    if predicate is None or predicate(ev.get("params", {})):
+                        return ev
+            while time.time() < deadline:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                try:
+                    raw = self._ws.recv(timeout=remaining)
+                except TimeoutError:
+                    continue
+                except Exception:
+                    self._closed = True
+                    return None
+                try:
+                    msg = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                self._route_message(msg)
+                method = msg.get("method", "")
+                if method.startswith(method_prefix):
+                    if predicate is None or predicate(msg.get("params", {})):
+                        return msg
+            return None
 
     def consume_events(self, method_prefix: str) -> list[dict]:
         """Drain and return buffered events matching ``method_prefix``."""
-        with self._events_lock:
-            kept, out = [], []
+        with self._op_lock:
+            kept: list[dict] = []
+            out: list[dict] = []
             for ev in self._events:
                 if ev["method"].startswith(method_prefix):
                     out.append(ev)
@@ -196,13 +209,14 @@ class CDPConnection:
         return out
 
     def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        try:
-            self._ws.close()
-        except Exception:
-            pass
+        with self._op_lock:
+            if self._closed:
+                return
+            self._closed = True
+            try:
+                self._ws.close()
+            except Exception:
+                pass
 
     def __enter__(self) -> "CDPConnection":
         return self
@@ -327,9 +341,19 @@ class CDPBackend(BrowserBackend):
             logger.info("orbit cdp launch: port=%s headless=%s", port, self._headless)
             self._process = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             self._base = f"http://127.0.0.1:{port}"
-            self._wait_http(self._base)
+            try:
+                self._wait_http(self._base)
+            except CDPError:
+                if self._process.poll() is not None:
+                    raise CDPError(
+                        f"Chromium exited early (code {self._process.poll()}); "
+                        f"a stale profile lock in {self._profile_dir} may be "
+                        "held by another Orbit instance"
+                    ) from None
+                raise
             self._browser_conn = CDPConnection(self._version_ws(), timeout=self._timeout)
             self._launched = True
             self._started = True
@@ -385,17 +409,40 @@ class CDPBackend(BrowserBackend):
             self._browser_conn.close()
             self._browser_conn = None
         if self._process:
-            try:
-                self._process.terminate()
-                try:
-                    self._process.wait(timeout=5)
-                except Exception:
-                    self._process.kill()
-            except Exception:
-                pass
+            self._kill_tree(self._process.pid)
             self._process = None
         self._started = False
         self._launched = False
+
+    @staticmethod
+    def _kill_tree(pid: int) -> None:
+        """Terminate a process and its whole tree (Chromium spawns children
+        that keep the profile lock alive even if the main process is gone)."""
+        import sys
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+                return
+            except Exception:
+                pass
+        try:
+            proc = __import__("psutil", globals(), locals(), ["Process"]).Process(pid)
+            for child in proc.children(recursive=True):
+                try:
+                    child.kill()
+                except Exception:
+                    pass
+            proc.kill()
+        except Exception:
+            try:
+                import os as _os
+                _os.kill(pid, 9)
+            except Exception:
+                pass
 
     def status(self) -> dict:
         return {
@@ -548,6 +595,9 @@ class CDPBackend(BrowserBackend):
             except Exception:
                 break
             time.sleep(0.25)
+        # Render/layout settle: headless=new reports readyState before paint,
+        # so element rects (used by the bounded snapshot) may need a beat.
+        time.sleep(0.25)
         t.url = target
         t.title = self._eval_title(conn)
         emit_browser_event(NAVIGATION_COMPLETED, {"tab_id": key, "url": target},

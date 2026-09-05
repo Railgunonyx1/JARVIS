@@ -177,6 +177,10 @@ class TargetRegistry:
                        {t.owner for t in tabs}},
         }
 
+    def __len__(self) -> int:
+        with self._guard:
+            return len(self._targets)
+
 
 # Canonical owner vocabulary re-exported for convenience.
 __all__ = [
