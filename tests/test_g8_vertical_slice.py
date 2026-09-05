@@ -187,6 +187,7 @@ def _build_loop(router: StreamRouter, registry: ToolRegistry) -> AgentLoop:
 
 @pytest.fixture(autouse=True)
 def orbit_browser():
+    reset_orbit_controller()  # drop any singleton left by earlier suites
     page = FakePage()
     get_orbit_controller(backend=_browser_backend(page))
     yield page

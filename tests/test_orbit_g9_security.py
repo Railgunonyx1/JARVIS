@@ -111,8 +111,17 @@ class TestAuditTrail:
         rows = _audit_rows(logger)
         assert rows[0]["allowed"] == 1
 
-    def test_raw_params_never_reach_audit_store(self):
+    def test_raw_params_never_reach_audit_store(self, monkeypatch):
         logger = DecisionLogger()
+
+        class FakeController:
+            def navigate(self, url, tab_id=None):
+                return {"url": url, "title": "Bank", "tab_id": "tab_x"}
+
+        # Never touch the real controller singleton (hermetic): the raw URL
+        # must stay out of the audit store even when navigation succeeds.
+        monkeypatch.setattr(orbit_tools, "get_orbit_controller",
+                            lambda *a, **k: FakeController())
         service = _service(logger)
         secret_url = "https://checking.bank.example/transfers?to=attacker"
         asyncio.run(_run(service, "orbit.navigate", {"url": secret_url}))

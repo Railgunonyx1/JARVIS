@@ -297,6 +297,7 @@ class TestBrowserRecoveryUnit:
 class TestLoopRecovery:
     @pytest.fixture
     def browser(self):
+        reset_orbit_controller()  # drop any singleton left by earlier suites
         backend = CrashyBackend(fail_reads=1)
         get_orbit_controller(backend=backend)
         yield backend
