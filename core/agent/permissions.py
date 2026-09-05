@@ -14,6 +14,7 @@ from core import events
 from core.decision_logger import DecisionLogger
 from core.mode_manager import ExecutionMode, get_mode_manager
 from security.engine import get_security_engine
+from security.sensitive_sites import SENSITIVE_SITES
 from tools.schema import Tool
 
 _CONFIRMABLE_SECURITY_MODE = {"plan": "controlled", "controlled": "controlled",
@@ -100,6 +101,54 @@ class PermissionEngine:
             return False, reason
         return True, ""
 
+    def _apply_sensitive_site_gate(
+        self,
+        tool: Tool,
+        arguments: dict[str, Any],
+        trace_id: str,
+    ) -> tuple[bool, str]:
+        """Consent gate for navigation to sensitive origins (G5).
+
+        A tool that *opens a destination* (permission ending in ``.open``) to a
+        sensitive host always requires explicit operator consent — even when the
+        tool itself classifies as low-risk (e.g. plain navigation to a banking /
+        webmail / account-console origin). Fail closed: with no consent channel
+        wired, or on denial, the navigation is blocked regardless of mode;
+        auto-approval (low/medium) never bypasses this gate.
+        """
+        if not tool.permission.endswith(".open"):
+            return True, ""
+        url = str(arguments.get("url") or "").strip()
+        if not url or not SENSITIVE_SITES.match(url):
+            return True, ""
+
+        handler = self.confirmation_handler
+        if handler is None:
+            reason = (
+                f"Navigation to sensitive site requires explicit consent ({url})"
+            )
+            self.logger.record(trace_id, events.PERMISSION_CHECKED, {
+                "tool": tool.name, "allowed": False, "reason": reason,
+                "risk": getattr(tool, "risk", "safe"),
+                "is_destructive": bool(getattr(tool, "is_destructive", False)),
+                "gate": "sensitive_site",
+            })
+            return False, reason
+
+        decision = handler(tool.name, arguments)
+        if decision not in ("once", "run", "deny"):
+            decision = "deny"
+        if decision == "deny":
+            reason = f"User denied navigation to sensitive site ({url})"
+            self.logger.record(trace_id, events.PERMISSION_CHECKED, {
+                "tool": tool.name, "allowed": False, "reason": reason,
+                "risk": getattr(tool, "risk", "safe"),
+                "is_destructive": bool(getattr(tool, "is_destructive", False)),
+                "gate": "sensitive_site",
+            })
+            return False, reason
+        return True, ""
+
     async def check(
         self,
         tool: Tool,
@@ -124,6 +173,12 @@ class PermissionEngine:
         risk_allowed, risk_reason = self._apply_risk_gate(tool, arguments, trace_id, session_id)
         if not risk_allowed:
             return False, risk_reason
+
+        sensitive_allowed, sensitive_reason = self._apply_sensitive_site_gate(
+            tool, arguments, trace_id,
+        )
+        if not sensitive_allowed:
+            return False, sensitive_reason
 
         allowed, reason = self.security.check_permission(
             tool.permission, session_id=session_id, params=arguments,

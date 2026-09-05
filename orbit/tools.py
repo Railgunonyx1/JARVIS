@@ -14,8 +14,11 @@ actions is enforced by the central PermissionEngine, never here.
 
 from __future__ import annotations
 
+import functools
+from dataclasses import replace
 from typing import Any
 
+from core.locks import ResourceLockedError
 from jbrowser.page_context import PageContext
 from jbrowser.permissions import describe_permissions
 from tools.classification import classify_tool
@@ -26,10 +29,35 @@ from orbit.controller import get_orbit_controller
 MAX_OUTPUT = 8000
 
 
+def _protect(handler: Any) -> Any:
+    """Convert ownership contests into a structured ToolResult.
+
+    The coordinator surfaces a deterministic RESOURCE_LOCKED signal when another
+    owner (USER on the DSH, or a sibling AGENT) holds the tab. Handlers stay
+    thin: they never decide access — they just translate the lock into an
+    auditable, schema-shaped failure instead of a raw exception.
+    """
+
+    @functools.wraps(handler)
+    def wrapped(args: dict[str, Any]) -> ToolResult:
+        try:
+            return handler(args)
+        except ResourceLockedError as e:
+            return ToolResult(
+                success=False,
+                error=f"RESOURCE_LOCKED: tab '{e.key}' is owned by '{e.owner}'",
+                metadata={"reason": "RESOURCE_LOCKED", "key": e.key, "owner": e.owner},
+            )
+
+    return wrapped
+
+
 def orbit_new_tab(args: dict[str, Any]) -> ToolResult:
     url = str(args.get("url", "")).strip()
     try:
         tab = get_orbit_controller().new_tab(url)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"orbit new_tab failed: {e}")
     return ToolResult(
@@ -71,6 +99,8 @@ def orbit_activate_tab(args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=False, error="tab_id is required")
     try:
         info = get_orbit_controller().switch_tab(tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=str(e))
     return ToolResult(
@@ -87,6 +117,8 @@ def orbit_navigate(args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=False, error="url is required")
     try:
         result = get_orbit_controller().navigate(url, tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to open {url}: {e}")
     return ToolResult(
@@ -100,6 +132,8 @@ def orbit_read(args: dict[str, Any]) -> ToolResult:
     tab_id = args.get("tab_id")
     try:
         ctx: PageContext = get_orbit_controller().read(tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"read failed: {e}")
     output = ctx.to_prompt_block()
@@ -122,6 +156,8 @@ def orbit_read(args: dict[str, Any]) -> ToolResult:
 def orbit_back(args: dict[str, Any]) -> ToolResult:
     try:
         get_orbit_controller().go_back(args.get("tab_id"))
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"go_back failed: {e}")
     return ToolResult(success=True, output="Went back")
@@ -130,6 +166,8 @@ def orbit_back(args: dict[str, Any]) -> ToolResult:
 def orbit_forward(args: dict[str, Any]) -> ToolResult:
     try:
         get_orbit_controller().go_forward(args.get("tab_id"))
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"go_forward failed: {e}")
     return ToolResult(success=True, output="Went forward")
@@ -138,6 +176,8 @@ def orbit_forward(args: dict[str, Any]) -> ToolResult:
 def orbit_reload(args: dict[str, Any]) -> ToolResult:
     try:
         get_orbit_controller().reload(args.get("tab_id"))
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"reload failed: {e}")
     return ToolResult(success=True, output="Reloaded")
@@ -150,6 +190,8 @@ def orbit_click(args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=False, error="handle is required (use [elN] handles from browser.read)")
     try:
         res = get_orbit_controller().click(handle, tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"Click failed ({handle}): {e}")
     return ToolResult(success=True, output=f"Clicked {handle}", metadata=res)
@@ -163,6 +205,8 @@ def orbit_type(args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=False, error="handle is required")
     try:
         res = get_orbit_controller().type_text(handle, text, tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"Type failed ({handle}): {e}")
     return ToolResult(success=True, output=f"Typed {len(text)} chars into {handle}", metadata=res)
@@ -174,6 +218,8 @@ def orbit_scroll(args: dict[str, Any]) -> ToolResult:
     tab_id = args.get("tab_id")
     try:
         get_orbit_controller().scroll(direction, amount, tab_id)
+    except ResourceLockedError:
+        raise
     except ValueError as e:
         return ToolResult(success=False, error=str(e))
     except Exception as e:
@@ -185,6 +231,8 @@ def orbit_screenshot(args: dict[str, Any]) -> ToolResult:
     tab_id = args.get("tab_id")
     try:
         path = get_orbit_controller().screenshot(tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"Screenshot unavailable: {e}")
     return ToolResult(success=True, output=f"Screenshot saved to {path}", metadata={"path": path})
@@ -222,6 +270,8 @@ def orbit_extract(args: dict[str, Any]) -> ToolResult:
     tab_id = args.get("tab_id")
     try:
         text = get_orbit_controller().extract_text(selector, tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"extract failed: {e}")
     return ToolResult(
@@ -238,6 +288,8 @@ def orbit_execute_script(args: dict[str, Any]) -> ToolResult:
         return ToolResult(success=False, error="script is required")
     try:
         out = get_orbit_controller().execute_script(script, tab_id)
+    except ResourceLockedError:
+        raise
     except Exception as e:
         return ToolResult(success=False, error=f"execute_script failed: {e}")
     return ToolResult(success=True, output=out[:MAX_OUTPUT], metadata={"len": len(out)})
@@ -473,5 +525,16 @@ _ORBIT_TOOLS: list[Tool] = [
 ]
 
 def build_orbit_tools() -> list[Tool]:
-    """Return the classified Orbit tool catalog (safe to register many)."""
-    return [classify_tool(t) for t in _ORBIT_TOOLS]
+    """Return the classified Orbit tool catalog (safe to register many).
+
+    Every handler is wrapped so ownership contests surface as structured
+    RESOURCE_LOCKED ToolResults; the declarative metadata (risk, retry
+    semantics, concurrency) comes from the shared classification engine.
+    """
+    return [
+        classify_tool(_with_protected_handler(tool)) for tool in _ORBIT_TOOLS
+    ]
+
+
+def _with_protected_handler(tool: Tool) -> Tool:
+    return replace(tool, handler=_protect(tool.handler))
