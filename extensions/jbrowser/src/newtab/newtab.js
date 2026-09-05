@@ -12,9 +12,10 @@ const chipsEl = document.getElementById("nt-chips");
 
 const AGENT_ACTIONS = [
   { label: "Summarize the current tab", prompt: "Summarize the current page I have open." },
-  { label: "Take notes from this page", prompt: "Extract the key points from the current page into notes." },
-  { label: "Find relevant context", prompt: "Search my memory for context relevant to what I'm working on." },
-  { label: "Run an autonomous agent", prompt: "Start an autonomous agent session to carry out a task. I'll approve actions as it goes." },
+  { label: "Explain a topic", prompt: "Explain this topic clearly, with examples: " },
+  { label: "Research across the web", prompt: "Research this and return a short briefing with sources: " },
+  { label: "Remember for later", prompt: "Save what's important on the current page to my memory." },
+  { label: "Run an autonomous agent", prompt: "Start an autonomous agent session to carry out a task. I'll approve consequential actions as it goes." },
 ];
 
 let sessionId = null;
@@ -104,6 +105,11 @@ function buildChips() {
     chipsEl.appendChild(chip);
   }
   quickEl.hidden = false;
+}
+
+const sidebarBtn = document.getElementById("nt-sidebar");
+if (sidebarBtn) {
+  sidebarBtn.addEventListener("click", () => sendMessage({ type: Msg.TOGGLE }));
 }
 
 btn.addEventListener("click", send);

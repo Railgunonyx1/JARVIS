@@ -1,0 +1,118 @@
+/* JARVIS Orbit — design tokens (G13 UI).
+ *
+ * Chromium = neutral surfaces; JARVIS = blue accent. Browser chrome stays
+ * calm and familiar; agent intent surfaces in blue and in the status
+ * language (idle / online / offline / reconnecting / agent states).
+ * Dark is the default; light activates via prefers-color-scheme.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutral surfaces & text (dark) */
+  --jb-bg: #16181d;
+  --jb-bg-soft: #1d2026;
+  --jb-surface: #21252d;
+  --jb-surface-hover: #282d37;
+  --jb-surface-active: #2f3542;
+  --jb-elevated: #262b34;
+  --jb-border: #343a46;
+  --jb-border-subtle: #2a2f39;
+  --jb-text: #e8eaee;
+  --jb-text-secondary: #a6adbb;
+  --jb-text-tertiary: #6f7686;
+  --jb-text-disabled: #4c525f;
+
+  /* JARVIS accent — blue */
+  --jb-accent: #4f8dff;
+  --jb-accent-hover: #6ba1ff;
+  --jb-accent-active: #3b77e6;
+  --jb-accent-muted: rgba(79, 141, 255, 0.16);
+  --jb-accent-text: #c9ddff;
+
+  /* Semantic */
+  --jb-success: #3fb56c;
+  --jb-success-muted: rgba(63, 181, 108, 0.15);
+  --jb-warning: #d9a13b;
+  --jb-warning-muted: rgba(217, 161, 59, 0.15);
+  --jb-danger: #e4574f;
+  --jb-danger-muted: rgba(228, 87, 79, 0.15);
+  --jb-info: #4f8dff;
+  --jb-info-muted: rgba(79, 141, 255, 0.15);
+
+  /* Type scale */
+  --jb-font-ui: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --jb-font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --jb-text-xs: 11px;
+  --jb-text-sm: 12.5px;
+  --jb-text-md: 13.5px;
+  --jb-text-lg: 15px;
+  --jb-text-xl: 18px;
+  --jb-text-2xl: 22px;
+  --jb-weight-regular: 400;
+  --jb-weight-medium: 500;
+  --jb-weight-semibold: 600;
+
+  /* Space (8px base) */
+  --jb-space-1: 4px;
+  --jb-space-2: 8px;
+  --jb-space-3: 12px;
+  --jb-space-4: 16px;
+  --jb-space-5: 20px;
+  --jb-space-6: 24px;
+
+  /* Shape + elevation */
+  --jb-radius-sm: 6px;
+  --jb-radius-md: 8px;
+  --jb-radius-lg: 10px;
+  --jb-radius-xl: 14px;
+  --jb-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --jb-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --jb-ring: 0 0 0 2px var(--jb-accent-muted);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --jb-bg: #f4f5f7;
+    --jb-bg-soft: #eceef2;
+    --jb-surface: #ffffff;
+    --jb-surface-hover: #f0f2f6;
+    --jb-surface-active: #e6e9ef;
+    --jb-elevated: #ffffff;
+    --jb-border: #d8dce4;
+    --jb-border-subtle: #e4e7ee;
+    --jb-text: #1c212b;
+    --jb-text-secondary: #555f6e;
+    --jb-text-tertiary: #8a93a3;
+    --jb-text-disabled: #b6bdc9;
+    --jb-accent: #2468e0;
+    --jb-accent-hover: #1f5cc9;
+    --jb-accent-active: #3b77e6;
+    --jb-accent-muted: rgba(36, 104, 224, 0.12);
+    --jb-accent-text: #1f4fb0;
+    --jb-shadow-1: 0 1px 2px rgba(20, 24, 32, 0.08);
+    --jb-shadow-2: 0 4px 12px rgba(20, 24, 32, 0.12);
+  }
+}
+
+/* Shared primitives */
+.jb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+button {
+  font-family: var(--jb-font-ui);
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--jb-ring);
+}

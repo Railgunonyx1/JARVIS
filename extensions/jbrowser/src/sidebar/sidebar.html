@@ -4,23 +4,34 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>JARVIS</title>
+    <link rel="stylesheet" href="../lib/tokens.css" />
     <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
     <header class="jb-topbar">
       <div class="jb-brand">
-        <span class="jb-dot" id="jb-status-dot"></span>
+        <span class="jb-logo" aria-hidden="true"></span>
         <span class="jb-title">JARVIS</span>
-        <span class="jb-status-label" id="jb-status-label">checking…</span>
+        <span class="jb-pill" id="jb-status-pill">
+          <span class="jb-dot" id="jb-status-dot"></span>
+          <span class="jb-status-label" id="jb-status-label">checking…</span>
+        </span>
       </div>
       <div class="jb-actions">
         <button id="jb-clear" class="jb-icon-btn" title="Clear conversation">↺</button>
-        <button id="jb-toggle-control" class="jb-icon-btn" title="Browser control settings">⚙</button>
+        <button id="jb-toggle-control" class="jb-icon-btn" title="Bridge connection settings">⚙</button>
       </div>
     </header>
 
+    <section id="jb-state" class="jb-state" hidden>
+      <span class="jb-state-dot" aria-hidden="true"></span>
+      <span class="jb-state-text" id="jb-state-text"></span>
+      <button id="jb-state-action" class="jb-link-btn" hidden></button>
+    </section>
+
     <section id="jb-page-bar" class="jb-page-bar">
       <div class="jb-page-meta">
+        <span class="jb-page-eyebrow">Current page</span>
         <span class="jb-page-title" id="jb-page-title">No page</span>
         <span class="jb-page-url" id="jb-page-url"></span>
       </div>
@@ -38,7 +49,7 @@
         rows="1"
         placeholder="Ask JARVIS about this page…  (Ctrl+Enter to send)"
       ></textarea>
-      <button id="jb-send" class="jb-send-btn" title="Send">➤</button>
+      <button id="jb-send" class="jb-send-btn" title="Send" aria-label="Send">➤</button>
     </footer>
 
     <section id="jb-settings" class="jb-settings" hidden>
@@ -52,8 +63,10 @@
         <span>Bridge token</span>
         <input type="text" id="jb-bridge-token" autocomplete="off" spellcheck="false" />
       </label>
-      <button id="jb-settings-save" class="jb-link-btn">Save</button>
-      <button id="jb-settings-close" class="jb-link-btn">Close</button>
+      <div class="jb-settings-actions">
+        <button id="jb-settings-save" class="jb-btn">Save</button>
+        <button id="jb-settings-close" class="jb-btn ghost">Close</button>
+      </div>
     </section>
 
     <script type="module" src="sidebar.js"></script>

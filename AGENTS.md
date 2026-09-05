@@ -158,6 +158,9 @@ itself. Two halves, one contract:
 | Network policy | `jbrowser.network.BrowserNetworkPolicy` — default-deny private/loopback/link-local before `goto` |
 | Import wizard | `orbit/wizard.py` — CSV password import is guidance only: masked per-account plan (presence/strength/duplicate/sensitive flags), no secret value is stored, logged, or returned (`orbit.import_passwords`, low-risk) |
 | Selective memory | `memory/keyspace.py` (constellation keyspace `user.*` / `agent.<id>.*` / `system.*` + ownership), `memory/store.py` owner column + `memory_blobs` BLOB table, `orbit/memory.py` facade, `orbit.memory_*` tools |
+| UI tokens | `extensions/jbrowser/src/lib/tokens.css` (dark/light, blue JARVIS accent, spacing/type/radius scale) — the agent-layer design system |
+| Perf gate | `benchmark/orbit_timing.py` (P50/P95/P99, hermetic paths; JSON artifact) + opt-in live E2E under `JARVIS_RUN_BROWSER_LIVE=1` |
+| Packaging | `packaging/orbit_bridge.spec` (PyInstaller bridge), `packaging/installer.iss` (Inno), `packaging/BUILD.md` (gates + STOP conditions) — delivery layer only |
 | Extension | `extensions/jbrowser/` (MV3, NO `chrome.debugger`; authenticated `BridgeClient` sends `Bearer` token) |
 | Bridge | `jbrowser-bridge/server.py` (loopback-only, CORS chrome-extension, optional bearer auth; `/v1/agent` + `/v1/cdp` permanent 501) |
 
@@ -195,7 +198,7 @@ itself. Two halves, one contract:
 | G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Done |
 | G11 | import wizard (CSV password guidance only — no stored secrets) | Done |
 | G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Done |
-| G13 | E2E/perf (P50/P95/P99), packaging, first-run, docs, CI, final report | Next |
+| G13 | E2E/perf (P50/P95/P99), packaging, first-run, docs, CI, final report | Done |
 
 Bridge extension client is **authenticated** (bearer token via
 `chrome.storage` `jb:bridgeToken`); the bridge is fail-closed on state-changing

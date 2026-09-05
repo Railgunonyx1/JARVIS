@@ -1,13 +1,7 @@
-:root {
-  --nt-bg: #14161c;
-  --nt-card: #1e2129;
-  --nt-border: #2c303b;
-  --nt-text: #eceef2;
-  --nt-muted: #9aa0ae;
-  --nt-accent: #5b8cff;
-  --nt-online: #37d67a;
-  --nt-offline: #f0625d;
-}
+/* JARVIS Orbit — new tab (a real browser home, with JARVIS at hand).
+ * Surfaces/typography from lib/tokens.css; Chromium-neutral, blue accent. */
+
+@import url("../lib/tokens.css");
 
 * {
   box-sizing: border-box;
@@ -17,77 +11,99 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: radial-gradient(1200px 600px at 50% -10%, #1b2030 0%, var(--nt-bg) 60%);
-  color: var(--nt-text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background:
+    radial-gradient(1100px 560px at 50% -12%, var(--jb-accent-muted) 0%, transparent 62%),
+    var(--jb-bg);
+  color: var(--jb-text);
+  font-family: var(--jb-font-ui);
 }
 
 .nt-wrap {
-  max-width: 760px;
+  max-width: 780px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: var(--jb-space-4) var(--jb-space-5) 48px;
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
+/* ── top status row ─────────────────────────────────────────────────── */
+
 .nt-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--nt-muted);
+  gap: var(--jb-space-2);
+  font-weight: var(--jb-weight-semibold);
+  color: var(--jb-text-secondary);
+}
+
+.nt-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--jb-accent), var(--jb-accent-active));
 }
 
 .nt-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--nt-muted);
+  background: var(--jb-text-disabled);
+  margin-left: var(--jb-space-2);
 }
 
 .nt-dot.online {
-  background: var(--nt-online);
-  box-shadow: 0 0 8px var(--nt-online);
+  background: var(--jb-success);
+  box-shadow: 0 0 0 3px var(--jb-success-muted);
 }
 
 .nt-dot.offline {
-  background: var(--nt-offline);
+  background: var(--jb-danger);
+  box-shadow: 0 0 0 3px var(--jb-danger-muted);
 }
 
 .nt-status {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--jb-text-xs);
+  font-weight: var(--jb-weight-regular);
 }
 
+/* ── hero / search-or-ask ───────────────────────────────────────────── */
+
 .nt-hero {
-  margin-top: 12vh;
+  margin-top: 11vh;
   text-align: center;
 }
 
 .nt-greeting {
-  font-size: 34px;
-  margin: 0 0 4px;
+  font-size: var(--jb-text-2xl);
+  font-weight: var(--jb-weight-semibold);
+  margin: 0 0 var(--jb-space-1);
+  letter-spacing: -0.01em;
 }
 
 .nt-sub {
-  color: var(--nt-muted);
-  margin: 0 0 22px;
+  color: var(--jb-text-secondary);
+  margin: 0 0 var(--jb-space-5);
+  font-size: var(--jb-text-md);
 }
 
 .nt-omnibox {
   display: flex;
-  gap: 8px;
-  background: var(--nt-card);
-  border: 1px solid var(--nt-border);
-  border-radius: 14px;
-  padding: 8px;
+  gap: var(--jb-space-2);
   align-items: center;
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  border-radius: var(--jb-radius-xl);
+  padding: var(--jb-space-1);
+  box-shadow: var(--jb-shadow-1);
 }
 
 .nt-omnibox:focus-within {
-  border-color: var(--nt-accent);
+  border-color: var(--jb-accent);
+  box-shadow: var(--jb-shadow-1), 0 0 0 3px var(--jb-accent-muted);
 }
 
 .nt-omnibox input {
@@ -95,80 +111,110 @@ body {
   background: transparent;
   border: none;
   outline: none;
-  color: var(--nt-text);
-  font-size: 15px;
-  padding: 6px 8px;
+  color: var(--jb-text);
+  font-family: var(--jb-font-ui);
+  font-size: var(--jb-text-lg);
+  padding: var(--jb-space-2) var(--jb-space-3);
+}
+
+.nt-omnibox input::placeholder {
+  color: var(--jb-text-tertiary);
 }
 
 .nt-omnibox button {
   width: 38px;
   height: 38px;
-  border-radius: 10px;
+  flex: none;
+  border-radius: var(--jb-radius-lg);
   border: none;
-  background: var(--nt-accent);
-  color: #fff;
-  font-size: 16px;
+  background: var(--jb-accent);
+  color: #ffffff;
+  font-size: var(--jb-text-md);
   cursor: pointer;
 }
 
+.nt-omnibox button:hover {
+  background: var(--jb-accent-hover);
+}
+
+.nt-quick {
+  margin-top: var(--jb-space-6);
+  text-align: center;
+}
+
 .nt-section-title {
-  font-size: 13px;
-  color: var(--nt-muted);
+  font-size: var(--jb-text-xs);
+  color: var(--jb-text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 34px 0 12px;
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--jb-space-3);
 }
 
 .nt-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  gap: var(--jb-space-2);
 }
 
 .nt-chip {
-  background: var(--nt-card);
-  border: 1px solid var(--nt-border);
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
   border-radius: 999px;
-  padding: 8px 14px;
-  color: var(--nt-text);
-  font-size: 13px;
+  padding: var(--jb-space-2) var(--jb-space-4);
+  color: var(--jb-text-secondary);
+  font-family: var(--jb-font-ui);
+  font-size: var(--jb-text-sm);
   cursor: pointer;
 }
 
 .nt-chip:hover {
-  border-color: var(--nt-accent);
+  color: var(--jb-text);
+  border-color: var(--jb-accent);
+  background: var(--jb-surface-hover);
 }
+
+/* ── conversation (appears once asked) ──────────────────────────────── */
 
 .nt-thread {
   flex: 1;
   overflow-y: auto;
-  margin-top: 28px;
+  margin-top: var(--jb-space-6);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--jb-space-2);
 }
 
 .nt-msg {
   max-width: 85%;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: var(--jb-space-2) var(--jb-space-4);
+  border-radius: var(--jb-radius-xl);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  border: 1px solid var(--nt-border);
+  border: 1px solid var(--jb-border-subtle);
 }
 
 .nt-msg.user {
   align-self: flex-end;
-  background: #3a4a72;
-  border-color: #3a4a72;
+  background: var(--jb-accent-muted);
+  border-color: transparent;
+  color: var(--jb-text);
 }
 
 .nt-msg.jarvis {
   align-self: flex-start;
-  background: var(--nt-card);
+  background: var(--jb-surface);
 }
 
 .nt-msg.error {
-  border-color: var(--nt-offline);
+  border-color: var(--jb-danger);
+  color: var(--jb-danger);
+}
+
+.nt-footer {
+  margin-top: var(--jb-space-6);
+  text-align: center;
+  font-size: var(--jb-text-xs);
+  color: var(--jb-text-tertiary);
 }

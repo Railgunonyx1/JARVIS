@@ -15,6 +15,18 @@ const settingsBtn = document.getElementById("jb-toggle-control");
 const settingsClose = document.getElementById("jb-settings-close");
 const settingsSave = document.getElementById("jb-settings-save");
 const bridgeTokenInput = document.getElementById("jb-bridge-token");
+const stateEl = document.getElementById("jb-state");
+const stateText = document.getElementById("jb-state-text");
+const stateAction = document.getElementById("jb-state-action");
+
+// Quick actions shown in the empty state — one-click task starters.
+const QUICK_ACTIONS = [
+  { label: "Summarize", prompt: "Summarize the current page I have open.", icon: "✎" },
+  { label: "Explain", prompt: "Explain what the current page is about, simply.", icon: "❔" },
+  { label: "Research", prompt: "Research this topic across the web and summarize findings: ", icon: "◎" },
+  { label: "Extract", prompt: "Extract the key facts from the current page into a list.", icon: "▤" },
+  { label: "Remember", prompt: "Save what's important on this page to memory.", icon: "✦" },
+];
 
 let sessionId = null;
 let messages = [];
@@ -39,15 +51,60 @@ function roleLabel(role) {
 function render() {
   thread.innerHTML = "";
   if (messages.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "jb-msg jarvis empty";
-    empty.textContent = "I'm JARVIS. Ask me about this page, or give me a task.";
-    thread.appendChild(empty);
+    thread.appendChild(buildEmptyState());
   }
   for (const m of messages) {
     appendMessage(m.role, m.content, m.kind === "error");
   }
   thread.scrollTop = thread.scrollHeight;
+}
+
+function buildEmptyState() {
+  const wrap = document.createElement("div");
+  wrap.className = "jb-msg jarvis empty";
+
+  const title = document.createElement("div");
+  title.className = "jb-empty-title";
+  title.textContent = "I'm JARVIS.";
+  wrap.appendChild(title);
+
+  const sub = document.createElement("div");
+  sub.className = "jb-empty-sub";
+  sub.textContent = "Ask me about this page, research a topic, or hand me a task — I'll keep you in control of anything consequential.";
+  wrap.appendChild(sub);
+
+  const chips = document.createElement("div");
+  chips.className = "jb-quick";
+  for (const a of QUICK_ACTIONS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "jb-quick-chip";
+    chip.innerHTML = `<span class="jb-quick-icon" aria-hidden="true">${a.icon}</span><span>${a.label}</span>`;
+    chip.addEventListener("click", () => {
+      input.value = a.prompt;
+      input.focus();
+      autoGrow();
+      send();
+    });
+    chips.appendChild(chip);
+  }
+  wrap.appendChild(chips);
+  return wrap;
+}
+
+function setAgentState(state, text, actionLabel = "") {
+  if (!state) {
+    stateEl.hidden = true;
+    return;
+  }
+  stateEl.hidden = false;
+  stateEl.dataset.state = state;
+  stateText.textContent = text;
+  stateAction.hidden = !actionLabel;
+  if (actionLabel) {
+    stateAction.textContent = actionLabel;
+    stateAction.dataset.action = state;
+  }
 }
 
 function appendMessage(role, content, isError = false) {
@@ -180,6 +237,26 @@ function updateStatus(status) {
   const online = status.ok === true && status.kernel === "online";
   statusDot.className = "jb-dot " + (online ? "online" : "offline");
   statusLabel.textContent = online ? "JARVIS online" : "JARVIS offline";
+
+  // Agent-layer states ride along on STATUS_UPDATE when the bridge/kernel
+  // reports them (waiting_browser / approval / error). Absent, the strip
+  // simply stays hidden and the UI keeps the conversation model.
+  const agent = status.agent;
+  if (agent && typeof agent === "object") {
+    if (agent.state === "waiting_browser") {
+      setAgentState("waiting_browser", "Waiting for the browser to come back…", "Retry");
+    } else if (agent.state === "approval") {
+      setAgentState("approval", "JARVIS needs approval for the next step.", "Review");
+    } else if (agent.state === "error") {
+      setAgentState("error", agent.text || "JARVIS hit an error.", "Retry");
+    } else {
+      setAgentState("");
+    }
+  } else if (!online) {
+    setAgentState("error", "Bridge offline — browsing keeps working, JARVIS is paused.", "Retry");
+  } else {
+    setAgentState("");
+  }
 }
 
 async function loadSettings() {
@@ -192,6 +269,12 @@ function storeSettings() {
     () => {}
   );
 }
+
+stateAction.addEventListener("click", () => {
+  // Retry / review re-probes bridge + kernel status and refreshes the pill.
+  setAgentState("");
+  sendMessage({ type: Msg.STATUS_REQUEST }).then((res) => updateStatus(res));
+});
 
 sendBtn.addEventListener("click", send);
 input.addEventListener("keydown", (e) => {
