@@ -264,6 +264,35 @@ def orbit_permissions(args: dict[str, Any]) -> ToolResult:
     )
 
 
+def orbit_import_passwords(args: dict[str, Any]) -> ToolResult:
+    """Analyze a pasted credentials CSV and return a masked import plan.
+
+    Guidance only: no password value is persisted, logged, or returned. The
+    plan keeps per-account presence/strength flags and user-side actions.
+    """
+    from orbit.wizard import run_import_analysis
+
+    csv_text = str(args.get("csv") or "")
+    if not csv_text.strip():
+        return ToolResult(success=False, error="csv is required")
+    try:
+        plan = run_import_analysis(csv_text)
+    except ValueError as e:
+        return ToolResult(success=False, error=f"invalid CSV: {e}")
+    return ToolResult(
+        success=True,
+        output=plan.to_text(),
+        metadata={
+            "accounts": plan.total,
+            "needs_password": len(plan.needs_password),
+            "weak_passwords": len(plan.weak_passwords),
+            "duplicates": len(plan.duplicates),
+            "sensitive_sites": len(plan.sensitive_sites),
+            "parse_errors": len(plan.parse_errors),
+        },
+    )
+
+
 def orbit_extract(args: dict[str, Any]) -> ToolResult:
     """Alias -- selectable text from the whole page or a CSS selector."""
     selector = args.get("selector")
@@ -520,6 +549,24 @@ _ORBIT_TOOLS: list[Tool] = [
         },
         permission="orbit.browser.script",
         handler=orbit_execute_script,
+        category="orbit",
+    ),
+    Tool(
+        name="orbit.import_passwords",
+        description="Analyze a pasted site-credentials CSV and return a masked "
+        "import plan (accounts to add, weak/duplicate/sensitive flags, "
+        "guidance). Guidance only: no password value is stored, logged, or "
+        "returned.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "csv": {"type": "string",
+                        "description": "CSV text: site,url,username,password."},
+            },
+            "required": ["csv"],
+        },
+        permission="orbit.credentials",
+        handler=orbit_import_passwords,
         category="orbit",
     ),
 ]

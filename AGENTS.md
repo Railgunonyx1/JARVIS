@@ -156,6 +156,7 @@ itself. Two halves, one contract:
 | Risk + consent | `tools/classification.py` `browser_risk_for_tool` (single source); `core/agent/permissions.py` sensitive-site gate, fail-closed |
 | Sensitive sites | `security/sensitive_sites.py` (banking/webmail/account/cloud origins; host + subdomain match) |
 | Network policy | `jbrowser.network.BrowserNetworkPolicy` — default-deny private/loopback/link-local before `goto` |
+| Import wizard | `orbit/wizard.py` — CSV password import is guidance only: masked per-account plan (presence/strength/duplicate/sensitive flags), no secret value is stored, logged, or returned (`orbit.import_passwords`, low-risk) |
 | Extension | `extensions/jbrowser/` (MV3, NO `chrome.debugger`; authenticated `BridgeClient` sends `Bearer` token) |
 | Bridge | `jbrowser-bridge/server.py` (loopback-only, CORS chrome-extension, optional bearer auth; `/v1/agent` + `/v1/cdp` permanent 501) |
 
@@ -191,8 +192,8 @@ itself. Two halves, one contract:
 | G8 | end-to-end vertical slice (DSH→bridge→agent→tools→CDP) | Done |
 | G9 | security + tests (sensitive sites, scan gate, audit) | Done |
 | G10 | crash recovery (WAITING_BROWSER in `core/agent/state.py`) | Done |
-| G11 | import wizard (CSV password guidance only — no stored secrets) | Next |
-| G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Pending |
+| G11 | import wizard (CSV password guidance only — no stored secrets) | Done |
+| G12 | selective memory (stable identity, constellation keyspace + ownership, BLOB mode) | Next |
 | G13 | E2E/perf (P50/P95/P99), packaging, first-run, docs, CI, final report | Pending |
 
 Bridge extension client is **authenticated** (bearer token via

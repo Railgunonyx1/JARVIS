@@ -49,10 +49,11 @@ benchmark/results/
 *_results.txt
 audit.log
 
-# IDE
+# IDE / session metadata
 .kilocode/
 .idea/
 .vscode/
+.freebuff/
 *.swp
 *.swo
 
