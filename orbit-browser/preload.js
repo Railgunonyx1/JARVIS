@@ -41,6 +41,13 @@ contextBridge.exposeInMainWorld("orbit", {
     },
   },
 
+  // ── Window Controls ─────────────────────────────────────────────
+  window: {
+    minimize: () => ipcRenderer.send("win-minimize"),
+    maximize: () => ipcRenderer.send("win-maximize"),
+    close: () => ipcRenderer.send("win-close"),
+  },
+
   // ── Navigation ──────────────────────────────────────────────────
   navigate: (url) => ipcRenderer.invoke("navigate", url),
 

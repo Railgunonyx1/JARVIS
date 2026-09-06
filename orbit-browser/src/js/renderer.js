@@ -399,6 +399,14 @@ if (homeBtn) {
   homeBtn.addEventListener("click", () => navigateTo("orbit://newtab"));
 }
 
+// ── Window Controls (frameless window) ────────────────────────
+const winClose = $("#winClose");
+const winMinimize = $("#winMinimize");
+const winMaximize = $("#winMaximize");
+if (winClose) winClose.addEventListener("click", () => window.orbit?.window?.close?.());
+if (winMinimize) winMinimize.addEventListener("click", () => window.orbit?.window?.minimize?.());
+if (winMaximize) winMaximize.addEventListener("click", () => window.orbit?.window?.maximize?.());
+
 // ── Sidebar Toggle ────────────────────────────────────────────
 jarvisBtn.addEventListener("click", () => {
   sidebarOpen = !sidebarOpen;

@@ -23,11 +23,22 @@
             <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.4"/>
           </svg>
         </button>
+        <div class="win-controls">
+          <button class="win-btn" id="winMinimize" title="Minimize">
+            <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+          </button>
+          <button class="win-btn" id="winMaximize" title="Maximize">
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><rect x="0.5" y="0.5" width="8" height="8" stroke="currentColor"/></svg>
+          </button>
+          <button class="win-btn win-close" id="winClose" title="Close">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
     <!-- ── Toolbar ───────────────────────────────────────────── -->
-    <div class="toolbar">
+    <div class="toolbar" id="toolbar">
       <button class="nav-btn" id="backBtn" title="Back" disabled>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.4"/>
@@ -59,9 +70,15 @@
           </svg>
         </span>
         <input type="text" id="omniInput" placeholder="Search Google or enter URL" spellcheck="false" />
+        <span class="zoom-indicator" id="zoomIndicator" title="Zoom level">100%</span>
+        <span class="omni-star" id="omniStar" title="Bookmark this page">★</span>
       </div>
 
       <div class="toolbar-right">
+        <div class="omni-status" id="jarvisStatusBadge">
+          <span class="status-dot offline" id="statusDot"></span>
+          <span id="statusLabel">OFF</span>
+        </div>
         <button class="nav-btn" id="extBtn" title="Extensions">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor"/>
@@ -96,9 +113,15 @@
       </div>
     </div>
 
-    <!-- ── Find on Page Bar ───────────────────────────────────── -->
+    <!-- ── Bookmark Bar ──────────────────────────────────────── -->
+    <div class="bookmark-bar" id="bookmarkBar">
+      <button class="bm-add" id="bmAddBtn" title="Add bookmark">+</button>
+      <div class="bm-sep"></div>
+    </div>
+
+    <!-- ── Find on Page Bar ──────────────────────────────────── -->
     <div class="find-bar" id="findBar">
-      <input type="text" id="findInput" placeholder="Find in page…" />
+      <input type="text" id="findInput" placeholder="Find in page..." />
       <span class="find-count" id="findCount">0/0</span>
       <button class="find-btn" id="findPrev" title="Previous">
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4" stroke="currentColor" stroke-width="1.4"/></svg>
@@ -112,10 +135,12 @@
     </div>
 
     <!-- ── Body ──────────────────────────────────────────────── -->
-    <div class="body">
+    <div class="body" id="body">
+      <div class="tab-strip-vertical" id="tabStripVertical"></div>
+
       <!-- Web content area -->
       <div class="content-area" id="contentArea">
-        <webview id="webview" class="webview" partition="persist:orbit" preload="./guest-preload.js" webpreferences="contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false"></webview>
+        <webview id="webview" class="webview" partition="persist:orbit" preload="../guest-preload.js" webpreferences="contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false"></webview>
 
         <!-- Internal pages (shown when on orbit:// URLs) -->
         <div class="internal-pages" id="internalPages">
@@ -299,12 +324,55 @@
                 <div class="row"><div class="name">Chromium</div><span class="meta">Electron</span></div>
               </div>
               <div class="group"><h2>JARVIS</h2>
-                <div class="row"><div class="name">DSH</div><span class="chip" id="diagDsh">Checking…</span></div>
-                <div class="row"><div class="name">Backend</div><span class="chip" id="diagBackend">Checking…</span></div>
+                <div class="row"><div class="name">DSH</div><span class="chip" id="diagDsh">Checking...</span></div>
+                <div class="row"><div class="name">Backend</div><span class="chip" id="diagBackend">Checking...</span></div>
               </div>
               <div class="group"><h2>Security</h2>
                 <div class="row"><div class="name">CDP Connection</div><span class="chip ok">Secure</span></div>
                 <div class="row"><div class="name">Network Policy</div><span class="meta">default-deny-private</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security Tests -->
+          <div class="page security-page" id="securityPage">
+            <div class="sheet">
+              <h1>Security Tests</h1>
+              <p class="sheet-lede">Strix-inspired penetration testing for browser security.</p>
+              
+              <div class="security-tester" id="securityTester">
+                <div class="security-score" id="securityScore">
+                  <span class="security-score-value" id="securityScoreValue">--</span>
+                  <span class="security-score-label">Security Score</span>
+                </div>
+                
+                <div class="security-stats" id="securityStats">
+                  <div class="security-stat">
+                    <div class="security-stat-value" id="statTotal">0</div>
+                    <div class="security-stat-label">Total Tests</div>
+                  </div>
+                  <div class="security-stat">
+                    <div class="security-stat-value" id="statPassed" style="color:var(--jb-success)">0</div>
+                    <div class="security-stat-label">Passed</div>
+                  </div>
+                  <div class="security-stat">
+                    <div class="security-stat-value" id="statFailed" style="color:var(--jb-danger)">0</div>
+                    <div class="security-stat-label">Failed</div>
+                  </div>
+                  <div class="security-stat">
+                    <div class="security-stat-value" id="statWarnings" style="color:var(--jb-warning)">0</div>
+                    <div class="security-stat-label">Warnings</div>
+                  </div>
+                </div>
+                
+                <div class="security-test-list" id="securityTestList">
+                  <!-- Tests will be rendered here -->
+                </div>
+                
+                <div class="security-actions">
+                  <button class="security-btn primary" id="runSecurityTests">Run Tests</button>
+                  <button class="security-btn" id="exportSecurityReport">Export Report</button>
+                </div>
               </div>
             </div>
           </div>
@@ -357,7 +425,7 @@
 
         <footer class="sb-composer">
           <div class="sb-composer-box">
-            <textarea id="sbInput" rows="2" placeholder="Ask JARVIS anything…"></textarea>
+            <textarea id="sbInput" rows="2" placeholder="Ask JARVIS anything..."></textarea>
             <div class="sb-composer-bar">
               <div class="sb-grow"></div>
               <button class="sb-send" id="sbSend" title="Send">
@@ -450,8 +518,74 @@
         </div>
       </div>
     </div>
-  </div>
 
+    <!-- ── Performance HUD ───────────────────────────────────── -->
+    <div class="perf-hud" id="perfHud" title="Click for diagnostics">
+      <div class="perf-hud-item"><span class="perf-dot off" id="perfJarvisDot"></span><span id="perfJarvis">JARVIS: --</span></div>
+      <div class="perf-hud-item"><span id="perfTabs">0 tabs</span></div>
+      <div class="perf-hud-item"><span id="perfZoom">100%</span></div>
+      <div class="perf-hud-item"><span id="perfFps">FPS: --</span></div>
+      <div class="perf-hud-item"><span id="perfMem">MEM: --MB</span></div>
+      <div class="perf-hud-item"><span id="perfDom">DOM: --</span></div>
+      <div class="perf-hud-grow"></div>
+      <div class="perf-hud-item"><span id="perfVersion">v0.1.0</span></div>
+    </div>
+
+    <!-- ── Command Palette ───────────────────────────────────── -->
+    <div class="cmd-palette-bg" id="cmdPaletteBg">
+      <div class="cmd-palette" id="cmdPalette">
+        <div class="cmd-search">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4"/></svg>
+          <input type="text" id="cmdInput" placeholder="Type a command or search tabs..." autocomplete="off" spellcheck="false" />
+          <kbd class="cmd-kbd">Esc</kbd>
+        </div>
+        <div class="cmd-results" id="cmdResults"></div>
+        <div class="cmd-footer">
+          <span><kbd>↑↓</kbd> Navigate</span>
+          <span><kbd>Enter</kbd> Select</span>
+          <span><kbd>Esc</kbd> Close</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Toast Container ───────────────────────────────────── -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ── Session Banner ────────────────────────────────────── -->
+    <div class="session-banner" id="sessionBanner">
+      <span id="sessionBannerMsg">Previous session found</span>
+      <button class="session-banner-btn" id="sessionDismiss">Dismiss</button>
+      <button class="session-banner-btn primary" id="sessionRestore">Restore</button>
+    </div>
+
+  </div><!-- end .browser -->
+
+  <!-- ── Scripts ─────────────────────────────────────────────── -->
   <script src="js/renderer.js"></script>
+  <script>
+    // Load optional modules with error isolation — one failing module
+    // must never prevent the core renderer from working.
+    (function() {
+      var modules = [
+        'enhanced-security.js',
+        'enhanced-performance.js',
+        'tab-management.js',
+        'jarvis-integration.js',
+        'dsh-native.js',
+        'page-cache.js',
+        'webview-pool.js',
+        'accessibility.js',
+        'download-manager.js',
+        'advanced-optimizations.js',
+        'security-tester.js',
+      ];
+      modules.forEach(function(m) {
+        var s = document.createElement('script');
+        s.src = m;
+        s.onerror = function() { console.warn('[ORBIT] Module failed to load:', m); };
+        document.body.appendChild(s);
+      });
+    })();
+  </script>
 </body>
 </html>

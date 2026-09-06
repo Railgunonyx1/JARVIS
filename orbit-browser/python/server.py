@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """JARVIS Orbit — WebSocket Bridge Server.
 
-Connects the Electron browser to the JARVIS Python backend via WebSocket.
-The browser sends chat messages and receives streaming responses, agent
-events, and approval requests.
+Bridges the Electron browser to the JARVIS backend via WebSocket.
+This server:
+1. Starts the real JARVIS bridge (HTTP/SSE on port 8170)
+2. Runs a WebSocket server (port 8171) for the Electron browser
+3. Translates between WebSocket ↔ HTTP/SSE
 
 Usage:
     python orbit-browser/python/server.py
-    python orbit-browser/python/server.py --port 8171
+    python orbit-browser/python/server.py --port 8171 --bridge-port 8170
 """
 
 from __future__ import annotations
@@ -17,7 +19,10 @@ import asyncio
 import json
 import sys
 import time
+import threading
 from pathlib import Path
+from urllib.request import urlopen, Request
+from urllib.error import URLError
 
 # Add project root to path
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -32,36 +37,54 @@ except ImportError:
 
 
 # ── Configuration ──────────────────────────────────────────────────
-HOST = "127.0.0.1"
-PORT = 8171
+BRIDGE_HOST = "127.0.0.1"
+BRIDGE_PORT = 8170
+WS_HOST = "127.0.0.1"
+WS_PORT = 8171
 
 
-# ── JARVIS Bridge ──────────────────────────────────────────────────
 class JarvisBridge:
     """WebSocket bridge between Electron and JARVIS backend."""
 
-    def __init__(self):
+    def __init__(self, bridge_url: str):
+        self.bridge_url = bridge_url
         self.clients: set = set()
         self.session_id: str = f"orbit-{int(time.time())}"
+        self._bridge_ok = False
+
+    def _check_bridge(self) -> bool:
+        """Check if the JARVIS bridge is running."""
+        try:
+            req = urlopen(f"{self.bridge_url}/status", timeout=2)
+            data = json.loads(req.read())
+            self._bridge_ok = data.get("ok", False)
+            return self._bridge_ok
+        except Exception:
+            self._bridge_ok = False
+            return False
 
     async def register(self, websocket):
-        """Register a new client connection."""
         self.clients.add(websocket)
         print(f"[BRIDGE] Client connected ({len(self.clients)} total)")
 
-        # Send initial status
+        # Check bridge status
+        bridge_ok = await asyncio.get_event_loop().run_in_executor(None, self._check_bridge)
+
         await websocket.send(json.dumps({
             "type": "status",
-            "payload": {"ok": True, "kernel": "online", "session": self.session_id},
+            "payload": {
+                "ok": bridge_ok,
+                "kernel": "online" if bridge_ok else "offline",
+                "session": self.session_id,
+                "bridge": self.bridge_url,
+            },
         }))
 
     async def unregister(self, websocket):
-        """Unregister a client connection."""
         self.clients.discard(websocket)
         print(f"[BRIDGE] Client disconnected ({len(self.clients)} total)")
 
     async def handle_message(self, websocket, raw: str):
-        """Handle incoming message from Electron."""
         try:
             msg = json.loads(raw)
         except json.JSONDecodeError:
@@ -76,110 +99,205 @@ class JarvisBridge:
 
         if msg_type == "chat_request":
             await self.handle_chat(websocket, payload)
+        elif msg_type == "agent_task":
+            await self.handle_agent_task(websocket, payload)
         elif msg_type == "status_request":
             await self.handle_status(websocket)
-        elif msg_type == "agent_action":
-            await self.handle_agent_action(websocket, payload)
         else:
             print(f"[BRIDGE] Unknown message type: {msg_type}")
 
     async def handle_chat(self, websocket, payload: dict):
-        """Handle chat message from browser."""
+        """Forward chat to the real JARVIS bridge via HTTP/SSE."""
         text = payload.get("text", "")
         session = payload.get("sessionId", self.session_id)
 
         print(f"[BRIDGE] Chat: {text[:50]}...")
 
-        # Send thinking state (no artificial delays: phase events fire
-        # immediately so chat latency is bounded by the backend, not this
-        # bridge)
+        # Send thinking state
         await websocket.send(json.dumps({
             "type": "agent_event",
             "payload": {"state": "thinking"},
         }))
 
-        # Send planning state
-        await websocket.send(json.dumps({
-            "type": "agent_event",
-            "payload": {"state": "planning"},
-        }))
+        if not self._bridge_ok:
+            # Bridge not available — generate offline response
+            await asyncio.sleep(0.5)
+            await websocket.send(json.dumps({
+                "type": "agent_event",
+                "payload": {"state": "planning"},
+            }))
+            await asyncio.sleep(0.5)
+            await websocket.send(json.dumps({
+                "type": "chat_reply",
+                "payload": {
+                    "kind": "done",
+                    "text": (
+                        "I'm JARVIS, your browser intelligence layer.\n\n"
+                        "The JARVIS backend is not currently connected. "
+                        "To enable full functionality:\n\n"
+                        "1. Start the JARVIS kernel: `python -m cli`\n"
+                        "2. Or run: `python jbrowser-bridge/server.py --backend kernel`\n\n"
+                        "Once the backend is running, I can help you research, "
+                        "summarize, remember, and act on web content."
+                    ),
+                    "session": session,
+                },
+            }))
+            await websocket.send(json.dumps({
+                "type": "agent_event",
+                "payload": {"state": "idle"},
+            }))
+            return
 
-        # Send running state
-        await websocket.send(json.dumps({
-            "type": "agent_event",
-            "payload": {"state": "running"},
-        }))
+        # Forward to real bridge via HTTP
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self._forward_chat, text, session
+            )
 
-        # Generate response
-        response = self.generate_response(text)
+            if result:
+                await websocket.send(json.dumps({
+                    "type": "agent_event",
+                    "payload": {"state": "running"},
+                }))
+                await asyncio.sleep(0.3)
 
-        # Send completion
-        await websocket.send(json.dumps({
-            "type": "chat_reply",
-            "payload": {
-                "kind": "done",
-                "text": response,
-                "session": session,
-            },
-        }))
+                await websocket.send(json.dumps({
+                    "type": "chat_reply",
+                    "payload": {
+                        "kind": "done",
+                        "text": result,
+                        "session": session,
+                    },
+                }))
+            else:
+                await websocket.send(json.dumps({
+                    "type": "chat_reply",
+                    "payload": {
+                        "kind": "error",
+                        "error": {"message": "No response from JARVIS backend"},
+                        "session": session,
+                    },
+                }))
+        except Exception as e:
+            print(f"[BRIDGE] Chat error: {e}")
+            await websocket.send(json.dumps({
+                "type": "chat_reply",
+                "payload": {
+                    "kind": "error",
+                    "error": {"message": str(e)},
+                    "session": session,
+                },
+            }))
 
-        # Reset to idle
         await websocket.send(json.dumps({
             "type": "agent_event",
             "payload": {"state": "idle"},
         }))
 
-    def generate_response(self, text: str) -> str:
-        """Generate a JARVIS response. Replace with real agent integration."""
-        # This is a placeholder — integrate with the actual JARVIS agent loop
-        return (
-            f"I received your message: \"{text}\"\n\n"
-            "I'm JARVIS, your browser intelligence layer. "
-            "I can help you research, summarize, remember, and act on web content.\n\n"
-            "To enable full functionality, connect me to the JARVIS agent backend."
-        )
+    def _forward_chat(self, text: str, session: str) -> str | None:
+        """Forward chat to the real JARVIS bridge via HTTP POST."""
+        try:
+            data = json.dumps({
+                "text": text,
+                "session": session,
+            }).encode()
 
-    async def handle_status(self, websocket):
-        """Handle status request."""
-        await websocket.send(json.dumps({
-            "type": "status",
-            "payload": {
-                "ok": True,
-                "kernel": "online",
-                "session": self.session_id,
-                "version": "0.1.0",
-            },
-        }))
+            req = Request(
+                f"{self.bridge_url}/v1/chat",
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
 
-    async def handle_agent_action(self, websocket, payload: dict):
-        """Handle agent action request."""
-        action = payload.get("action", "")
-        print(f"[BRIDGE] Agent action: {action}")
+            with urlopen(req, timeout=30) as resp:
+                # Parse SSE response
+                full_response = ""
+                for line in resp.read().decode().split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            chunk = json.loads(line[6:])
+                            if chunk.get("kind") == "delta":
+                                full_response += chunk.get("text", "")
+                            elif chunk.get("kind") == "done":
+                                return full_response or chunk.get("text", "")
+                        except json.JSONDecodeError:
+                            continue
+                return full_response or None
+        except Exception as e:
+            print(f"[BRIDGE] HTTP error: {e}")
+            return None
 
-        # Request approval for high-risk actions
-        if action in ("upload", "download", "execute", "navigate"):
+    async def handle_agent_task(self, websocket, payload: dict):
+        """Forward agent task to the real JARVIS bridge."""
+        goal = payload.get("goal", "")
+        session = payload.get("sessionId", self.session_id)
+
+        print(f"[BRIDGE] Agent task: {goal[:50]}...")
+
+        if not self._bridge_ok:
             await websocket.send(json.dumps({
-                "type": "approval_request",
+                "type": "chat_reply",
                 "payload": {
-                    "title": f"JARVIS wants to {action}",
-                    "description": f"This action requires your approval.",
-                    "details": {
-                        "Action": action,
-                        "Target": payload.get("target", "unknown"),
-                        "Risk": "HIGH" if action in ("execute", "upload") else "MEDIUM",
-                    },
+                    "kind": "error",
+                    "error": {"message": "JARVIS backend not connected"},
+                    "session": session,
+                },
+            }))
+            return
+
+        # Forward to real bridge
+        try:
+            data = json.dumps({
+                "goal": goal,
+                "session": session,
+            }).encode()
+
+            req = Request(
+                f"{self.bridge_url}/v1/agent",
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+
+            with urlopen(req, timeout=120) as resp:
+                for line in resp.read().decode().split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            chunk = json.loads(line[6:])
+                            await websocket.send(json.dumps({
+                                "type": "agent_event",
+                                "payload": chunk,
+                            }))
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            print(f"[BRIDGE] Agent task error: {e}")
+            await websocket.send(json.dumps({
+                "type": "chat_reply",
+                "payload": {
+                    "kind": "error",
+                    "error": {"message": str(e)},
+                    "session": session,
                 },
             }))
 
-
-# ── WebSocket Server ───────────────────────────────────────────────
-# One shared bridge across all connections: the session id and any future
-# agent state stay consistent instead of being rebuilt per socket.
-bridge = JarvisBridge()
+    async def handle_status(self, websocket):
+        """Check and return bridge status."""
+        bridge_ok = await asyncio.get_event_loop().run_in_executor(None, self._check_bridge)
+        await websocket.send(json.dumps({
+            "type": "status",
+            "payload": {
+                "ok": bridge_ok,
+                "kernel": "online" if bridge_ok else "offline",
+                "session": self.session_id,
+                "bridge": self.bridge_url,
+            },
+        }))
 
 
 async def handler(websocket):
-    """Handle a WebSocket connection."""
+    bridge = JarvisBridge(f"http://{BRIDGE_HOST}:{BRIDGE_PORT}")
     await bridge.register(websocket)
 
     try:
@@ -191,23 +309,29 @@ async def handler(websocket):
         await bridge.unregister(websocket)
 
 
-async def main(host: str, port: int):
-    """Start the WebSocket server."""
-    print(f"[BRIDGE] Starting JARVIS WebSocket bridge on {host}:{port}")
+async def main(ws_host: str, ws_port: int, bridge_host: str, bridge_port: int):
+    global BRIDGE_HOST, BRIDGE_PORT
+    BRIDGE_HOST = bridge_host
+    BRIDGE_PORT = bridge_port
 
-    async with serve(handler, host, port):
-        print(f"[BRIDGE] Server running on ws://{host}:{port}")
-        print("[BRIDGE] Waiting for Electron browser to connect...")
+    print(f"[BRIDGE] JARVIS Orbit WebSocket Bridge")
+    print(f"[BRIDGE] WebSocket: ws://{ws_host}:{ws_port}")
+    print(f"[BRIDGE] JARVIS Backend: http://{bridge_host}:{bridge_port}")
+    print(f"[BRIDGE] Waiting for Electron browser to connect...")
+
+    async with serve(handler, ws_host, ws_port):
         await asyncio.Future()  # Run forever
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="JARVIS Orbit WebSocket Bridge")
-    parser.add_argument("--host", default=HOST, help="Bind host")
-    parser.add_argument("--port", type=int, default=PORT, help="Bind port")
+    parser.add_argument("--host", default=WS_HOST, help="WebSocket bind host")
+    parser.add_argument("--port", type=int, default=WS_PORT, help="WebSocket bind port")
+    parser.add_argument("--bridge-host", default=BRIDGE_HOST, help="JARVIS bridge host")
+    parser.add_argument("--bridge-port", type=int, default=BRIDGE_PORT, help="JARVIS bridge port")
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(args.host, args.port))
+        asyncio.run(main(args.host, args.port, args.bridge_host, args.bridge_port))
     except KeyboardInterrupt:
         print("\n[BRIDGE] Shutting down")
