@@ -51,6 +51,14 @@
       </div>
 
       <div class="toolbar-right">
+        <button class="nav-btn" id="extBtn" title="Extensions">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor"/>
+            <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor"/>
+            <path d="M11.5 9v5M9 11.5h5" stroke="currentColor"/>
+          </svg>
+        </button>
         <button class="nav-btn" id="jarvisBtn" title="JARVIS sidebar">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="3" cy="3" r=".9" fill="currentColor"/>
@@ -64,10 +72,16 @@
             <circle cx="13" cy="13" r=".9" fill="currentColor"/>
           </svg>
         </button>
-        <div class="omni-status" id="jarvisStatus">
-          <span class="status-dot" id="statusDot"></span>
-          <span class="status-label" id="statusLabel">OFF</span>
-        </div>
+        <button class="nav-btn" id="profileBtn" title="Profile">
+          <span class="toolbar-avatar">P</span>
+        </button>
+        <button class="nav-btn" id="menuBtn" title="Menu">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="3.5" r="1.1" fill="currentColor"/>
+            <circle cx="8" cy="8" r="1.1" fill="currentColor"/>
+            <circle cx="8" cy="12.5" r="1.1" fill="currentColor"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -323,6 +337,62 @@
           </div>
         </footer>
       </aside>
+    </div>
+
+    <!-- ── Tab Context Menu ──────────────────────────────────── -->
+    <div class="context-menu" id="tabContextMenu">
+      <button class="ctx-item" data-action="newTab">New tab</button>
+      <button class="ctx-item" data-action="duplicate">Duplicate</button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-action="closeTab">Close tab</button>
+      <button class="ctx-item" data-action="closeOthers">Close other tabs</button>
+      <button class="ctx-item" data-action="closeRight">Close tabs to the right</button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-action="reload">Reload</button>
+      <button class="ctx-item" data-action="copyUrl">Copy URL</button>
+    </div>
+
+    <!-- ── Browser Menu ──────────────────────────────────────── -->
+    <div class="popover browser-menu" id="browserMenu">
+      <button class="menu-item" data-action="newTab">New tab <span class="sp">Ctrl+T</span></button>
+      <button class="menu-item" data-action="newWindow">New window</button>
+      <button class="menu-item" data-action="incognito">New private window</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://history">History</button>
+      <button class="menu-item" data-nav="orbit://downloads">Downloads</button>
+      <button class="menu-item" data-nav="orbit://bookmarks">Bookmarks</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://tasks">Tasks</button>
+      <button class="menu-item" data-nav="orbit://memory">Memory</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://settings">Settings</button>
+      <button class="menu-item" data-nav="orbit://diagnostics">Diagnostics</button>
+    </div>
+
+    <!-- ── Extension Popup ────────────────────────────────────── -->
+    <div class="popover ext-popup" id="extPopup">
+      <div class="pop-header">
+        <span class="pop-title">Extensions</span>
+      </div>
+      <div class="ext-row"><div class="ext-icon">J</div><div class="ext-info"><div class="ext-name">JARVIS</div><div class="ext-sub">Built into Orbit</div></div><span class="chip">Built in</span></div>
+      <div class="ext-row"><div class="ext-icon">U</div><div class="ext-info"><div class="ext-name">uBlock Origin</div><div class="ext-sub">All sites</div></div><span class="chip ok">Pin</span></div>
+      <div class="ext-row"><div class="ext-icon">B</div><div class="ext-info"><div class="ext-name">Bitwarden</div><div class="ext-sub">On click</div></div></div>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://extensions">Manage extensions</button>
+    </div>
+
+    <!-- ── Profile Dropdown ───────────────────────────────────── -->
+    <div class="popover profile-popup" id="profilePopup">
+      <div class="pop-header">
+        <div class="profile-avatar">P</div>
+        <div><div class="pop-title">JARVIS Orbit</div><div class="pop-sub">Personal · Sync on</div></div>
+      </div>
+      <button class="menu-item">Switch profile</button>
+      <button class="menu-item">Add profile</button>
+      <button class="menu-item">Guest mode</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item">Lock profile</button>
+      <button class="menu-item" data-nav="orbit://settings">Profile settings</button>
     </div>
 
     <!-- ── Floating Glyph (when sidebar closed, agent active) ── -->
