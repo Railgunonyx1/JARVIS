@@ -3,13 +3,15 @@ setlocal
 chcp 65001 >nul 2>&1
 
 REM ── JARVIS Orbit — Browser Launcher ─────────────────────────────
-REM This is the Orbit browser — a custom Electron browser with JARVIS.
-REM It is NOT Google Chrome. It ships with its own Chromium.
+REM Double-click this to launch JARVIS Orbit, just like Chrome.
 REM
-REM Double-click this to launch JARVIS Orbit.
+REM What it does:
+REM   1. Starts the JARVIS bridge (if not running)
+REM   2. Launches Chromium with the JARVIS extension
+REM   3. Shows status in the terminal
 
-REM Always cd to the directory containing this bat (the project root)
-cd /d "%~dp0"
+REM Always cd to the project root
+cd /d "%~dp0.."
 
 REM Force UTF-8 for Python
 set "PYTHONIOENCODING=utf-8"
@@ -23,7 +25,7 @@ if not defined PY set "PY=python"
 title JARVIS Orbit
 color 0B
 
-REM Relaunch in Windows Terminal when available (better rendering)
+REM Relaunch in Windows Terminal if available (better rendering)
 if not "%JARVIS_WT%"=="1" (
     where wt.exe >nul 2>nul
     if not errorlevel 1 (
@@ -48,48 +50,25 @@ echo.
 REM Parse arguments
 if "%1"=="--first-run" goto firstrun
 if "%1"=="-f" goto firstrun
-if "%1"=="--dev" goto dev
+if "%1"=="--debug" goto debug
+if "%1"=="-d" goto debug
 
 REM Normal launch
 echo   [●] Starting JARVIS Orbit...
 echo.
-
-REM Start the WebSocket bridge in background
-start /b "" "%PY%" orbit-browser\python\server.py
-
-REM Wait for bridge to start
-timeout /t 2 /nobreak >nul
-
-REM Launch the Electron browser
-cd orbit-browser
-if exist "node_modules\.bin\electron" (
-    call npx electron .
-) else (
-    echo   [!] Electron not installed. Running: npm install
-    call npm install
-    call npx electron .
-)
+"%PY%" scripts\orbit_launch.py %*
 goto end
 
 :firstrun
 echo   [●] First-run setup...
 echo.
-cd orbit-browser
-if not exist "node_modules" (
-    echo   [●] Installing dependencies...
-    call npm install
-)
-echo   [●] Starting browser...
-call npx electron .
+"%PY%" scripts\orbit_launch.py --first-run
 goto end
 
-:dev
-echo   [●] Dev mode...
+:debug
+echo   [●] Debug mode...
 echo.
-start /b "" "%PY%" orbit-browser\python\server.py
-timeout /t 2 /nobreak >nul
-cd orbit-browser
-call npx electron . --dev
+"%PY%" scripts\orbit_launch.py --debug
 goto end
 
 :end
