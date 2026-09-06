@@ -61,4 +61,26 @@ contextBridge.exposeInMainWorld("orbit", {
       ipcRenderer.on("navigate-to", (_, url) => callback(url));
     },
   },
+
+  // ── System (Shields / Permissions / Performance / Spaces) ───────
+  system: {
+    security: {
+      status: () => ipcRenderer.invoke("security:status"),
+      shields: (enabled) => ipcRenderer.invoke("security:shields", !!enabled),
+      config: (cfg) => ipcRenderer.invoke("security:config", cfg),
+    },
+    permissions: {
+      allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),
+      revoke: (origin, permission) => ipcRenderer.invoke("permissions:revoke", origin, permission),
+      list: () => ipcRenderer.invoke("permissions:list"),
+    },
+    performance: {
+      status: () => ipcRenderer.invoke("performance:status"),
+      efficiency: (enabled) => ipcRenderer.invoke("performance:efficiency", !!enabled),
+    },
+    spaces: {
+      list: () => ipcRenderer.invoke("spaces:list"),
+      switch: (id) => ipcRenderer.invoke("spaces:switch", id),
+    },
+  },
 });
