@@ -690,7 +690,7 @@ function createWindow() {
           "style-src 'self' 'unsafe-inline'; " +
           "img-src 'self' data: https:; " +
           "font-src 'self' data:; " +
-          "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
+          "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
           "frame-src 'self' https:; " +
           "object-src 'none'; " +
           "base-uri 'self'; " +
