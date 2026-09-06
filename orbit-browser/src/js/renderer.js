@@ -179,7 +179,6 @@ function attachWebviewEvents(wv) {
         }
       } catch (err) {}
     }
-    console.log("[Webview] Loaded:", wv.getURL());
   });
   wv.addEventListener("did-navigate", (e) => {
     const tab = tabOwnedBy(wv);
@@ -437,6 +436,10 @@ function showInternalPage(pageId) {
 }
 
 function refreshDiagnostics() {
+  const diagDsh = diagDsh;
+  const diagBackend = diagBackend;
+  const diagEfficiency = diagEfficiency;
+  const diagFrozen = diagFrozen;
   const setChip = (el, text, ok) => {
     if (!el) return;
     el.textContent = text;
@@ -446,20 +449,20 @@ function refreshDiagnostics() {
   if (j && typeof j.then === "function") {
     j.then((s) => {
       const online = !!(s && s.ok && s.kernel === "online");
-      setChip(document.getElementById("diagDsh"), online ? "Connected" : "Offline", online);
-      setChip(document.getElementById("diagBackend"), s?.bridge || "Offline", online);
+      setChip(diagDsh, online ? "Connected" : "Offline", online);
+      setChip(diagBackend, s?.bridge || "Offline", online);
     }).catch(() => {
-      setChip(document.getElementById("diagDsh"), "Error", false);
+      setChip(diagDsh, "Error", false);
     });
   } else {
-    setChip(document.getElementById("diagDsh"), "Unavailable", false);
+    setChip(diagDsh, "Unavailable", false);
   }
   const p = window.orbit?.system?.performance?.status?.();
   if (p && typeof p.then === "function") {
     p.then((s) => {
       const eff = s && s.efficiencyMode;
-      setChip(document.getElementById("diagEfficiency"), eff ? "On" : "Off", !!eff);
-      const frozen = document.getElementById("diagFrozen");
+      setChip(diagEfficiency, eff ? "On" : "Off", !!eff);
+      const frozen = diagFrozen;
       if (frozen) frozen.textContent = (s && s.frozen) ? s.frozen + " tab(s)" : "None";
     }).catch(() => {});
   }
@@ -672,7 +675,6 @@ async function sendToJarvis() {
     const page = tab ? { url: tab.url, title: tab.title } : null;
     const streamResult = await window.dshNative.chat(text, { page });
     if (streamResult.streamId) {
-      console.log("[JARVIS] Stream started:", streamResult.streamId);
     } else if (streamResult.success === false) {
       Chat.append("error", streamResult.error || "Connection failed");
       setMatrix("fail");
@@ -735,7 +737,6 @@ async function runAgentTask(task) {
   const page = tab ? { url: tab.url, title: tab.title } : null;
   const result = await window.dshNative.runAgent(task, { page });
   if (result.streamId) {
-    console.log("[JARVIS] Agent stream started:", result.streamId);
   } else if (result.success === false) {
     Chat.append("error", result.error || "Agent task failed");
     setMatrix("fail");
@@ -872,7 +873,13 @@ if (window.orbit?.on?.navigateTo) {
 if (window.orbit?.on?.tabCreated) {
   window.orbit.on.tabCreated((tab) => {
     const id = tab && tab.id;
-    if (id && !tabs.has(id) && tab.url) createTab(tab.url);
+    if (!id || tabs.has(id) || !tab.url) return;
+    if (bootTabId && !bootReplaced && tabs.has(bootTabId)) {
+      bootReplaced = true;
+      navigateTo(tab.url);
+      return;
+    }
+    createTab(tab.url);
   });
 }
 if (window.orbit?.on?.tabSleep) {
@@ -1161,27 +1168,23 @@ let cmdIdx = 0;
 let cmdFiltered = [];
 
 function openCmdPalette() {
-  const bg = document.getElementById("cmdPaletteBg");
-  const inp = document.getElementById("cmdInput");
-  if (!bg) return;
-  bg.classList.add("on");
-  inp.value = "";
+  if (!cmdPaletteBg) return;
+  cmdPaletteBg.classList.add("on");
+  cmdInput.value = "";
   cmdIdx = 0;
   filterCmd("");
-  setTimeout(function() { inp.focus(); }, 50);
+  setTimeout(() => cmdInput.focus(), 50);
 }
 
 function closeCmdPalette() {
-  const bg = document.getElementById("cmdPaletteBg");
-  if (bg) bg.classList.remove("on");
+  if (cmdPaletteBg) cmdPaletteBg.classList.remove("on");
 }
 
 function filterCmd(q) {
   q = (q || "").toLowerCase().trim();
   cmdFiltered = [];
-  const res = document.getElementById("cmdResults");
-  if (!res) return;
-  const html = "";
+  if (!cmdResults) return;
+  let html = "";
   if (q) {
     for (const [id, tab] of tabs) {
       if (tab.title.toLowerCase().indexOf(q) >= 0 || tab.url.toLowerCase().indexOf(q) >= 0) {
@@ -1196,7 +1199,7 @@ function filterCmd(q) {
   });
   if (cmdFiltered.length) html += '<div class="cmd-group-label">Results</div>';
   cmdFiltered.forEach(function(c, i) {
-    html += '<div class="cmd-item' + (i === cmdIdx ? ' selected' : '') + '" data-ci="' + i + '"><div class="cmd-item-icon">' + c.i + '</div><div class="cmd-item-label">' + c.l + '<div class="cmd-item-desc">' + c.d + '</div></div>' + (c.s ? '<div class="cmd-item-shortcut">' + c.s + '</div>' : '') + '</div>';
+    html += '<div class="cmd-item' + (i === cmdIdx ? ' active' : '') + '" data-ci="' + i + '"><div class="cmd-item-icon">' + c.i + '</div><div class="cmd-item-label">' + c.l + '<div class="cmd-item-desc">' + c.d + '</div></div>' + (c.s ? '<div class="cmd-item-shortcut">' + c.s + '</div>' : '') + '</div>';
   });
   res.innerHTML = html;
   res.querySelectorAll(".cmd-item").forEach(function(el) {
@@ -1586,7 +1589,6 @@ function hibernateTab(id) {
   tab.hibernated = true;
   tab.url = tab.webview.getURL() || tab.url;
   try { tab.webview.src = 'about:blank'; } catch (e) {}
-  console.log('[TABS] Hibernated tab:', id);
 }
 
 function wakeTab(id) {
@@ -1716,7 +1718,6 @@ if (window.tabManagement) {
   // Listen for tab management events
   document.addEventListener('tab-management-event', (e) => {
     const { type, data } = e.detail;
-    console.log('[TABS]', type, data);
     renderTabs();
   });
 }
@@ -1726,7 +1727,6 @@ if (window.jarvisIntegration) {
   // Listen for JARVIS events
   document.addEventListener('jarvis-integration-event', (e) => {
     const { type, data } = e.detail;
-    console.log('[JARVIS]', type, data);
   });
 }
 
@@ -1746,12 +1746,10 @@ if (window.enhancedPerformance) {
 
 // Enhanced Security integration  
 if (window.enhancedSecurity) {
-  console.log('[SECURITY] Enhanced security module loaded');
 }
 
 // Security Tester integration
 if (window.securityTester) {
-  console.log('[SECURITY] Security tester (Strix-inspired) loaded');
 }
 
 // ── Init ──────────────────────────────────────────────────────
@@ -1769,11 +1767,10 @@ window._renderNonChatPanel = function(name) {
     sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
   }
 };
-createTab("orbit://newtab");
+var bootTabId = createTab("orbit://newtab");
+var bootReplaced = false;
 setMatrix("idle");
 renderBookmarkBar();
 updatePerfHud();
 // Show initial JARVIS welcome
 Chat.renderPanel("jarvis");
-console.log("[ORBIT] Renderer initialized (complete)");
-console.log("[ORBIT] Modules loaded: TabManagement=" + !!window.tabManagement + ", JarvisIntegration=" + !!window.jarvisIntegration + ", EnhancedPerformance=" + !!window.enhancedPerformance + ", EnhancedSecurity=" + !!window.enhancedSecurity);
