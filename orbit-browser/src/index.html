@@ -120,6 +120,152 @@
             </div>
             <div class="nt-footer">Personal · JARVIS ready</div>
           </div>
+
+          <!-- Settings -->
+          <div class="page settings-page" id="settingsPage">
+            <div class="sheet">
+              <h1>Settings</h1>
+              <p class="sheet-lede">Grouped the way Nothing groups a phone: one system, quiet sections.</p>
+              <div class="group"><h2>You and JARVIS</h2>
+                <div class="row"><div><div class="name">Enable JARVIS</div><div class="sub">Intelligence layer stays available</div></div><span class="chip ok">On</span></div>
+                <div class="row"><div><div class="name">Confirm sensitive actions</div><div class="sub">Purchases, uploads, scripts, account changes</div></div><span class="chip ok">Required</span></div>
+              </div>
+              <div class="group"><h2>Appearance</h2>
+                <div class="row"><div><div class="name">Theme</div><div class="sub">Dark is the primary direction</div></div><button class="chip-btn" id="themeToggle">Toggle light</button></div>
+                <div class="row"><div><div class="name">Accent</div><div class="sub">Monochrome with optional faint tint</div></div><span class="chip">Glyph</span></div>
+              </div>
+              <div class="group"><h2>AI</h2>
+                <div class="row"><div><div class="name">Primary model</div><div class="sub">Configured model router</div></div><span class="chip ok">Connected</span></div>
+                <div class="row"><div><div class="name">Fallback model</div><div class="sub">Used if the primary does not respond</div></div><span class="chip">Ready</span></div>
+              </div>
+              <div class="group"><h2>Network</h2>
+                <div class="row"><div class="name">Public web</div><span class="chip ok">Allowed</span></div>
+                <div class="row"><div class="name">Private network</div><span class="chip bad">Blocked</span></div>
+                <div class="row"><div class="name">Loopback</div><span class="chip bad">Blocked</span></div>
+              </div>
+              <div class="group"><h2>About</h2>
+                <div class="row"><div class="name">JARVIS Orbit</div><span class="meta">0.1.0</span></div>
+                <div class="row"><div class="name">DSH Protocol</div><span class="chip ok">DSH/1.0</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- History -->
+          <div class="page history-page" id="historyPage">
+            <div class="sheet">
+              <h1>History</h1>
+              <p class="sheet-lede">JARVIS activity is a filter, not pollution in Today.</p>
+              <div class="group"><h2>Today</h2>
+                <div class="row"><div><div class="name">JARVIS Orbit</div><div class="sub">orbit://newtab</div></div><span class="meta">Just now</span></div>
+                <div class="row"><div><div class="name">GitHub</div><div class="sub">github.com</div></div><span class="meta">5m ago</span></div>
+              </div>
+              <div class="group"><h2>Yesterday</h2>
+                <div class="row"><div><div class="name">MDN Web Docs</div><div class="sub">developer.mozilla.org</div></div><span class="meta">Yesterday</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bookmarks -->
+          <div class="page bookmarks-page" id="bookmarksPage">
+            <div class="sheet">
+              <h1>Bookmarks</h1>
+              <p class="sheet-lede">A research collection is just a folder of sources.</p>
+              <div class="group"><h2>AI Browser Research</h2>
+                <div class="row"><div class="name">Chromium</div><span class="meta">chromium.org</span></div>
+                <div class="row"><div class="name">Servo</div><span class="meta">servo.org</span></div>
+                <div class="row"><div class="name">Ladybird</div><span class="meta">ladybird.org</span></div>
+              </div>
+              <div class="group"><h2>JARVIS Development</h2>
+                <div class="row"><div class="name">Electron Docs</div><span class="meta">electronjs.org</span></div>
+                <div class="row"><div class="name">Playwright</div><span class="meta">playwright.dev</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Downloads -->
+          <div class="page downloads-page" id="downloadsPage">
+            <div class="sheet">
+              <h1>Downloads</h1>
+              <p class="sheet-lede">Agent-origin files wait for approval before they touch disk.</p>
+              <div class="group">
+                <div class="row"><div><div class="name">orbit-research.md</div><div class="sub">github.com · JARVIS Research</div></div><span class="meta">248 KB</span><span class="chip ok">Complete</span></div>
+                <div class="row"><div><div class="name">dataset.zip</div><div class="sub">example.com · needs approval</div></div><span class="meta">42 MB</span><span class="chip warn">Ask</span></div>
+                <div class="row"><div><div class="name">chromium-notes.pdf</div><div class="sub">docs.chromium.org</div></div><span class="meta">1.1 MB</span><span class="chip">Downloading</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tasks -->
+          <div class="page tasks-page" id="tasksPage">
+            <div class="sheet">
+              <h1>Tasks</h1>
+              <p class="sheet-lede">One row. Status as a glyph, not a rainbow badge.</p>
+              <div class="group">
+                <div class="row"><div><div class="name">Research open-source browser AI frameworks</div><div class="sub">JARVIS Main Agent</div></div><span class="chip ask">Run</span><span class="meta">14m</span></div>
+                <div class="row"><div><div class="name">Summarize current page</div><div class="sub">JARVIS</div></div><span class="chip ok">Done</span><span class="meta">2m</span></div>
+                <div class="row"><div><div class="name">Compare documentation sources</div><div class="sub">Documentation agent</div></div><span class="chip">Paused</span><span class="meta">6m</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Permissions -->
+          <div class="page permissions-page" id="permissionsPage">
+            <div class="sheet">
+              <h1>Permissions</h1>
+              <p class="sheet-lede">Current site — inheritance is visible.</p>
+              <div class="group"><h2>Current Site</h2>
+                <div class="row"><div class="name">Page reading</div><span class="chip ok">Allowed</span><span class="meta">Site</span></div>
+                <div class="row"><div class="name">Navigation</div><span class="chip ok">Allowed</span><span class="meta">Task</span></div>
+                <div class="row"><div class="name">Interaction</div><span class="chip ask">Ask</span><span class="meta">Global</span></div>
+                <div class="row"><div class="name">Downloads</div><span class="chip ask">Ask</span><span class="meta">Global</span></div>
+                <div class="row"><div class="name">Uploads</div><span class="chip bad">Blocked</span><span class="meta">Global</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Memory -->
+          <div class="page memory-page" id="memoryPage">
+            <div class="sheet">
+              <h1>Memory</h1>
+              <p class="sheet-lede">Sentences a person would recognize. Not embeddings.</p>
+              <div class="group">
+                <div class="row"><div><div class="name">Orbit uses DSH as its browser communication protocol.</div><div class="sub">Source · research task · high confidence</div></div><span class="chip">Saved</span></div>
+                <div class="row"><div><div class="name">Prefer dark theme and compact chrome.</div><div class="sub">Source · settings · preference</div></div><span class="chip">Pinned</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Extensions -->
+          <div class="page extensions-page" id="extensionsPage">
+            <div class="sheet">
+              <h1>Extensions</h1>
+              <p class="sheet-lede">JARVIS is built in. It is not a store banner.</p>
+              <div class="group">
+                <div class="row"><div><div class="name">JARVIS</div><div class="sub">Built into Orbit</div></div><span class="chip">Built in</span></div>
+                <div class="row"><div><div class="name">uBlock Origin</div><div class="sub">All sites</div></div><span class="chip ok">Pinned</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Diagnostics -->
+          <div class="page diagnostics-page" id="diagnosticsPage">
+            <div class="sheet">
+              <h1>Diagnostics</h1>
+              <p class="sheet-lede">Technical, readable, no secrets.</p>
+              <div class="group"><h2>Browser</h2>
+                <div class="row"><div class="name">Orbit</div><span class="meta">0.1.0</span></div>
+                <div class="row"><div class="name">Chromium</div><span class="meta">Electron</span></div>
+              </div>
+              <div class="group"><h2>JARVIS</h2>
+                <div class="row"><div class="name">DSH</div><span class="chip" id="diagDsh">Checking…</span></div>
+                <div class="row"><div class="name">Backend</div><span class="chip" id="diagBackend">Checking…</span></div>
+              </div>
+              <div class="group"><h2>Security</h2>
+                <div class="row"><div class="name">CDP Connection</div><span class="chip ok">Secure</span></div>
+                <div class="row"><div class="name">Network Policy</div><span class="meta">default-deny-private</span></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
