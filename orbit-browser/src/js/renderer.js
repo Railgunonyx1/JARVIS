@@ -147,24 +147,49 @@ function activateTab(id) {
 }
 
 // ── Navigation ────────────────────────────────────────────────────
+// Map orbit:// URLs to page element IDs
+const INTERNAL_PAGES = {
+  "orbit://newtab": "newtabPage",
+  "orbit://settings": "settingsPage",
+  "orbit://history": "historyPage",
+  "orbit://bookmarks": "bookmarksPage",
+  "orbit://downloads": "downloadsPage",
+  "orbit://tasks": "tasksPage",
+  "orbit://permissions": "permissionsPage",
+  "orbit://memory": "memoryPage",
+  "orbit://extensions": "extensionsPage",
+  "orbit://diagnostics": "diagnosticsPage",
+};
+
+function showInternalPage(pageId) {
+  // Hide all pages, show the target
+  $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+  const target = document.getElementById(pageId);
+  if (target) target.classList.add("on");
+}
+
 function navigateTo(url) {
   const tab = tabs.get(activeTabId);
   if (!tab) return;
 
   tab.url = url;
-  omniInput.value = url.replace(/^https?:\/\//, "");
 
   if (url.startsWith("orbit://")) {
-    // Internal page
+    // Internal page — clear omnibox
+    omniInput.value = "";
+    omniInput.placeholder = url.replace("orbit://", "orbit://");
     webview.classList.add("hidden");
-    internalPages.classList.remove("visible");
-    newtabPage.style.display = url === "orbit://newtab" ? "flex" : "none";
-    if (url !== "orbit://newtab") {
-      // TODO: Show other internal pages
-      newtabPage.style.display = "flex";
+    internalPages.classList.add("visible");
+    const pageId = INTERNAL_PAGES[url];
+    if (pageId) {
+      showInternalPage(pageId);
+    } else {
+      showInternalPage("newtabPage");
     }
   } else {
-    // External page
+    // External page — show URL
+    omniInput.value = url.replace(/^https?:\/\//, "");
+    omniInput.placeholder = "Search or enter URL";
     webview.classList.remove("hidden");
     internalPages.classList.remove("visible");
     webview.loadURL(url);
@@ -424,6 +449,45 @@ webview.addEventListener("did-stop-loading", () => {
     </svg>
   `;
 });
+
+// ── New Tab Tiles ────────────────────────────────────────────────
+document.addEventListener("click", (e) => {
+  const tile = e.target.closest("[data-url]");
+  if (tile) {
+    navigateTo(tile.dataset.url);
+  }
+});
+
+// ── Theme Toggle ─────────────────────────────────────────────────
+const themeToggle = $("#themeToggle");
+if (themeToggle) {
+  themeToggle.addEventListener("click", () => {
+    const html = document.documentElement;
+    const current = html.dataset.theme || "dark";
+    html.dataset.theme = current === "dark" ? "light" : "dark";
+    themeToggle.textContent = current === "dark" ? "Toggle dark" : "Toggle light";
+  });
+}
+
+// ── NTP Search ───────────────────────────────────────────────────
+const ntpSearch = $("#ntpSearch");
+if (ntpSearch) {
+  ntpSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const value = ntpSearch.value.trim();
+      if (!value) return;
+      let url;
+      if (value.match(/^https?:\/\//)) {
+        url = value;
+      } else if (value.match(/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/)) {
+        url = `https://${value}`;
+      } else {
+        url = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+      }
+      navigateTo(url);
+    }
+  });
+}
 
 // ── Keyboard Shortcuts ────────────────────────────────────────────
 document.addEventListener("keydown", (e) => {
