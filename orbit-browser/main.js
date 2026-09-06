@@ -334,8 +334,12 @@ function guestFor(id) {
 
 async function freezeTab(id) {
   if (frozenTabs.has(id)) return;
+  if (id === activeTabId) return;
   const wc = guestFor(id);
   if (!wc || wc.isDestroyed()) return;
+  // The renderer pools webviews across tabs; never freeze the guest that is
+  // currently backing the active tab, even if our id->wcId map is stale.
+  if (webContentsIds.get(activeTabId) === wc.id) return;
   let attached = false;
   try {
     if (!wc.debugger.isAttached()) {
@@ -654,11 +658,7 @@ function createWindow() {
     title: "JARVIS Orbit",
     icon: path.join(__dirname, "src/icons/icon.png"),
     titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#000000",
-      symbolColor: "#999999",
-      height: 40,
-    },
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -723,6 +723,14 @@ function createWindow() {
     jarvisWs?.close();
     performance.stopSleepCheck?.();
   });
+
+  // ── Window Controls (frameless window) ────────────────────────
+  ipcMain.on("win-minimize", () => mainWindow?.minimize());
+  ipcMain.on("win-maximize", () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+    else mainWindow?.maximize();
+  });
+  ipcMain.on("win-close", () => mainWindow?.close());
 }
 
 // ── App Lifecycle ─────────────────────────────────────────────────
