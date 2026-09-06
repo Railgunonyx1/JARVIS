@@ -88,6 +88,50 @@ const SESSION_PARTITION = "persist:orbit";
 const GUEST_PRELOAD = path.join(__dirname, "guest-preload.js");
 const PERMISSION_ALLOWLIST = []; // { origin, permissions: [] }
 
+// Network governance (Brave-style aggressive defaults, persisted in store).
+const networkConfig = {
+  blockPrivateNetwork: true,        // no page subresource may probe local nets
+  fastBlockThirdPartyCookies: true, // cross-site responses drop Set-Cookie
+  blockCrossSiteCookies: false,     // opt-in: also strip Cookie on cross-site calls
+};
+
+// Canvas readback grain — Brave-Shields-style fingerprint farbling, injected
+// into the guest main world on load. Deterministic per page, bounded cost,
+// skips huge canvases. Full farbling suite (WebGL, UA hints) lands in Phase D.
+const GRAIN_JS = `
+(function(){
+  try {
+    if (HTMLCanvasElement.prototype.__orbitGrain) return;
+    Object.defineProperty(HTMLCanvasElement.prototype, "__orbitGrain", { value: true });
+    var proto = HTMLCanvasElement.prototype;
+    var td = proto.toDataURL;
+    var gi = CanvasRenderingContext2D.prototype.getImageData;
+    var host = (location && location.hostname) || "";
+    var seed = 17;
+    for (var i = 0; i < host.length; i++) seed = (seed * 131 + host.charCodeAt(i)) | 0;
+    proto.toDataURL = function () {
+      var out = td.apply(this, arguments);
+      try {
+        var w = this.width, h = this.height;
+        if (!w || !h || w * h > 400000) return out;
+        var ctx = this.getContext("2d");
+        if (!ctx) return out;
+        var d = gi.call(ctx, 0, 0, w, h).data;
+        var n = Math.min(28, Math.floor(d.length / 3072) + 4);
+        var mask = d.length - 8;
+        for (var k = 0; k < n; k++) {
+          var p = (seed + k * 977) & mask;
+          var ch = (seed >>> 3 + k) & 3;
+          d[p + ch] ^= 1 + ((seed + k) & 1);
+        }
+        ctx.putImageData(new ImageData(d, w, h), 0, 0);
+      } catch (e) {}
+      return out;
+    };
+  } catch (e) {}
+})();
+`;
+
 function getBrowserSession() {
   if (!browserSession) {
     browserSession = session.fromPartition(SESSION_PARTITION);
@@ -121,6 +165,23 @@ function isPrivateOrLocalHost(hostname) {
   return false;
 }
 
+function isPrivateNetworkHost(hostname) {
+  const h = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+  if (isPrivateOrLocalHost(h)) return true;
+  if (h === "::1" || h === "::") return true;
+  if (/^fe[89ab]?:/i.test(h)) return true;      // link-local fe80::/10
+  if (/^f[cd]:/i.test(h)) return true;          // ULA fc00::/7
+  return false;
+}
+
+function siteOriginOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch (_) {
+    return null;
+  }
+}
+
 function isAllowedPermission(origin, permission) {
   return PERMISSION_ALLOWLIST.some(
     (e) =>
@@ -135,6 +196,12 @@ function installSecurity(ses) {
   // working while the daily browser is hardened.
   ses.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
     if (security.shouldBlock(details.url)) return callback({ cancel: true });
+    if (networkConfig.blockPrivateNetwork && details.resourceType !== "mainFrame") {
+      const parsed = urlFor(details.url);
+      if (parsed && isPrivateNetworkHost(parsed.hostname)) {
+        return callback({ cancel: true });
+      }
+    }
     if (details.url.startsWith("http://")) {
       const parsed = urlFor(details.url);
       if (parsed && !isPrivateOrLocalHost(parsed.hostname)) {
@@ -150,7 +217,24 @@ function installSecurity(ses) {
   ses.webRequest.onBeforeSendHeaders({ urls: ["*://*/*"] }, (details, callback) => {
     const headers = { ...(details.requestHeaders || {}) };
     if (security.config.doNotTrack) headers["DNT"] = "1";
+    // Aggressive posture: strip Cookie on cross-site requests too.
+    if (networkConfig.blockCrossSiteCookies && details.resourceType !== "mainFrame") {
+      const top = siteOriginOf(details.topURL || "");
+      const req = siteOriginOf(details.url);
+      if (top && req && top !== req) delete headers["cookie"];
+    }
     callback({ requestHeaders: headers });
+  });
+
+  // Cross-site responses never set cookies (third-party set-cookie block).
+  ses.webRequest.onHeadersReceived({ urls: ["*://*/*"] }, (details, callback) => {
+    const headers = details.responseHeaders || {};
+    if (networkConfig.fastBlockThirdPartyCookies && details.resourceType !== "mainFrame") {
+      const top = siteOriginOf(details.topURL || "");
+      const req = siteOriginOf(details.url);
+      if (top && req && top !== req) delete headers["set-cookie"];
+    }
+    callback({ responseHeaders: headers });
   });
 
   // Permissions: default-deny, allowlist wins (aggressive posture).
@@ -178,10 +262,12 @@ function initStore() {
         fingerprintProtection: true,
         httpsUpgrade: true,
       },
+      network: { ...networkConfig },
       permissions: [],
     },
   });
   Object.assign(security.config, store.get("shields"));
+  Object.assign(networkConfig, store.get("network"));
   const storedPermissions = store.get("permissions", []);
   if (Array.isArray(storedPermissions)) {
     PERMISSION_ALLOWLIST.length = 0;
@@ -337,6 +423,11 @@ function setupIPC() {
     store?.set("shields", { ...security.config });
     return security.getStatus();
   });
+  ipcMain.handle("security:network", (_e, cfg) => {
+    if (cfg && typeof cfg === "object") Object.assign(networkConfig, cfg);
+    store?.set("network", { ...networkConfig });
+    return { ...networkConfig };
+  });
 
   // Site permissions (default-deny allowlist)
   ipcMain.handle("permissions:allow", (_e, origin, permission) => {
@@ -465,6 +556,12 @@ app.on("web-contents-created", (_event, contents) => {
     contents.on("will-navigate", (event, url) => {
       if (!/^(https?|about|data|blob):/i.test(url)) {
         event.preventDefault();
+      }
+    });
+    // Canvas fingerprint grain (Brave-Shields style), gated on the Shield.
+    contents.on("dom-ready", () => {
+      if (security.config.fingerprintProtection) {
+        contents.executeJavaScript(GRAIN_JS).catch(() => {});
       }
     });
   }
