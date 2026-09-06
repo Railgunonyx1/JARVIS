@@ -319,7 +319,7 @@ class ProviderRouter:
                     if name_map:
                         restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
-                    self._last_model = provider.model
+                    self._last_model = _request_model or provider.model
                     metrics.counter(f"provider.ok.{provider_name}", 1)
                     if span is not None:
                         span.set_attribute("provider", provider_name)
@@ -373,7 +373,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             metrics.counter(f"provider.ok.{provider_name}", 1)
                             return response
                         except Exception as retry_err:
@@ -421,6 +421,7 @@ class ProviderRouter:
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
+        _request_model = preferred_model
         last_error = None
         with tracer.span("router.stream") as span:
             for provider_name in chain:
@@ -434,8 +435,10 @@ class ProviderRouter:
                             start = time.perf_counter()
                             chars = 0
                             first_chunk = True
+                            _stream_model = _request_model if provider_name == "ollama" else None
                             async for chunk in provider.complete_stream(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_stream_model,
                             ):
                                 if first_chunk:
                                     first_chunk = False
@@ -457,7 +460,7 @@ class ProviderRouter:
                                 req.set_attribute("tokens_per_second", round(tokens_per_second, 1))
                             tracer.add_metric("llm.tokens_generated", tokens)
                         self._last_provider = provider_name
-                        self._last_model = provider.model
+                        self._last_model = _request_model or provider.model
                         self._invalidate_chain()
                         metrics.counter(f"provider.ok.{provider_name}", 1)
                         if span is not None:
@@ -553,7 +556,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             self._last_stream_tool_calls = response.tool_calls
                             yield response.text, response.tool_calls
                             if span is not None:
@@ -566,8 +569,10 @@ class ProviderRouter:
                             chars = 0
                             first_chunk = True
                             provider._init_stream_tool_calls()
+                            _stream_model = _request_model if provider_name == "ollama" else None
                             async for chunk in provider.complete_stream(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_stream_model,
                             ):
                                 if first_chunk:
                                     first_chunk = False
@@ -584,7 +589,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             self._last_stream_tool_calls = calls
                             yield None, calls
                             elapsed_ms = (time.perf_counter() - start) * 1000

@@ -10,6 +10,10 @@ Failure paths:
     → BLOCKED → FAILED
     → FAILED
     → CANCELLED
+
+Browser coordination:
+    → WAITING_BROWSER (the agent is parked until a browser tab it needs is
+      released; a sibling agent or the operator owns it) → EXECUTING
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ class TaskStatus(StrEnum):
     BLOCKED = "blocked"
     CANCELLED = "cancelled"
     ROLLED_BACK = "rolled_back"
+    WAITING_BROWSER = "waiting_browser"
 
 
 class FailureClass(StrEnum):
@@ -84,6 +89,15 @@ _CONTEXT_OVERFLOW_MARKERS: tuple[str, ...] = (
     "token limit exceeded",
     "exceeds the maximum",
     "reduce input",
+    "too many tokens",
+)
+
+_MODEL_FAILURE_MARKERS: tuple[str, ...] = (
+    "empty response",
+    "provider returned an empty response",
+    "finish_reason=",
+    "invalid response format",
+    "failed to parse model",
 )
 
 
@@ -93,8 +107,14 @@ def is_context_overflow_error(error: str) -> bool:
     return any(marker in err for marker in _CONTEXT_OVERFLOW_MARKERS)
 
 
+def is_model_failure_error(error: str) -> bool:
+    """Return True if an error string indicates a model-level generation failure."""
+    err = error.lower()
+    return any(marker in err for marker in _MODEL_FAILURE_MARKERS)
+
+
 def classify_failure(error: str, *, is_timeout: bool = False,
-                     is_permission: bool = False, is_verification: bool = False,
+                     is_permission: bool = False,
                      is_cancelled: bool = False, is_context_overflow: bool = False,
                      is_provider: bool = False) -> FailureClass:
     """Deterministic failure classification. Always returns the highest-precedence match."""
@@ -115,6 +135,8 @@ def classify_failure(error: str, *, is_timeout: bool = False,
     err = error.lower()
     if "not registered" in err or "unknown tool" in err:
         return FailureClass.MALFORMED_TOOL
+    if is_model_failure_error(error):
+        return FailureClass.MODEL_FAILURE
     return FailureClass.TOOL_FAILURE
 
 
@@ -134,9 +156,11 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PLANNING: {TaskStatus.EXECUTING, TaskStatus.BLOCKED, TaskStatus.CANCELLED},
     TaskStatus.EXECUTING: {
         TaskStatus.OBSERVING, TaskStatus.FAILED, TaskStatus.BLOCKED, TaskStatus.CANCELLED,
+        TaskStatus.WAITING_BROWSER,
     },
     TaskStatus.OBSERVING: {
         TaskStatus.VERIFYING, TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.CANCELLED,
+        TaskStatus.WAITING_BROWSER,
     },
     TaskStatus.VERIFYING: {
         TaskStatus.COMPLETED, TaskStatus.RECOVERING, TaskStatus.FAILED,
@@ -146,6 +170,10 @@ _TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
         TaskStatus.EXECUTING, TaskStatus.FAILED, TaskStatus.ROLLED_BACK, TaskStatus.CANCELLED,
     },
     TaskStatus.BLOCKED: {TaskStatus.EXECUTING, TaskStatus.CANCELLED},
+    TaskStatus.WAITING_BROWSER: {
+        TaskStatus.EXECUTING, TaskStatus.OBSERVING, TaskStatus.BLOCKED,
+        TaskStatus.CANCELLED, TaskStatus.FAILED,
+    },
     TaskStatus.ROLLED_BACK: {TaskStatus.FAILED, TaskStatus.EXECUTING},
     # Terminal states
     TaskStatus.COMPLETED: set(),

@@ -12,14 +12,13 @@ the single tool execution boundary.
 
 from __future__ import annotations
 
-import asyncio
 import ast
+import asyncio
 import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # 1. Static analysis: no direct calls to AgentToolExecutor.execute outside
@@ -40,12 +39,13 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
         "tool_service.py",   # owns the executor/permissions
         "loop.py",           # creates the service (constructor only)
         "tools.py",          # defines AgentToolExecutor itself
+        "kernel.py",         # composition root — wires the single boundary
         "__init__.py",
     }
 
     # Exclude directories that should not be scanned
     EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "_quarantine", "node_modules"}
-    
+
     # Use os.walk to avoid broken symlinks in node_modules
     import os
     for dirpath, dirnames, filenames in os.walk(project_root):
@@ -55,18 +55,18 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
         if any(p in EXCLUDE_DIRS for p in dir_parts):
             dirnames.clear()  # Don't recurse into this directory
             continue
-        
+
         for filename in filenames:
             if not filename.endswith(".py"):
                 continue
-            
+
             py_file = Path(dirpath) / filename
             try:
                 rel = py_file.relative_to(project_root)
             except (ValueError, OSError):
                 continue
             parts = rel.parts
-            
+
             # Skip excluded directories
             if any(p in EXCLUDE_DIRS for p in parts):
                 continue
@@ -169,6 +169,7 @@ def test_agentloop_no_public_executor():
     pass to ToolExecutionService, but they must never be stored on self.
     """
     import inspect
+
     from core.agent.loop import AgentLoop
 
     public_bypass = []
@@ -312,3 +313,98 @@ def test_loop_wires_tool_verifier_to_service():
     assert loop._tool_verifier._tool_service is loop._tool_service
     assert loop._tool_verifier._enabled is True
     assert isinstance(loop._tool_service, ToolExecutionService)
+
+
+# ---------------------------------------------------------------------------
+# 6. Legacy execution chain is quarantined — nothing active may reference it
+# ---------------------------------------------------------------------------
+
+def _find_quarantine_imports() -> list[tuple[str, int, str]]:
+    """Scan active source for imports of the quarantined legacy chain."""
+    import os
+    project_root = Path(__file__).resolve().parents[1]
+    QUARANTINED_REFS = (
+        "core.executor",
+        "core.task_queue",
+        "import workflows",
+        "from workflows",
+    )
+    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "node_modules"}
+    imports: list[tuple[str, int, str]] = []
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        rel_dir = os.path.relpath(dirpath, project_root)
+        dir_parts = rel_dir.split(os.sep) if rel_dir != "." else []
+        if any(p in EXCLUDE_DIRS or p.startswith("_quarantine") for p in dir_parts):
+            dirnames.clear()
+            continue
+        for filename in filenames:
+            if not filename.endswith(".py"):
+                continue
+            py_file = Path(dirpath) / filename
+            try:
+                rel = py_file.relative_to(project_root)
+            except (ValueError, OSError):
+                continue
+            if any(p.startswith("_quarantine") for p in rel.parts):
+                continue
+            if py_file.name.startswith("test_") or py_file.name == "conftest.py":
+                continue
+            try:
+                source = py_file.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            for i, line in enumerate(source.splitlines(), 1):
+                stripped = line.strip()
+                if not stripped.startswith(("import ", "from ")):
+                    continue
+                if any(ref in stripped for ref in QUARANTINED_REFS):
+                    imports.append((str(rel), i, stripped))
+    return imports
+
+
+def test_legacy_chain_not_referenced_by_active_runtime():
+    """The legacy AgentExecutor/task_queue/workflows chain must be quarantined
+    and never reachable from active, non-test source."""
+    imports = _find_quarantine_imports()
+    if imports:
+        msg = "Active source still references the quarantined legacy chain:\n"
+        for f, ln, code in imports:
+            msg += f"  {f}:{ln}  {code}\n"
+        msg += "\nThese modules live in _quarantine/ and must not be imported."
+        pytest.fail(msg)
+
+
+def test_quarantined_modules_relocated():
+    """The legacy execution modules no longer exist at their old paths."""
+    root = Path(__file__).resolve().parents[1]
+    for old_path in ("core/executor.py", "core/task_queue.py", "workflows"):
+        assert not (root / old_path).exists(), f"{old_path} must be quarantined"
+        assert (root / "_quarantine").exists()
+
+
+def test_code_scan_is_canonical_security_home():
+    """Generated-code scanning lives in security.code_scan, not core.executor."""
+    import security.code_scan as cs
+    assert hasattr(cs, "check_generated_code")
+    assert hasattr(cs, "FORBIDDEN_CODE_PATTERNS")
+    assert hasattr(cs, "generated_code_enabled")
+
+
+# ---------------------------------------------------------------------------
+# 7. Deterministic failure classification precedence
+# ---------------------------------------------------------------------------
+
+def test_failure_classification_precedence():
+    """Precedence: CANCELLED > TIMEOUT > PERMISSION > CONTEXT_OVERFLOW >
+    PROVIDER > MODEL > TOOL."""
+    from core.agent.state import FailureClass, classify_failure
+
+    assert classify_failure("x", is_cancelled=True, is_timeout=True) == FailureClass.CANCELLED
+    assert classify_failure("x", is_timeout=True, is_permission=True) == FailureClass.TIMEOUT
+    assert classify_failure("x", is_permission=True, is_context_overflow=True) == FailureClass.PERMISSION_DENIED
+    assert classify_failure("too many tokens", is_provider=True) == FailureClass.CONTEXT_OVERFLOW
+    assert classify_failure("api error", is_provider=True) == FailureClass.PROVIDER_FAILURE
+    assert classify_failure("provider returned an empty response") == FailureClass.MODEL_FAILURE
+    assert classify_failure("unknown tool") == FailureClass.MALFORMED_TOOL
+    assert classify_failure("something broke") == FailureClass.TOOL_FAILURE

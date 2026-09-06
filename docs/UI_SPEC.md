@@ -1,264 +1,102 @@
-# JARVIS MK-X Terminal Specification
+# JARVIS Orbit — UI Specification
 
-**Status:** Locked architecture  
-**Canvas:** Windows Terminal + PowerShell 7  
-**UI layer:** Rich  
-**Rule:** Backend owns state & decisions. Renderer only displays snapshots.
-
----
+**Status:** Matches implemented behavior (G13).  
+**Product rule:** JARVIS Orbit is a real, recognizable Chromium browser that
+happens to have JARVIS built in. The browser must remain fully usable when
+JARVIS is offline.
 
 ## 1. Architecture boundary (non-negotiable)
 
+Chromium owns the browser chrome and the web; JARVIS owns the agent layer.
+The MV3 extension is the only JARVIS UI surface; it never replaces native
+chrome.
+
 ```
-JARVIS Core
+Chromium (native chrome — tabs, omnibox, profile, extensions, menus)
+    │  hosts the MV3 extension
+    ▼
+Extension surfaces (the agent layer)
+├── Sidebar      — chat / task composer, status, quick actions, page context
+├── New tab      — browser-home search-or-ask + agent actions
+├── Service worker — bridge client (127.0.0.1:8170), status loop, chat stream
+└── Content      — page context capture (untrusted web content stays data)
     │
-Event / State Bus
-    │
-┌───┴───┬───────┬────────┐
-│ Agent │ Tools │ Memory │
-└───┬───┴───────┴────────┘
-    │
-WS / Events
-    │
-Terminal Renderer (Rich)
-    │
-Windows Terminal
+    ▼
+JARVIS bridge → ToolExecutionService → orbit.* tools → BrowserController → CDP
 ```
 
-Renderer components:
+Surfaces from the product design contract fall into three buckets:
 
-```
-Renderer
-├── StatusBar          (collapses by width)
-├── Conversation
-├── Plan               (stateful snapshot)
-├── Activity           (live AgentEvent stream)
-├── Input
-├── CodeView           (workspace)
-├── MemoryView         (workspace)
-├── AuditView          (workspace)
-├── ConfirmationView   (policy-backed modal)
-└── CommandPalette
-```
+| Bucket | Surfaces | Owner |
+|--------|----------|-------|
+| Native chrome (kept as Chromium ships it) | tab bar/groups, omnibox + dropdown, bookmark bar, extension button + dropdown, profile button + dropdown, three-dot menu, downloads/history/bookmarks pages, private browsing, page context menu | Chromium |
+| Agent layer (implemented in the extension) | sidebar, page-context bar, quick actions, new tab, status/agent-state strip, bridge settings | this repo |
+| Not yet surfaced (documented contract, needs a consumer event first) | inline approval modal, agents/tasks/memory views, first-run onboarding steps | this repo (scaffolded) |
 
-The renderer never decides. The agent never knows how pixels are drawn.
+Deliberate: no reimplementation of omnibox/flyout/profile dropdown. "Keep the
+browser recognizable as a normal Chromium browser" (locked decision 2A).
 
----
+## 2. Design tokens
 
-## 2. Responsive breakpoints
+Single source: `extensions/jbrowser/src/lib/tokens.css`.
 
-| Width   | Layout                                      |
-|---------|---------------------------------------------|
-| ≥ 120   | PLAN + CONVERSATION + ACTIVITY              |
-| 90–119  | PLAN + CONVERSATION                         |
-| < 70    | CONVERSATION only                           |
+- Neutral surfaces; **blue** is the JARVIS accent (`--jb-accent`).
+- Dark by default; light flips via `prefers-color-scheme`.
+- 8px spacing scale, 6–14px radius scale, shared type scale
+  (`--jb-font-ui`, sizes `--jb-text-xs`…`--jb-text-2xl`).
+- Semantic status colors: success / warning / danger / info, each with a
+  muted background pair used by pills and state strips.
 
-Always present: **Status bar** (top) and **Input** (bottom).
+## 3. Sidebar (agent layer core)
 
-Workspaces (`code`, `memory`, `audit`) replace the content area on demand; they are not permanent panels.
+`extensions/jbrowser/src/sidebar/`
 
----
+| Region | Behavior |
+|--------|----------|
+| Header | logo mark + **JARVIS** title + status pill (`online`/`offline`/`reconnecting` dot), clear + bridge-settings actions |
+| Agent-state strip | hidden unless the kernel reports an agent state: `waiting_browser` (amber), `approval` (blue), `error` (red) — each with an action button that re-probes `/status` |
+| Page-context bar | current tab title + URL (mono), **Listening** toggle |
+| Thread | conversation with roles (`user`/`jarvis`), error styling, empty-state welcome |
+| Empty state | quick-action chips — Summarize / Explain / Research / Extract / Remember — that prefill + send |
+| Composer | auto-grow textarea; `Ctrl+Enter` (or the ➤ button) sends |
+| Settings | optional bearer token for the bridge (`--auth` mode) |
 
-## 3. Status bar field priority
+Status wiring: the pill reflects `GET /status` `{ok, kernel}` broadcast as
+`STATUS_UPDATE`; agent-layer states ride along on the same payload
+(`payload.agent = {state, text}`) — absent, the strip stays hidden and the
+UI keeps the plain conversation model, so older bridges never break the UI.
 
-| Width   | Fields shown                                                |
-|---------|-------------------------------------------------------------|
-| ≥ 120   | JARVIS · MODE · model · tokens · N TOOL · MEMORY · ONLINE · time |
-| 90–119  | JARVIS · MODE · model · tokens · ONLINE · time              |
-| < 70    | JARVIS · MODE · tokens · ONLINE                             |
+## 4. New tab
 
----
+`extensions/jbrowser/src/newtab/`
 
-## 4. Execution modes (real policies)
+Browser-home feel: top brand row with status, centered greeting, one
+search-or-ask field (`Enter` sends through the bridge), agent-action chips,
+an **Open JARVIS sidebar** affordance, and a muted footer. The in-page
+conversation appears only after the first ask, keeping the idle tab calm.
 
-| Mode        | Behavior                                              |
-|-------------|-------------------------------------------------------|
-| AGENT       | Full autonomous execution                             |
-| PLAN        | Analyze + build/update plan only; no side effects     |
-| CONTROLLED  | Ask before any consequential action                   |
-| SMART       | Dynamically choose autonomy from risk + context       |
+## 5. Status language
 
-Enforced by the core policy layer, not by the prompt string.
+| Visual | Meaning |
+|--------|---------|
+| Green dot (pill) | `ok:true`, kernel online |
+| Red dot | bridge offline — browsing continues, JARVIS paused |
+| Amber pulsing dot | reconnecting / waiting for browser |
+| Amber strip `waiting_browser` | agent paused on a browser crash; Retry re-probes |
+| Blue strip `approval` | agent awaits operator consent for a consequential step |
+| Red strip `error` | bridge/kernel error state |
 
-Prompt always shows: `JARVIS [MODE]>`
+## 6. Component states
 
----
+Every interactive component carries default / hover / focus-visible (ring) /
+disabled styling from tokens. Destructive text (danger) and consent
+(approval) use the muted semantic backgrounds so intent reads at a glance
+without being alarmist for routine actions.
 
-## 5. Plan model (backend-owned)
+## 7. Design contract (Figma)
 
-```
-Plan
-├── id
-├── goal
-├── steps[]
-│    ├── id
-│    ├── description
-│    ├── status          # pending | active | completed | failed | skipped
-│    ├── started_at
-│    ├── completed_at
-│    └── related_event_ids[]
-└── revision
-```
-
-UI symbols: `✓` completed · `→` active · `○` pending · `✗` failed
-
-The agent may rewrite the plan at any time. The UI only re-renders the current snapshot.
-
----
-
-## 6. Activity = live structured event stream
-
-```
-AgentEvent
-├── event_id
-├── timestamp
-├── type                 # tool | planner | system | memory | security | provider
-├── status               # running | completed | failed | pending | cancelled
-├── tool
-├── arguments
-├── result
-├── duration_s
-├── parent_run_id
-├── exit_code
-└── full_output          # collapsible
-```
-
-Rendered compactly:
-
-```
-● repo.search
-  authentication
-  8 results
-
-✓ filesystem.read
-  security/auth.py
-  2.1 KB
-
-● shell.execute
-  pytest tests/test_auth.py
-```
-
----
-
-## 7. Security confirmation (mandatory)
-
-Never a bare `Allow? [y/N]`. Always structured:
-
-```
-┌ SECURITY CONFIRMATION ──────────────────────┐
-│ JARVIS wants to execute:                    │
-│   package.remove("example")                 │
-│ Risk: HIGH                                  │
-│ Scope: system package                       │
-│ Reversible: NO                              │
-│ Allow once?     [y]                         │
-│ Allow this run? [r]                         │
-│ Deny            [n]                         │
-└─────────────────────────────────────────────┘
-```
-
-Returns `once` | `run` | `deny` to the security/policy layer.  
-UI never bypasses SecurityEngine / PermissionManager / Sandbox.
-
----
-
-## 8. Workspaces (on-demand)
-
-Command palette (`/palette` or conceptual Ctrl+K):
-
-```
-chat | plan | code | activity | memory | audit
-```
-
-Suggested bindings (when terminal supports them):
-
-- Ctrl+1 Chat  
-- Ctrl+2 Plan  
-- Ctrl+3 Code  
-- Ctrl+4 Activity  
-- Ctrl+5 Memory  
-- Ctrl+6 Audit  
-
-### Code
-File tree + focused buffer, modification markers, LOC. Conversation remains available; this is a workspace, not a replacement editor.
-
-### Memory
-Query + ranked hits (score, title, date, snippet) + optional pipeline visualization.
-
-### Audit
-Health sections: SYSTEM, TESTS, PERFORMANCE, SECURITY. Real data only — no invented metrics.
-
----
-
-## 9. Keyboard map (terminal-safe)
-
-| Key / command     | Action                                      |
-|-------------------|---------------------------------------------|
-| Up / Down         | History                                     |
-| Ctrl+C            | Interrupt agent/tool (never stolen for UI)  |
-| Ctrl+L            | Redraw (via /clear + re-render)             |
-| /palette          | Command palette                             |
-| /mode <name>      | Set execution policy                        |
-| /workspace <name> | Switch workspace                            |
-| /layout <name>    | Force layout mode                           |
-| /status           | Current state                               |
-| /exit             | Quit                                        |
-
-If a shortcut conflicts with Windows Terminal, the `/command` form is the fallback.
-
----
-
-## 10. Input & history
-
-- Interactive (tty): Windows `msvcrt` path when available
-- Non-tty / pipes: **must** use `sys.stdin.readline()` — never `msvcrt`
-- History: `%USERPROFILE%\.jarvis\history`
-  - max 1000 entries
-  - no consecutive duplicates
-  - ignore empty lines
-  - filter obvious secrets (`api_key=`, `token=`, `password=`, `bearer`, …)
-
----
-
-## 11. Error style
-
-```
-✗ Provider unavailable
-  Gemini did not respond.
-  Trying the configured fallback provider…
-
-✓ Switched to OpenRouter
-```
-
-Technical details available on request; default is human-readable.
-
----
-
-## 12. Implementation modules
-
-```
-cli/
-  models.py      Plan, AgentEvent, ConfirmationRequest, AppState, Mode
-  renderer.py    Pure display — status, plan, activity, workspaces, confirm
-  layout.py      Responsive LayoutManager + workspace modes
-  input.py       Windows-aware + pipe-safe
-  history.py     Secret-filtered history
-  theme.py       Professional, low-noise palette
-  commands.py    Real commands + palette
-  main.py        Entry + REPL
-```
-
----
-
-## 13. Non-goals
-
-- React / Electron / Tauri / Flask / web dashboard
-- Fake CPU / RAM / GPU telemetry
-- Animated cyberpunk effects
-- Agent logic inside the renderer
-- Permanent multi-panel clutter on small terminals
-
----
-
-**The functioning agent is the product.  
-The terminal UI exists to make that process clear and controllable.**
+The full product design contract — every surface and state matrix (extension
+dropdown, profile dropdown, menus, downloads/history/bookmarks, import
+wizard, first run, error/empty/loading states, dark + light) — is tracked as
+the canonical UI reference for this feature. Implementation order follows the
+buckets above: the agent layer first, native chrome never.

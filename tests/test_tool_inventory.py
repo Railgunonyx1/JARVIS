@@ -30,6 +30,10 @@ READ_ONLY_TOOLS = {
     "web.search",
     # Browser (read)
     "browser.open", "browser.extract", "browser.screenshot", "browser.status",
+    # Browser (J-Browser platform: observe / navigate / tab & session management)
+    "browser.read", "browser.find", "browser.scroll", "browser.tabs",
+    "browser.new_tab", "browser.close_tab", "browser.switch_tab",
+    "browser.profile", "browser.permissions",
     # System (read)
     "system.status",
     # Runtime (read)

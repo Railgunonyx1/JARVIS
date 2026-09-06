@@ -185,7 +185,7 @@ class _FakeStreamProvider(LLMProvider):
         return LLMResponse(text="hi", model="fake-model", provider="fake", tokens_used=1)
 
     async def complete_stream(self, messages, system_prompt=None, max_tokens=None,
-                              temperature=None, tools=None):
+                              temperature=None, tools=None, model=None):
         await asyncio.sleep(0.01)
         yield "Hello"
         yield " world"

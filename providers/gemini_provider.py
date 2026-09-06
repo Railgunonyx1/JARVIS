@@ -155,6 +155,7 @@ class GeminiProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         import asyncio
 
@@ -176,7 +177,7 @@ class GeminiProvider(LLMProvider):
         def _produce() -> None:
             try:
                 response = client.models.generate_content(
-                    model=self._model,
+                    model=model or self._model,
                     contents=contents,
                     config=config,
                     stream=True,

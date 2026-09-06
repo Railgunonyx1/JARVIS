@@ -135,6 +135,7 @@ class LLMProvider(ABC):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream a chat completion response."""
         ...

@@ -126,6 +126,7 @@ class AgentLoop:
         harness=None,
         model_gateway=None,
         tool_service=None,
+        browser_recovery=None,
     ) -> None:
 
         self.router = router
@@ -150,6 +151,7 @@ class AgentLoop:
 
         # Harness integration: harness overrides scalar config when present
         self._harness = harness
+        self._browser_recovery = browser_recovery
         if harness is not None:
             hc = harness.config
             self.max_iterations = hc.max_iterations
@@ -172,6 +174,7 @@ class AgentLoop:
 
         self._tool_counter = 0
         self._preferred_model: str | None = None  # request-scoped model override
+        self._session_id: str = ""  # current session identity stamped on BusEvents
 
         # Single tool execution boundary -- permissions and executor live
         # inside ToolExecutionService; nothing outside may access them.
@@ -225,6 +228,7 @@ class AgentLoop:
                 payload=payload or {},
                 source="agent_loop",
                 trace_id=trace_id,
+                session_id=self._session_id,
             ))
         except Exception:
             pass  # Best-effort: bus publish failure must not crash the agent
@@ -238,6 +242,8 @@ class AgentLoop:
         tracer = get_tracer()
         root = tracer.begin(f"run: {goal[:80]}", {"goal": goal[:200]})
         try:
+            if session_id:
+                self._session_id = session_id
             trace_id = self.logger.begin_task(goal, source="agent_loop")
             self.logger.record(trace_id, events.AGENT_REASONING_STARTED, {"goal": goal[:200]})
             self.observer.start(trace_id, goal)
@@ -377,6 +383,11 @@ class AgentLoop:
                 if profile is not None:
                     state.provider = profile.provider
                     state.model = profile.name
+                    # Route the gateway's selection to the provider as the
+                    # request-scoped model so the actual inference call honours
+                    # it. The ModelGateway is the single model-selection
+                    # authority; nothing else should mutate _preferred_model.
+                    self._preferred_model = profile.name
                     self._emit("model.selected", {
                         "provider": profile.provider,
                         "model": profile.name,
@@ -491,6 +502,7 @@ class AgentLoop:
                         perf=self._end_perf(tracer, root),
                     )
                 state.iteration = iteration
+                state.browser_down_this_iter = False
                 _t_compress = time.monotonic()
                 # Adaptive context budget: pre-compute token estimate, then temporarily swap, always restore
                 _estimated_tokens = self.context_manager.budget.messages * _ctx_mult
@@ -720,6 +732,26 @@ class AgentLoop:
                     response.tool_calls, messages, state, trace_id, session_id,
                 )
                 _latency_log.append(("tool_batch", (time.monotonic() - _t_start) * 1000))
+                if getattr(state, "browser_unavailable", False):
+                    # Recovery exhausted inside the batch: WAITING_BROWSER -> FAILED
+                    # (already transitioned). Surface a deterministic, structured
+                    # failure instead of letting the next iteration run blind.
+                    error = state.errors[-1] if state.errors else "browser unavailable"
+                    from core.agent.state import FailureClass
+                    fc = state.failure_class or FailureClass.TOOL_FAILURE
+                    self.logger.record(trace_id, events.TASK_FAILED, {
+                        "goal": goal[:200], "error": error[:500],
+                    })
+                    self._emit("task.failed", {
+                        "goal": goal[:200], "error": error[:500],
+                        "failure_class": fc.value,
+                    }, trace_id)
+                    self._finish_observation(False, "", state, iteration)
+                    return AgentResult(
+                        success=False, response="", trace_id=trace_id, state=state,
+                        error=error, observation=self._result_observation(state),
+                        perf=self._end_perf(tracer, root),
+                    )
                 # Safety: if the LLM keeps making tool calls without ever producing
                 # a text response, inject a nudge after 5 consecutive tool-only iterations.
                 if iteration >= 5 and not any(
@@ -965,10 +997,14 @@ class AgentLoop:
     async def _handle_call(self, messages: list[dict[str, Any]], call, state: AgentState,
                            trace_id: str, session_id: str) -> None:
         self.logger.record(trace_id, events.TOOL_REQUESTED, {"tool": call.name})
-        await self._tool_service.execute_tool(
+        result = await self._tool_service.execute_tool(
             call, trace_id=trace_id, session_id=session_id,
             append_to_messages=messages, state=state,
         )
+        if result is not None:
+            await self._maybe_recover_browser(
+                result, messages, call, state, trace_id, session_id,
+            )
         if self._tool_verifier.should_verify(call.name):
             try:
                 vr = await self._tool_verifier.verify(call.name, call.arguments, "")
@@ -979,6 +1015,78 @@ class AgentLoop:
                     }, trace_id)
             except Exception:
                 pass
+
+    async def _maybe_recover_browser(self, result, messages, call, state, trace_id,
+                                     session_id) -> None:
+        """Park in WAITING_BROWSER and relaunch a crashed browser (G10).
+
+        Only browser-namespace tools are candidates, only a positive
+        ``is_recoverable`` verdict triggers the path, and at most one recovery
+        sequence runs per iteration so a parallel batch cannot cascade. On
+        success the task resumes EXECUTING with a structured tool message; on
+        exhaustion it fails deterministically (TOOL_FAILURE) with the state
+        transition WAITING_BROWSER -> FAILED.
+        """
+        recovery = self._browser_recovery
+        if recovery is None or result is None:
+            return
+        if getattr(state, "browser_down_this_iter", False):
+            return
+        if getattr(result, "permission_denied", False) or getattr(result, "success", True):
+            return
+        tool_name = getattr(result, "tool_name", "") or call.name
+        if not (tool_name.startswith("orbit.") or tool_name.startswith("browser.")):
+            return
+        error = getattr(result, "error", "") or ""
+        if not recovery.is_recoverable(error):
+            return
+        state.browser_down_this_iter = True
+        if state.status == TaskStatus.EXECUTING:
+            state.transition(TaskStatus.WAITING_BROWSER)
+        elif state.status != TaskStatus.WAITING_BROWSER:
+            return
+        self._emit("browser.waiting", {
+            "tool": tool_name, "error": error[:200],
+        }, trace_id)
+        outcome = await recovery.recover(trace_id=trace_id, session_id=session_id)
+        call_id = getattr(result, "call_id", "") or call.id
+        if outcome.ok:
+            if state.status == TaskStatus.WAITING_BROWSER:
+                state.transition(TaskStatus.EXECUTING)
+            self._emit("browser.recovered", {
+                "tool": tool_name, "attempts": outcome.attempts,
+                "detail": outcome.detail,
+            }, trace_id)
+            messages.append({
+                "role": "tool", "tool_call_id": call_id, "name": tool_name,
+                "content": (
+                    "BROWSER RECOVERED — the browser process was restarted "
+                    f"({outcome.detail}). Reissue your last action."
+                ),
+            })
+        else:
+            from core.agent.state import FailureClass
+            state.failure_class = pick_worst_failure(
+                state.failure_class, FailureClass.TOOL_FAILURE,
+            )
+            detail = (
+                f"browser unavailable after {outcome.attempts} recovery "
+                f"attempt(s): {outcome.detail}"
+            )
+            state.errors.append(detail)
+            state.browser_unavailable = True
+            try:
+                state.transition(TaskStatus.FAILED)
+            except ValueError:
+                pass
+            self._emit("browser.unavailable", {
+                "tool": tool_name, "attempts": outcome.attempts,
+                "detail": outcome.detail, "failure_class": "tool_failure",
+            }, trace_id)
+            messages.append({
+                "role": "tool", "tool_call_id": call_id, "name": tool_name,
+                "content": f"BROWSER UNAVAILABLE — {detail}",
+            })
 
     def _is_parallel_safe(self, call) -> bool:
         """Tool calls that may run concurrently with other tool calls.

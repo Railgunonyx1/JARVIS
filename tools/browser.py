@@ -1,8 +1,12 @@
-"""Browser tools — Playwright-backed automation with WebScraper fallback.
+"""Browser tools — Playwright/Chromium via J-Browser.
 
-Handlers are sync (the executor runs them via ``asyncio.to_thread``).
-The underlying BrowserAgent is a session singleton: the browser launches
-lazily on first use and stays warm across tool calls.
+Handlers are sync (the executor runs them via ``asyncio.to_thread``). They
+route through :func:`jbrowser.controller.get_controller` so there is exactly
+one engine path (a single Playwright process) for every browser tool — the
+legacy and J-Browser tool sets share the same controller and backend.
+
+Playwright is optional: when unavailable the backend keeps a WebScraper
+fallback for read/navigation so the tools never hard-fail on installs.
 """
 
 from __future__ import annotations
@@ -14,14 +18,13 @@ from tools.schema import ToolResult, truncate
 MAX_TEXT = 8000
 
 
-def _agent():
-    from external.browser_agent import get_browser_agent
-    return get_browser_agent()
+def _controller():
+    from jbrowser.controller import get_controller
+    return get_controller()
 
 
 def browser_status(args: dict[str, Any]) -> ToolResult:
-    agent = _agent()
-    status = agent.status()
+    status = _controller().status()
     return ToolResult(
         success=True,
         output=(
@@ -38,31 +41,31 @@ def browser_open(args: dict[str, Any]) -> ToolResult:
     if not url:
         return ToolResult(success=False, error="url is required")
     try:
-        page = _agent().open(url)
+        nav = _controller().navigate(url)
+        page = _controller().read()
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to open {url}: {e}")
-    text = truncate(page.get("text", ""), MAX_TEXT)
+    text = truncate(page.text, MAX_TEXT)
     return ToolResult(
         success=True,
         output=(
-            f"Title: {page.get('title', '')}\n"
-            f"URL: {page.get('url', url)}\n"
-            f"Backend: {page.get('backend', '?')}\n\n"
+            f"Title: {page.title}\n"
+            f"URL: {nav.get('url', url)}\n"
+            f"Backend: {_controller().status().get('backend', '?')}\n\n"
             f"{text}"
         ),
         metadata={
-            "url": page.get("url", url),
-            "title": page.get("title", ""),
-            "backend": page.get("backend", "?"),
-            "links": page.get("links", [])[:20],
-            "fetch_ms": page.get("fetch_ms"),
+            "url": page.url or url,
+            "title": page.title,
+            "backend": _controller().status().get("backend", "?"),
+            "links": page.links[:20],
         },
     )
 
 
 def browser_screenshot(args: dict[str, Any]) -> ToolResult:
     try:
-        path = _agent().screenshot(args.get("path"))
+        path = _controller().screenshot()
     except Exception as e:
         return ToolResult(
             success=False,
@@ -80,13 +83,13 @@ def browser_click(args: dict[str, Any]) -> ToolResult:
     if not selector:
         return ToolResult(success=False, error="selector is required")
     try:
-        _agent().click(selector)
+        _controller().click_selector(selector)
     except Exception as e:
         return ToolResult(success=False, error=f"Click failed ({selector}): {e}")
     return ToolResult(
         success=True,
-        output=f"Clicked {selector}. Current URL: {_agent().current_url()}",
-        metadata={"selector": selector, "url": _agent().current_url()},
+        output=f"Clicked {selector}. Current URL: {_controller().current_url()}",
+        metadata={"selector": selector, "url": _controller().current_url()},
     )
 
 
@@ -96,7 +99,7 @@ def browser_type(args: dict[str, Any]) -> ToolResult:
     if not selector:
         return ToolResult(success=False, error="selector is required")
     try:
-        _agent().type_text(selector, text)
+        _controller().type_selector(selector, text)
     except Exception as e:
         return ToolResult(success=False, error=f"Type failed ({selector}): {e}")
     return ToolResult(
@@ -108,7 +111,7 @@ def browser_type(args: dict[str, Any]) -> ToolResult:
 
 def browser_extract(args: dict[str, Any]) -> ToolResult:
     try:
-        text = _agent().extract_text(args.get("selector"))
+        text = _controller().extract_text(args.get("selector"))
     except Exception as e:
         return ToolResult(success=False, error=f"Extract failed: {e}")
     return ToolResult(

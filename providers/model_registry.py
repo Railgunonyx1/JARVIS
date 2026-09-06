@@ -380,10 +380,9 @@ class ModelRegistry:
     """Singleton model registry with state tracking and cascade routing.
 
     Three-tier cascade:
-      Tier 1 (router):  qwen2.5:1.5b — ultra-fast, handles greetings/simple tasks
-      Tier 2 (worker):  qwen2.5:3b  — fast, handles coding/tools/reasoning
-      Tier 3 (heavy):   qwen3:4b    — smart, handles complex multi-step tasks
-                         (with thinking mode for deep reasoning)
+      Tier 1 (router):  gemma3:1b — 815MB ultra-fast, handles greetings/simple tasks
+      Tier 2 (worker):  qwen2.5:1.5b — fast, handles coding/tools/reasoning
+      Tier 3 (heavy):   qwen2.5:3b — default worker for tool-using and complex tasks
     """
 
     _instance = None
@@ -465,7 +464,7 @@ class ModelRegistry:
         """Enable or disable three-tier cascade routing."""
         self._cascade_mode = enabled
         if enabled:
-            return ("Cascade enabled: 1B router → 3B worker → 4B heavy. "
+            return ("Cascade enabled: 1B router → 1.5B worker → 3B heavy. "
                     "1B handles simple tasks instantly, escalates as needed.")
         return "Cascade disabled. Using single-model auto-routing."
 
@@ -501,22 +500,22 @@ class ModelRegistry:
 
         if router_perf and router_perf.requests >= 3 and router_perf.success_rate < 0.75:
             result["draft_enabled"] = False
-            logger.info("Adaptive: disabling draft-verify (1.5B success rate: %.0f%%)",
+            logger.info("Adaptive: disabling draft-verify (1B success rate: %.0f%%)",
                         router_perf.success_rate * 100)
 
         if worker_perf and worker_perf.requests >= 3 and worker_perf.success_rate < 0.80:
             result["escalate_threshold"] = 0.60
-            logger.info("Adaptive: raising escalate threshold (3B success rate: %.0f%%)",
+            logger.info("Adaptive: raising escalate threshold (1.5B success rate: %.0f%%)",
                         worker_perf.success_rate * 100)
 
         if router_perf and router_perf.requests >= 2 and router_perf.avg_ttft_ms > 2000:
             result["draft_enabled"] = False
-            logger.info("Adaptive: disabling draft-verify (1.5B TTFT: %.0fms)",
+            logger.info("Adaptive: disabling draft-verify (1B TTFT: %.0fms)",
                         router_perf.avg_ttft_ms)
 
         if worker_perf and worker_perf.requests >= 3 and worker_perf.avg_ttft_ms > 5000:
             result["escalate_threshold"] = 0.55
-            logger.info("Adaptive: raising threshold (3B TTFT: %.0fms)",
+            logger.info("Adaptive: raising threshold (1.5B TTFT: %.0fms)",
                         worker_perf.avg_ttft_ms)
 
         return result
@@ -530,22 +529,22 @@ class ModelRegistry:
 
         Strategy:
           1. Deterministic commands → skip LLM entirely.
-          2. QUICK/CONVERSATIONAL with high confidence → 1.5B handles directly.
-          3. CODING/RESEARCH/WRITING/REASONING with high confidence → 3B worker.
-          4. Low confidence or ambiguous → 4B heavy model (with thinking).
+          2. QUICK/CONVERSATIONAL with high confidence → gemma3:1b handles directly.
+          3. CODING/RESEARCH/WRITING/REASONING with high confidence → qwen2.5:1.5b worker.
+          4. Low confidence or ambiguous → qwen2.5:3b heavy model.
           5. Adapt escalation threshold based on actual performance metrics.
 
         Returns:
             {
-                "router": "qwen2.5:1.5b",          # Always set (for reference)
-                "worker": "qwen2.5:3b"|None,       # Set if escalated
-                "heavy":  "qwen3:4b"|None,          # Set only for complex tasks
+                "router": "gemma3:1b",           # Always set (for reference)
+                "worker": "qwen2.5:1.5b"|None,   # Set if escalated
+                "heavy":  "qwen2.5:3b"|None,     # Set only for complex tasks
                 "task_type": "coding",
                 "confidence": 0.85,                  # 0.0–1.0
                 "needs_tools": True,
-                "draft_first": False,                 # 1.5B drafts, then 3B verifies
+                "draft_first": False,                 # 1.5B drafts, then 1.5B verifies
                 "deterministic": False,               # Bypass LLM entirely
-                "selected_model": "qwen2.5:3b",      # The actual model to use
+                "selected_model": "qwen2.5:1.5b",    # The actual model to use
             }
         """
         task_type, confidence = detect_task_type_with_confidence(prompt)

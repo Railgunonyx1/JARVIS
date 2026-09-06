@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+import threading
 import time
 
 from core.agent.loop import AgentLoop
@@ -405,6 +406,43 @@ class TestToolExecutionService:
         assert result.failure_class == FailureClass.TIMEOUT
         assert "timed out" in result.error
 
+    def test_cancellation_keyed_by_tool_call_id(self):
+        from core.agent.tools import AgentToolExecutor
+        from tools.registry import ToolRegistry
+        from tools.schema import Tool
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_handler(_):
+            started.set()
+            release.wait(10.0)
+            return {"success": True, "output": "done"}
+
+        reg = ToolRegistry()
+        reg.register(Tool(
+            name="test.blocking", description="blocking", parameters={},
+            permission="filesystem.read", handler=blocking_handler,
+            category="testing", timeout_seconds=20.0,
+        ))
+        svc = ToolExecutionService(registry=reg)
+        call = ToolCall(name="test.blocking", arguments={}, id="call-abc-123")
+
+        async def run():
+            task = asyncio.create_task(svc.execute_tool(call))
+            await asyncio.to_thread(started.wait, 3.0)
+            try:
+                cancel = AgentToolExecutor.current_cancellation("call-abc-123")
+                assert cancel is not None, "current_cancellation must return the live event"
+                assert not cancel.is_set()
+                assert AgentToolExecutor.current_cancellation("other-id") is None
+            finally:
+                release.set()
+                await asyncio.wait_for(task, timeout=5.0)
+            assert AgentToolExecutor.current_cancellation("call-abc-123") is None
+
+        asyncio.run(run())
+
     def test_execute_tools_parallel_preserves_order(self):
         from tools.registry import ToolRegistry
         from tools.schema import Tool
@@ -596,6 +634,26 @@ class TestAgentLoopHarnessIntegration:
         result = asyncio.run(loop.run("implement feature"))
         assert result.success
 
+    def test_loop_stamps_session_id_on_bus_events(self):
+        """BusEvents emitted by the loop carry the active session_id."""
+        from runtime.event_bus import get_event_bus
+
+        bus = get_event_bus()
+        bus.clear()
+        hc = HarnessConfig(harness_type=HarnessType.MINIMAL, enable_verification=False)
+        loop = AgentLoop(
+            router=FakeRouter([_resp("done.")]),
+            registry=build_default_registry(),
+            project=ProjectContext(root_path=ROOT),
+            decision_logger=StubLogger(),
+            harness=Harness(hc),
+            event_bus=bus,
+        )
+        asyncio.run(loop.run("hello", session_id="sess-abc"))
+        started = [e for e in bus.recent(100) if e.name == "task.started"]
+        assert started, "task.started event was not emitted"
+        assert started[-1].session_id == "sess-abc"
+
     def test_loop_batch_parallel_safe_serializes_destructive(self):
         """The loop runs read-only tool calls concurrently but never overlaps
         destructive/high-risk tools, and appends tool messages in input order.
@@ -689,6 +747,44 @@ class TestAgentLoopHarnessIntegration:
         assert result.success
         assert isinstance(seen["append_to_messages"], list)
         assert seen["append_to_messages"][0]["role"] == "user"
+
+
+# ── EventBus wildcard matching ─────────────────────────────────────────
+
+
+class TestEventBusWildcard:
+    @staticmethod
+    def _match(pattern: str, name: str) -> bool:
+        from runtime.event_bus import _match_pattern
+        return _match_pattern(pattern, name)
+
+    def test_exact_match(self):
+        assert self._match("tool.executed", "tool.executed")
+        assert not self._match("tool.executed", "tool.denied")
+
+    def test_single_segment_star(self):
+        assert self._match("tool.*", "tool.executed")
+        assert not self._match("tool.*", "tool.executed.extra")
+        assert not self._match("tool.*", "other.executed")
+
+    def test_double_star_matches_zero_or_more(self):
+        assert self._match("tool.**", "tool")
+        assert self._match("tool.**", "tool.executed")
+        assert self._match("tool.**", "tool.executed.extra.deep")
+
+    def test_double_star_followed_by_segment(self):
+        assert self._match("tool.**.done", "tool.done")
+        assert self._match("tool.**.done", "tool.a.done")
+        assert self._match("tool.**.done", "tool.a.b.done")
+        assert not self._match("tool.**.done", "tool.a.b.other")
+
+    def test_double_star_not_crossing_root(self):
+        assert not self._match("tool.**.done", "other.a.done")
+        assert not self._match("tool.**", "other.executed")
+
+    def test_root_double_star(self):
+        assert self._match("**", "anything.at.all")
+        assert self._match("**", "single")
 
 
 # ── VerificationEngine tests ──────────────────────────────────────────
@@ -897,10 +993,15 @@ class TestFailureClassification:
         s.terminal_reason = TerminalReason.VERIFICATION_FAIL
         assert s.terminal_reason == TerminalReason.VERIFICATION_FAIL
 
-    def test_failure_class_not_verification(self):
+    def test_failure_class_plain_tool(self):
         from core.agent.state import FailureClass, classify_failure
-        fc = classify_failure("tests failed", is_verification=True)
+        fc = classify_failure("tests failed")
         assert fc == FailureClass.TOOL_FAILURE
+
+    def test_failure_class_model_failure(self):
+        from core.agent.state import FailureClass, classify_failure
+        fc = classify_failure("provider returned an empty response")
+        assert fc == FailureClass.MODEL_FAILURE
 
     def test_failure_class_not_max_iterations(self):
         from core.agent.state import FailureClass, classify_failure

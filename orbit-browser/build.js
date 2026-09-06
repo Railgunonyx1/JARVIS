@@ -1,0 +1,2 @@
+const fs=require("fs");const p=require("path");const d=__dirname;function w(r,c){fs.writeFileSync(p.join(d,r),c);console.log("Wrote "+r+" ("+c.split("
+").length+" lines)");}function a(r,c){let e="";try{e=fs.readFileSync(p.join(d,r),"utf8")}catch(x){}fs.writeFileSync(p.join(d,r),e+c);console.log("Appended to "+r);}

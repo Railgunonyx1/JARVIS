@@ -25,6 +25,9 @@ memory/*.db
 memory/*.db-journal
 memory/sessions/
 
+# JARVIS Orbit Chromium profiles (runtime state, never commit)
+config/browser_profiles/
+
 # Logs
 logs/
 *.log
@@ -46,10 +49,11 @@ benchmark/results/
 *_results.txt
 audit.log
 
-# IDE
+# IDE / session metadata
 .kilocode/
 .idea/
 .vscode/
+.freebuff/
 *.swp
 *.swo
 
@@ -84,3 +88,6 @@ web_boot.log
 
 # Placeholder leftovers
 path/
+orbit-profile/
+.orbit-profile/
+
