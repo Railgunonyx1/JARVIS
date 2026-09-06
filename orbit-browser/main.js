@@ -349,6 +349,7 @@ async function freezeTab(id) {
       attached = true;
       await wc.debugger.sendCommand("Page.setWebLifecycleState", { state: "frozen" });
       frozenTabs.add(id);
+      performance.markSleeping(id);
       mainWindow?.webContents.send("tab-sleep", id);
     }
   } catch (_) {
@@ -363,6 +364,7 @@ async function freezeTab(id) {
 async function wakeTab(id) {
   if (!frozenTabs.has(id)) return;
   frozenTabs.delete(id);
+  performance.markAwake(id);
   mainWindow?.webContents.send("tab-wake", id);
   const wc = guestFor(id);
   if (!wc || wc.isDestroyed()) return;

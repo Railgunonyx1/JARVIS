@@ -119,6 +119,16 @@ class PerformanceModule {
     }
   }
 
+  markSleeping(id) {
+    const tab = this.tabs.get(id);
+    if (tab) tab.sleep();
+  }
+
+  markAwake(id) {
+    const tab = this.tabs.get(id);
+    if (tab) tab.wake();
+  }
+
   /**
    * Check if a tab should be sleeping
    */
