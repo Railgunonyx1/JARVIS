@@ -781,6 +781,23 @@ if (window.orbit?.on?.navigateTo) {
     if (url && /^https?:/i.test(url)) createTab(url);
   });
 }
+if (window.orbit?.on?.tabSleep) {
+  window.orbit.on.tabSleep((id) => {
+    const tab = tabs.get(id);
+    if (tab && !tab.hibernated) {
+      tab.sleeping = true;
+      if (id !== activeTabId) renderTabs();
+    }
+  });
+  window.orbit.on.tabWake((id) => {
+    const tab = tabs.get(id);
+    if (tab) {
+      tab.sleeping = false;
+      clearSleepTimer(id);
+      if (id === activeTabId) renderTabs();
+    }
+  });
+}
 if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
   window.orbit.jarvis.onStatus((status) => {
     jarvisOnline = status.ok && status.kernel === "online";
@@ -1527,19 +1544,33 @@ if (sessionBanner) {
   if ($("#sessionDismiss")) $("#sessionDismiss").addEventListener("click", function() { sessionBanner.classList.remove("on"); });
 }
 
-// ── Sleeping Tabs ────────────────────────────────────────────
-var SLEEP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+// ── Sleeping Tabs (Hibernation) ─────────────────────────────
+var SLEEP_TIMEOUT = 3 * 60 * 1000; // 3 minutes (was 5)
+var HIBERNATE_TIMEOUT = 10 * 60 * 1000; // 10 minutes: full hibernation
 var sleepTimers = new Map();
+var hibernateTimers = new Map();
 
 function startSleepTimer(id) {
   clearSleepTimer(id);
+  clearHibernateTimer(id);
   sleepTimers.set(id, setTimeout(function() {
     var tab = tabs.get(id);
     if (tab && id !== activeTabId && !tab.agentOwned) {
       tab.sleeping = true;
       renderTabs();
+      // Start hibernation timer after sleep
+      startHibernateTimer(id);
     }
   }, SLEEP_TIMEOUT));
+}
+
+function startHibernateTimer(id) {
+  hibernateTimers.set(id, setTimeout(function() {
+    var tab = tabs.get(id);
+    if (tab && tab.sleeping && id !== activeTabId) {
+      hibernateTab(id);
+    }
+  }, HIBERNATE_TIMEOUT - SLEEP_TIMEOUT));
 }
 
 function clearSleepTimer(id) {
@@ -1547,12 +1578,34 @@ function clearSleepTimer(id) {
   if (timer) { clearTimeout(timer); sleepTimers.delete(id); }
 }
 
+function clearHibernateTimer(id) {
+  var timer = hibernateTimers.get(id);
+  if (timer) { clearTimeout(timer); hibernateTimers.delete(id); }
+}
+
+function hibernateTab(id) {
+  var tab = tabs.get(id);
+  if (!tab || !tab.webview || tab.hibernated) return;
+  tab.hibernated = true;
+  tab.url = tab.webview.getURL() || tab.url;
+  try { tab.webview.src = 'about:blank'; } catch (e) {}
+  console.log('[TABS] Hibernated tab:', id);
+}
+
 function wakeTab(id) {
   var tab = tabs.get(id);
-  if (tab && tab.sleeping) {
-    tab.sleeping = false;
-    renderTabs();
+  if (!tab) return;
+  clearHibernateTimer(id);
+  if (tab.hibernated) {
+    tab.hibernated = false;
+    if (tab.url && !tab.url.startsWith('orbit://')) {
+      try { tab.webview.loadURL(tab.url); } catch (e) {}
+    }
   }
+  if (tab.sleeping) {
+    tab.sleeping = false;
+  }
+  renderTabs();
   startSleepTimer(id);
 }
 

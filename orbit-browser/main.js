@@ -337,6 +337,8 @@ async function freezeTab(id) {
   if (id === activeTabId) return;
   const wc = guestFor(id);
   if (!wc || wc.isDestroyed()) return;
+  // Renderer-side hibernation already blanked this guest — nothing to freeze.
+  if (typeof wc.getURL === "function" && wc.getURL() === "about:blank") return;
   // The renderer pools webviews across tabs; never freeze the guest that is
   // currently backing the active tab, even if our id->wcId map is stale.
   if (webContentsIds.get(activeTabId) === wc.id) return;
