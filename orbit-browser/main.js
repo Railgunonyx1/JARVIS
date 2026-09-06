@@ -312,6 +312,29 @@ function closeTab(id) {
   mainWindow?.webContents.send("tab-closed", id);
 }
 
+// Persist real URLs at save time: main-side bookkeeping stores the URL from
+// the last attach, which predates navigation. Read the live guest URL instead
+// (falling back to the bookmarked one) and drop blank/hibernated shells.
+function sessionSnapshot() {
+  const out = [];
+  for (const [id, tab] of tabs) {
+    let url = typeof tab.url === "string" ? tab.url : "";
+    let title = typeof tab.title === "string" ? tab.title : "";
+    const wc = guestFor(id);
+    if (wc && !wc.isDestroyed() && typeof wc.getURL === "function") {
+      const live = wc.getURL();
+      if (live && live !== "about:blank") {
+        url = live;
+        const liveTitle = typeof wc.getTitle === "function" ? wc.getTitle() : "";
+        if (liveTitle) title = liveTitle;
+      }
+    }
+    if (!url || url.startsWith("about:") || url === "orbit://newtab") continue;
+    out.push({ id, url, title, favicon: null, loading: false, agentOwned: false });
+  }
+  return out;
+}
+
 function setActiveTab(id) {
   activeTabId = id;
   performance.markActive(id);
@@ -643,7 +666,7 @@ function setupIPC() {
 
   // Session persistence
   ipcMain.handle("session:save", () => {
-    const tabData = Array.from(tabs.values());
+    const tabData = sessionSnapshot();
     store?.set("lastSession", tabData);
     return { saved: tabData.length };
   });
@@ -719,8 +742,8 @@ function createWindow() {
   }
 
   mainWindow.on("closed", () => {
-    // Save session before closing
-    const tabData = Array.from(tabs.values());
+    // Save session before closing (live URLs via sessionSnapshot)
+    const tabData = sessionSnapshot();
     store?.set("lastSession", tabData);
     // Cleanup
     mainWindow = null;
