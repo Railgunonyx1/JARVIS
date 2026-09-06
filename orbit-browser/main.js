@@ -660,7 +660,12 @@ function setupIPC() {
   // Spaces (active space reporting; partition-isolated tabs land in Phase B)
   ipcMain.handle("spaces:list", () => spaces.getStatus());
   ipcMain.handle("spaces:switch", (_e, id) => {
-    spaces.switchTo(validateString(id, "space id", 64));
+    const sid = validateString(id, "space id", 64);
+    if (!spaces.switchTo(sid)) return spaces.getStatus();
+    const partition = sid === "work" ? "persist:orbit" : `persist:orbit-sp-${sid}`;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("space-changed", { space: sid, partition });
+    }
     return spaces.getStatus();
   });
 

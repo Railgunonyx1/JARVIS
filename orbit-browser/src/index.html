@@ -431,7 +431,7 @@
           <button data-panel="vision">Vision</button>
           <button data-panel="activity">Activity</button>
           <button data-panel="memory">Memory</button>
-          <button data-panel="dsh">DSH</button>
+          <button data-panel="chat-history">History</button>
         </nav>
 
         <div class="sb-context" id="sbContext">
@@ -586,21 +586,23 @@
   </div><!-- end .browser -->
 
   <!-- ── Scripts ─────────────────────────────────────────────── -->
+  <script src="js/chat.js"></script>
   <script src="js/renderer.js"></script>
   <script>
     // Load optional modules with error isolation — one failing module
     // must never prevent the core renderer from working.
     (function() {
       // Critical: load immediately | Deferred: load during idle time
-      var critical = ['enhanced-security.js', 'dsh-native.js', 'tab-thumbnails.js'];
-      var deferred = [
+      const critical = ['enhanced-security.js', 'dsh-native.js', 'tab-thumbnails.js'];
+      const deferred = [
         'enhanced-performance.js', 'tab-management.js', 'jarvis-integration.js',
         'page-cache.js', 'webview-pool.js', 'accessibility.js',
         'download-manager.js', 'advanced-optimizations.js', 'security-tester.js',
         'vision-agent.js', 'multi-agent-planner.js', 'reading-mode.js',
+        'spaces-ui.js',
       ];
       function loadMod(m) {
-        var s = document.createElement('script');
+        const s = document.createElement('script');
         s.src = m;
         s.onerror = function() { console.warn('[ORBIT] Module failed:', m); };
         document.body.appendChild(s);
@@ -608,10 +610,10 @@
       critical.forEach(loadMod);
       function loadBatch() {
         if (!deferred.length) return;
-        var batch = deferred.splice(0, 3);
+        const batch = deferred.splice(0, 3);
         batch.forEach(loadMod);
         if (deferred.length) {
-          var fn = function() { setTimeout(loadBatch, 80); };
+          const fn = function() { setTimeout(loadBatch, 80); };
           window.requestIdleCallback ? requestIdleCallback(fn, {timeout:2000}) : fn();
         }
       }

@@ -132,7 +132,7 @@ function createWebview() {
   const seed = $("#webview");
   const wv = document.createElement("webview");
   wv.className = "webview hidden";
-  wv.setAttribute("partition", seed?.getAttribute("partition") || "persist:orbit");
+  wv.setAttribute("partition", window.__orbitPartition || seed?.getAttribute("partition") || "persist:orbit");
   wv.setAttribute("preload", seed?.getAttribute("preload") || "./guest-preload.js");
   wv.setAttribute("webpreferences", seed?.getAttribute("webpreferences") || "contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false");
   contentArea.appendChild(wv);

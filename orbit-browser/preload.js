@@ -74,6 +74,9 @@ contextBridge.exposeInMainWorld("orbit", {
     tabWake: (callback) => {
       ipcRenderer.on("tab-wake", (_, id) => callback(id));
     },
+    spaceChanged: (callback) => {
+      ipcRenderer.on("space-changed", (_, payload) => callback(payload));
+    },
   },
 
   // ── System (Shields / Permissions / Performance / Spaces) ───────
