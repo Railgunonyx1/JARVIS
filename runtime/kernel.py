@@ -230,6 +230,12 @@ def close_kernel(kernel) -> None:
             mem()
     except Exception:
         pass
+    try:
+        from core.event_store import close_event_store
+
+        close_event_store()
+    except Exception:
+        pass
 
 
 class JarvisKernel:

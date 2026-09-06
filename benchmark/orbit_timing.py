@@ -59,7 +59,13 @@ def _time(iterations: int, fn: Callable[[], Any]) -> list[float]:
 # ── measured paths ──────────────────────────────────────────────────────────
 
 def tool_dispatch_latency(iterations: int = 30) -> list[float]:
-    """ToolExecutionService dispatch + permission + audit overhead."""
+    """ToolExecutionService dispatch + permission + audit overhead.
+
+    Samples inside one persistent event loop (like the real agent loop) after
+    a short warmup, so the metric reflects per-call cost, not loop creation.
+    """
+    import asyncio
+
     from core.agent.permissions import PermissionEngine
     from core.agent.tool_service import ToolExecutionService
     from core.decision_logger import DecisionLogger
@@ -77,14 +83,28 @@ def tool_dispatch_latency(iterations: int = 30) -> list[float]:
         decision_logger=logger,
         mode="agent",
     )
+    loop = asyncio.new_event_loop()
 
-    def call() -> None:
-        asyncio.run(service.execute_tool(
-            ToolCall(name="orbit.permissions", arguments={}, id=f"perf-{time.time_ns()}"),
+    async def one() -> None:
+        await service.execute_tool(
+            ToolCall(name="orbit.permissions", arguments={},
+                     id=f"perf-{time.time_ns()}"),
             trace_id="g13_perf", session_id="perf",
-        ))
+        )
 
-    return _time(iterations, call)
+    async def sample(n: int) -> list[float]:
+        out: list[float] = []
+        for _ in range(n):
+            start = time.perf_counter()
+            await one()
+            out.append(time.perf_counter() - start)
+        return out
+
+    try:
+        loop.run_until_complete(sample(3))  # warmup (lazy module imports etc.)
+        return loop.run_until_complete(sample(min(iterations, MAX_SAMPLES)))
+    finally:
+        loop.close()
 
 
 def controller_facade_latency(iterations: int = 30) -> list[float]:
