@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,64 +8,98 @@
     <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
-    <header class="jb-topbar">
-      <div class="jb-brand">
-        <span class="jb-logo" aria-hidden="true"></span>
-        <span class="jb-title">JARVIS</span>
-        <span class="jb-pill" id="jb-status-pill">
-          <span class="jb-dot" id="jb-status-dot"></span>
-          <span class="jb-status-label" id="jb-status-label">checking…</span>
+
+    <!-- ── Header: glyph matrix + brand + status ─────────────────── -->
+    <header class="sb-head">
+      <div class="sb-matrix" id="sb-matrix" data-state="idle" aria-hidden="true">
+        <!-- 49 dots injected by JS -->
+      </div>
+      <div class="sb-brand">
+        <span class="sb-title">JARVIS</span>
+        <span class="sb-status">
+          <span class="sb-dot" id="jb-status-dot"></span>
+          <span id="jb-status-label">checking…</span>
         </span>
       </div>
-      <div class="jb-actions">
-        <button id="jb-clear" class="jb-icon-btn" title="Clear conversation">↺</button>
-        <button id="jb-toggle-control" class="jb-icon-btn" title="Bridge connection settings">⚙</button>
-      </div>
+      <div class="sb-grow"></div>
+      <button id="jb-clear" class="sb-icon" title="Clear conversation">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7.5a4 4 0 017.5-1.5M11 7.5a4 4 0 01-7.5 1.5" stroke="currentColor" stroke-width="1.2"/><path d="M10.5 3V5.5H8" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button id="jb-toggle-control" class="sb-icon" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2" stroke="currentColor"/><path d="M7 1.5v2M7 10.5v2M1.5 7h2M10.5 7h2M3.3 3.3l1.4 1.4M9.3 9.3l1.4 1.4M10.7 3.3l-1.4 1.4M4.7 9.3l-1.4 1.4" stroke="currentColor" stroke-width="1"/></svg>
+      </button>
     </header>
 
-    <section id="jb-state" class="jb-state" hidden>
-      <span class="jb-state-dot" aria-hidden="true"></span>
-      <span class="jb-state-text" id="jb-state-text"></span>
-      <button id="jb-state-action" class="jb-link-btn" hidden></button>
+    <!-- ── Agent state strip ─────────────────────────────────────── -->
+    <section id="jb-state" class="sb-state" hidden>
+      <span class="sb-state-dot" aria-hidden="true"></span>
+      <span id="jb-state-text" class="sb-state-text"></span>
+      <button id="jb-state-action" class="sb-state-btn" hidden></button>
     </section>
 
-    <section id="jb-page-bar" class="jb-page-bar">
-      <div class="jb-page-meta">
-        <span class="jb-page-eyebrow">Current page</span>
-        <span class="jb-page-title" id="jb-page-title">No page</span>
-        <span class="jb-page-url" id="jb-page-url"></span>
+    <!-- ── Nav tabs ──────────────────────────────────────────────── -->
+    <nav class="sb-nav" id="sb-nav">
+      <button class="on" data-panel="jarvis">JARVIS</button>
+      <button data-panel="agents">Agents</button>
+      <button data-panel="activity">Activity</button>
+      <button data-panel="memory">Memory</button>
+    </nav>
+
+    <!-- ── Page context ──────────────────────────────────────────── -->
+    <div class="sb-context" id="page-context">
+      <span class="sb-ctx-label">This page</span>
+      <span class="sb-ctx-title" id="jb-page-title">No page</span>
+      <span class="sb-ctx-url" id="jb-page-url"></span>
+      <div class="sb-ctx-actions">
+        <button class="sb-chip" data-quick="summarize">Summarize</button>
+        <button class="sb-chip" data-quick="explain">Explain</button>
+        <button class="sb-chip" data-quick="research">Research</button>
+        <button class="sb-chip" data-quick="remember">Remember</button>
       </div>
-      <label class="jb-listen-switch" title="JARVIS can see this page">
-        <span>Listening</span>
-        <input type="checkbox" id="jb-listen" checked />
-      </label>
-    </section>
+    </div>
 
-    <main id="jb-thread" class="jb-thread" aria-live="polite"></main>
+    <!-- ── Offline banner ────────────────────────────────────────── -->
+    <div class="sb-banner" id="jb-offline-banner" hidden>
+      <b>JARVIS is currently unavailable.</b>
+      The browser still works.
+      <button class="sb-chip" id="jb-retry">Retry</button>
+    </div>
 
-    <footer class="jb-composer">
-      <textarea
-        id="jb-input"
-        rows="1"
-        placeholder="Ask JARVIS about this page…  (Ctrl+Enter to send)"
-      ></textarea>
-      <button id="jb-send" class="jb-send-btn" title="Send" aria-label="Send">➤</button>
+    <!-- ── Thread ────────────────────────────────────────────────── -->
+    <main id="jb-thread" class="sb-thread" aria-live="polite"></main>
+
+    <!-- ── Composer ──────────────────────────────────────────────── -->
+    <footer class="sb-composer">
+      <div class="sb-composer-box">
+        <textarea id="jb-input" rows="2" placeholder="Ask JARVIS anything…"></textarea>
+        <div class="sb-composer-bar">
+          <div class="sb-grow"></div>
+          <label class="sb-listen" title="JARVIS can see this page">
+            <span>Listen</span>
+            <input type="checkbox" id="jb-listen" checked />
+          </label>
+          <button id="jb-send" class="sb-send" title="Send">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.4"/></svg>
+          </button>
+        </div>
+      </div>
     </footer>
 
-    <section id="jb-settings" class="jb-settings" hidden>
-      <div class="jb-settings-title">Bridge connection</div>
-      <p class="jb-settings-note">
+    <!-- ── Settings overlay ──────────────────────────────────────── -->
+    <section id="jb-settings" class="sb-settings" hidden>
+      <div class="sb-settings-title">Bridge connection</div>
+      <p class="sb-settings-note">
         Optional bearer token for the JARVIS bridge
         (<code>127.0.0.1:8170</code>). Required only when the bridge runs with
         <code>--auth</code>. Browser control always goes through JARVIS tools.
       </p>
-      <label class="jb-settings-row">
+      <label class="sb-settings-row">
         <span>Bridge token</span>
         <input type="text" id="jb-bridge-token" autocomplete="off" spellcheck="false" />
       </label>
-      <div class="jb-settings-actions">
-        <button id="jb-settings-save" class="jb-btn">Save</button>
-        <button id="jb-settings-close" class="jb-btn ghost">Close</button>
+      <div class="sb-settings-actions">
+        <button id="jb-settings-save" class="sb-btn primary">Save</button>
+        <button id="jb-settings-close" class="sb-btn">Close</button>
       </div>
     </section>
 

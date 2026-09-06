@@ -1,11 +1,11 @@
 import { STORAGE } from "../lib/constants.js";
 import { sendMessage, onMessage } from "../lib/messaging.js";
 
+/* ── DOM refs (all existing IDs preserved) ──────────────────────── */
 const input = document.getElementById("nt-input");
 const btn = document.getElementById("nt-btn");
 const dot = document.getElementById("nt-dot");
 const statusEl = document.getElementById("nt-status");
-const greeting = document.getElementById("nt-greeting");
 const thread = document.getElementById("nt-thread");
 const quickEl = document.getElementById("nt-quick");
 const chipsEl = document.getElementById("nt-chips");
@@ -21,6 +21,7 @@ const AGENT_ACTIONS = [
 let sessionId = null;
 let conversations = {};
 
+/* ── Greeting ───────────────────────────────────────────────────── */
 function hourGreeting() {
   const h = new Date().getHours();
   if (h < 5) return "Working late?";
@@ -29,6 +30,7 @@ function hourGreeting() {
   return "Good evening.";
 }
 
+/* ── Messages ───────────────────────────────────────────────────── */
 function appendMsg(role, content, isError = false) {
   const el = document.createElement("div");
   el.className = `nt-msg ${role}${isError ? " error" : ""}`;
@@ -38,6 +40,7 @@ function appendMsg(role, content, isError = false) {
   return el;
 }
 
+/* ── Session ────────────────────────────────────────────────────── */
 async function ensureSession() {
   const { [STORAGE.sessionId]: sid } = await chrome.storage.local.get(STORAGE.sessionId);
   sessionId = sid || crypto.randomUUID();
@@ -46,6 +49,7 @@ async function ensureSession() {
   conversations = all || {};
 }
 
+/* ── Send ───────────────────────────────────────────────────────── */
 function send() {
   const text = input.value.trim();
   if (!text) return;
@@ -62,10 +66,10 @@ function send() {
   let acc = "";
   const requestId = crypto.randomUUID();
 
-  sendMessage({ type: Msg.CHAT_REQUEST, sessionId, text, streamVia: Msg.CHAT_REPLY, requestId });
+  sendMessage({ type: "CHAT_REQUEST", sessionId, text, streamVia: "CHAT_REPLY", requestId });
 
   onMessage((message) => {
-    if (message?.type !== Msg.CHAT_REPLY || message.requestId !== requestId) return;
+    if (message?.type !== "CHAT_REPLY" || message.requestId !== requestId) return;
     const p = message.payload || {};
     if (p.kind === "delta") {
       acc += p.text || "";
@@ -81,9 +85,10 @@ function send() {
   });
 }
 
+/* ── Status ─────────────────────────────────────────────────────── */
 async function refreshStatus() {
   try {
-    const res = await sendMessage({ type: Msg.STATUS_REQUEST });
+    const res = await sendMessage({ type: "STATUS_REQUEST" });
     const online = res && res.ok === true && res.kernel === "online";
     dot.className = "nt-dot " + (online ? "online" : "offline");
     statusEl.textContent = online ? "JARVIS online" : "JARVIS offline";
@@ -93,6 +98,7 @@ async function refreshStatus() {
   }
 }
 
+/* ── Agent chips ────────────────────────────────────────────────── */
 function buildChips() {
   for (const a of AGENT_ACTIONS) {
     const chip = document.createElement("button");
@@ -107,11 +113,22 @@ function buildChips() {
   quickEl.hidden = false;
 }
 
+/* ── Sidebar toggle ─────────────────────────────────────────────── */
 const sidebarBtn = document.getElementById("nt-sidebar");
 if (sidebarBtn) {
-  sidebarBtn.addEventListener("click", () => sendMessage({ type: Msg.TOGGLE }));
+  sidebarBtn.addEventListener("click", () => sendMessage({ type: "TOGGLE" }));
 }
 
+/* ── Tile navigation (open internal pages in sidebar) ───────────── */
+document.addEventListener("click", (e) => {
+  const tile = e.target.closest("[data-go]");
+  if (tile) {
+    // Signal the service worker to navigate or open the view
+    sendMessage({ type: "NAVIGATE", view: tile.dataset.go }).catch(() => {});
+  }
+});
+
+/* ── Events ─────────────────────────────────────────────────────── */
 btn.addEventListener("click", send);
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -121,7 +138,7 @@ input.addEventListener("keydown", (e) => {
 });
 
 onMessage((message) => {
-  if (message?.type === Msg.STATUS_UPDATE) {
+  if (message?.type === "STATUS_UPDATE") {
     const online = message.payload && message.payload.kernel === "online";
     dot.className = "nt-dot " + (online ? "online" : "offline");
     statusEl.textContent = online ? "JARVIS online" : "JARVIS offline";
@@ -129,7 +146,9 @@ onMessage((message) => {
   return undefined;
 });
 
-greeting.textContent = hourGreeting();
+/* ── Init ───────────────────────────────────────────────────────── */
+document.querySelector(".nt-wordmark").textContent = "ORBIT";
+document.querySelector(".nt-sub").textContent = "Search or ask JARVIS";
 buildChips();
 ensureSession().then(refreshStatus);
 input.focus();

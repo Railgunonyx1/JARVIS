@@ -1,185 +1,167 @@
-/* JARVIS Orbit — new tab (a real browser home, with JARVIS at hand).
- * Surfaces/typography from lib/tokens.css; Chromium-neutral, blue accent. */
+/* JARVIS Orbit new tab — Nothing design language.
+ * ORBIT wordmark (Doto), search, monochrome tiles, true-black void.
+ */
 
 @import url("../lib/tokens.css");
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
+html, body {
   height: 100%;
-}
-
-body {
-  background:
-    radial-gradient(1100px 560px at 50% -12%, var(--jb-accent-muted) 0%, transparent 62%),
-    var(--jb-bg);
+  background: var(--jb-void);
   color: var(--jb-text);
   font-family: var(--jb-font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 
 .nt-wrap {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: var(--jb-space-4) var(--jb-space-5) 48px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-
-/* ── top status row ─────────────────────────────────────────────────── */
-
-.nt-brand {
-  display: flex;
   align-items: center;
-  gap: var(--jb-space-2);
-  font-weight: var(--jb-weight-semibold);
-  color: var(--jb-text-secondary);
+  padding: var(--jb-space-8) var(--jb-space-6) var(--jb-space-6);
 }
 
-.nt-logo {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, var(--jb-accent), var(--jb-accent-active));
-}
-
-.nt-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--jb-text-disabled);
-  margin-left: var(--jb-space-2);
-}
-
-.nt-dot.online {
-  background: var(--jb-success);
-  box-shadow: 0 0 0 3px var(--jb-success-muted);
-}
-
-.nt-dot.offline {
-  background: var(--jb-danger);
-  box-shadow: 0 0 0 3px var(--jb-danger-muted);
-}
-
-.nt-status {
-  font-size: var(--jb-text-xs);
-  font-weight: var(--jb-weight-regular);
-}
-
-/* ── hero / search-or-ask ───────────────────────────────────────────── */
-
-.nt-hero {
-  margin-top: 11vh;
+/* ── Wordmark ───────────────────────────────────────────────────── */
+.nt-center {
   text-align: center;
+  margin-top: 10vh;
 }
 
-.nt-greeting {
-  font-size: var(--jb-text-2xl);
-  font-weight: var(--jb-weight-semibold);
-  margin: 0 0 var(--jb-space-1);
-  letter-spacing: -0.01em;
+.nt-wordmark {
+  font-family: var(--jb-font-display);
+  font-size: var(--jb-text-display);
+  letter-spacing: 0.12em;
+  color: var(--jb-paper);
+  font-weight: 500;
 }
 
 .nt-sub {
-  color: var(--jb-text-secondary);
-  margin: 0 0 var(--jb-space-5);
+  margin-top: var(--jb-space-2);
+  color: var(--jb-mute);
   font-size: var(--jb-text-md);
 }
 
+/* ── Search ─────────────────────────────────────────────────────── */
 .nt-omnibox {
   display: flex;
-  gap: var(--jb-space-2);
   align-items: center;
+  gap: var(--jb-space-3);
+  margin-top: var(--jb-space-8);
+  width: min(560px, 100%);
+  height: 44px;
   background: var(--jb-surface);
-  border: 1px solid var(--jb-border);
-  border-radius: var(--jb-radius-xl);
-  padding: var(--jb-space-1);
-  box-shadow: var(--jb-shadow-1);
+  border: 1px solid var(--jb-line-hard);
+  border-radius: var(--jb-radius-md);
+  padding: 0 var(--jb-space-4);
 }
-
 .nt-omnibox:focus-within {
-  border-color: var(--jb-accent);
-  box-shadow: var(--jb-shadow-1), 0 0 0 3px var(--jb-accent-muted);
+  border-color: var(--jb-paper);
 }
-
+.nt-omnibox svg { color: var(--jb-mute); flex: none; }
 .nt-omnibox input {
   flex: 1;
-  background: transparent;
-  border: none;
+  background: none;
+  border: 0;
   outline: none;
   color: var(--jb-text);
-  font-family: var(--jb-font-ui);
   font-size: var(--jb-text-lg);
-  padding: var(--jb-space-2) var(--jb-space-3);
 }
-
-.nt-omnibox input::placeholder {
-  color: var(--jb-text-tertiary);
-}
-
+.nt-omnibox input::placeholder { color: var(--jb-text-tertiary); }
 .nt-omnibox button {
-  width: 38px;
-  height: 38px;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: var(--jb-radius-xs);
+  color: var(--jb-mute);
   flex: none;
+}
+.nt-omnibox button:hover { color: var(--jb-paper); }
+
+/* ── Status row ─────────────────────────────────────────────────── */
+.nt-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--jb-space-4);
+}
+.nt-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--jb-ghost);
+}
+.nt-dot.online { background: var(--jb-success); }
+.nt-dot.offline { background: var(--jb-danger); }
+.nt-status {
+  font-size: var(--jb-text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jb-mute);
+}
+
+/* ── Tiles ──────────────────────────────────────────────────────── */
+.nt-tiles {
+  display: flex;
+  gap: 12px;
+  margin-top: var(--jb-space-8);
+}
+.nt-tile {
+  width: 92px; height: 84px;
   border-radius: var(--jb-radius-lg);
-  border: none;
-  background: var(--jb-accent);
-  color: #ffffff;
-  font-size: var(--jb-text-md);
-  cursor: pointer;
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--jb-mute);
 }
-
-.nt-omnibox button:hover {
-  background: var(--jb-accent-hover);
+.nt-tile:hover {
+  border-color: var(--jb-line-hard);
+  color: var(--jb-paper);
+  background: var(--jb-surface-active);
 }
+.nt-tile span { font-size: 11px; }
 
+/* ── Quick actions ──────────────────────────────────────────────── */
 .nt-quick {
   margin-top: var(--jb-space-6);
   text-align: center;
 }
-
-.nt-section-title {
+.nt-quick-title {
   font-size: var(--jb-text-xs);
-  color: var(--jb-text-tertiary);
-  text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin: 0 0 var(--jb-space-3);
+  text-transform: uppercase;
+  color: var(--jb-ghost);
+  margin-bottom: var(--jb-space-3);
 }
-
 .nt-chips {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--jb-space-2);
 }
-
 .nt-chip {
   background: var(--jb-surface);
   border: 1px solid var(--jb-border);
-  border-radius: 999px;
+  border-radius: var(--jb-radius-full);
   padding: var(--jb-space-2) var(--jb-space-4);
-  color: var(--jb-text-secondary);
+  color: var(--jb-mute);
   font-family: var(--jb-font-ui);
   font-size: var(--jb-text-sm);
   cursor: pointer;
 }
-
 .nt-chip:hover {
-  color: var(--jb-text);
-  border-color: var(--jb-accent);
-  background: var(--jb-surface-hover);
+  color: var(--jb-paper);
+  border-color: var(--jb-line-hard);
 }
 
-/* ── conversation (appears once asked) ──────────────────────────────── */
-
+/* ── Conversation thread ────────────────────────────────────────── */
 .nt-thread {
   flex: 1;
   overflow-y: auto;
   margin-top: var(--jb-space-6);
+  width: min(600px, 100%);
   display: flex;
   flex-direction: column;
   gap: var(--jb-space-2);
@@ -187,34 +169,47 @@ body {
 
 .nt-msg {
   max-width: 85%;
-  padding: var(--jb-space-2) var(--jb-space-4);
-  border-radius: var(--jb-radius-xl);
+  padding: var(--jb-space-3) var(--jb-space-4);
+  border-radius: var(--jb-radius-md);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  border: 1px solid var(--jb-border-subtle);
 }
-
 .nt-msg.user {
   align-self: flex-end;
-  background: var(--jb-accent-muted);
-  border-color: transparent;
-  color: var(--jb-text);
+  background: var(--jb-surface-active);
+  color: var(--jb-paper);
 }
-
 .nt-msg.jarvis {
   align-self: flex-start;
   background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  color: var(--jb-text);
 }
-
 .nt-msg.error {
   border-color: var(--jb-danger);
   color: var(--jb-danger);
 }
 
+/* ── Footer ─────────────────────────────────────────────────────── */
 .nt-footer {
-  margin-top: var(--jb-space-6);
+  margin-top: auto;
+  padding-top: var(--jb-space-4);
   text-align: center;
   font-size: var(--jb-text-xs);
-  color: var(--jb-text-tertiary);
+  color: var(--jb-ghost);
+}
+.nt-footer-link {
+  color: var(--jb-mute);
+  font-size: var(--jb-text-xs);
+}
+.nt-footer-link:hover { color: var(--jb-paper); }
+.nt-footer-sep {
+  margin: 0 8px;
+  color: var(--jb-ghost);
+}
+.nt-footer-mono {
+  font-family: var(--jb-font-mono);
+  font-size: 10px;
+  color: var(--jb-ghost);
 }
