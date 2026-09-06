@@ -62,9 +62,12 @@ const tabStripVertical = $("#tabStripVertical");
 const omniStar = $("#omniStar");
 const zoomIndicator = $("#zoomIndicator");
 const sessionBanner = $("#sessionBanner");
+const emptyTabs = $("#emptyTabs");
+const emptyNewTabBtn = $("#emptyNewTab");
 
 // ── State ─────────────────────────────────────────────────────
 let tabs = new Map();
+window._orbitTabs = tabs; // Expose for thumbnail/vision modules
 let activeTabId = null;
 let sidebarOpen = true;
 let jarvisOnline = false;
@@ -72,6 +75,7 @@ let agentState = "idle";
 let bookmarks = JSON.parse(localStorage.getItem("orbit-bookmarks") || "[]");
 let zoomLevels = JSON.parse(localStorage.getItem("orbit-zoom") || "{}");
 let currentZoom = 1.0;
+let _navigating = false; // guard: true while navigateTo is executing
 
 // ── Toast Notifications ───────────────────────────────────────
 function showToast(type, title, msg, dur) {
@@ -148,25 +152,30 @@ function attachWebviewEvents(wv) {
   });
   wv.addEventListener("did-navigate", (e) => {
     const tab = tabOwnedBy(wv);
-    if (tab) {
-      tab.url = e.url;
-      if (tab.id === activeTabId) {
-        omniInput.value = e.url.replace(/^https?:\/\//, "");
-        omniInput.placeholder = "Search or enter URL";
-        wv.classList.remove("hidden");
-        internalPages.classList.remove("visible");
-        $$(".page", internalPages).forEach(p => p.classList.remove("on"));
-        backBtn.disabled = !wv.canGoBack();
-        forwardBtn.disabled = !wv.canGoForward();
-      }
-    }
+    if (!tab) return;
+    tab.url = e.url;
+    // Only update omnibox for the active tab. Prevent stale did-navigate
+    // events from other tabs overwriting the current omnibox value.
+    if (tab.id !== activeTabId) return;
+    // Ignore about:blank navigations (webview initial load)
+    if (!e.url || e.url === "about:blank") return;
+    omniInput.value = e.url.replace(/^https?:\/\//, "");
+    omniInput.placeholder = "Search or enter URL";
+    wv.classList.remove("hidden");
+    internalPages.classList.remove("visible");
+    $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+    try {
+      backBtn.disabled = !wv.canGoBack();
+      forwardBtn.disabled = !wv.canGoForward();
+    } catch (err) { /* webview not ready */ }
   });
   wv.addEventListener("did-navigate-in-page", (e) => {
-    if (e.isMainFrame) {
-      const tab = tabOwnedBy(wv);
-      if (tab) {
-        tab.url = e.url;
-        if (tab.id === activeTabId) omniInput.value = e.url.replace(/^https?:\/\//, "");
+    if (!e.isMainFrame) return;
+    const tab = tabOwnedBy(wv);
+    if (tab && tab.id === activeTabId) {
+      tab.url = e.url;
+      if (e.url && e.url !== "about:blank") {
+        omniInput.value = e.url.replace(/^https?:\/\//, "");
       }
     }
   });
@@ -209,14 +218,72 @@ function renderTabs() {
       activateTab(id);
     });
 
+    // Drag-and-drop tab reordering
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", id);
+      e.dataTransfer.effectAllowed = "move";
+      el.style.opacity = "0.5";
+      setTimeout(() => el.classList.add("dragging"), 0);
+    });
+    el.addEventListener("dragend", () => {
+      el.style.opacity = "";
+      el.classList.remove("dragging");
+      tabStrip.querySelectorAll(".tab").forEach(t => t.classList.remove("drag-over"));
+    });
+    el.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      el.classList.add("drag-over");
+    });
+    el.addEventListener("dragleave", () => {
+      el.classList.remove("drag-over");
+    });
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      el.classList.remove("drag-over");
+      const draggedId = e.dataTransfer.getData("text/plain");
+      if (draggedId && draggedId !== id) {
+        reorderTab(draggedId, id);
+      }
+    });
+
     tabStrip.appendChild(el);
   }
   renderVerticalTabs();
   updatePerfHud();
 }
 
+function reorderTab(draggedId, targetId) {
+  // Convert Map to array, reorder, then rebuild Map
+  const entries = Array.from(tabs.entries());
+  const dragIdx = entries.findIndex(([id]) => id === draggedId);
+  const targetIdx = entries.findIndex(([id]) => id === targetId);
+  if (dragIdx === -1 || targetIdx === -1 || dragIdx === targetIdx) return;
+  const [moved] = entries.splice(dragIdx, 1);
+  entries.splice(targetIdx, 0, moved);
+  tabs = new Map(entries);
+  window._orbitTabs = tabs;
+  renderTabs();
+  saveSession();
+}
+
+function showEmptyScreen(show) {
+  if (emptyTabs) emptyTabs.classList.toggle("on", show);
+  if (webview) webview.classList.toggle("hidden", show);
+  internalPages.classList.toggle("visible", !show);
+  if (show) {
+    backBtn.disabled = true;
+    forwardBtn.disabled = true;
+    omniInput.value = "";
+    omniInput.placeholder = "Open a new tab to start browsing";
+    sbPageTitle.textContent = "No tabs";
+  }
+}
+
 function createTab(url) {
   url = url || "orbit://newtab";
+  showEmptyScreen(false);
   const id = "tab-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
   const tab = {
     id, url, title: "New tab", favicon: null,
@@ -234,7 +301,6 @@ function createTab(url) {
 }
 
 function closeTab(id) {
-  if (tabs.size <= 1) return;
   const tab = tabs.get(id);
   if (!tab) return;
   if (tab.webview) {
@@ -242,6 +308,12 @@ function closeTab(id) {
   }
   tabs.delete(id);
   window.orbit?.tabs?.close?.(id);
+  if (tabs.size === 0) {
+    activeTabId = null;
+    showEmptyScreen(true);
+    renderTabs();
+    return;
+  }
   if (activeTabId === id) {
     const remaining = Array.from(tabs.keys());
     activateTab(remaining[remaining.length - 1]);
@@ -282,8 +354,10 @@ function activateTab(id) {
     if (wv) wv.classList.remove("hidden");
     omniInput.value = tab.url.replace(/^https?:\/\//, "");
     omniInput.placeholder = "Search Google or enter URL";
-    backBtn.disabled = !wv || !wv.canGoBack();
-    forwardBtn.disabled = !wv || !wv.canGoForward();
+    try {
+      backBtn.disabled = !wv || !wv.canGoBack();
+      forwardBtn.disabled = !wv || !wv.canGoForward();
+    } catch (err) { backBtn.disabled = true; forwardBtn.disabled = true; }
     // Restore zoom for this domain
     try {
       const domain = new URL(tab.url).hostname;
@@ -341,10 +415,12 @@ function navigateTo(url) {
     const wv = activeWebview();
     if (!wv) return;
     wv.classList.remove("hidden");
-    try { wv.loadURL(url); } catch (e) { console.error("[NAV] Failed to load URL:", e); }
+    try { wv.loadURL(url); } catch (e) { console.error("[NAV] Failed to load URL:", e); showToast("err", "Navigation failed", e.message || "Could not load URL"); return; }
     setTimeout(() => {
-      backBtn.disabled = !wv.canGoBack();
-      forwardBtn.disabled = !wv.canGoForward();
+      try {
+        backBtn.disabled = !wv.canGoBack();
+        forwardBtn.disabled = !wv.canGoForward();
+      } catch (err) { /* webview not ready */ }
     }, 100);
   }
 
@@ -392,6 +468,7 @@ reloadBtn.addEventListener("click", () => {
 
 // ── New Tab ───────────────────────────────────────────────────
 newTabBtn.addEventListener("click", () => createTab());
+if (emptyNewTabBtn) emptyNewTabBtn.addEventListener("click", () => createTab());
 
 // ── Home Button ───────────────────────────────────────────────
 const homeBtn = $("#homeBtn");
@@ -440,6 +517,7 @@ if (sbNav) sbNav.addEventListener("click", (e) => {
 
 function renderPanel(name) {
   if (name === "dsh") { renderDshPanel(); return; }
+  if (name === "vision") { renderVisionPanel(); return; }
   if (name === "jarvis") {
     sbBody.innerHTML = '<div style="padding:24px 8px;color:var(--jb-mute)"><div style="font-family:var(--jb-font-display);font-size:22px;letter-spacing:.1em;color:var(--jb-paper);margin-bottom:8px">' + (jarvisOnline ? "READY" : "OFF") + '</div><div style="color:var(--jb-mute)">' + (jarvisOnline ? "The page stays primary. Invoke JARVIS when you need it." : "JARVIS is offline. Browse normally.") + '</div></div>';
   } else if (name === "agents") {
@@ -698,6 +776,11 @@ function finalizeStreamingMessage(fullText) {
 }
 
 // ── Legacy JARVIS Events (Fallback) ──────────────────────────────
+if (window.orbit?.on?.navigateTo) {
+  window.orbit.on.navigateTo((url) => {
+    if (url && /^https?:/i.test(url)) createTab(url);
+  });
+}
 if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
   window.orbit.jarvis.onStatus((status) => {
     jarvisOnline = status.ok && status.kernel === "online";
@@ -1006,6 +1089,57 @@ if (findInput) findInput.addEventListener("keydown", (e) => {
   if (e.key === "Escape") findBar.classList.remove("on");
 });
 
+// ── Vision Panel ─────────────────────────────────────────────
+function renderVisionPanel() {
+  var html = '<div style="padding:16px;color:var(--jb-mute)">';
+  
+  html += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--jb-ghost);margin-bottom:12px">Vision Agent</div>';
+  
+  html += '<div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:12px">';
+  html += '<div style="font-size:13px;color:var(--jb-paper);font-weight:500;margin-bottom:8px">Page Analysis</div>';
+  html += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:10px">Capture screenshots and analyze page content with vision AI.</p>';
+  html += '<button onclick="window.visionAgent && window.visionAgent.describePage().then(r => { if(r.success) alert(r.answer.slice(0,500)); else alert(r.error); })" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer;margin-right:6px">Describe Page</button>';
+  html += '<button onclick="window.readingMode && window.readingMode.toggle()" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer">Reading Mode</button>';
+  html += '</div>';
+  
+  html += '<div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:12px">';
+  html += '<div style="font-size:13px;color:var(--jb-paper);font-weight:500;margin-bottom:8px">Multi-Agent Planner</div>';
+  html += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:10px">Decompose tasks into steps with planner + navigator architecture.</p>';
+  html += '<textarea id="plannerInput" rows="2" placeholder="Describe a task..." style="width:100%;padding:8px;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:6px;color:var(--jb-text);font-size:12px;resize:none;margin-bottom:8px"></textarea>';
+  html += '<button id="plannerExecBtn" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-paper);color:var(--jb-void);font-size:12px;cursor:pointer;font-weight:500">Execute Task</button>';
+  html += '</div>';
+  
+  html += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--jb-ghost);margin-bottom:8px;margin-top:16px">Keyboard Shortcuts</div>';
+  html += '<div style="font-size:12px;color:var(--jb-mute)">';
+  html += '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Ctrl+Shift+D</span><span style="color:var(--jb-ghost)">Toggle reading mode</span></div>';
+  html += '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Ctrl+Shift+V</span><span style="color:var(--jb-ghost)">Vision analysis</span></div>';
+  html += '<div style="display:flex;justify-content:space-between;padding:4px 0"><span>Ctrl+K</span><span style="color:var(--jb-ghost)">Command palette</span></div>';
+  html += '</div>';
+  
+  html += '</div>';
+  sbBody.innerHTML = html;
+
+  // Wire up planner button
+  var plannerBtn = document.getElementById('plannerExecBtn');
+  var plannerInput = document.getElementById('plannerInput');
+  if (plannerBtn && plannerInput) {
+    plannerBtn.addEventListener('click', function() {
+      var task = plannerInput.value.trim();
+      if (!task) return;
+      if (window.multiAgentPlanner) {
+        plannerBtn.textContent = 'Running...';
+        plannerBtn.disabled = true;
+        window.multiAgentPlanner.execute(task).then(function(r) {
+          plannerBtn.textContent = 'Execute Task';
+          plannerBtn.disabled = false;
+          if (r.success) showToast('ok', 'Task Complete', r.result);
+          else showToast('err', 'Task Failed', r.error);
+        });
+      }
+    });
+  }
+}
+
 // ── DSH Panel (Native Integration) ─────────────────────────────
 function renderDshPanel() {
   var dsh = window.dshNative;
@@ -1270,6 +1404,24 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && shift && e.key.toLowerCase() === "r") {
     e.preventDefault();
     try { var wv = activeWebview(); if (wv) wv.reloadIgnoringCache(); } catch (e) {}
+    return;
+  }
+  // Ctrl+Shift+D: Toggle reading mode
+  if (ctrl && shift && e.key.toLowerCase() === "d") {
+    e.preventDefault();
+    if (window.readingMode) window.readingMode.toggle();
+    return;
+  }
+  // Ctrl+Shift+V: Vision analysis
+  if (ctrl && shift && e.key.toLowerCase() === "v") {
+    e.preventDefault();
+    if (window.visionAgent) {
+      showToast('info', 'Vision', 'Analyzing page...');
+      window.visionAgent.describePage().then(r => {
+        if (r.success) appendMessage('jarvis', r.answer);
+        else showToast('err', 'Vision Failed', r.error);
+      });
+    }
     return;
   }
   // F12: Developer tools
