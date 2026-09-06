@@ -197,7 +197,16 @@ function attachWebviewEvents(wv) {
   });
 }
 
+var _renderTabsPending = false;
 function renderTabs() {
+  if (_renderTabsPending) return;
+  _renderTabsPending = true;
+  requestAnimationFrame(function() {
+    _renderTabsPending = false;
+    _renderTabsInner();
+  });
+}
+function _renderTabsInner() {
   tabStrip.innerHTML = "";
   for (const [id, tab] of tabs) {
     const el = document.createElement("button");
@@ -391,6 +400,36 @@ function showInternalPage(pageId) {
   $$(".page", internalPages).forEach(p => p.classList.remove("on"));
   const target = document.getElementById(pageId);
   if (target) target.classList.add("on");
+  if (pageId === "diagnosticsPage") refreshDiagnostics();
+}
+
+function refreshDiagnostics() {
+  const setChip = (el, text, ok) => {
+    if (!el) return;
+    el.textContent = text;
+    el.className = "chip " + (ok ? "ok" : "err");
+  };
+  const j = window.orbit?.jarvis?.status?.();
+  if (j && typeof j.then === "function") {
+    j.then((s) => {
+      const online = !!(s && s.ok && s.kernel === "online");
+      setChip(document.getElementById("diagDsh"), online ? "Connected" : "Offline", online);
+      setChip(document.getElementById("diagBackend"), s?.bridge || "Offline", online);
+    }).catch(() => {
+      setChip(document.getElementById("diagDsh"), "Error", false);
+    });
+  } else {
+    setChip(document.getElementById("diagDsh"), "Unavailable", false);
+  }
+  const p = window.orbit?.system?.performance?.status?.();
+  if (p && typeof p.then === "function") {
+    p.then((s) => {
+      const eff = s && s.efficiencyMode;
+      setChip(document.getElementById("diagEfficiency"), eff ? "On" : "Off", !!eff);
+      const frozen = document.getElementById("diagFrozen");
+      if (frozen) frozen.textContent = (s && s.frozen) ? s.frozen + " tab(s)" : "None";
+    }).catch(() => {});
+  }
 }
 
 function navigateTo(url) {

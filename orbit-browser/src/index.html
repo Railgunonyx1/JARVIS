@@ -140,6 +140,26 @@
 
       <!-- Web content area -->
       <div class="content-area" id="contentArea">
+        <!-- Empty state: shown when all tabs are closed -->
+        <div class="empty-tabs" id="emptyTabs">
+          <div class="empty-tabs-inner">
+            <div class="empty-tabs-icon">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="4" y="12" width="26" height="20" rx="3" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="18" y="16" width="26" height="20" rx="3" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="empty-tabs-title">No open tabs</div>
+            <div class="empty-tabs-sub">Press <kbd>Ctrl+T</kbd> or click below to open a new tab</div>
+            <button class="empty-tabs-btn" id="emptyNewTab">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.4"/>
+              </svg>
+              New Tab
+            </button>
+          </div>
+        </div>
+
         <webview id="webview" class="webview" partition="persist:orbit" preload="../guest-preload.js" webpreferences="contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false"></webview>
 
         <!-- Internal pages (shown when on orbit:// URLs) -->
@@ -331,6 +351,10 @@
                 <div class="row"><div class="name">CDP Connection</div><span class="chip ok">Secure</span></div>
                 <div class="row"><div class="name">Network Policy</div><span class="meta">default-deny-private</span></div>
               </div>
+              <div class="group"><h2>Performance</h2>
+                <div class="row"><div class="name">Efficiency Mode</div><span class="chip" id="diagEfficiency">Checking...</span></div>
+                <div class="row"><div class="name">Frozen Tabs</div><span class="meta" id="diagFrozen">Checking...</span></div>
+              </div>
             </div>
           </div>
 
@@ -404,6 +428,7 @@
         <nav class="sb-nav" id="sbNav">
           <button class="on" data-panel="jarvis">JARVIS</button>
           <button data-panel="agents">Agents</button>
+          <button data-panel="vision">Vision</button>
           <button data-panel="activity">Activity</button>
           <button data-panel="memory">Memory</button>
           <button data-panel="dsh">DSH</button>
@@ -566,25 +591,31 @@
     // Load optional modules with error isolation — one failing module
     // must never prevent the core renderer from working.
     (function() {
-      var modules = [
-        'enhanced-security.js',
-        'enhanced-performance.js',
-        'tab-management.js',
-        'jarvis-integration.js',
-        'dsh-native.js',
-        'page-cache.js',
-        'webview-pool.js',
-        'accessibility.js',
-        'download-manager.js',
-        'advanced-optimizations.js',
-        'security-tester.js',
+      // Critical: load immediately | Deferred: load during idle time
+      var critical = ['enhanced-security.js', 'dsh-native.js', 'tab-thumbnails.js'];
+      var deferred = [
+        'enhanced-performance.js', 'tab-management.js', 'jarvis-integration.js',
+        'page-cache.js', 'webview-pool.js', 'accessibility.js',
+        'download-manager.js', 'advanced-optimizations.js', 'security-tester.js',
+        'vision-agent.js', 'multi-agent-planner.js', 'reading-mode.js',
       ];
-      modules.forEach(function(m) {
+      function loadMod(m) {
         var s = document.createElement('script');
         s.src = m;
-        s.onerror = function() { console.warn('[ORBIT] Module failed to load:', m); };
+        s.onerror = function() { console.warn('[ORBIT] Module failed:', m); };
         document.body.appendChild(s);
-      });
+      }
+      critical.forEach(loadMod);
+      function loadBatch() {
+        if (!deferred.length) return;
+        var batch = deferred.splice(0, 3);
+        batch.forEach(loadMod);
+        if (deferred.length) {
+          var fn = function() { setTimeout(loadBatch, 80); };
+          window.requestIdleCallback ? requestIdleCallback(fn, {timeout:2000}) : fn();
+        }
+      }
+      window.requestIdleCallback ? requestIdleCallback(loadBatch, {timeout:1000}) : setTimeout(loadBatch, 50);
     })();
   </script>
 </body>
