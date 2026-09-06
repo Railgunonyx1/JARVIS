@@ -5,9 +5,39 @@
  * NOT an extension — a standalone browser built on Electron (Chromium).
  */
 
-const { app, BrowserWindow, ipcMain, session, protocol } = require("electron");
+const { app, BrowserWindow, ipcMain, session, protocol, net } = require("electron");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const WebSocket = require("ws");
+
+// ── Chromium performance flags ────────────────────────────────────
+// Mirrors the researched, evidence-backed launch profile codified in
+// jbrowser/optimization.py, restricted to the flags that help a user-facing
+// daily-driver browser (rendering/GPU offload, QUIC, lean background waste,
+// live active tab). Browser-hostile switches (mute-audio, hide-scrollbars)
+// and agent-only switches (disable-extensions/...) are intentionally omitted.
+function applyChromiumFlags() {
+  const flags = {
+    "enable-gpu-rasterization": "",
+    "num-raster-threads": "2",
+    "enable-quic": "",
+    "disable-features":
+      "PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies",
+    "disable-background-timer-throttling": "",
+    "disable-backgrounding-occluded-windows": "",
+    "disable-renderer-backgrounding": "",
+    "no-first-run": "",
+    "no-default-browser-check": "",
+    "disable-default-apps": "",
+    "disable-domain-reliability": "",
+    "disable-background-networking": "",
+    "freeze-background-tabs": "",
+  };
+  for (const [name, value] of Object.entries(flags)) {
+    app.commandLine.appendSwitch(name, value);
+  }
+}
+applyChromiumFlags();
 
 // ── Configuration ─────────────────────────────────────────────────
 const CONFIG = {
@@ -236,27 +266,23 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
-  protocol.handle("orbit", (request) => {
-    const url = request.url.replace("orbit://", "");
-    // Route internal pages
-    const pages = {
-      newtab: "src/newtab.html",
-      settings: "src/settings.html",
-      downloads: "src/downloads.html",
-      history: "src/history.html",
-      bookmarks: "src/bookmarks.html",
-      tasks: "src/tasks.html",
-      permissions: "src/permissions.html",
-      memory: "src/memory.html",
-      extensions: "src/extensions.html",
-      diagnostics: "src/diagnostics.html",
-    };
-    const file = pages[url] || "src/newtab.html";
-    return new Response(
-      require("fs").readFileSync(path.join(__dirname, file)),
-      {
-        headers: { "Content-Type": "text/html" },
-      }
-    );
+  protocol.handle("orbit", async (request) => {
+    // Stream the page from disk over Electron's async net.fetch: the handler
+    // never blocks the main process (no sync fs.read) and sets the correct
+    // Content-Type per file extension for free.
+    let host = "newtab";
+    try {
+      host = new URL(request.url).hostname || "newtab";
+    } catch (_) {
+      host = "newtab";
+    }
+    const file = pages[host] || "src/newtab.html";
+    try {
+      return await net.fetch(
+        pathToFileURL(path.join(__dirname, file)).toString()
+      );
+    } catch (_) {
+      return new Response("Not Found", { status: 404 });
+    }
   });
 });

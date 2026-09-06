@@ -90,22 +90,19 @@ class JarvisBridge:
 
         print(f"[BRIDGE] Chat: {text[:50]}...")
 
-        # Send thinking state
+        # Send thinking state (no artificial delays: phase events fire
+        # immediately so chat latency is bounded by the backend, not this
+        # bridge)
         await websocket.send(json.dumps({
             "type": "agent_event",
             "payload": {"state": "thinking"},
         }))
-
-        # Simulate JARVIS response (replace with real agent call)
-        await asyncio.sleep(0.5)
 
         # Send planning state
         await websocket.send(json.dumps({
             "type": "agent_event",
             "payload": {"state": "planning"},
         }))
-
-        await asyncio.sleep(0.5)
 
         # Send running state
         await websocket.send(json.dumps({
@@ -176,9 +173,13 @@ class JarvisBridge:
 
 
 # ── WebSocket Server ───────────────────────────────────────────────
+# One shared bridge across all connections: the session id and any future
+# agent state stay consistent instead of being rebuilt per socket.
+bridge = JarvisBridge()
+
+
 async def handler(websocket):
     """Handle a WebSocket connection."""
-    bridge = JarvisBridge()
     await bridge.register(websocket)
 
     try:
