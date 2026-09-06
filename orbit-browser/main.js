@@ -50,6 +50,20 @@ const CONFIG = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) JARVIS-Orbit/0.1.0 Chrome/120.0.0.0 Safari/537.36",
 };
 
+// ── Internal pages (orbit://<host>) ───────────────────────────────
+const PAGES = {
+  newtab: "src/newtab.html",
+  settings: "src/settings.html",
+  downloads: "src/downloads.html",
+  history: "src/history.html",
+  bookmarks: "src/bookmarks.html",
+  tasks: "src/tasks.html",
+  permissions: "src/permissions.html",
+  memory: "src/memory.html",
+  extensions: "src/extensions.html",
+  diagnostics: "src/diagnostics.html",
+};
+
 // ── State ─────────────────────────────────────────────────────────
 let mainWindow = null;
 let jarvisWs = null;
@@ -206,8 +220,9 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       webviewTag: true,
+      spellcheck: false,
     },
     backgroundColor: "#000000",
     show: false,
@@ -252,6 +267,13 @@ app.on("window-all-closed", () => {
   }
 });
 
+// Disable the spellchecker on every webContents (main window + each webview
+// tab) at birth: loading hunspell dictionaries per guest page is a measurable
+// memory/CPU cost and spellchecking isn't a JARVIS Orbit feature.
+app.on("web-contents-created", (_event, contents) => {
+  contents.setSpellCheckerEnabled(false);
+});
+
 // ── Custom Protocol (orbit://) ────────────────────────────────────
 protocol.registerSchemesAsPrivileged([
   {
@@ -276,7 +298,7 @@ app.whenReady().then(() => {
     } catch (_) {
       host = "newtab";
     }
-    const file = pages[host] || "src/newtab.html";
+    const file = PAGES[host] || "src/newtab.html";
     try {
       return await net.fetch(
         pathToFileURL(path.join(__dirname, file)).toString()
