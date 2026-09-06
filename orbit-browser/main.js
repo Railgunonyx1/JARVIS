@@ -75,6 +75,9 @@ const PAGES = {
 let mainWindow = null;
 let jarvisWs = null;
 let jarvisStatus = { ok: false, kernel: "offline" };
+let jarvisReconnectAttempts = 0;
+const JARVIS_MAX_RECONNECT = 10;
+const JARVIS_BASE_DELAY = 1000; // 1s base, doubles each attempt
 
 // ── Optimizer module instances ────────────────────────────────────
 const security = new SecurityModule();
@@ -278,6 +281,8 @@ function initStore() {
 
 // ── Tab Management ────────────────────────────────────────────────
 const tabs = new Map();
+const webContentsIds = new Map(); // tabId -> guest webContents.id
+const frozenTabs = new Set();     // tabId currently frozen (sleeping)
 let activeTabId = null;
 
 function createTab(url = "orbit://newtab") {
@@ -301,6 +306,8 @@ function createTab(url = "orbit://newtab") {
 
 function closeTab(id) {
   performance.unregisterTab(id);
+  webContentsIds.delete(id);
+  frozenTabs.delete(id);
   tabs.delete(id);
   mainWindow?.webContents.send("tab-closed", id);
 }
@@ -308,20 +315,88 @@ function closeTab(id) {
 function setActiveTab(id) {
   activeTabId = id;
   performance.markActive(id);
+  wakeTab(id);
   const tab = tabs.get(id);
   if (tab) {
     mainWindow?.webContents.send("tab-activated", tab);
   }
 }
 
+// ── Sleeping tabs (real freeze, Chrome-sleeping-tabs style) ───────
+// The renderer marks sleeping state visually; this is the process lever.
+// A hidden guest is put into the Chromium 'frozen' lifecycle state so its
+// process can be swapped out. Tabs owned by an agent are never touched.
+
+function guestFor(id) {
+  const wcId = webContentsIds.get(id);
+  return wcId ? webContents.fromId(wcId) : null;
+}
+
+async function freezeTab(id) {
+  if (frozenTabs.has(id)) return;
+  const wc = guestFor(id);
+  if (!wc || wc.isDestroyed()) return;
+  let attached = false;
+  try {
+    if (!wc.debugger.isAttached()) {
+      wc.debugger.attach("1.3");
+      attached = true;
+      await wc.debugger.sendCommand("Page.setWebLifecycleState", { state: "frozen" });
+      frozenTabs.add(id);
+      mainWindow?.webContents.send("tab-sleep", id);
+    }
+  } catch (_) {
+    // WebViews may refuse lifecycle control; cosmetic sleep still applies.
+  } finally {
+    if (attached) {
+      try { wc.debugger.detach(); } catch (_) {}
+    }
+  }
+}
+
+async function wakeTab(id) {
+  if (!frozenTabs.has(id)) return;
+  frozenTabs.delete(id);
+  mainWindow?.webContents.send("tab-wake", id);
+  const wc = guestFor(id);
+  if (!wc || wc.isDestroyed()) return;
+  let attached = false;
+  try {
+    if (!wc.debugger.isAttached()) {
+      wc.debugger.attach("1.3");
+      attached = true;
+      await wc.debugger.sendCommand("Page.setWebLifecycleState", { state: "active" });
+    }
+  } catch (_) {
+  } finally {
+    if (attached) {
+      try { wc.debugger.detach(); } catch (_) {}
+    }
+  }
+}
+
+function runSleepCheck() {
+  for (const [id, tab] of tabs) {
+    if (tab.agentOwned) continue;
+    if (performance.shouldSleep(id)) freezeTab(id);
+  }
+}
+
 // ── JARVIS WebSocket Connection ───────────────────────────────────
 function connectJarvis() {
   if (jarvisWs?.readyState === WebSocket.OPEN) return;
+  if (jarvisReconnectAttempts >= JARVIS_MAX_RECONNECT) {
+    console.warn("[JARVIS] Max reconnect attempts reached. Manual retry required.");
+    jarvisStatus = { ok: false, kernel: "offline", reason: "max_retries" };
+    mainWindow?.webContents.send("jarvis-status", jarvisStatus);
+    return;
+  }
 
   try {
     jarvisWs = new WebSocket(CONFIG.JARVIS_WS_URL);
 
     jarvisWs.on("open", () => {
+      jarvisReconnectAttempts = 0; // Reset on successful connection
       jarvisStatus = { ok: true, kernel: "online" };
       mainWindow?.webContents.send("jarvis-status", jarvisStatus);
       console.log("[JARVIS] Connected");
@@ -340,8 +415,11 @@ function connectJarvis() {
       jarvisStatus = { ok: false, kernel: "offline" };
       mainWindow?.webContents.send("jarvis-status", jarvisStatus);
       console.log("[JARVIS] Disconnected");
-      // Reconnect after 3 seconds
-      setTimeout(connectJarvis, 3000);
+      // Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
+      const delay = Math.min(JARVIS_BASE_DELAY * Math.pow(2, jarvisReconnectAttempts), 30000);
+      jarvisReconnectAttempts++;
+      console.log(`[JARVIS] Reconnecting in ${delay}ms (attempt ${jarvisReconnectAttempts}/${JARVIS_MAX_RECONNECT})`);
+      setTimeout(connectJarvis, delay);
     });
 
     jarvisWs.on("error", (err) => {
@@ -349,7 +427,9 @@ function connectJarvis() {
     });
   } catch (e) {
     console.error("[JARVIS] Connection failed:", e.message);
-    setTimeout(connectJarvis, 3000);
+    jarvisReconnectAttempts++;
+    const delay = Math.min(JARVIS_BASE_DELAY * Math.pow(2, jarvisReconnectAttempts), 30000);
+    setTimeout(connectJarvis, delay);
   }
 }
 
@@ -379,26 +459,97 @@ function sendToJarvis(msg) {
   }
 }
 
+// ── Input Validation ──────────────────────────────────────────────
+function validateString(val, name, maxLen = 2048) {
+  if (typeof val !== "string") throw new TypeError(`${name} must be a string`);
+  if (val.length > maxLen) throw new RangeError(`${name} exceeds max length ${maxLen}`);
+  return val;
+}
+
+function validateUrl(val, name) {
+  validateString(val, name);
+  if (!/^(https?|orbit|about|data|blob):/i.test(val)) {
+    throw new TypeError(`${name} must be a valid URL (http/https/orbit scheme)`);
+  }
+  return val;
+}
+
+function validateObject(val, name) {
+  if (val === null || typeof val !== "object" || Array.isArray(val)) {
+    throw new TypeError(`${name} must be a plain object`);
+  }
+  return val;
+}
+
+// ── Offline Message Queue ─────────────────────────────────────────
+const offlineQueue = [];
+const MAX_OFFLINE_QUEUE = 100;
+
+function queueOrSend(msg) {
+  if (jarvisWs?.readyState === WebSocket.OPEN) {
+    jarvisWs.send(JSON.stringify(msg));
+  } else if (offlineQueue.length < MAX_OFFLINE_QUEUE) {
+    offlineQueue.push(msg);
+    console.log(`[JARVIS] Message queued (offline) — queue size: ${offlineQueue.length}`);
+  }
+}
+
+function flushOfflineQueue() {
+  while (offlineQueue.length > 0 && jarvisWs?.readyState === WebSocket.OPEN) {
+    const msg = offlineQueue.shift();
+    jarvisWs.send(JSON.stringify(msg));
+  }
+}
+
 // ── IPC Handlers ──────────────────────────────────────────────────
 function setupIPC() {
   // Tab management
-  ipcMain.handle("tab:create", (_, url) => createTab(url));
-  ipcMain.handle("tab:close", (_, id) => closeTab(id));
-  ipcMain.handle("tab:activate", (_, id) => setActiveTab(id));
+  ipcMain.handle("tab:create", (_, url) => createTab(url ? validateUrl(url, "tab url") : "orbit://newtab"));
+  ipcMain.handle("tab:close", (_, id) => closeTab(validateString(id, "tab id", 128)));
+  ipcMain.handle("tab:activate", (_, id) => setActiveTab(validateString(id, "tab id", 128)));
   ipcMain.handle("tab:list", () => Array.from(tabs.values()));
+  // Renderer-born tabs register their guests here so the sleeping engine can
+  // map tabId -> webContents.id (real freeze/wake); unknown ids are picked up
+  // into the shared registry (e.g. window.open-created tabs).
+  ipcMain.handle("tab:attach", (_e, id, url, wcId) => {
+    const safeId = validateString(id, "tab id", 128);
+    const safeUrl = url ? validateUrl(url, "tab url", 8192) : "orbit://newtab";
+    if (!tabs.has(safeId)) {
+      tabs.set(safeId, {
+        id: safeId,
+        url: safeUrl,
+        title: "New tab",
+        favicon: null,
+        loading: false,
+        agentOwned: false,
+      });
+      performance.registerTab(safeId, safeUrl);
+    } else {
+      tabs.get(safeId).url = safeUrl;
+    }
+    if (Number.isInteger(wcId) && wcId > 0) webContentsIds.set(safeId, wcId);
+    return true;
+  });
 
   // JARVIS communication
   ipcMain.handle("jarvis:status", () => jarvisStatus);
-  ipcMain.handle("jarvis:send", (_, msg) => sendToJarvis(msg));
+  ipcMain.handle("jarvis:send", (_, msg) => {
+    validateObject(msg, "jarvis message");
+    validateString(msg.type || "", "message type", 64);
+    queueOrSend(msg);
+  });
   ipcMain.handle("jarvis:chat", (_, text, sessionId) => {
-    sendToJarvis({
+    validateString(text, "chat text", 10000);
+    const sid = sessionId ? validateString(sessionId, "session id", 128) : "default";
+    queueOrSend({
       type: "chat_request",
-      payload: { text, sessionId },
+      payload: { text, sessionId: sid },
     });
   });
 
   // Navigation
   ipcMain.handle("navigate", (_, url) => {
+    validateUrl(url, "navigation url");
     mainWindow?.webContents.send("navigate-to", url);
   });
 
@@ -419,28 +570,40 @@ function setupIPC() {
     return security.getStatus();
   });
   ipcMain.handle("security:config", (_e, cfg) => {
-    if (cfg && typeof cfg === "object") Object.assign(security.config, cfg);
+    const safe = validateObject(cfg || {}, "security config");
+    const allowed = ["adBlocking", "trackerBlocking", "fingerprintProtection", "httpsUpgrade", "doNotTrack"];
+    for (const key of Object.keys(safe)) {
+      if (allowed.includes(key)) security.config[key] = safe[key];
+    }
     store?.set("shields", { ...security.config });
     return security.getStatus();
   });
   ipcMain.handle("security:network", (_e, cfg) => {
-    if (cfg && typeof cfg === "object") Object.assign(networkConfig, cfg);
+    const safe = validateObject(cfg || {}, "network config");
+    const allowed = ["blockPrivateNetwork", "fastBlockThirdPartyCookies", "blockCrossSiteCookies"];
+    for (const key of Object.keys(safe)) {
+      if (allowed.includes(key)) networkConfig[key] = safe[key];
+    }
     store?.set("network", { ...networkConfig });
     return { ...networkConfig };
   });
 
   // Site permissions (default-deny allowlist)
   ipcMain.handle("permissions:allow", (_e, origin, permission) => {
-    const entry = PERMISSION_ALLOWLIST.find((e) => e.origin === origin);
-    if (entry) entry.permissions.push(permission);
-    else PERMISSION_ALLOWLIST.push({ origin, permissions: [permission] });
+    const safeOrigin = validateString(origin, "origin", 2048);
+    const safePerm = validateString(permission, "permission", 128);
+    const entry = PERMISSION_ALLOWLIST.find((e) => e.origin === safeOrigin);
+    if (entry) entry.permissions.push(safePerm);
+    else PERMISSION_ALLOWLIST.push({ origin: safeOrigin, permissions: [safePerm] });
     store?.set("permissions", PERMISSION_ALLOWLIST);
     return true;
   });
   ipcMain.handle("permissions:revoke", (_e, origin, permission) => {
-    const entry = PERMISSION_ALLOWLIST.find((e) => e.origin === origin);
-    if (entry && permission) {
-      entry.permissions = entry.permissions.filter((p) => p !== permission);
+    const safeOrigin = validateString(origin, "origin", 2048);
+    const safePerm = permission ? validateString(permission, "permission", 128) : null;
+    const entry = PERMISSION_ALLOWLIST.find((e) => e.origin === safeOrigin);
+    if (entry && safePerm) {
+      entry.permissions = entry.permissions.filter((p) => p !== safePerm);
       if (!entry.permissions.length) {
         PERMISSION_ALLOWLIST.splice(PERMISSION_ALLOWLIST.indexOf(entry), 1);
       }
@@ -454,9 +617,11 @@ function setupIPC() {
     PERMISSION_ALLOWLIST.map((e) => ({ ...e, permissions: [...e.permissions] }))
   );
 
-  // Performance (sleeping tabs / efficiency — full suspension lands with
-  // per-tab webviews in Phase B; module is live + observable now)
-  ipcMain.handle("performance:status", () => performance.getStatus());
+  // Performance (sleeping tabs with real freeze; frozen count reported live)
+  ipcMain.handle("performance:status", () => ({
+    ...performance.getStatus(),
+    frozen: frozenTabs.size,
+  }));
   ipcMain.handle("performance:efficiency", (_e, enabled) =>
     performance.toggleEfficiencyMode(!!enabled)
   );
@@ -464,8 +629,18 @@ function setupIPC() {
   // Spaces (active space reporting; partition-isolated tabs land in Phase B)
   ipcMain.handle("spaces:list", () => spaces.getStatus());
   ipcMain.handle("spaces:switch", (_e, id) => {
-    spaces.switchTo(String(id));
+    spaces.switchTo(validateString(id, "space id", 64));
     return spaces.getStatus();
+  });
+
+  // Session persistence
+  ipcMain.handle("session:save", () => {
+    const tabData = Array.from(tabs.values());
+    store?.set("lastSession", tabData);
+    return { saved: tabData.length };
+  });
+  ipcMain.handle("session:restore", () => {
+    return store?.get("lastSession", []) || [];
   });
 }
 
@@ -504,15 +679,49 @@ function createWindow() {
     mainWindow.show();
   });
 
+  // Set CSP headers on the main window
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline'; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "img-src 'self' data: https:; " +
+          "font-src 'self' data:; " +
+          "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
+          "frame-src 'self' https:; " +
+          "object-src 'none'; " +
+          "base-uri 'self'; " +
+          "form-action 'self'; "
+        ],
+      },
+    });
+  });
+
   // Connect to JARVIS
   connectJarvis();
 
-  // Create initial tab
-  createTab("orbit://newtab");
+  // Restore previous session or create new tab
+  const lastSession = store?.get("lastSession", []) || [];
+  if (lastSession.length > 0 && lastSession.some(t => t.url && !t.url.startsWith("orbit://"))) {
+    // Restore non-internal tabs from last session
+    for (const tab of lastSession.filter(t => t.url && !t.url.startsWith("orbit://"))) {
+      createTab(tab.url);
+    }
+  } else {
+    createTab("orbit://newtab");
+  }
 
   mainWindow.on("closed", () => {
+    // Save session before closing
+    const tabData = Array.from(tabs.values());
+    store?.set("lastSession", tabData);
+    // Cleanup
     mainWindow = null;
     jarvisWs?.close();
+    performance.stopSleepCheck?.();
   });
 }
 
@@ -520,10 +729,18 @@ function createWindow() {
 app.whenReady().then(() => {
   initStore();
   installSecurity(getBrowserSession());
+  // Spellcheck off at the session boundary (webContents-level API is gone in
+  // modern Electron; dictionary loading is a RAM/CPU cost we don't need).
+  for (const s of [session.defaultSession, getBrowserSession()]) {
+    try {
+      if (typeof s.setSpellCheckerEnabled === "function") s.setSpellCheckerEnabled(false);
+    } catch (_) {}
+  }
   setupIPC();
   createWindow();
-  // Compact interval keeps tab-discard state fresh without busy work.
-  performance.startSleepCheck(60000);
+  // Compact interval keeps tab-discard state fresh without busy work and
+  // drives the real freeze/wake sleeping engine for hidden webviews.
+  setInterval(runSleepCheck, 60000);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -532,8 +749,19 @@ app.whenReady().then(() => {
   });
 });
 
+// ── Error Boundaries ──────────────────────────────────────────────
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] Uncaught exception:", err);
+  // Don't crash the whole browser for renderer errors
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled rejection:", reason);
+});
+
 app.on("window-all-closed", () => {
   jarvisWs?.close();
+  performance.stopSleepCheck?.();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -541,8 +769,14 @@ app.on("window-all-closed", () => {
 
 // ── Webview (guest) hardening ─────────────────────────────────────
 // Every webContents at birth: spellcheck off (dict load is wasted RAM/CPU).
+// The webContents-level setter was removed in modern Electron — prefer the
+// session-level switch and guard the legacy call for safety.
 app.on("web-contents-created", (_event, contents) => {
-  contents.setSpellCheckerEnabled(false);
+  try {
+    if (typeof contents.setSpellCheckerEnabled === "function") {
+      contents.setSpellCheckerEnabled(false);
+    }
+  } catch (_) {}
 
   // Guest navigation policy: window.open lands in the active tab (no popup
   // windows); only web-safe schemes may navigate a guest frame.

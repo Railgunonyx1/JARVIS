@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("orbit", {
     close: (id) => ipcRenderer.invoke("tab:close", id),
     activate: (id) => ipcRenderer.invoke("tab:activate", id),
     list: () => ipcRenderer.invoke("tab:list"),
+    attach: (id, url, wcId) => ipcRenderer.invoke("tab:attach", id, url, wcId),
   },
 
   // ── JARVIS Communication ────────────────────────────────────────
@@ -59,6 +60,12 @@ contextBridge.exposeInMainWorld("orbit", {
     },
     navigateTo: (callback) => {
       ipcRenderer.on("navigate-to", (_, url) => callback(url));
+    },
+    tabSleep: (callback) => {
+      ipcRenderer.on("tab-sleep", (_, id) => callback(id));
+    },
+    tabWake: (callback) => {
+      ipcRenderer.on("tab-wake", (_, id) => callback(id));
     },
   },
 
