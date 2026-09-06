@@ -246,7 +246,39 @@ class JarvisBridge:
             }))
             return
 
-        # Forward to real bridge
+        # Forward to real bridge (blocking HTTP read runs off the event loop)
+        try:
+            events = await asyncio.get_event_loop().run_in_executor(
+                None, self._forward_agent_task, goal, session
+            )
+            if events is None:
+                await websocket.send(json.dumps({
+                    "type": "chat_reply",
+                    "payload": {
+                        "kind": "error",
+                        "error": {"message": "No response from JARVIS backend"},
+                        "session": session,
+                    },
+                }))
+                return
+            for event in events:
+                await websocket.send(json.dumps({
+                    "type": "agent_event",
+                    "payload": event,
+                }))
+        except Exception as e:
+            print(f"[BRIDGE] Agent task error: {e}")
+            await websocket.send(json.dumps({
+                "type": "chat_reply",
+                "payload": {
+                    "kind": "error",
+                    "error": {"message": str(e)},
+                    "session": session,
+                },
+            }))
+
+    def _forward_agent_task(self, goal: str, session: str) -> list | None:
+        """Forward agent task to the real JARVIS bridge via HTTP POST."""
         try:
             data = json.dumps({
                 "goal": goal,
@@ -260,27 +292,18 @@ class JarvisBridge:
                 method="POST",
             )
 
+            events: list = []
             with urlopen(req, timeout=120) as resp:
                 for line in resp.read().decode().split("\n"):
                     if line.startswith("data: "):
                         try:
-                            chunk = json.loads(line[6:])
-                            await websocket.send(json.dumps({
-                                "type": "agent_event",
-                                "payload": chunk,
-                            }))
+                            events.append(json.loads(line[6:]))
                         except json.JSONDecodeError:
                             continue
+            return events or None
         except Exception as e:
-            print(f"[BRIDGE] Agent task error: {e}")
-            await websocket.send(json.dumps({
-                "type": "chat_reply",
-                "payload": {
-                    "kind": "error",
-                    "error": {"message": str(e)},
-                    "session": session,
-                },
-            }))
+            print(f"[BRIDGE] Agent task HTTP error: {e}")
+            return None
 
     async def handle_status(self, websocket):
         """Check and return bridge status."""
