@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld("orbit", {
     send: (msg) => ipcRenderer.invoke("jarvis:send", msg),
     chat: (text, sessionId) => ipcRenderer.invoke("jarvis:chat", text, sessionId),
 
+    // Companion management
+    startTask: (payload) => ipcRenderer.invoke("companion:task", payload),
+    stopTask: (payload) => ipcRenderer.invoke("companion:stop", payload),
+
     // Event listeners
     onStatus: (callback) => {
       ipcRenderer.on("jarvis-status", (_, status) => callback(status));
@@ -48,6 +52,7 @@ contextBridge.exposeInMainWorld("orbit", {
     close: () => ipcRenderer.send("win-close"),
     create: () => ipcRenderer.invoke("window:create"),
     createPrivate: () => ipcRenderer.invoke("window:create-private"),
+    fullscreen: () => ipcRenderer.invoke("window:fullscreen"),
   },
 
   // ── Webview partition for this window (persist:orbit or in-memory) ──
@@ -107,6 +112,9 @@ contextBridge.exposeInMainWorld("orbit", {
     spaces: {
       list: () => ipcRenderer.invoke("spaces:list"),
       switch: (id) => ipcRenderer.invoke("spaces:switch", id),
+    },
+    session: {
+      clearSiteData: (origin) => ipcRenderer.invoke("session:clear-site-data", origin),
     },
   },
 });

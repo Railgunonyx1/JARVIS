@@ -220,22 +220,21 @@ function installSecurity(ses) {
   ses.webRequest.onBeforeSendHeaders({ urls: ["*://*/*"] }, (details, callback) => {
     const headers = { ...(details.requestHeaders || {}) };
     if (security.config.doNotTrack) headers["DNT"] = "1";
-    // Aggressive posture: strip Cookie on cross-site requests too.
-    if (networkConfig.blockCrossSiteCookies && details.resourceType !== "mainFrame") {
-      const top = siteOriginOf(details.topURL || "");
-      const req = siteOriginOf(details.url);
-      if (top && req && top !== req) delete headers["cookie"];
+    // Strip Cookie ONLY on known tracker/ad requests (Brave-standard, not
+    // aggressive): blanket cross-site stripping breaks SSO, iframe logins,
+    // and API sessions — the user must stay logged in.
+    if (networkConfig.blockCrossSiteCookies && security.isTracker(details.url)) {
+      delete headers["cookie"];
     }
     callback({ requestHeaders: headers });
   });
 
-  // Cross-site responses never set cookies (third-party set-cookie block).
+  // Tracker/ad responses never set cookies. Cross-site Set-Cookie from real
+  // sites is preserved so OAuth/SSO/iframe login flows keep working.
   ses.webRequest.onHeadersReceived({ urls: ["*://*/*"] }, (details, callback) => {
     const headers = details.responseHeaders || {};
-    if (networkConfig.fastBlockThirdPartyCookies && details.resourceType !== "mainFrame") {
-      const top = siteOriginOf(details.topURL || "");
-      const req = siteOriginOf(details.url);
-      if (top && req && top !== req) delete headers["set-cookie"];
+    if (networkConfig.fastBlockThirdPartyCookies && security.isTracker(details.url)) {
+      delete headers["set-cookie"];
     }
     callback({ responseHeaders: headers });
   });
@@ -499,7 +498,7 @@ function validateString(val, name, maxLen = 2048) {
 
 function validateUrl(val, name) {
   validateString(val, name);
-  if (!/^(https?|orbit|about|data|blob):/i.test(val)) {
+  if (!/^(https?|orbit|about):/i.test(val)) {
     throw new TypeError(`${name} must be a valid URL (http/https/orbit scheme)`);
   }
   return val;
@@ -576,6 +575,18 @@ function setupIPC() {
       type: "chat_request",
       payload: { text, sessionId: sid },
     });
+  });
+
+  // Companion task management
+  ipcMain.handle("companion:task", (_, payload) => {
+    validateObject(payload, "companion payload");
+    queueOrSend({ type: "companion_task", payload });
+    return true;
+  });
+  ipcMain.handle("companion:stop", (_, payload) => {
+    validateObject(payload, "companion payload");
+    queueOrSend({ type: "companion_stop", payload });
+    return true;
   });
 
   // Navigation
@@ -765,6 +776,25 @@ function createWindow(incognito = false) {
   // ── Window Controls (frameless window) ────────────────────────
   ipcMain.handle("window:create", () => { createWindow(false); return true; });
   ipcMain.handle("window:create-private", () => { createWindow(true); return true; });
+  ipcMain.handle("window:fullscreen", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    const next = !mainWindow.isFullScreen();
+    mainWindow.setFullScreen(next);
+    return next;
+  });
+  // Clear cookies + storage for one origin (site-settings popup action).
+  ipcMain.handle("session:clear-site-data", async (_e, origin) => {
+    const o = validateString(origin, "origin", 512);
+    try {
+      await getBrowserSession().clearStorageData({
+        origin: o,
+        storages: ["cookies", "localstorage", "indexdb", "cachestorage"],
+      });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  });
   ipcMain.on("win-minimize", () => mainWindow?.minimize());
   ipcMain.on("win-maximize", () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -836,7 +866,7 @@ app.on("web-contents-created", (_event, contents) => {
       return { action: "deny" };
     });
     contents.on("will-navigate", (event, url) => {
-      if (!/^(https?|about|data|blob):/i.test(url)) {
+      if (!/^(https?|about):/i.test(url)) {
         event.preventDefault();
       }
     });

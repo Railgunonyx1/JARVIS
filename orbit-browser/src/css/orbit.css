@@ -1527,6 +1527,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 
+/* ── Tab Groups ─────────────────────────────────────────────────── */
+.tab{border-top:2px solid transparent}
+.tab-grp{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;cursor:pointer;flex:none}
+
+/* ── Site Settings Popup ────────────────────────────────────────── */
+.site-popup{width:300px}
+.site-current{padding:10px 12px}
+.site-host{font-size:14px;color:var(--jb-paper);font-weight:500;word-break:break-all}
+.site-sub{font-size:11px;color:var(--jb-mute);margin-top:2px}
+.site-perms{padding:4px 0}
+.site-perm-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:var(--jb-text)}
+.site-perm-row.sub{padding-left:20px;color:var(--jb-mute);font-size:11px}
+.menu-item.danger{color:var(--jb-danger)}
+.menu-item.danger:hover{background:var(--jb-danger);color:var(--jb-void)}
+
 /* ── Pinned / Muted Tabs ────────────────────────────────────────── */
 .tab.pinned{max-width:150px}
 .tab.pinned .tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1562,3 +1577,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .hist-remove:hover{color:var(--jb-danger)}
 .hist-actions{display:flex;gap:8px;padding:12px 0 4px}
 .empty-page{padding:16px 0;color:var(--jb-mute);font-size:13px}
+.companion-card{transition:border-color .15s}
+.companion-card:hover{border-color:var(--jb-accent)}
+.companion-action{transition:opacity .12s}
+.companion-action:hover{opacity:.85}
+#jarvisStatus{width:8px;height:8px;border-radius:50%;background:var(--jb-mute);transition:background .3s}
+#jarvisStatus.online{background:#4ade80}
+#jarvisStatus.offline{background:#f87171}

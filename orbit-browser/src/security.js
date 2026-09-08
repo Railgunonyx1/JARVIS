@@ -124,6 +124,23 @@ class SecurityModule {
   }
 
   /**
+   * True when the URL belongs to a known ad/tracker host. Used by the main
+   * process to scope cookie filtering to trackers ONLY (Brave-standard mode)
+   * so SSO/OAuth/iframe logins — which set cookies cross-site — keep working
+   * and the user stays logged in.
+   */
+  isTracker(url) {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname;
+      if (BLOCKED_DOMAINS.some(d => hostname.includes(d))) return true;
+      return TRACKER_PATTERNS.some(p => p.test(url));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Upgrade HTTP to HTTPS
    */
   upgradeToHttps(url) {
