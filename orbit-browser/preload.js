@@ -46,7 +46,15 @@ contextBridge.exposeInMainWorld("orbit", {
     minimize: () => ipcRenderer.send("win-minimize"),
     maximize: () => ipcRenderer.send("win-maximize"),
     close: () => ipcRenderer.send("win-close"),
+    create: () => ipcRenderer.invoke("window:create"),
+    createPrivate: () => ipcRenderer.invoke("window:create-private"),
   },
+
+  // ── Webview partition for this window (persist:orbit or in-memory) ──
+  partition: (() => {
+    const arg = process.argv.find((a) => a.startsWith("--orbit-partition="));
+    return arg ? arg.split("=")[1] : null;
+  })(),
 
   // ── Navigation ──────────────────────────────────────────────────
   navigate: (url) => ipcRenderer.invoke("navigate", url),

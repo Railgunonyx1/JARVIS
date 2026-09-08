@@ -83,7 +83,7 @@ function showToast(type, title, msg, dur) {
   const icons = { ok: "\u2713", warn: "\u26a0", err: "\u2717", info: "\u2139" };
   const t = document.createElement("div");
   t.className = "toast";
-  const html = '<div class="toast-icon ' + type + '">' + (icons[type] || "") + '</div>';
+  let html = '<div class="toast-icon ' + type + '">' + (icons[type] || "") + '</div>';
   html += '<div class="toast-body"><div class="toast-title">' + title + '</div>';
   if (msg) html += '<div class="toast-msg">' + msg + '</div>';
   html += '</div><button class="toast-close">\u00d7</button>';
@@ -115,6 +115,17 @@ function setMatrix(state) {
   if (floatMatrix) floatMatrix.dataset.state = state === "ask" ? "ask" : "running";
 }
 
+// ── Reopen Closed Tab (Chrome-style Ctrl+Shift+T) ─────────────
+const closedTabs = [];
+const MAX_CLOSED_TABS = 20;
+
+function reopenClosedTab() {
+  const last = closedTabs.pop();
+  if (!last) { showToast("info", "No closed tabs", "Nothing to reopen"); return; }
+  createTab(last.url);
+  showToast("ok", "Tab Reopened", last.title || last.url);
+}
+
 // ── Tab Management ────────────────────────────────────────────
 function activeWebview() {
   const tab = tabs.get(activeTabId);
@@ -128,22 +139,101 @@ function tabOwnedBy(wv) {
   return null;
 }
 
+function currentPartition() {
+  const seed = $("#webview");
+  return (
+    window.__orbitPartition ||
+    (window.orbit && window.orbit.partition) ||
+    (seed && seed.getAttribute("partition")) ||
+    "persist:orbit"
+  );
+}
+
+function isPrivateWindow() {
+  return currentPartition() !== "persist:orbit";
+}
+
 function createWebview() {
   const seed = $("#webview");
   const wv = document.createElement("webview");
-  wv.className = "webview hidden";
-  wv.setAttribute("partition", window.__orbitPartition || seed?.getAttribute("partition") || "persist:orbit");
+  // NEVER create a webview hidden: a display:none webview's guest process
+  // never attaches, so the first loadURL throws and the user sees a white
+  // screen. Guests attach while visible; background tabs get display:none
+  // later (in activateTab) once already attached.
+  wv.className = "webview";
+  // A webview with NO src attribute never starts its guest in Electron 28
+  // (no did-attach, no dom-ready — loadURL then throws synchronously). Seed
+  // it with about:blank so the guest is alive before the first navigation.
+  wv.setAttribute("src", "about:blank");
+  wv.setAttribute("partition", currentPartition());
   wv.setAttribute("preload", seed?.getAttribute("preload") || "./guest-preload.js");
   wv.setAttribute("webpreferences", seed?.getAttribute("webpreferences") || "contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false");
   contentArea.appendChild(wv);
   return wv;
 }
 
+function _doLoad(wv, url, attempt) {
+  // Shared loader: catches both the synchronous not-attached throw (which
+  // .catch() alone would miss — the original white-screen bug) and Promise
+  // rejections. Transient failures (guest session still initializing, an
+  // in-flight about:blank load) get one automatic retry, like Chrome.
+  attempt = attempt || 0;
+  try {
+    wv.loadURL(url)
+      .then(() => { if (wv.dataset) wv.dataset.pendingTries = "0"; })
+      .catch((err) => {
+        const msg = (err && err.message) ? err.message : String(err);
+        // ERR_ABORTED is a benign cancellation (a newer navigation superseded
+        // this one) — never retry or toast it, or we'd stomp the user's new URL.
+        const aborted = /ERR_ABORTED/.test(msg);
+        console.error("[NAV] loadURL rejected:", msg);
+        if (!aborted && attempt < 2) {
+          setTimeout(() => _doLoad(wv, url, attempt + 1), 500);
+        } else if (!aborted) {
+          showToast("err", "Navigation failed", msg.substring(0, 200));
+        }
+      });
+  } catch (err) {
+    // Guest not attached / dom-ready not emitted yet (webview created behind
+    // an internal page). Park the URL; did-attach/dom-ready flush it. The
+    // retry chain is BOUNDED (each attempt waits longer) so a guest that
+    // never becomes ready fails loudly instead of retrying silently forever.
+    if (wv.dataset) {
+      wv.dataset.pendingUrl = url;
+      const tries = parseInt(wv.dataset.pendingTries || "0", 10) + 1;
+      wv.dataset.pendingTries = String(tries);
+      if (tries <= 10) {
+        console.warn("[NAV] webview not ready (try " + tries + "), deferring load:", url);
+        setTimeout(() => flushPendingLoad(wv), 400 * tries);
+      } else {
+        wv.dataset.pendingUrl = "";
+        console.error("[NAV] webview never became ready:", url);
+        showToast("err", "Navigation failed", "The tab could not start loading (webview never became ready)");
+      }
+    }
+  }
+}
+
+function loadURLSafely(wv, url) {
+  _doLoad(wv, url, 0);
+}
+
+function flushPendingLoad(wv) {
+  if (!wv.dataset || !wv.dataset.pendingUrl) return;
+  const url = wv.dataset.pendingUrl;
+  wv.dataset.pendingUrl = "";
+  _doLoad(wv, url, 0);
+  // If _doLoad hit the not-attached path again (did-attach can fire before
+  // dom-ready), it re-parks the URL for the dom-ready flush.
+}
+
 function attachWebviewEvents(wv) {
   wv.addEventListener("did-attach", () => {
+    flushPendingLoad(wv);
     const t = tabOwnedBy(wv);
     if (t) window.orbit?.tabs?.attach?.(t.id, t.url, wv.getWebContentsId?.() || 0);
   });
+  wv.addEventListener("dom-ready", () => flushPendingLoad(wv));
   wv.addEventListener("did-fail-load", (e) => {
     // Only show errors for main-frame loads (not subresources)
     if (e.isMainFrame === false && e.type !== "other") return;
@@ -183,12 +273,14 @@ function attachWebviewEvents(wv) {
   wv.addEventListener("did-navigate", (e) => {
     const tab = tabOwnedBy(wv);
     if (!tab) return;
+    // Ignore about:blank (the webview's initial load) — it would clobber the
+    // tab's real URL and record blank history entries.
+    if (!e.url || e.url === "about:blank") return;
     tab.url = e.url;
+    recordHistory(e.url, tab.title || e.url);
     // Only update omnibox for the active tab. Prevent stale did-navigate
     // events from other tabs overwriting the current omnibox value.
     if (tab.id !== activeTabId) return;
-    // Ignore about:blank navigations (webview initial load)
-    if (!e.url || e.url === "about:blank") return;
     omniInput.value = e.url.replace(/^https?:\/\//, "");
     omniInput.placeholder = "Search or enter URL";
     wv.classList.remove("hidden");
@@ -238,17 +330,21 @@ function renderTabs() {
 }
 function _renderTabsInner() {
   tabStrip.innerHTML = "";
-  for (const [id, tab] of tabs) {
+  // Pinned tabs first (Chrome-style), then normal tabs in open order.
+  const ordered = Array.from(tabs.entries()).sort((a, b) => (b[1].pinned ? 1 : 0) - (a[1].pinned ? 1 : 0));
+  for (const [id, tab] of ordered) {
     const el = document.createElement("button");
     const sleeping = tab.sleeping ? " sleeping" : "";
-    el.className = "tab " + (id === activeTabId ? "active " : "") + (tab.agentOwned ? "agent-owned " : "") + sleeping;
+    const pinned = tab.pinned ? " pinned" : "";
+    const muted = tab.muted ? " muted" : "";
+    el.className = "tab " + (id === activeTabId ? "active " : "") + (tab.agentOwned ? "agent-owned " : "") + sleeping + pinned + muted;
     el.dataset.id = id;
-    el.title = tab.title;
+    el.title = tab.title + (tab.muted ? " (muted)" : "");
 
     if (tab.agentOwned) {
       el.innerHTML = '<span class="tab-glyph"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="tab-title">' + escapeHtml(tab.title) + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
     } else {
-      el.innerHTML = '<span class="tab-fav"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg></span><span class="tab-title">' + escapeHtml(tab.title) + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
+      el.innerHTML = '<span class="tab-fav">' + (tab.pinned ? '\u2702' : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>') + '</span><span class="tab-title">' + escapeHtml(tab.title) + '</span>' + (tab.muted ? '<span class="tab-state" title="Muted">\u{1F507}</span>' : '') + '<span class="tab-close" data-close="' + id + '">\u00d7</span>';
     }
 
     el.addEventListener("click", (e) => {
@@ -330,18 +426,36 @@ function createTab(url) {
     webview: null, wcId: 0,
   };
   const seed = $("#webview");
-  const wv = tabs.size === 0 && seed ? seed : createWebview();
+  // Private windows never reuse the persist:orbit seed — every tab gets a
+  // fresh in-memory webview (and the seed is hidden so it can't show through).
+  const privateMode = isPrivateWindow();
+  const wv = tabs.size === 0 && seed && !privateMode ? seed : createWebview();
+  if (privateMode && seed) seed.classList.add("hidden");
   tab.webview = wv;
   attachWebviewEvents(wv);
   tabs.set(id, tab);
   activateTab(id);
   window.orbit?.tabs?.activate?.(id);
+  // createTab never navigated the webview before: a restored/external URL
+  // would otherwise sit on a blank viewport until manually navigated.
+  // Park the URL in the pending mechanism so it loads only AFTER the guest's
+  // initial about:blank dom-ready (did-attach/dom-ready flush it) — loading
+  // while about:blank is still in flight can abort with ERR_FAILED.
+  if (url && !url.startsWith("orbit://")) {
+    if (wv.dataset) wv.dataset.pendingUrl = url;
+    setTimeout(() => flushPendingLoad(wv), 2000);
+  }
   return id;
 }
 
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
+  // Remember the tab for Ctrl+Shift+T reopen (skip internal pages).
+  if (tab.url && !tab.url.startsWith("orbit://")) {
+    closedTabs.push({ url: tab.url, title: tab.title || tab.url });
+    if (closedTabs.length > MAX_CLOSED_TABS) closedTabs.shift();
+  }
   clearSleepTimer(id);
   clearHibernateTimer(id);
   if (tab.webview) {
@@ -380,7 +494,8 @@ function activateTab(id) {
 
   const internal = tab.url ? tab.url.startsWith("orbit://") : true;
   if (internal) {
-    if (webview) webview.classList.add("hidden");
+    // Overlay (see navigateTo): the webview stays visible so its guest stays
+    // attached and navigable.
     internalPages.classList.add("visible");
     const pageId = INTERNAL_PAGES[tab.url];
     showInternalPage(pageId || "newtabPage");
@@ -433,6 +548,9 @@ function showInternalPage(pageId) {
   const target = document.getElementById(pageId);
   if (target) target.classList.add("on");
   if (pageId === "diagnosticsPage") refreshDiagnostics();
+  if (pageId === "historyPage") renderHistoryPage();
+  if (pageId === "bookmarksPage") renderBookmarksPage();
+  if (pageId === "extensionsPage") renderExtensionsPage();
 }
 
 function refreshDiagnostics() {
@@ -476,7 +594,9 @@ function navigateTo(url) {
   if (url.startsWith("orbit://")) {
     omniInput.value = "";
     omniInput.placeholder = url.replace("orbit://", "orbit://");
-    if (webview) webview.classList.add("hidden");
+    // Internal pages overlay the (attached, visible) webview instead of
+    // display:none'ing it — hiding a webview before its guest attaches
+    // permanently breaks navigation for that tab.
     internalPages.classList.add("visible");
     const pageId = INTERNAL_PAGES[url];
     showInternalPage(pageId || "newtabPage");
@@ -490,11 +610,10 @@ function navigateTo(url) {
     const wv = activeWebview();
     if (!wv) { console.error("[NAV] No webview for active tab"); showToast("err", "No webview", "Tab has no webview attached. Try creating a new tab."); return; }
     wv.classList.remove("hidden");
-    // loadURL returns a Promise — catch rejections (e.g. invalid URL, aborted)
-    wv.loadURL(url).catch(function(err) {
-      console.error("[NAV] loadURL rejected:", err);
-      showToast("err", "Navigation failed", (err && err.message) ? err.message.substring(0, 200) : "Could not load " + url);
-    });
+    // Show the viewport first so a hidden guest can attach, then load.
+    // loadURLSafely handles both Promise rejections AND the synchronous
+    // not-attached-yet throw that caused the white screen.
+    loadURLSafely(wv, url);
     setTimeout(() => {
       try {
         backBtn.disabled = !wv.canGoBack();
@@ -548,6 +667,20 @@ reloadBtn.addEventListener("click", () => {
 // ── New Tab ───────────────────────────────────────────────────
 newTabBtn.addEventListener("click", () => createTab());
 if (emptyNewTabBtn) emptyNewTabBtn.addEventListener("click", () => createTab());
+
+// Middle-click on a tab closes it (Chrome), double-click on empty
+// strip space opens a new tab.
+if (tabStrip) {
+  tabStrip.addEventListener("auxclick", (e) => {
+    if (e.button === 1) {
+      const el = e.target.closest(".tab");
+      if (el && el.dataset.id) closeTab(el.dataset.id);
+    }
+  });
+  tabStrip.addEventListener("dblclick", (e) => {
+    if (e.target === tabStrip || e.target.classList.contains("tab-strip")) createTab();
+  });
+}
 
 // ── Home Button ───────────────────────────────────────────────
 const homeBtn = $("#homeBtn");
@@ -1230,7 +1363,7 @@ if (findInput) findInput.addEventListener("keydown", (e) => {
 
 // ── Vision Panel ─────────────────────────────────────────────
 function renderVisionPanel() {
-  const html = '<div style="padding:16px;color:var(--jb-mute)">';
+  let html = '<div style="padding:16px;color:var(--jb-mute)">';
   
   html += '<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--jb-ghost);margin-bottom:12px">Vision Agent</div>';
   
@@ -1300,11 +1433,22 @@ if (tabContextMenu) tabContextMenu.addEventListener("click", (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
   if (action === "newTab") createTab();
+  if (action === "reopenTab") reopenClosedTab();
   if (action === "duplicate" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) createTab(tab.url); }
   if (action === "closeTab" && contextTabId) closeTab(contextTabId);
   if (action === "closeOthers" && contextTabId) { for (const [id] of tabs) { if (id !== contextTabId) { clearSleepTimer(id); clearHibernateTimer(id); tabs.delete(id); } } activateTab(contextTabId); renderTabs(); }
+  if (action === "closeRight" && contextTabId) {
+    const ids = Array.from(tabs.keys());
+    const idx = ids.indexOf(contextTabId);
+    for (let i = idx + 1; i < ids.length; i++) {
+      clearSleepTimer(ids[i]); clearHibernateTimer(ids[i]); tabs.delete(ids[i]);
+    }
+    activateTab(contextTabId); renderTabs();
+  }
   if (action === "reload") { try { const wv = activeWebview(); if (wv) wv.reload(); } catch (e) {} }
   if (action === "copyUrl" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) navigator.clipboard.writeText(tab.url); }
+  if (action === "muteTab" && contextTabId) { const tab = tabs.get(contextTabId); if (tab && tab.webview) { tab.muted = !tab.muted; try { tab.webview.setAudioMuted(tab.muted); } catch (err) {} renderTabs(); } }
+  if (action === "pinTab" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) { tab.pinned = !tab.pinned; renderTabs(); saveSession(); } }
   tabContextMenu.classList.remove("on");
 });
 
@@ -1319,12 +1463,21 @@ if (menuBtn) menuBtn.addEventListener("click", (e) => {
   browserMenu.classList.toggle("on");
 });
 
+// ── About (browser menu) ──────────────────────────────────────
+const aboutOrbit = document.getElementById("aboutOrbit");
+if (aboutOrbit) aboutOrbit.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllPopups();
+  showToast("info", "JARVIS Orbit 0.1.0", "Unbranded Chromium (Electron) \u00b7 DSH/1.0 \u00b7 Nothing Design System");
+});
+
 // ── Extension Popup ───────────────────────────────────────────
 const extPopup = $("#extPopup");
 const extBtn = $("#extBtn");
 if (extBtn) extBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
+  renderExtPopup();
   extPopup.style.right = "50px";
   extPopup.style.top = "84px";
   extPopup.classList.toggle("on");
@@ -1336,10 +1489,161 @@ const profileBtn = $("#profileBtn");
 if (profileBtn) profileBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
+  renderProfilePopup();
   profilePopup.style.right = "80px";
   profilePopup.style.top = "84px";
   profilePopup.classList.toggle("on");
 });
+
+// ── Profiles (Chrome-style multi-profile) ─────────────────────
+const PROFILES_KEY = "orbit-profiles";
+const PROFILE_COLORS = ["#8ab4f8", "#f28b82", "#81c995", "#fdd663", "#d7aefb", "#78d9ec", "#ff8bcb", "#9aa0a6"];
+function getProfiles() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
+    return (p && p.length) ? p : [{ id: "default", name: "Personal", color: "#9aa0a6", active: true }];
+  } catch (e) { return [{ id: "default", name: "Personal", color: "#9aa0a6", active: true }]; }
+}
+function saveProfiles(p) { try { localStorage.setItem(PROFILES_KEY, JSON.stringify(p)); } catch (e) {} }
+function activeProfile() { return getProfiles().find((x) => x.active) || getProfiles()[0]; }
+function syncProfileAvatar() {
+  const prof = activeProfile();
+  const avatar = document.querySelector(".toolbar-avatar");
+  if (avatar) {
+    avatar.textContent = (prof.name || "P").charAt(0).toUpperCase();
+    avatar.style.background = prof.color;
+  }
+}
+function switchProfile(id) {
+  const p = getProfiles();
+  if (!p.some((x) => x.id === id)) return;
+  p.forEach((x) => { x.active = (x.id === id); });
+  saveProfiles(p);
+  syncProfileAvatar();
+  renderProfilePopup();
+  const prof = activeProfile();
+  showToast("ok", "Profile Switched", "Now using \"" + prof.name + "\"");
+  closeAllPopups();
+}
+function addProfile() {
+  const name = prompt("New profile name:", "");
+  if (!name || !name.trim()) return;
+  const p = getProfiles();
+  p.push({ id: "p" + Date.now().toString(36), name: name.trim().slice(0, 24), color: PROFILE_COLORS[p.length % PROFILE_COLORS.length], active: false });
+  saveProfiles(p);
+  switchProfile(p[p.length - 1].id);
+}
+function toggleGuestMode() {
+  const p = getProfiles();
+  const active = activeProfile();
+  if (active.id === "guest") {
+    const fallback = p.find((x) => x.id !== "guest");
+    if (fallback) switchProfile(fallback.id);
+    return;
+  }
+  if (!p.some((x) => x.id === "guest")) {
+    p.push({ id: "guest", name: "Guest", color: "#f28b82", active: false });
+    saveProfiles(p);
+  }
+  switchProfile("guest");
+  showToast("warn", "Guest Mode", "This session's data will not be saved");
+}
+function lockProfile() {
+  localStorage.removeItem(HISTORY_KEY);
+  localStorage.removeItem("orbit-bookmarks");
+  localStorage.removeItem("orbit-session");
+  bookmarks = [];
+  closedTabs.length = 0;
+  renderBookmarkBar();
+  showToast("ok", "Profile Locked", "History and saved data cleared");
+  renderProfilePopup();
+}
+function renderProfilePopup() {
+  const popup = document.getElementById("profilePopup");
+  if (!popup) return;
+  const prof = activeProfile();
+  const guest = prof.id === "guest";
+  let html = '<div class="pop-header"><div class="profile-avatar" style="background:' + prof.color + '">' + escapeHtml(prof.name.charAt(0).toUpperCase()) + '</div><div><div class="pop-title">' + escapeHtml(prof.name) + '</div><div class="pop-sub">' + (guest ? "Guest \u00b7 not saved" : "Personal \u00b7 Sync on") + '</div></div></div>';
+  getProfiles().forEach((p) => {
+    html += '<button class="profile-item' + (p.active ? " on" : "") + '" data-profile="' + p.id + '"><span class="profile-avatar sm" style="background:' + p.color + '">' + escapeHtml(p.name.charAt(0).toUpperCase()) + '</span><span class="profile-name">' + escapeHtml(p.name) + '</span>' + (p.active ? '<span class="chip ok">Active</span>' : "") + '</button>';
+  });
+  html += '<div class="menu-sep"></div>';
+  html += '<button class="menu-item" id="profileAdd">Add profile</button>';
+  html += guest
+    ? '<button class="menu-item" id="profileExitGuest">Exit guest mode</button>'
+    : '<button class="menu-item" id="profileGuest">Guest mode</button>';
+  html += '<button class="menu-item" id="profileLock">Lock profile</button>';
+  html += '<div class="menu-sep"></div>';
+  html += '<button class="menu-item" data-nav="orbit://settings">Profile settings</button>';
+  popup.innerHTML = html;
+  popup.querySelectorAll("[data-profile]").forEach((b) => b.addEventListener("click", () => switchProfile(b.dataset.profile)));
+  const addBtn = document.getElementById("profileAdd");
+  if (addBtn) addBtn.addEventListener("click", () => addProfile());
+  const guestBtn = document.getElementById("profileGuest");
+  if (guestBtn) guestBtn.addEventListener("click", () => toggleGuestMode());
+  const exitBtn = document.getElementById("profileExitGuest");
+  if (exitBtn) exitBtn.addEventListener("click", () => toggleGuestMode());
+  const lockBtn = document.getElementById("profileLock");
+  if (lockBtn) lockBtn.addEventListener("click", () => lockProfile());
+}
+
+// ── Extension Popup (interactive) ─────────────────────────────
+const EXT_STATE_KEY = "orbit-ext-state";
+const EXTENSIONS = [
+  { id: "jarvis", name: "JARVIS", sub: "Built into Orbit", builtin: true },
+  { id: "ublock", name: "uBlock Origin", sub: "Ad & tracker blocking" },
+  { id: "bitwarden", name: "Bitwarden", sub: "Password manager" },
+];
+function getExtState() {
+  try { return JSON.parse(localStorage.getItem(EXT_STATE_KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveExtState(s) { try { localStorage.setItem(EXT_STATE_KEY, JSON.stringify(s)); } catch (e) {} }
+function extStatus(id) { const s = getExtState()[id] || {}; return { pinned: !!s.pinned, enabled: s.enabled !== false }; }
+function renderExtPopup() {
+  const popup = document.getElementById("extPopup");
+  if (!popup) return;
+  let html = '<div class="pop-header"><span class="pop-title">Extensions</span></div>';
+  EXTENSIONS.forEach((ext) => {
+    const st = extStatus(ext.id);
+    html += '<div class="ext-row' + (st.enabled ? "" : " disabled") + '"><div class="ext-icon">' + escapeHtml(ext.name.charAt(0).toUpperCase()) + '</div>' +
+      '<div class="ext-info"><div class="ext-name">' + escapeHtml(ext.name) + '</div><div class="ext-sub">' + escapeHtml(ext.sub) + '</div></div>' +
+      '<button class="chip ext-pin' + (st.pinned ? " ok" : "") + '" data-pin="' + ext.id + '" title="' + (st.pinned ? "Unpin from toolbar" : "Pin to toolbar") + '">' + (st.pinned ? "\u2713" : "Pin") + '</button>' +
+      '<button class="ext-power' + (st.enabled ? " on" : "") + '" data-power="' + ext.id + '" title="' + (st.enabled ? "Disable extension" : "Enable extension") + '"></button>' +
+      '</div>';
+  });
+  html += '<div class="menu-sep"></div>';
+  html += '<button class="menu-item" data-nav="orbit://extensions">Manage extensions</button>';
+  popup.innerHTML = html;
+  popup.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const s = getExtState(); const st = s[b.dataset.pin] || {};
+    st.pinned = !st.pinned; s[b.dataset.pin] = st;
+    saveExtState(s);
+    renderExtPopup(); renderExtensionsPage();
+  }));
+  popup.querySelectorAll("[data-power]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const s = getExtState(); const st = s[b.dataset.power] || {};
+    st.enabled = st.enabled === false ? true : false; s[b.dataset.power] = st;
+    saveExtState(s);
+    renderExtPopup(); renderExtensionsPage();
+  }));
+}
+function renderExtensionsPage() {
+  const host = document.getElementById("extensionsPage");
+  if (!host) return;
+  const sheet = host.querySelector(".sheet");
+  if (!sheet) return;
+  let html = '<div class="sheet"><h1>Extensions</h1><p class="sheet-lede">JARVIS is built in. It is not a store banner.</p><div class="group">';
+  EXTENSIONS.forEach((ext) => {
+    const st = extStatus(ext.id);
+    html += '<div class="row"><div><div class="name">' + escapeHtml(ext.name) + '</div><div class="sub">' + escapeHtml(ext.sub) + '</div></div>' +
+      '<span class="chip' + (st.pinned ? " ok" : "") + '">' + (st.pinned ? "Pinned" : "Unpinned") + '</span>' +
+      '<span class="chip ' + (st.enabled ? "ok" : "") + '">' + (st.enabled ? "Enabled" : "Disabled") + '</span></div>';
+  });
+  html += '</div></div>';
+  sheet.outerHTML = html;
+}
 
 // ── Close all popups ──────────────────────────────────────────
 function closeAllPopups() {
@@ -1365,6 +1669,13 @@ document.addEventListener("click", (e) => {
   if (actionItem && actionItem.closest(".popover, .context-menu")) {
     const action = actionItem.dataset.action;
     if (action === "newTab") createTab();
+    if (action === "newWindow") { window.orbit?.window?.create?.(); }
+    if (action === "incognito") { window.orbit?.window?.createPrivate?.(); }
+    if (action === "reopenTab") reopenClosedTab();
+    if (action === "zoomIn") zoomIn();
+    if (action === "zoomOut") zoomOut();
+    if (action === "zoomReset") zoomReset();
+    if (action === "find") toggleFind();
     if (action === "reload") { try { const wv = activeWebview(); if (wv) wv.reload(); } catch (e) {} }
     closeAllPopups();
   }
@@ -1403,6 +1714,9 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key.toLowerCase() === "k") { e.preventDefault(); openCmdPalette(); return; }
   // Ctrl+T: New tab
   if (ctrl && e.key.toLowerCase() === "t") { e.preventDefault(); createTab(); return; }
+  // Ctrl+N: New window / Ctrl+Shift+N: New private window
+  if (ctrl && e.key.toLowerCase() === "n" && !shift) { e.preventDefault(); window.orbit?.window?.create?.(); return; }
+  if (ctrl && shift && e.key.toLowerCase() === "n") { e.preventDefault(); window.orbit?.window?.createPrivate?.(); return; }
   // Ctrl+W: Close tab
   if (ctrl && e.key.toLowerCase() === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
   // Ctrl+L: Focus omnibox
@@ -1484,6 +1798,12 @@ document.addEventListener("keydown", (e) => {
   if (e.altKey && e.key === "ArrowRight") {
     e.preventDefault();
     try { const wv = activeWebview(); if (wv && wv.canGoForward()) wv.goForward(); } catch (e) {}
+    return;
+  }
+  // Ctrl+Shift+T: Reopen closed tab (Chrome)
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === "t") {
+    e.preventDefault();
+    reopenClosedTab();
     return;
   }
   // Escape: Close things
@@ -1597,8 +1917,8 @@ function wakeTab(id) {
   clearHibernateTimer(id);
   if (tab.hibernated) {
     tab.hibernated = false;
-    if (tab.url && !tab.url.startsWith('orbit://')) {
-      tab.webview.loadURL(tab.url).catch(() => {});
+    if (tab.url && !tab.url.startsWith('orbit://') && tab.webview) {
+      loadURLSafely(tab.webview, tab.url);
     }
   }
   if (tab.sleeping) {
@@ -1752,6 +2072,107 @@ if (window.enhancedSecurity) {
 if (window.securityTester) {
 }
 
+// ── History (Chrome-style recent visits, recorded on navigate) ──
+const HISTORY_KEY = "orbit-history";
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch (e) { return []; }
+}
+function recordHistory(url, title) {
+  if (!url || url.startsWith("about:") || url.startsWith("orbit://") || url.startsWith("data:")) return;
+  const h = getHistory();
+  const now = Date.now();
+  // Merge consecutive duplicates (same URL within a minute).
+  if (h.length && h[0].url === url && (now - h[0].ts) < 60000) {
+    h[0].title = title; h[0].ts = now;
+  } else {
+    h.unshift({ url: url, title: title || url, ts: now });
+  }
+  if (h.length > 400) h.length = 400;
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) {}
+}
+function renderHistoryPage() {
+  const host = document.getElementById("historyPage");
+  if (!host) return;
+  const h = getHistory();
+  const sheet = host.querySelector(".sheet");
+  if (!sheet) return;
+  const dayLabel = (ts) => {
+    const d = new Date(ts); const today = new Date();
+    const sameDay = (a, b) => a.toDateString() === b.toDateString();
+    if (sameDay(d, today)) return "Today";
+    const yest = new Date(today); yest.setDate(today.getDate() - 1);
+    if (sameDay(d, yest)) return "Yesterday";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+  const timeLabel = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  let html = '<div class="sheet"><h1>History</h1><p class="sheet-lede">Real visits from this device — recorded as you browse.</p>';
+  if (!h.length) {
+    html += '<div class="group"><div class="empty-page">No history yet. Browse somewhere and it will appear here.</div></div>';
+  } else {
+    let lastDay = "";
+    h.forEach((e, i) => {
+      const day = dayLabel(e.ts);
+      if (day !== lastDay) { html += '<div class="group"><h2>' + day + '</h2>'; lastDay = day; }
+      const fav = "<svg width='12' height='12' viewBox='0 0 12 12' fill='none'><circle cx='6' cy='6' r='4.5' stroke='currentColor'/></svg>";
+      html += '<div class="row hist-row" data-url="' + escapeHtml(e.url) + '"><div class="hist-fav">' + fav + '</div><div class="hist-body"><div class="name">' + escapeHtml(e.title) + '</div><div class="sub">' + escapeHtml(e.url) + '</div></div><span class="meta">' + timeLabel(e.ts) + '</span><button class="hist-remove" data-remove="' + i + '" title="Remove">\u00d7</button></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div class="hist-actions"><button class="chip-btn" id="histClear">Clear history</button></div></div>';
+  sheet.outerHTML = html;
+  const clearBtn = document.getElementById("histClear");
+  if (clearBtn) clearBtn.addEventListener("click", () => {
+    localStorage.removeItem(HISTORY_KEY);
+    showToast("ok", "History Cleared", "All browsing history removed");
+    renderHistoryPage();
+  });
+  host.querySelectorAll(".hist-remove").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const h2 = getHistory(); h2.splice(parseInt(b.dataset.remove, 10), 1);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h2)); } catch (err) {}
+      renderHistoryPage();
+    });
+  });
+  host.querySelectorAll(".hist-row").forEach((r) => {
+    r.addEventListener("click", () => navigateTo(r.dataset.url));
+  });
+}
+function renderBookmarksPage() {
+  const host = document.getElementById("bookmarksPage");
+  if (!host) return;
+  const sheet = host.querySelector(".sheet");
+  if (!sheet) return;
+  let html = '<div class="sheet"><h1>Bookmarks</h1><p class="sheet-lede">Saved from the \u2605 star in the address bar.</p>';
+  if (!bookmarks.length) {
+    html += '<div class="group"><div class="empty-page">No bookmarks yet. Press the star in the address bar to save a page.</div></div>';
+  } else {
+    html += '<div class="group">';
+    bookmarks.forEach((b, i) => {
+      html += '<div class="row hist-row" data-url="' + escapeHtml(b.url) + '"><div class="hist-fav">\u2605</div><div class="hist-body"><div class="name">' + escapeHtml(b.title || b.url) + '</div><div class="sub">' + escapeHtml(b.url) + '</div></div><button class="hist-remove" data-remove="' + i + '" title="Remove">\u00d7</button></div>';
+    });
+    html += '</div><div class="hist-actions"><button class="chip-btn" id="bmOpenAll">Open all</button></div>';
+  }
+  html += '</div>';
+  sheet.outerHTML = html;
+  const openAll = document.getElementById("bmOpenAll");
+  if (openAll) openAll.addEventListener("click", () => {
+    bookmarks.forEach((b) => createTab(b.url));
+    showToast("ok", "Bookmarks Opened", bookmarks.length + " tabs opened");
+  });
+  host.querySelectorAll(".hist-remove").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      bookmarks.splice(parseInt(b.dataset.remove, 10), 1);
+      localStorage.setItem("orbit-bookmarks", JSON.stringify(bookmarks));
+      renderBookmarkBar(); renderBookmarksPage();
+    });
+  });
+  host.querySelectorAll(".hist-row").forEach((r) => {
+    r.addEventListener("click", () => navigateTo(r.dataset.url));
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────
 initMatrix(sbMatrix);
 if (floatMatrix) initMatrix(floatMatrix);
@@ -1770,6 +2191,10 @@ window._renderNonChatPanel = function(name) {
 var bootTabId = createTab("orbit://newtab");
 var bootReplaced = false;
 setMatrix("idle");
+// Render dynamic popup contents (profiles, extensions) and sync the avatar.
+syncProfileAvatar();
+renderProfilePopup();
+renderExtPopup();
 renderBookmarkBar();
 updatePerfHud();
 // Show initial JARVIS welcome

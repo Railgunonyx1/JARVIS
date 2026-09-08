@@ -25,6 +25,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   outline-offset: 2px;
 }
 
+/* ── Global Transitions ─────────────────────────────────────────── */
+.tab, .nav-btn, .win-btn, .bm-item, .cmd-item, .sb-chip, .empty-tabs-btn,
+.ctx-item, .menu-item, .toast, .modal, .sidebar, .popover {
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease,
+              transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.toast { transition: opacity 0.2s ease, transform 0.2s ease; }
+.toast.out { opacity: 0; transform: translateX(20px); }
+.sidebar { transition: width 0.2s ease, opacity 0.2s ease; }
+.modal-bg { transition: opacity 0.2s ease; }
+.cmd-palette-bg { transition: opacity 0.15s ease; }
+.webview { transition: opacity 0.1s ease; }
+
 /* ── Browser Layout ─────────────────────────────────────────────── */
 .browser {
   height: 100vh;
@@ -71,6 +84,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .tab:hover { background: var(--jb-surface); color: var(--jb-text); }
 .tab.active { background: var(--jb-surface-hover); color: var(--jb-paper); z-index: 1; }
+.tab.dragging { opacity: 0.4; transform: scale(0.95); }
+.tab.drag-over { border-left: 2px solid var(--jb-paper); margin-left: -2px; }
+.tab.sleeping { opacity: 0.5; }
+.tab.sleeping .tab-title { font-style: italic; }
+.tab.hibernated { opacity: 0.35; }
+.tab.hibernated .tab-title::after { content: ' 💤'; font-style: normal; }
 
 .tab-fav {
   width: 14px; height: 14px;
@@ -226,10 +245,177 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   border: none;
 }
 
-.internal-pages {
+/* ── Chat Module ──────────────────────────────────────────────── */
+.chat-msg { margin: 0 0 14px; }
+.chat-label {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--jb-ghost); margin-bottom: 4px;
+}
+.chat-content { line-height: 1.5; }
+.chat-msg--user .chat-content { color: var(--jb-paper); }
+.chat-msg--jarvis .chat-content { color: var(--jb-text); }
+.chat-msg--streaming .chat-content::after {
+  content: '\25CF'; animation: blink 1s infinite; margin-left: 2px;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.chat-msg--highlight { background: var(--jb-surface); border-radius: 6px; padding: 4px 8px; }
+.chat-empty { padding: 24px 8px; text-align: center; color: var(--jb-mute); }
+.chat-empty-status {
+  font-size: 14px; color: var(--jb-paper); letter-spacing: 0.1em;
+  font-family: var(--jb-font-display); margin-bottom: 8px;
+}
+.chat-empty-sub { font-size: 12px; }
+.chat-search {
+  width: 100%; background: var(--jb-void); border: 1px solid var(--jb-border);
+  border-radius: 8px; padding: 8px 12px; color: var(--jb-paper);
+  font-size: 12px; outline: none; box-sizing: border-box; margin-bottom: 12px;
+}
+.chat-search:focus { border-color: var(--jb-paper); }
+.chat-history-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.chat-history-count {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--jb-ghost);
+}
+.chat-history-clear {
+  background: none; border: none; color: var(--jb-ghost);
+  cursor: pointer; font-size: 11px;
+}
+.chat-history-clear:hover { color: var(--jb-paper); }
+.chat-history-list { max-height: calc(100vh - 300px); overflow-y: auto; }
+.chat-history-date {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--jb-ghost); padding: 8px 0 4px; border-top: 1px solid var(--jb-border);
+}
+.chat-history-item {
+  padding: 8px; cursor: pointer; border-radius: 6px; margin-bottom: 4px;
+}
+.chat-history-item:hover { background: var(--jb-surface); }
+.chat-history-item-header {
+  display: flex; justify-content: space-between;
+}
+.chat-history-item-label {
+  font-size: 11px; font-weight: 500; color: var(--jb-paper);
+}
+.chat-history-item-time {
+  font-size: 10px; color: var(--jb-ghost);
+}
+.chat-history-item-preview {
+  font-size: 12px; color: var(--jb-mute); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-history-empty {
+  padding: 20px; text-align: center; color: var(--jb-ghost); font-size: 12px;
+}
+.activity-item {
+  padding: 6px 0; border-bottom: 1px solid var(--jb-border);
+}
+.activity-meta {
+  font-size: 10px; color: var(--jb-ghost);
+}
+.activity-preview {
+  font-size: 12px; color: var(--jb-mute); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.panel-pad { padding: 12px; }
+.panel-muted { padding: 12px; color: var(--jb-mute); font-size: 12px; }
+.panel-section-label {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--jb-ghost); margin-bottom: 8px;
+}
+
+/* Slash-command popup */
+.cmd-popup {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  background: var(--jb-void); border: 1px solid var(--jb-border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  z-index: 100; margin-bottom: 4px;
+}
+.cmd-popup-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; cursor: pointer; font-size: 12px;
+}
+.cmd-popup-item:hover, .cmd-popup-item.active { background: var(--jb-surface); }
+.cmd-popup-cmd { color: var(--jb-paper); font-weight: 500; min-width: 100px; }
+.cmd-popup-desc { color: var(--jb-mute); }
+
+/* ── Empty Tabs Screen ─────────────────────────────────────── */
+.empty-tabs {
   width: 100%;
   height: 100%;
   display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--jb-void);
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+.empty-tabs.on { display: flex; }
+.empty-tabs-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.empty-tabs-icon {
+  color: var(--jb-ghost);
+  margin-bottom: 4px;
+}
+.empty-tabs-title {
+  font-family: var(--jb-font-display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--jb-mute);
+}
+.empty-tabs-sub {
+  font-size: 13px;
+  color: var(--jb-ghost);
+}
+.empty-tabs-sub kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--jb-line-hard);
+  border-radius: 4px;
+  font-family: var(--jb-font-mono);
+  font-size: 11px;
+  color: var(--jb-mute);
+  background: var(--jb-surface);
+}
+.empty-tabs-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--jb-line-hard);
+  background: var(--jb-surface);
+  color: var(--jb-text);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.empty-tabs-btn:hover {
+  background: var(--jb-surface-active);
+  border-color: var(--jb-paper);
+  color: var(--jb-paper);
+}
+
+.internal-pages {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  background: var(--jb-void);
+  z-index: 4;
+  overflow-y: auto;
 }
 .internal-pages.visible { display: flex; }
 .webview.hidden { display: none; }
@@ -803,100 +989,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   font-size: 10px; letter-spacing: 0.06em; color: var(--jb-paper);
 }
 
-/* ── DSH Panel ─────────────────────────────────────────────── */
-.dsh-panel { padding: 12px; }
-.dsh-section { margin-bottom: 16px; }
-.dsh-title {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--jb-ghost);
-  margin-bottom: 8px;
-}
-.dsh-model {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--jb-border);
-  border-radius: var(--jb-radius-sm);
-  background: var(--jb-void);
-  margin-bottom: 6px;
-  cursor: pointer;
-}
-.dsh-model:hover { border-color: var(--jb-line-hard); }
-.dsh-model.active { border-color: var(--jb-interactive); }
-.dsh-model-name { font-size: 12px; color: var(--jb-paper); flex: 1; }
-.dsh-model-status { font-size: 10px; color: var(--jb-mute); }
-
-.dsh-command {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--jb-border);
-  border-radius: var(--jb-radius-sm);
-  background: var(--jb-void);
-  margin-bottom: 4px;
-  cursor: pointer;
-}
-.dsh-command:hover { border-color: var(--jb-line-hard); background: var(--jb-surface); }
-.dsh-cmd-icon { color: var(--jb-mute); font-family: var(--jb-font-mono); font-size: 11px; width: 20px; text-align: center; }
-.dsh-cmd-name { font-size: 12px; color: var(--jb-paper); }
-.dsh-cmd-desc { font-size: 11px; color: var(--jb-mute); margin-left: auto; }
-
-.dsh-tool {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--jb-radius-sm);
-  margin-bottom: 2px;
-}
-.dsh-tool:hover { background: var(--jb-surface); }
-.dsh-tool-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.dsh-tool-dot.ok { background: var(--jb-success); }
-.dsh-tool-dot.err { background: var(--jb-danger); }
-.dsh-tool-name { font-size: 11px; color: var(--jb-text); font-family: var(--jb-font-mono); }
-.dsh-tool-desc { font-size: 10px; color: var(--jb-ghost); }
-.dsh-tool-info { display: flex; flex-direction: column; gap: 1px; }
-
-/* ── DSH Status ────────────────────────────────────────────────── */
-.dsh-status { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--jb-void); border: 1px solid var(--jb-border); border-radius: 8px; margin-bottom: 12px; }
-.dsh-status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.dsh-status-dot.connected { background: var(--jb-success); }
-.dsh-status-dot.disconnected { background: var(--jb-danger); }
-.dsh-status-text { font-size: 12px; color: var(--jb-paper); font-weight: 500; }
-.dsh-status-kernel { font-size: 10px; color: var(--jb-mute); margin-left: auto; font-family: var(--jb-font-mono); }
-
-/* ── DSH Quick Actions ─────────────────────────────────────────── */
-.dsh-quick-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.dsh-quick-btn { padding: 6px 10px; background: var(--jb-surface); border: 1px solid var(--jb-border); border-radius: 6px; color: var(--jb-text); font-size: 11px; cursor: pointer; }
-.dsh-quick-btn:hover { background: var(--jb-surface-active); color: var(--jb-paper); border-color: var(--jb-line-hard); }
-
-/* ── DSH Model Status ──────────────────────────────────────────── */
-.dsh-model-provider { font-size: 10px; color: var(--jb-ghost); }
-.dsh-model-status { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.dsh-model-status.ready { background: var(--jb-success); }
-.dsh-model-status.error { background: var(--jb-danger); }
-
-/* ── DSH Command Info ──────────────────────────────────────────── */
-.dsh-cmd-info { display: flex; flex-direction: column; gap: 1px; flex: 1; }
-
-/* ── DSH Stream ────────────────────────────────────────────────── */
-.dsh-stream { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--jb-void); border: 1px solid var(--jb-border); border-radius: 6px; margin-bottom: 4px; }
-.dsh-stream-type { font-size: 10px; color: var(--jb-mute); text-transform: uppercase; letter-spacing: 0.05em; }
-.dsh-stream-id { font-size: 11px; color: var(--jb-text); font-family: var(--jb-font-mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-stream-duration { font-size: 10px; color: var(--jb-ghost); font-family: var(--jb-font-mono); }
-.dsh-stream-cancel { width: 20px; height: 20px; border-radius: 4px; color: var(--jb-ghost); display: grid; place-items: center; background: none; border: none; cursor: pointer; }
-.dsh-stream-cancel:hover { background: var(--jb-surface-active); color: var(--jb-danger); }
-
-/* ── DSH Session Count ─────────────────────────────────────────── */
-.dsh-session-count { font-size: 12px; color: var(--jb-mute); padding: 8px 10px; background: var(--jb-void); border: 1px solid var(--jb-border); border-radius: 6px; }
-
 /* ── Streaming Text ────────────────────────────────────────────── */
-.streaming-text { animation: blink 1s step-end infinite; }
-@keyframes blink { 50% { opacity: 0.5; } }
 
 /* ── Accessibility ──────────────────────────────────────────────── */
 .reduced-motion *,
@@ -1433,3 +1526,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .jarvis-btn-full{width:100%}
 
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ── Pinned / Muted Tabs ────────────────────────────────────────── */
+.tab.pinned{max-width:150px}
+.tab.pinned .tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab.muted .tab-title{opacity:.7}
+.tab-state{font-size:10px;margin-right:2px;color:var(--jb-mute)}
+
+/* ── Profile Popup ──────────────────────────────────────────────── */
+.profile-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;background:none;border:none;color:var(--jb-text);font-size:13px;cursor:pointer;text-align:left}
+.profile-item:hover{background:var(--jb-surface)}
+.profile-item.on{background:var(--jb-surface-active)}
+.profile-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#000;font-size:14px;font-weight:600;letter-spacing:.02em}
+.profile-avatar.sm{width:22px;height:22px;font-size:12px}
+.profile-name{flex:1}
+.toolbar-avatar{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;color:#000;font-size:12px;font-weight:600}
+
+/* ── Extension Popup ────────────────────────────────────────────── */
+.ext-row{display:flex;align-items:center;gap:10px;padding:8px 12px}
+.ext-row.disabled .ext-icon,.ext-row.disabled .ext-info{opacity:.45}
+.ext-pin{min-width:38px;text-align:center;cursor:pointer;user-select:none}
+.ext-pin.ok{cursor:pointer}
+.ext-power{width:26px;height:16px;border-radius:8px;border:1px solid var(--jb-line-hard);background:var(--jb-surface);position:relative;cursor:pointer;flex:none;transition:background .15s}
+.ext-power::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--jb-mute);transition:left .15s,background .15s}
+.ext-power.on{background:var(--jb-interactive);border-color:var(--jb-interactive)}
+.ext-power.on::after{left:12px;background:#fff}
+
+/* ── History / Bookmarks rows ───────────────────────────────────── */
+.hist-row{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius:6px;padding:6px 8px;margin:0 -8px}
+.hist-row:hover{background:var(--jb-surface)}
+.hist-fav{width:20px;text-align:center;color:var(--jb-mute);flex:none}
+.hist-body{flex:1;min-width:0}
+.hist-remove{background:none;border:none;color:var(--jb-ghost);font-size:15px;cursor:pointer;padding:2px 6px;border-radius:4px;flex:none;opacity:0;transition:opacity .12s}
+.hist-row:hover .hist-remove{opacity:1}
+.hist-remove:hover{color:var(--jb-danger)}
+.hist-actions{display:flex;gap:8px;padding:12px 0 4px}
+.empty-page{padding:16px 0;color:var(--jb-mute);font-size:13px}

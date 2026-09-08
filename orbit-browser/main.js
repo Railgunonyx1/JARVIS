@@ -681,13 +681,16 @@ function setupIPC() {
 }
 
 // ── Window Creation ───────────────────────────────────────────────
-function createWindow() {
+function createWindow(incognito = false) {
+  // Private windows use a non-persistent partition so nothing (cookies,
+  // history, cache) survives the session — Chromium's in-memory session.
+  const partition = incognito ? "in-memory" : SESSION_PARTITION;
   mainWindow = new BrowserWindow({
     width: CONFIG.DEFAULT_WIDTH,
     height: CONFIG.DEFAULT_HEIGHT,
     minWidth: CONFIG.MIN_WIDTH,
     minHeight: CONFIG.MIN_HEIGHT,
-    title: "JARVIS Orbit",
+    title: incognito ? "JARVIS Orbit — Private" : "JARVIS Orbit",
     icon: path.join(__dirname, "src/icons/icon.png"),
     titleBarStyle: "hidden",
     frame: false,
@@ -698,6 +701,9 @@ function createWindow() {
       sandbox: true,
       webviewTag: true,
       spellcheck: false,
+      // Tell the renderer which webview partition to use (persist:orbit vs
+      // in-memory for private browsing) before its scripts run.
+      additionalArguments: ["--orbit-partition=" + partition],
     },
     backgroundColor: "#000000",
     show: false,
@@ -757,6 +763,8 @@ function createWindow() {
   });
 
   // ── Window Controls (frameless window) ────────────────────────
+  ipcMain.handle("window:create", () => { createWindow(false); return true; });
+  ipcMain.handle("window:create-private", () => { createWindow(true); return true; });
   ipcMain.on("win-minimize", () => mainWindow?.minimize());
   ipcMain.on("win-maximize", () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();

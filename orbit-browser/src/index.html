@@ -160,7 +160,7 @@
           </div>
         </div>
 
-        <webview id="webview" class="webview" partition="persist:orbit" preload="../guest-preload.js" webpreferences="contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false"></webview>
+        <webview id="webview" class="webview" src="about:blank" partition="persist:orbit" preload="../guest-preload.js" webpreferences="contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false"></webview>
 
         <!-- Internal pages (shown when on orbit:// URLs) -->
         <div class="internal-pages" id="internalPages">
@@ -467,13 +467,17 @@
     <!-- ── Tab Context Menu ──────────────────────────────────── -->
     <div class="context-menu" id="tabContextMenu">
       <button class="ctx-item" data-action="newTab">New tab</button>
+      <button class="ctx-item" data-action="reopenTab">Reopen closed tab <span class="sp">Ctrl+Shift+T</span></button>
       <button class="ctx-item" data-action="duplicate">Duplicate</button>
+      <div class="ctx-sep"></div>
+      <button class="ctx-item" data-action="pinTab">Pin tab</button>
+      <button class="ctx-item" data-action="muteTab">Mute tab</button>
+      <button class="ctx-item" data-action="reload">Reload</button>
       <div class="ctx-sep"></div>
       <button class="ctx-item" data-action="closeTab">Close tab</button>
       <button class="ctx-item" data-action="closeOthers">Close other tabs</button>
       <button class="ctx-item" data-action="closeRight">Close tabs to the right</button>
       <div class="ctx-sep"></div>
-      <button class="ctx-item" data-action="reload">Reload</button>
       <button class="ctx-item" data-action="copyUrl">Copy URL</button>
     </div>
 
@@ -482,6 +486,12 @@
       <button class="menu-item" data-action="newTab">New tab <span class="sp">Ctrl+T</span></button>
       <button class="menu-item" data-action="newWindow">New window</button>
       <button class="menu-item" data-action="incognito">New private window</button>
+      <button class="menu-item" data-action="reopenTab">Reopen closed tab <span class="sp">Ctrl+Shift+T</span></button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-action="find">Find in page <span class="sp">Ctrl+F</span></button>
+      <button class="menu-item" data-action="zoomIn">Zoom in <span class="sp">Ctrl+&plus;</span></button>
+      <button class="menu-item" data-action="zoomOut">Zoom out <span class="sp">Ctrl+&minus;</span></button>
+      <button class="menu-item" data-action="zoomReset">Reset zoom <span class="sp">Ctrl+0</span></button>
       <div class="menu-sep"></div>
       <button class="menu-item" data-nav="orbit://history">History</button>
       <button class="menu-item" data-nav="orbit://downloads">Downloads</button>
@@ -489,9 +499,12 @@
       <div class="menu-sep"></div>
       <button class="menu-item" data-nav="orbit://tasks">Tasks</button>
       <button class="menu-item" data-nav="orbit://memory">Memory</button>
+      <button class="menu-item" data-nav="orbit://extensions">Extensions</button>
       <div class="menu-sep"></div>
       <button class="menu-item" data-nav="orbit://settings">Settings</button>
       <button class="menu-item" data-nav="orbit://diagnostics">Diagnostics</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" id="aboutOrbit">About JARVIS Orbit</button>
     </div>
 
     <!-- ── Extension Popup ────────────────────────────────────── -->
