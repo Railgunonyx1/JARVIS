@@ -69,6 +69,8 @@ const emptyNewTabBtn = $("#emptyNewTab");
 let tabs = new Map();
 window._orbitTabs = tabs; // Expose for thumbnail/vision modules
 let activeTabId = null;
+let tileMode = false;
+let tabMru = [];
 let sidebarOpen = true;
 let jarvisOnline = false;
 let agentState = "idle";
@@ -126,11 +128,50 @@ function reopenClosedTab() {
   showToast("ok", "Tab Reopened", last.title || last.url);
 }
 
+// ── Tab Groups (Chrome-style colored groups) ──────────────────
+const GROUP_COLORS = ["#8ab4f8", "#f28b82", "#81c995", "#fdd663", "#d7aefb", "#78d9ec"];
+function nextGroupColor() {
+  const used = new Set();
+  for (const t of tabs.values()) if (t.groupColor) used.add(t.groupColor);
+  const free = GROUP_COLORS.find((c) => !used.has(c));
+  return free || GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)];
+}
+function groupTab(id) {
+  const tab = tabs.get(id);
+  if (!tab) return;
+  // Already grouped: click cycles the color (Chrome).
+  if (tab.groupColor) {
+    const i = GROUP_COLORS.indexOf(tab.groupColor);
+    tab.groupColor = GROUP_COLORS[(i + 1) % GROUP_COLORS.length];
+  } else {
+    tab.groupColor = nextGroupColor();
+  }
+  renderTabs();
+}
+function ungroupTab(id) {
+  const tab = tabs.get(id);
+  if (tab) { tab.groupColor = null; renderTabs(); }
+}
+
 // ── Tab Management ────────────────────────────────────────────
 function activeWebview() {
   const tab = tabs.get(activeTabId);
   return tab ? tab.webview : null;
 }
+
+function tileTargets() {
+  const act = tabs.get(activeTabId);
+  if (!tileMode || !act || !act.webview) return null;
+  const ids = [activeTabId].concat(tabMru.filter((id) => id !== activeTabId && tabs.has(id)));
+  const vs = [];
+  for (const id of ids) {
+    const t = tabs.get(id);
+    if (t && t.webview && !/^orbit:\/\//i.test(t.url || "")) vs.push(t);
+  }
+  if (vs.length < 2) return null;
+  return vs;
+}
+window._orbitTilingTargets = tileTargets;
 
 function tabOwnedBy(wv) {
   for (const tab of tabs.values()) {
@@ -344,8 +385,9 @@ function _renderTabsInner() {
     if (tab.agentOwned) {
       el.innerHTML = '<span class="tab-glyph"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="tab-title">' + escapeHtml(tab.title) + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
     } else {
-      el.innerHTML = '<span class="tab-fav">' + (tab.pinned ? '\u2702' : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>') + '</span><span class="tab-title">' + escapeHtml(tab.title) + '</span>' + (tab.muted ? '<span class="tab-state" title="Muted">\u{1F507}</span>' : '') + '<span class="tab-close" data-close="' + id + '">\u00d7</span>';
+      el.innerHTML = '<span class="tab-fav">' + (tab.pinned ? '\u2702' : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>') + '</span>' + (tab.groupColor ? '<span class="tab-grp" data-grp="' + id + '" style="background:' + tab.groupColor + '" title="Click to change group color"></span>' : '') + '<span class="tab-title">' + escapeHtml(tab.title) + '</span>' + (tab.muted ? '<span class="tab-state" title="Muted">\u{1F507}</span>' : '') + '<span class="tab-close" data-close="' + id + '">\u00d7</span>';
     }
+    if (tab.groupColor) el.style.borderTopColor = tab.groupColor;
 
     el.addEventListener("click", (e) => {
       const closeBtn = e.target.closest("[data-close]");
@@ -480,6 +522,8 @@ function closeTab(id) {
 function activateTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
+  tabMru = [id].concat(tabMru.filter((x) => x !== id));
+  window.__orbitTabMru = tabMru;
   activeTabId = id;
 
   // Wake this tab and start sleep timers for others
@@ -488,8 +532,12 @@ function activateTab(id) {
     if (tid !== id) startSleepTimer(tid);
   });
 
-  for (const t of tabs.values()) {
-    if (t.webview) t.webview.classList.toggle("hidden", t.id !== id);
+  if (window.tilingUi) {
+    window.tilingUi.applyLayout();
+  } else {
+    for (const t of tabs.values()) {
+      if (t.webview) t.webview.classList.toggle("hidden", t.id !== id);
+    }
   }
 
   const internal = tab.url ? tab.url.startsWith("orbit://") : true;
@@ -711,6 +759,17 @@ sbClose.addEventListener("click", () => {
   setMatrix(agentState);
 });
 
+// ── Jarvis Status Indicator ───────────────────────────────────
+var jarvisStatusEl = document.getElementById('jarvisStatus');
+if (window.orbit && window.orbit.jarvis && window.orbit.jarvis.onStatus) {
+  window.orbit.jarvis.onStatus(function(status) {
+    if (jarvisStatusEl) {
+      jarvisStatusEl.className = (status && status.ok) ? 'online' : 'offline';
+      jarvisStatusEl.title = (status && status.ok) ? 'JARVIS online' : 'JARVIS offline';
+    }
+  });
+}
+
 if (floatGlyph) floatGlyph.addEventListener("click", () => {
   sidebarOpen = true;
   sidebar.classList.remove("hidden");
@@ -737,9 +796,149 @@ function renderPanel(name) {
   if (name === "agents") {
     sbBody.innerHTML = '<div class="panel-pad"><div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><div class="sb-matrix" data-state="idle"></div><h3 style="font-size:13px;color:var(--jb-paper);font-weight:500">Main agent</h3></div><p style="color:var(--jb-mute);font-size:12px;margin-top:6px">No active task</p></div></div>';
     sbBody.querySelectorAll(".sb-matrix").forEach(initMatrix);
+  } else if (name === "companions") {
+    renderCompanionsPanel();
   } else if (name === "memory") {
     sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
   }
+}
+
+// ── AI Companions (Strawberry-style autonomous agents) ─────────
+const _companions = [];
+let _companionIdSeq = 0;
+
+function renderCompanionsPanel() {
+  const html = [];
+  html.push('<div class="panel-pad">');
+  html.push('<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">');
+  html.push('<h3 style="font-size:13px;color:var(--jb-paper);font-weight:500;margin:0">Companions</h3>');
+  html.push('<button id="companionCreate" style="background:var(--jb-accent);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500">+ New</button>');
+  html.push('</div>');
+  if (_companions.length === 0) {
+    html.push('<div style="text-align:center;padding:24px 0;color:var(--jb-mute);font-size:12px">');
+    html.push('<div style="font-size:28px;margin-bottom:8px">\u{1F916}</div>');
+    html.push('No companions yet.<br>Create one to automate browsing tasks.');
+    html.push('</div>');
+  } else {
+    _companions.forEach(function(c) {
+      var statusColor = c.status === 'running' ? 'var(--jb-accent)' : c.status === 'done' ? '#4ade80' : c.status === 'error' ? '#f87171' : 'var(--jb-mute)';
+      var statusLabel = c.status === 'running' ? 'Running' : c.status === 'done' ? 'Completed' : c.status === 'error' ? 'Failed' : 'Idle';
+      html.push('<div class="companion-card" data-cid="' + c.id + '" style="border:1px solid var(--jb-border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--jb-void)">');
+      html.push('<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">');
+      html.push('<div style="width:8px;height:8px;border-radius:50%;background:' + statusColor + '"></div>');
+      html.push('<span style="font-size:12px;font-weight:500;color:var(--jb-paper);flex:1">' + escapeHtml(c.name) + '</span>');
+      html.push('<span style="font-size:10px;color:' + statusColor + '">' + statusLabel + '</span>');
+      html.push('</div>');
+      html.push('<div style="font-size:11px;color:var(--jb-mute);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(c.task) + '</div>');
+      if (c.tabs && c.tabs.length > 0) {
+        html.push('<div style="font-size:10px;color:var(--jb-mute);margin-bottom:6px">' + c.tabs.length + ' tab' + (c.tabs.length > 1 ? 's' : '') + ' open</div>');
+      }
+      html.push('<div style="display:flex;gap:4px">');
+      if (c.status === 'idle') {
+        html.push('<button class="companion-action" data-action="start" data-cid="' + c.id + '" style="flex:1;background:var(--jb-accent);color:#fff;border:none;border-radius:6px;padding:4px 0;font-size:10px;cursor:pointer">Start</button>');
+      } else if (c.status === 'running') {
+        html.push('<button class="companion-action" data-action="pause" data-cid="' + c.id + '" style="flex:1;background:var(--jb-muted);color:var(--jb-paper);border:none;border-radius:6px;padding:4px 0;font-size:10px;cursor:pointer">Pause</button>');
+      } else if (c.status === 'paused') {
+        html.push('<button class="companion-action" data-action="resume" data-cid="' + c.id + '" style="flex:1;background:var(--jb-accent);color:#fff;border:none;border-radius:6px;padding:4px 0;font-size:10px;cursor:pointer">Resume</button>');
+      }
+      html.push('<button class="companion-action" data-action="stop" data-cid="' + c.id + '" style="background:none;color:var(--jb-mute);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">Stop</button>');
+      html.push('<button class="companion-action" data-action="remove" data-cid="' + c.id + '" style="background:none;color:#f87171;border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">\u2715</button>');
+      html.push('</div>');
+      html.push('</div>');
+    });
+  }
+  html.push('</div>');
+  sbBody.innerHTML = html.join('');
+  // Wire events
+  var createBtn = document.getElementById('companionCreate');
+  if (createBtn) createBtn.addEventListener('click', createCompanion);
+  sbBody.querySelectorAll('.companion-action').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var action = btn.dataset.action;
+      var cid = parseInt(btn.dataset.cid);
+      if (action === 'start') startCompanion(cid);
+      else if (action === 'pause') pauseCompanion(cid);
+      else if (action === 'resume') resumeCompanion(cid);
+      else if (action === 'stop') stopCompanion(cid);
+      else if (action === 'remove') removeCompanion(cid);
+    });
+  });
+}
+
+function createCompanion() {
+  var name = prompt('Companion name:', 'Research Agent ' + (_companionIdSeq + 1));
+  if (!name) return;
+  var task = prompt('What should this companion do?', '');
+  if (!task) return;
+  _companions.push({
+    id: ++_companionIdSeq,
+    name: name,
+    task: task,
+    status: 'idle',
+    tabs: [],
+    log: [],
+    created: Date.now(),
+  });
+  renderCompanionsPanel();
+}
+
+function startCompanion(cid) {
+  var c = _companions.find(function(x) { return x.id === cid; });
+  if (!c || c.status !== 'idle') return;
+  c.status = 'running';
+  c.log.push({ time: Date.now(), msg: 'Started' });
+  // Create a dedicated tab for this companion
+  createTab('orbit://newtab');
+  var newTabId = activeTabId;
+  c.tabs.push(newTabId);
+  // Register as agent-owned
+  var tab = tabs.get(newTabId);
+  if (tab) tab.agentOwned = true;
+  _renderTabs();
+  // Send task to JARVIS
+  sendToJarvis({ type: 'companion_task', payload: { companionId: cid, name: c.name, task: c.task, tabId: newTabId } });
+  showToast('Companion \"' + c.name + '\" started');
+  renderCompanionsPanel();
+}
+
+function pauseCompanion(cid) {
+  var c = _companions.find(function(x) { return x.id === cid; });
+  if (!c || c.status !== 'running') return;
+  c.status = 'paused';
+  c.log.push({ time: Date.now(), msg: 'Paused' });
+  showToast('Companion \"' + c.name + '\" paused');
+  renderCompanionsPanel();
+}
+
+function resumeCompanion(cid) {
+  var c = _companions.find(function(x) { return x.id === cid; });
+  if (!c || c.status !== 'paused') return;
+  c.status = 'running';
+  c.log.push({ time: Date.now(), msg: 'Resumed' });
+  sendToJarvis({ type: 'companion_resume', payload: { companionId: cid, task: c.task } });
+  showToast('Companion \"' + c.name + '\" resumed');
+  renderCompanionsPanel();
+}
+
+function stopCompanion(cid) {
+  var c = _companions.find(function(x) { return x.id === cid; });
+  if (!c) return;
+  c.status = 'idle';
+  c.log.push({ time: Date.now(), msg: 'Stopped' });
+  sendToJarvis({ type: 'companion_stop', payload: { companionId: cid } });
+  showToast('Companion \"' + c.name + '\" stopped');
+  renderCompanionsPanel();
+}
+
+function removeCompanion(cid) {
+  var idx = _companions.findIndex(function(x) { return x.id === cid; });
+  if (idx < 0) return;
+  var c = _companions[idx];
+  // Close companion tabs
+  c.tabs.forEach(function(tid) { closeTab(tid); });
+  _companions.splice(idx, 1);
+  showToast('Companion \"' + c.name + '\" removed');
+  renderCompanionsPanel();
 }
 
 // ── Composer (DSH Native Integration) ──────────────────────────
@@ -1092,7 +1291,7 @@ function renderBookmarkBar() {
   bookmarks.forEach(function(bm, i) {
     const el = document.createElement("button");
     el.className = "bm-item";
-    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>' + bm.title;
+    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>' + escapeHtml(bm.title);
     el.title = bm.url;
     el.addEventListener("click", function() { navigateTo(bm.url); });
     el.addEventListener("contextmenu", function(e) {
@@ -1247,7 +1446,7 @@ function renderVerticalTabs() {
     const el = document.createElement("button");
     el.className = "tab" + (id === activeTabId ? " active" : "") + (tab.agentOwned ? " agent-owned" : "");
     el.dataset.id = id;
-    el.innerHTML = '<span class="tab-title">' + tab.title + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
+    el.innerHTML = '<span class="tab-title">' + escapeHtml(tab.title) + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
     el.addEventListener("click", function(e) {
       const closeBtn = e.target.closest("[data-close]");
       if (closeBtn) { e.stopPropagation(); closeTab(closeBtn.dataset.close); return; }
@@ -1449,7 +1648,15 @@ if (tabContextMenu) tabContextMenu.addEventListener("click", (e) => {
   if (action === "copyUrl" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) navigator.clipboard.writeText(tab.url); }
   if (action === "muteTab" && contextTabId) { const tab = tabs.get(contextTabId); if (tab && tab.webview) { tab.muted = !tab.muted; try { tab.webview.setAudioMuted(tab.muted); } catch (err) {} renderTabs(); } }
   if (action === "pinTab" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) { tab.pinned = !tab.pinned; renderTabs(); saveSession(); } }
+  if (action === "groupTab" && contextTabId) groupTab(contextTabId);
+  if (action === "ungroupTab" && contextTabId) ungroupTab(contextTabId);
   tabContextMenu.classList.remove("on");
+});
+
+// Clicking a tab's group color dot cycles the color (Chrome behavior).
+if (tabStrip) tabStrip.addEventListener("click", (e) => {
+  const dot = e.target.closest("[data-grp]");
+  if (dot) { e.stopPropagation(); groupTab(dot.dataset.grp); }
 });
 
 // ── Browser Menu ──────────────────────────────────────────────
@@ -1645,16 +1852,70 @@ function renderExtensionsPage() {
   sheet.outerHTML = html;
 }
 
+// ── Site Settings Popup (lock icon — Chrome-style) ───────────
+const sitePopup = $("#sitePopup");
+const omniLock = $("#omniLock");
+function renderSitePopup() {
+  if (!sitePopup) return;
+  const tab = tabs.get(activeTabId);
+  let host = "—", origin = "";
+  try {
+    const u = new URL(tab ? tab.url : "");
+    if (u.protocol === "https:" || u.protocol === "http:") {
+      host = u.hostname;
+      origin = u.origin;
+    }
+  } catch (e) {}
+  const hostEl = document.getElementById("siteHost");
+  if (hostEl) hostEl.textContent = host;
+  const connEl = document.getElementById("siteConn");
+  if (connEl) connEl.textContent = host === "—" ? "Not on a web page" : (origin.startsWith("https") ? "Secure connection" : "Not secure — HTTP");
+  const permEl = document.getElementById("sitePerms");
+  if (permEl && window.orbit?.system?.permissions?.list) {
+    window.orbit.system.permissions.list().then((list) => {
+      if (!permEl) return;
+      const mine = (Array.isArray(list) ? list : []).filter((p) => p.origin === origin);
+      if (!mine.length) {
+        permEl.innerHTML = '<div class="site-perm-row"><span>Permissions</span><span class="meta">Default (ask)</span></div>';
+        return;
+      }
+      permEl.innerHTML = '<div class="site-perm-row"><span>Permissions</span><span class="chip ok">' + escapeHtml(mine.length) + " granted</span></div>" + mine.map((p) => '<div class="site-perm-row sub"><span>' + escapeHtml(String(p.permissions || []).slice(0, 40)) + '</span><span class="chip ok">Allowed</span></div>').join("");
+    }).catch(() => {});
+  }
+  const clearBtn = document.getElementById("siteClearData");
+  if (clearBtn) clearBtn.dataset.origin = origin;
+}
+if (omniLock) omniLock.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllPopups();
+  renderSitePopup();
+  sitePopup.style.left = "240px";
+  sitePopup.style.top = "84px";
+  sitePopup.classList.toggle("on");
+});
+const siteClearBtn = document.getElementById("siteClearData");
+if (siteClearBtn) siteClearBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const origin = siteClearBtn.dataset.origin || "";
+  if (!origin) { showToast("info", "No site data", "Open a web page first"); return; }
+  if (!confirm("Clear cookies and stored data for " + origin + "? This will sign you out of that site.")) return;
+  window.orbit?.system?.session?.clearSiteData(origin).then((r) => {
+    showToast(r && r.ok ? "ok" : "err", "Site Data", r && r.ok ? "Cleared for " + origin : "Failed to clear");
+    renderSitePopup();
+  });
+});
+
 // ── Close all popups ──────────────────────────────────────────
 function closeAllPopups() {
   if (browserMenu) browserMenu.classList.remove("on");
   if (extPopup) extPopup.classList.remove("on");
   if (profilePopup) profilePopup.classList.remove("on");
+  if (sitePopup) sitePopup.classList.remove("on");
   if (tabContextMenu) tabContextMenu.classList.remove("on");
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".popover") && !e.target.closest(".context-menu") && !e.target.closest("#menuBtn") && !e.target.closest("#extBtn") && !e.target.closest("#profileBtn")) closeAllPopups();
+  if (!e.target.closest(".popover") && !e.target.closest(".context-menu") && !e.target.closest("#menuBtn") && !e.target.closest("#extBtn") && !e.target.closest("#profileBtn") && !e.target.closest("#omniLock")) closeAllPopups();
 });
 
 document.addEventListener("contextmenu", (e) => {
@@ -1717,6 +1978,7 @@ document.addEventListener("keydown", (e) => {
   // Ctrl+N: New window / Ctrl+Shift+N: New private window
   if (ctrl && e.key.toLowerCase() === "n" && !shift) { e.preventDefault(); window.orbit?.window?.create?.(); return; }
   if (ctrl && shift && e.key.toLowerCase() === "n") { e.preventDefault(); window.orbit?.window?.createPrivate?.(); return; }
+  if (e.key === "F11") { e.preventDefault(); window.orbit?.window?.fullscreen?.(); return; }
   // Ctrl+W: Close tab
   if (ctrl && e.key.toLowerCase() === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
   // Ctrl+L: Focus omnibox
@@ -2093,9 +2355,10 @@ function recordHistory(url, title) {
 function renderHistoryPage() {
   const host = document.getElementById("historyPage");
   if (!host) return;
-  const h = getHistory();
+  let h = getHistory();
   const sheet = host.querySelector(".sheet");
   if (!sheet) return;
+  const q = ((document.getElementById("histSearch") || {}).value || "").toLowerCase().trim();
   const dayLabel = (ts) => {
     const d = new Date(ts); const today = new Date();
     const sameDay = (a, b) => a.toDateString() === b.toDateString();
@@ -2106,9 +2369,19 @@ function renderHistoryPage() {
   };
   const timeLabel = (ts) => new Date(ts).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   let html = '<div class="sheet"><h1>History</h1><p class="sheet-lede">Real visits from this device — recorded as you browse.</p>';
+  html += '<input type="text" class="chat-search" id="histSearch" placeholder="Search history…" value="' + escapeHtml(q) + '" />';
   if (!h.length) {
     html += '<div class="group"><div class="empty-page">No history yet. Browse somewhere and it will appear here.</div></div>';
   } else {
+    const filtered = q ? h.filter((e) => (e.title + " " + e.url).toLowerCase().indexOf(q) >= 0) : h;
+    if (!filtered.length) {
+      html += '<div class="group"><div class="empty-page">No entries match \u201c' + escapeHtml(q) + '\u201d</div></div>';
+      html += '</div>';
+      sheet.outerHTML = html;
+      wireHistSearch();
+      return;
+    }
+    h = filtered;
     let lastDay = "";
     h.forEach((e, i) => {
       const day = dayLabel(e.ts);
@@ -2120,6 +2393,11 @@ function renderHistoryPage() {
   }
   html += '<div class="hist-actions"><button class="chip-btn" id="histClear">Clear history</button></div></div>';
   sheet.outerHTML = html;
+  function wireHistSearch() {
+    const inp = document.getElementById("histSearch");
+    if (inp) inp.addEventListener("input", () => renderHistoryPage());
+  }
+  wireHistSearch();
   const clearBtn = document.getElementById("histClear");
   if (clearBtn) clearBtn.addEventListener("click", () => {
     localStorage.removeItem(HISTORY_KEY);

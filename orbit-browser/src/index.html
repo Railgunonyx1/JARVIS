@@ -87,7 +87,7 @@
             <path d="M11.5 9v5M9 11.5h5" stroke="currentColor"/>
           </svg>
         </button>
-        <button class="nav-btn" id="jarvisBtn" title="JARVIS sidebar">
+        <button class="nav-btn" id="jarvisBtn" title="JARVIS sidebar" style="position:relative">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="3" cy="3" r=".9" fill="currentColor"/>
             <circle cx="8" cy="3" r=".9" fill="currentColor"/>
@@ -99,6 +99,7 @@
             <circle cx="8" cy="13" r=".9" fill="currentColor"/>
             <circle cx="13" cy="13" r=".9" fill="currentColor"/>
           </svg>
+          <span id="jarvisStatus" class="offline" style="position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;border:1px solid var(--jb-bg)"></span>
         </button>
         <button class="nav-btn" id="profileBtn" title="Profile">
           <span class="toolbar-avatar">P</span>
@@ -428,6 +429,7 @@
         <nav class="sb-nav" id="sbNav">
           <button class="on" data-panel="jarvis">JARVIS</button>
           <button data-panel="agents">Agents</button>
+          <button data-panel="companions">Companions</button>
           <button data-panel="vision">Vision</button>
           <button data-panel="activity">Activity</button>
           <button data-panel="memory">Memory</button>
@@ -472,6 +474,8 @@
       <div class="ctx-sep"></div>
       <button class="ctx-item" data-action="pinTab">Pin tab</button>
       <button class="ctx-item" data-action="muteTab">Mute tab</button>
+      <button class="ctx-item" data-action="groupTab">Add tab to group</button>
+      <button class="ctx-item" data-action="ungroupTab">Remove from group</button>
       <button class="ctx-item" data-action="reload">Reload</button>
       <div class="ctx-sep"></div>
       <button class="ctx-item" data-action="closeTab">Close tab</button>
@@ -531,6 +535,24 @@
       <div class="menu-sep"></div>
       <button class="menu-item">Lock profile</button>
       <button class="menu-item" data-nav="orbit://settings">Profile settings</button>
+    </div>
+
+    <!-- ── Site Settings Popup (lock icon) ───────────────────── -->
+    <div class="popover site-popup" id="sitePopup">
+      <div class="pop-header">
+        <span class="pop-title">Site settings</span>
+      </div>
+      <div class="site-current" id="siteCurrent">
+        <div class="site-host" id="siteHost">—</div>
+        <div class="site-sub" id="siteConn">Secure connection</div>
+      </div>
+      <div class="menu-sep"></div>
+      <div class="site-perms" id="sitePerms">
+        <div class="site-perm-row"><span>Permissions</span><span class="meta">Loading…</span></div>
+      </div>
+      <div class="menu-sep"></div>
+      <button class="menu-item danger" id="siteClearData">Clear site data</button>
+      <button class="menu-item" data-nav="orbit://permissions">Manage permissions</button>
     </div>
 
     <!-- ── Floating Glyph (when sidebar closed, agent active) ── -->
@@ -612,7 +634,7 @@
         'page-cache.js', 'webview-pool.js', 'accessibility.js',
         'download-manager.js', 'advanced-optimizations.js', 'security-tester.js',
         'vision-agent.js', 'multi-agent-planner.js', 'reading-mode.js',
-        'spaces-ui.js',
+        'spaces-ui.js', 'tiling-ui.js',
       ];
       function loadMod(m) {
         const s = document.createElement('script');
