@@ -945,6 +945,60 @@ function setupIPC() {
     return { ...networkConfig };
   });
 
+  // ── Downloads tracking (real will-download events) ───────────
+  const downloads = new Map(); // id -> { id, filename, url, state, received, total, path, startedAt }
+  let downloadIdSeq = 0;
+
+  ipcMain.handle("downloads:list", () => Array.from(downloads.values()).sort((a, b) => b.startedAt - a.startedAt));
+  ipcMain.handle("downloads:clear", () => { downloads.clear(); return true; });
+  ipcMain.handle("downloads:cancel", (_e, id) => {
+    const d = downloads.get(id);
+    if (d && d.item && d.state === "downloading") {
+      try { d.item.cancel(); } catch (err) { /* already done */ }
+    }
+    return true;
+  });
+  ipcMain.handle("downloads:show", (_e, id) => {
+    const d = downloads.get(id);
+    if (d && d.path) {
+      try { require("electron").shell.showItemInFolder(d.path); } catch (err) {}
+    }
+    return true;
+  });
+
+  function attachDownloadHandlers(ses) {
+    ses.on("will-download", (_event, item, webContents) => {
+      const id = ++downloadIdSeq;
+      const d = {
+        id,
+        filename: item.getFilename(),
+        url: item.getURL(),
+        state: "downloading",
+        received: 0,
+        total: item.getTotalBytes(),
+        path: "",
+        startedAt: Date.now(),
+        item,
+      };
+      downloads.set(id, d);
+      mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+
+      item.on("updated", (_e, state) => {
+        d.received = item.getReceivedBytes();
+        d.total = item.getTotalBytes();
+        d.state = state === "interrupted" ? "interrupted" : "downloading";
+        mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+      });
+      item.once("done", (_e, state) => {
+        d.state = state === "completed" ? "complete" : "cancelled";
+        d.path = item.getSavePath();
+        d.received = item.getReceivedBytes();
+        d.item = null;
+        mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+      });
+    });
+  }
+
   // Site permissions (default-deny allowlist)
   ipcMain.handle("permissions:allow", (_e, origin, permission) => {
     const safeOrigin = validateString(origin, "origin", 2048);
@@ -1226,9 +1280,23 @@ function createWindow(incognito = false) {
 }
 
 // ── App Lifecycle ─────────────────────────────────────────────────
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   initStore();
   installSecurity(getBrowserSession());
+  attachDownloadHandlers(getBrowserSession());
   // Spellcheck off at the session boundary (webContents-level API is gone in
   // modern Electron; dictionary loading is a RAM/CPU cost we don't need).
   for (const s of [session.defaultSession, getBrowserSession()]) {
