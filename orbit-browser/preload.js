@@ -149,6 +149,20 @@ contextBridge.exposeInMainWorld("orbit", {
     markInstalled: (extensionId) => ipcRenderer.invoke("extensions:mark-installed", extensionId),
   },
 
+  // ── Permissions / Downloads (top-level convenience aliases) ───
+  permissions: {
+    allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),
+    revoke: (origin, permission) => ipcRenderer.invoke("permissions:revoke", origin, permission),
+    list: () => ipcRenderer.invoke("permissions:list"),
+  },
+  downloads: {
+    list: () => ipcRenderer.invoke("downloads:list"),
+    clear: () => ipcRenderer.invoke("downloads:clear"),
+    cancel: (id) => ipcRenderer.invoke("downloads:cancel", id),
+    show: (id) => ipcRenderer.invoke("downloads:show", id),
+    onUpdated: (cb) => ipcRenderer.on("downloads-updated", (_e, list) => cb(list)),
+  },
+
   // ── System (Shields / Permissions / Performance / Spaces) ───────
   system: {
     security: {
