@@ -233,6 +233,14 @@ See `jarvis-research-tags.md` for full analysis.
 - cp1252 stdout. Always encode safely.
 - `shell.execute` WinError 87 is known. Use `shell.cmd` with care.
 - Canonical tool name is `shell.execute` (not `shell.cmd`).
+- Orbit launcher contract: root `JARVIS.bat` is the CANONICAL launcher
+  (`orbit-browser\start.bat` delegates to it). Services spawn via PowerShell
+  `Start-Process -WindowStyle Hidden` (detached, survive console close);
+  port liveness via `netstat -ano | findstr LISTENING`; browser via
+  `orbit-browser\wait-window.ps1` (needs `-WorkDir` WITHOUT trailing
+  backslash — cmd `%~dp0` ends with `\` and breaks Start-Process).
+  `.bat` files must be CRLF (LF breaks cmd). App enforces a single-instance
+  lock, so re-running the launcher focuses the existing window.
 
 ## Code Style
 
