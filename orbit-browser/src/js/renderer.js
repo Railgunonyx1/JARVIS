@@ -1924,6 +1924,18 @@ if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
   });
   window.orbit.jarvis.onAgentEvent((event) => { if (event.state) setMatrix(event.state); });
   window.orbit.jarvis.onApproval((request) => { showApprovalModal(request); });
+
+  // Seed the status badge from the main-process state: the connection may have
+  // opened before the renderer subscribed, and main only pushes on change, so
+  // without this pull the badge would stay OFF until the next reconnect.
+  window.orbit.jarvis.status().then(function(s) {
+    if (s) syncJarvisOnline(!!(s.ok && s.kernel === "online"));
+    if (s && s.ok) {
+      if (statusDot) statusDot.className = "status-dot " + (jarvisOnline ? "online" : "offline");
+      if (statusLabel) statusLabel.textContent = jarvisOnline ? "ONLINE" : "OFF";
+      if (sbDot) sbDot.className = "sb-dot " + (jarvisOnline ? "online" : "offline");
+    }
+  }).catch(function() {});
 }
 
 // ── Approval Modal ────────────────────────────────────────────

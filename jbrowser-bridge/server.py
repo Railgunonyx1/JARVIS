@@ -267,8 +267,20 @@ def main(argv=None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         stream=sys.stdout,
     )
+    # A `kernel` backend is only real intelligence when an engine is attached.
+    # ModelGatewayEngine is the default chat engine (lazy provider import —
+    # constructing it never loads the model stack; if no provider is usable the
+    # first chat turn fails closed with a clear SSE error instead of silently).
+    engine = None
+    if args.backend == "kernel":
+        try:
+            from engine import ModelGatewayEngine
+            engine = ModelGatewayEngine()
+            logger.info("kernel backend attached with engine=%s", engine.name)
+        except Exception as exc:  # noqa: BLE001 - degrade to hollow, never crash
+            logger.error("could not attach kernel engine (%s); serving hollow", exc)
     httpd = serve(args.host, args.port, backend_kind=args.backend,
-                  require_auth=args.auth)
+                  engine=engine, require_auth=args.auth)
     logger.info("JBrowserBridge listening on http://%s:%d backend=%s auth=%s",
                 args.host, args.port, args.backend,
                 "on" if args.auth else "off")

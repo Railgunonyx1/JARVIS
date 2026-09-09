@@ -1093,16 +1093,6 @@ function setupIPC() {
   ipcMain.on("agent-type-result", (_, result) => {
     // Handled by the promise in the tool handler
   });
-
-  // Session persistence
-  ipcMain.handle("session:save", () => {
-    const tabData = sessionSnapshot();
-    store?.set("lastSession", tabData);
-    return { saved: tabData.length };
-  });
-  ipcMain.handle("session:restore", () => {
-    return store?.get("lastSession", []) || [];
-  });
 }
 
 // ── Window Creation ───────────────────────────────────────────────

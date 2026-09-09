@@ -9,8 +9,8 @@ REM (orbit-browser\start.bat delegates back to this file).
 REM
 REM 1. Reuses / starts the JARVIS kernel backend (port 8170)
 REM 2. Reuses / starts the WebSocket bridge        (port 8171)
-REM 3. Launches the browser window, waits for it to appear, then this
-REM    console closes itself. Nothing but the browser keeps running.
+REM 3. Launches the browser DETACHED and closes this console
+REM    immediately. Nothing but the browser keeps running.
 REM
 REM Idempotent and console-close safe: services spawn via PowerShell
 REM Start-Process (own hidden process, NOT console-attached), so they
@@ -107,9 +107,11 @@ if not exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" (
     exit /b 1
 )
 
-REM ── 5. Launch the browser (visible - the only window left) ──────
+REM ── 5. Launch the browser DETACHED so this console closes ───────
+REM Instantly. wait-window.ps1 runs hidden on its own; any launch
+REM failure is appended to %TEMP%\orbit-launch-error.log.
 echo   [..] Launching browser...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0orbit-browser\wait-window.ps1" -ElectronPath "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" -WorkDir "%~dp0orbit-browser" >nul 2>&1
+powershell -NoProfile -Command "Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File','%~dp0orbit-browser\wait-window.ps1','-ElectronPath','%~dp0orbit-browser\node_modules\electron\dist\electron.exe','-WorkDir','%~dp0orbit-browser' -WindowStyle Hidden" >nul 2>&1
 
-REM ── 6. Browser window is up - close this console ────────────────
+REM ── 6. Close this console immediately ────────────────────────────
 exit

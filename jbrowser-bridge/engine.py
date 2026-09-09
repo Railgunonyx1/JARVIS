@@ -90,10 +90,40 @@ def _get_router():
     """Lazily build (and cache) the real provider router."""
     global _router_cache
     if _router_cache is None:
+        _ensure_repo_root_imports()
         from runtime.kernel import _load_api_keys, _load_models_config
         from providers.router import ProviderRouter
-        _router_cache = ProviderRouter(_load_models_config(), _load_api_keys())
+        # ProviderRouter expects API keys keyed by plain provider name
+        # ("gemini", "groq" ...) while the repo loader yields "<name>_api_key"
+        # (plus numbered extras like "groq_api_key_2"). Normalize so the cloud
+        # providers actually initialize instead of being silently skipped.
+        raw = _load_api_keys()
+        keys: dict = {k: v for k, v in raw.items() if "_" not in k}
+        for k, v in raw.items():
+            if k.endswith("_api_key"):
+                keys[k[: -len("_api_key")]] = v
+        for name in ("groq", "openrouter", "mistral"):
+            extras = [v for k, v in raw.items()
+                      if k.startswith(name + "_api_key_") and v]
+            if extras:
+                keys[name + "_extra"] = extras
+        _router_cache = ProviderRouter(_load_models_config(), keys)
     return _router_cache
+
+
+def _ensure_repo_root_imports() -> None:
+    """Make the JARVIS repo root importable regardless of launch mode.
+
+    ``runtime`` / ``providers`` live at the repo root; a server run as
+    ``python jbrowser-bridge/server.py`` has only ``jbrowser-bridge`` on
+    ``sys.path``. Insert the repo root once when the provider stack is first
+    needed (lazy path, so echo-only servers never pay for it).
+    """
+    import os
+    import sys as _sys
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _sys.path[0] != repo_root and os.path.isdir(os.path.join(repo_root, "runtime")):
+        _sys.path.insert(0, repo_root)
 
 
 _router_cache = None
