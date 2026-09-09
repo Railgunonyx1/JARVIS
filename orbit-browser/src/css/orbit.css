@@ -1879,7 +1879,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .perf-mem-ok{color:#4ade80 !important}
 
 /* ── JARVIS Launch Button ───────────────────────────────────── */
-.jarvis-launch{display:flex;align-items:center;gap:4px !important;padding:4px 8px !important;border-radius:8px !important;transition:all .2s ease !important}
+.jarvis-launch{display:flex;align-items:center;justify-content:center;gap:4px !important;padding:4px 8px !important;border-radius:8px !important;width:auto;min-width:32px;white-space:nowrap;transition:all .2s ease !important}
 .jarvis-launch:hover{background:rgba(124,92,255,0.15) !important}
 .jarvis-launch.active{background:rgba(124,92,255,0.2) !important}
 #jarvisStatus{width:8px;height:8px;border-radius:50%;transition:all .3s ease;flex-shrink:0}
