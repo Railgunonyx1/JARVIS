@@ -152,6 +152,10 @@ const spaces = new SpacesModule();
 let store = null;           // electron-store: settings + site permissions
 let browserSession = null;  // session.fromPartition("persist:orbit")
 
+// ── Downloads ─────────────────────────────────────────────────────
+const downloads = new Map(); // id -> { id, filename, url, state, received, total, path, startedAt }
+let downloadIdSeq = 0;
+
 // ── Session & Security (Shields) ──────────────────────────────────
 const SESSION_PARTITION = "persist:orbit";
 const GUEST_PRELOAD = path.join(__dirname, "guest-preload.js");
@@ -946,9 +950,8 @@ function setupIPC() {
   });
 
   // ── Downloads tracking (real will-download events) ───────────
-  const downloads = new Map(); // id -> { id, filename, url, state, received, total, path, startedAt }
-  let downloadIdSeq = 0;
-
+// Download manager (state lives at module scope so the will-download hook
+  // can be attached during window setup, not only while setupIPC runs).
   ipcMain.handle("downloads:list", () => Array.from(downloads.values()).sort((a, b) => b.startedAt - a.startedAt));
   ipcMain.handle("downloads:clear", () => { downloads.clear(); return true; });
   ipcMain.handle("downloads:cancel", (_e, id) => {
@@ -965,39 +968,6 @@ function setupIPC() {
     }
     return true;
   });
-
-  function attachDownloadHandlers(ses) {
-    ses.on("will-download", (_event, item, webContents) => {
-      const id = ++downloadIdSeq;
-      const d = {
-        id,
-        filename: item.getFilename(),
-        url: item.getURL(),
-        state: "downloading",
-        received: 0,
-        total: item.getTotalBytes(),
-        path: "",
-        startedAt: Date.now(),
-        item,
-      };
-      downloads.set(id, d);
-      mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
-
-      item.on("updated", (_e, state) => {
-        d.received = item.getReceivedBytes();
-        d.total = item.getTotalBytes();
-        d.state = state === "interrupted" ? "interrupted" : "downloading";
-        mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
-      });
-      item.once("done", (_e, state) => {
-        d.state = state === "completed" ? "complete" : "cancelled";
-        d.path = item.getSavePath();
-        d.received = item.getReceivedBytes();
-        d.item = null;
-        mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
-      });
-    });
-  }
 
   // Site permissions (default-deny allowlist)
   ipcMain.handle("permissions:allow", (_e, origin, permission) => {
@@ -1277,6 +1247,39 @@ function createWindow(incognito = false) {
     else mainWindow?.maximize();
   });
   ipcMain.on("win-close", () => mainWindow?.close());
+}
+
+function attachDownloadHandlers(ses) {
+  ses.on("will-download", (_event, item, _webContents) => {
+    const id = ++downloadIdSeq;
+    const d = {
+      id,
+      filename: item.getFilename(),
+      url: item.getURL(),
+      state: "downloading",
+      received: 0,
+      total: item.getTotalBytes(),
+      path: "",
+      startedAt: Date.now(),
+      item,
+    };
+    downloads.set(id, d);
+    mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+
+    item.on("updated", (_e, state) => {
+      d.received = item.getReceivedBytes();
+      d.total = item.getTotalBytes();
+      d.state = state === "interrupted" ? "interrupted" : "downloading";
+      mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+    });
+    item.once("done", (_e, state) => {
+      d.state = state === "completed" ? "complete" : "cancelled";
+      d.path = item.getSavePath();
+      d.received = item.getReceivedBytes();
+      d.item = null;
+      mainWindow?.webContents.send("downloads-updated", Array.from(downloads.values()));
+    });
+  });
 }
 
 // ── App Lifecycle ─────────────────────────────────────────────────
