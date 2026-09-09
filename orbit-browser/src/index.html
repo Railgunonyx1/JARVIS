@@ -63,8 +63,8 @@
       </button>
 
       <div class="omnibox" id="omnibox">
-        <span class="omni-lock" id="omniLock">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <span class="omni-lock" id="omniLock" title="Site info">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" id="omniLockIcon">
             <rect x="2.5" y="5.5" width="7" height="5" rx="1" stroke="currentColor"/>
             <path d="M4 5.5V4a2 2 0 014 0v1.5" stroke="currentColor"/>
           </svg>
@@ -72,6 +72,7 @@
         <input type="text" id="omniInput" placeholder="Search Google or enter URL" spellcheck="false" />
         <span class="zoom-indicator" id="zoomIndicator" title="Zoom level">100%</span>
         <span class="omni-star" id="omniStar" title="Bookmark this page">★</span>
+        <div class="omni-progress" id="omniProgress"></div>
       </div>
 
       <div class="toolbar-right">
@@ -96,6 +97,14 @@
           </svg>
           <span id="jarvisStatus" class="offline" title="JARVIS offline"></span>
           <span id="jarvisLaunchLabel" class="jarvis-launch-label">Start</span>
+        </button>
+        <button class="nav-btn" id="jarvisFloatBtn" title="Floating JARVIS chat (Ctrl+Shift+K)">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 3h10a1 1 0 011 1v6a1 1 0 01-1 1H8l-3 3v-3H3a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/>
+            <circle cx="5.8" cy="7.2" r="0.8" fill="currentColor"/>
+            <circle cx="8" cy="7.2" r="0.8" fill="currentColor"/>
+            <circle cx="10.2" cy="7.2" r="0.8" fill="currentColor"/>
+          </svg>
         </button>
         <button class="nav-btn" id="profileBtn" title="Profile">
           <span class="toolbar-avatar">P</span>
@@ -299,10 +308,8 @@
             <div class="sheet">
               <h1>Tasks</h1>
               <p class="sheet-lede">One row. Status as a glyph, not a rainbow badge.</p>
-              <div class="group">
-                <div class="row"><div><div class="name">Research open-source browser AI frameworks</div><div class="sub">JARVIS Main Agent</div></div><span class="chip ask">Run</span><span class="meta">14m</span></div>
-                <div class="row"><div><div class="name">Summarize current page</div><div class="sub">JARVIS</div></div><span class="chip ok">Done</span><span class="meta">2m</span></div>
-                <div class="row"><div><div class="name">Compare documentation sources</div><div class="sub">Documentation agent</div></div><span class="chip">Paused</span><span class="meta">6m</span></div>
+              <div class="group" id="tasksListGroup">
+                <div id="tasksList"></div>
               </div>
             </div>
           </div>
@@ -311,8 +318,11 @@
           <div class="page permissions-page" id="permissionsPage">
             <div class="sheet">
               <h1>Permissions</h1>
-              <p class="sheet-lede">Current site — inheritance is visible.</p>
-              <div class="group"><h2>Current Site</h2>
+              <p class="sheet-lede">Default-deny allowlist — sites only get what you grant.</p>
+              <div class="group" id="permissionsListGroup"><h2>Granted Site Permissions</h2>
+                <div id="permissionsList"><div class="panel-muted" style="padding:16px;text-align:center">Loading permissions...</div></div>
+              </div>
+              <div class="group"><h2>Global Defaults</h2>
                 <div class="row"><div class="name">Page reading</div><span class="chip ok">Allowed</span><span class="meta">Site</span></div>
                 <div class="row"><div class="name">Navigation</div><span class="chip ok">Allowed</span><span class="meta">Task</span></div>
                 <div class="row"><div class="name">Interaction</div><span class="chip ask">Ask</span><span class="meta">Global</span></div>
@@ -327,9 +337,12 @@
             <div class="sheet">
               <h1>Memory</h1>
               <p class="sheet-lede">Sentences a person would recognize. Not embeddings.</p>
-              <div class="group">
-                <div class="row"><div><div class="name">Orbit uses DSH as its browser communication protocol.</div><div class="sub">Source · research task · high confidence</div></div><span class="chip">Saved</span></div>
-                <div class="row"><div><div class="name">Prefer dark theme and compact chrome.</div><div class="sub">Source · settings · preference</div></div><span class="chip">Pinned</span></div>
+              <div class="group" id="memoryListGroup">
+                <div id="memoryList"></div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                  <input type="text" id="memoryInput" placeholder="Save a memory..." style="flex:1;background:var(--jb-surface);border:1px solid var(--jb-border);border-radius:8px;padding:8px 12px;color:var(--jb-text);font-size:12px;outline:none" />
+                  <button class="chip-btn" id="memorySaveBtn">Save</button>
+                </div>
               </div>
             </div>
           </div>
@@ -339,9 +352,11 @@
             <div class="sheet">
               <h1>Extensions</h1>
               <p class="sheet-lede">JARVIS is built in. It is not a store banner.</p>
-              <div class="group">
-                <div class="row"><div><div class="name">JARVIS</div><div class="sub">Built into Orbit</div></div><span class="chip">Built in</span></div>
-                <div class="row"><div><div class="name">uBlock Origin</div><div class="sub">All sites</div></div><span class="chip ok">Pinned</span></div>
+              <div class="group" id="extensionsListGroup">
+                <div id="extensionsList"></div>
+              </div>
+              <div style="margin-top:12px">
+                <button class="chip-btn" data-nav="orbit://extension-store">Open Extension Store</button>
               </div>
             </div>
           </div>
@@ -659,6 +674,29 @@
         <b id="floatTitle">Researching</b>
         <div id="floatSub">click to open</div>
       </div>
+    </div>
+
+    <!-- ── Floating JARVIS Chat Window (draggable, movable) ──── -->
+    <div class="jarvis-float" id="jarvisFloat">
+      <div class="jarvis-float-head" id="jarvisFloatHead">
+        <div class="sb-matrix" id="jarvisFloatMatrix" data-state="idle"></div>
+        <b>JARVIS</b>
+        <div class="jarvis-float-grow"></div>
+        <button class="jarvis-float-btn" id="jarvisFloatMin" title="Minimize">
+          <svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="1" fill="currentColor"/></svg>
+        </button>
+        <button class="jarvis-float-btn" id="jarvisFloatClose" title="Close">
+          <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+      </div>
+      <div class="jarvis-float-body" id="jarvisFloatBody">
+        <div class="jarvis-float-msg system">Ask JARVIS anything — this window follows you anywhere.</div>
+      </div>
+      <div class="jarvis-float-input">
+        <input type="text" id="jarvisFloatInput" placeholder="Ask JARVIS..." spellcheck="false" />
+        <button id="jarvisFloatSend" title="Send">→</button>
+      </div>
+      <div class="jarvis-float-resize" id="jarvisFloatResize"></div>
     </div>
 
     <!-- ── Approval Modal ────────────────────────────────────── -->

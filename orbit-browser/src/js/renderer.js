@@ -435,6 +435,9 @@ function attachWebviewEvents(wv) {
     const tab = tabOwnedBy(wv);
     if (tab && tab.id === activeTabId) {
       omniInput.placeholder = "Loading...";
+      // Chrome-style thin progress bar
+      const prog = document.getElementById('omniProgress');
+      if (prog) { prog.className = 'omni-progress loading'; }
     }
   });
   wv.addEventListener("did-finish-load", () => {
@@ -448,6 +451,14 @@ function attachWebviewEvents(wv) {
           omniInput.value = url.replace(/^https?:\/\//, "");
         }
       } catch (err) {}
+      // Complete progress bar
+      const prog = document.getElementById('omniProgress');
+      if (prog && prog.classList.contains('loading')) {
+        prog.className = 'omni-progress done';
+        setTimeout(function() { prog.className = 'omni-progress'; }, 350);
+      }
+      // Update lock icon security state
+      updateOmniLock(url);
     }
   });
   wv.addEventListener("did-navigate", (e) => {
@@ -561,46 +572,57 @@ function _renderTabsInner() {
     }
     if (tab.groupColor) el.style.borderTopColor = tab.groupColor;
 
-    el.addEventListener("click", (e) => {
-      const closeBtn = e.target.closest("[data-close]");
-      if (closeBtn) { e.stopPropagation(); closeTab(closeBtn.dataset.close); return; }
-      activateTab(id);
-    });
-
-    // Drag-and-drop tab reordering
-    el.draggable = true;
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", id);
-      e.dataTransfer.effectAllowed = "move";
-      el.style.opacity = "0.5";
-      setTimeout(() => el.classList.add("dragging"), 0);
-    });
-    el.addEventListener("dragend", () => {
-      el.style.opacity = "";
-      el.classList.remove("dragging");
-      tabStrip.querySelectorAll(".tab").forEach(t => t.classList.remove("drag-over"));
-    });
-    el.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      el.classList.add("drag-over");
-    });
-    el.addEventListener("dragleave", () => {
-      el.classList.remove("drag-over");
-    });
-    el.addEventListener("drop", (e) => {
-      e.preventDefault();
-      el.classList.remove("drag-over");
-      const draggedId = e.dataTransfer.getData("text/plain");
-      if (draggedId && draggedId !== id) {
-        reorderTab(draggedId, id);
-      }
-    });
-
     tabStrip.appendChild(el);
   }
   renderVerticalTabs();
   updatePerfHud();
+}
+
+// ── Event delegation for the tab strip (one listener, not N) ──
+// Click, close, and drag-drop are handled once here instead of binding
+// five listeners per tab element on every render. Big win with 20+ tabs.
+if (tabStrip && !tabStrip.dataset.delegated) {
+  tabStrip.dataset.delegated = "1";
+  tabStrip.addEventListener("click", (e) => {
+    const closeBtn = e.target.closest("[data-close]");
+    if (closeBtn) { e.stopPropagation(); closeTab(closeBtn.dataset.close); return; }
+    const grpBtn = e.target.closest("[data-grp]");
+    if (grpBtn) { e.stopPropagation(); groupTab(grpBtn.dataset.grp); return; }
+    const tabEl = e.target.closest(".tab");
+    if (tabEl && tabEl.dataset.id) activateTab(tabEl.dataset.id);
+  });
+  tabStrip.addEventListener("dragstart", (e) => {
+    const tabEl = e.target.closest(".tab");
+    if (!tabEl) return;
+    e.dataTransfer.setData("text/plain", tabEl.dataset.id);
+    e.dataTransfer.effectAllowed = "move";
+    tabEl.style.opacity = "0.5";
+    setTimeout(() => tabEl.classList.add("dragging"), 0);
+  });
+  tabStrip.addEventListener("dragend", (e) => {
+    const tabEl = e.target.closest(".tab");
+    if (tabEl) { tabEl.style.opacity = ""; tabEl.classList.remove("dragging"); }
+    tabStrip.querySelectorAll(".tab").forEach(t => t.classList.remove("drag-over"));
+  });
+  tabStrip.addEventListener("dragover", (e) => {
+    const tabEl = e.target.closest(".tab");
+    if (!tabEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    tabEl.classList.add("drag-over");
+  });
+  tabStrip.addEventListener("dragleave", (e) => {
+    const tabEl = e.target.closest(".tab");
+    if (tabEl) tabEl.classList.remove("drag-over");
+  });
+  tabStrip.addEventListener("drop", (e) => {
+    const tabEl = e.target.closest(".tab");
+    if (!tabEl) return;
+    e.preventDefault();
+    tabEl.classList.remove("drag-over");
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (draggedId && draggedId !== tabEl.dataset.id) reorderTab(draggedId, tabEl.dataset.id);
+  });
 }
 
 function reorderTab(draggedId, targetId) {
@@ -647,6 +669,7 @@ function createTab(url) {
   if (privateMode && seed) seed.classList.add("hidden");
   tab.webview = wv;
   attachWebviewEvents(wv);
+  _wireFoundInPage(wv);
   tabs.set(id, tab);
   activateTab(id);
   window.orbit?.tabs?.activate?.(id);
@@ -789,6 +812,10 @@ function showInternalPage(pageId) {
   if (pageId === "extensionsPage") renderExtensionsPage();
   if (pageId === "newtabPage") renderSessionThumbnails();
   if (pageId === "privacyPage") renderPrivacyPage();
+  if (pageId === "downloadsPage") renderDownloadsPage();
+  if (pageId === "permissionsPage") renderPermissionsPage();
+  if (pageId === "memoryPage") renderMemoryPage();
+  if (pageId === "tasksPage") renderTasksPage();
 }
 
 function refreshDiagnostics() {
@@ -1782,6 +1809,64 @@ function finalizeStreamingMessage(fullText) {
 }
 
 // ── Legacy JARVIS Events (Fallback) ──────────────────────────────
+// ── Headless Agent Loop tool round-trips ───────────────────────
+// main.js registers browser.read/click/type tools that ping the renderer
+// and await a result IPC; without these handlers every call hit its timeout.
+if (window.orbit?.on?.navigateTo) {
+  window.orbit.on.navigateTo((url) => {
+    if (url && /^https?:/i.test(url)) createTab(url);
+  });
+}
+if (window.orbit?.agent) {
+  window.orbit.agent.onState(function(state) {
+    if (state === 'thinking' || state === 'executing') setMatrix('thinking');
+    else if (state === 'completed') { setMatrix('done'); setTimeout(function() { setMatrix('idle'); }, 2000); }
+    else if (state === 'failed') { setMatrix('fail'); setTimeout(function() { setMatrix('idle'); }, 2000); }
+  });
+  window.orbit.agent.onTool(function(info) {
+    Chat.append('system', '\u2699 ' + (info && info.name ? info.name : 'tool'));
+  });
+}
+if (window.orbit?.agent?.sendReadResult) {
+  window.orbit.on && window.orbit.on.agentRead && window.orbit.on.agentRead(async function() {
+    try {
+      const wv = activeWebview();
+      if (!wv) { window.orbit.agent.sendReadResult('No active page'); return; }
+      const text = await wv.executeJavaScript('document.body ? document.body.innerText.substring(0, 8000) : ""', false);
+      window.orbit.agent.sendReadResult(text || '(empty page)');
+    } catch (e) {
+      window.orbit.agent.sendReadResult('Read error: ' + e.message);
+    }
+  });
+  window.orbit.on && window.orbit.on.agentClick && window.orbit.on.agentClick(async function(args) {
+    try {
+      const wv = activeWebview();
+      if (!wv) { window.orbit.agent.sendClickResult('No active page'); return; }
+      const sel = (args && args.selector) || 'body';
+      const r = await wv.executeJavaScript(
+        '(function(){var el=document.querySelector(' + JSON.stringify(sel) + ');' +
+        'if(!el)return "Not found";el.scrollIntoView({block:"center"});el.click();return "Clicked";})()', false);
+      window.orbit.agent.sendClickResult(r || 'Click failed');
+    } catch (e) {
+      window.orbit.agent.sendClickResult('Click error: ' + e.message);
+    }
+  });
+  window.orbit.on && window.orbit.on.agentType && window.orbit.on.agentType(async function(args) {
+    try {
+      const wv = activeWebview();
+      if (!wv) { window.orbit.agent.sendTypeResult('No active page'); return; }
+      const sel = (args && args.selector) || 'input';
+      const text = (args && args.text) || '';
+      const r = await wv.executeJavaScript(
+        '(function(){var el=document.querySelector(' + JSON.stringify(sel) + ');' +
+        'if(!el)return "Input not found";el.focus();el.value=' + JSON.stringify(text) + ';' +
+        'el.dispatchEvent(new Event("input",{bubbles:true}));return "Typed";})()', false);
+      window.orbit.agent.sendTypeResult(r || 'Type failed');
+    } catch (e) {
+      window.orbit.agent.sendTypeResult('Type error: ' + e.message);
+    }
+  });
+}
 if (window.orbit?.on?.navigateTo) {
   window.orbit.on.navigateTo((url) => {
     if (url && /^https?:/i.test(url)) createTab(url);
@@ -2170,6 +2255,7 @@ const CMD_ITEMS = [
   { l: "Toggle Split View", d: "Two tabs side by side", s: "Ctrl+Shift+S", i: "\u25a4", a: function() { toggleSplitView(); } },
   { l: "Reader Mode", d: "Distraction-free reading", s: "Ctrl+Shift+R", i: "\u{1F4D6}", a: function() { openReaderMode(); } },
   { l: "Search Tabs", d: "Find an open tab", s: "Ctrl+Shift+F", i: "\u{1F50D}", a: function() { toggleTabSearch(); } },
+  { l: "Floating JARVIS Chat", d: "Small movable JARVIS window", s: "Ctrl+Shift+K", i: "\u{1F4AC}", a: function() { toggleJarvisFloat(); } },
   { l: "Pop out Video", d: "Float the active tab's video (PiP)", s: "Ctrl+Shift+P", i: "\u25b6", a: function() { popoutVideo(); } },
   { l: "Run Agent Task", d: "Headless agent execution", i: "\u{1F916}", a: function() {
     var task = prompt('Agent task:');
@@ -2236,7 +2322,36 @@ function toggleFind() {
   if (findBar && findBar.classList.contains("on")) { findInput.focus(); findInput.select(); }
 }
 
-if ($("#findClose")) $("#findClose").addEventListener("click", () => findBar.classList.remove("on"));
+// ── Find-in-page result counting ("3/17" like Chrome) ─────────
+if (findInput) {
+  var _findDebounce = null;
+  findInput.addEventListener("input", function() {
+    clearTimeout(_findDebounce);
+    _findDebounce = setTimeout(function() {
+      var wv = activeWebview();
+      if (!wv) return;
+      var q = findInput.value;
+      if (!q) { var c = $("#findCount"); if (c) c.textContent = "0/0"; try { wv.stopFindInPage("clearSelection"); } catch (e) {} return; }
+      try { wv.findInPage(q); } catch (e) {}
+    }, 200);
+  });
+}
+// result count comes from the found-in-page event
+function _wireFoundInPage(wv) {
+  if (!wv || wv.__findWired) return;
+  wv.__findWired = true;
+  wv.addEventListener("found-in-page", function(e) {
+    var c = $("#findCount");
+    if (c && e.result) {
+      c.textContent = e.result.activeMatchOrdinal + "/" + e.result.matches;
+    }
+  });
+}
+
+if ($("#findClose")) $("#findClose").addEventListener("click", () => {
+  findBar.classList.remove("on");
+  try { const wv = activeWebview(); if (wv) wv.stopFindInPage("clearSelection"); } catch (e) {}
+});
 if ($("#findNext")) $("#findNext").addEventListener("click", () => {
   try { const wv = activeWebview(); if (wv && findInput.value) wv.findInPage(findInput.value); } catch (e) {}
 });
@@ -2245,7 +2360,7 @@ if ($("#findPrev")) $("#findPrev").addEventListener("click", () => {
 });
 if (findInput) findInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { const wv = activeWebview(); if (wv) wv.findInPage(findInput.value, { forward: !e.shiftKey }); }
-  if (e.key === "Escape") findBar.classList.remove("on");
+  if (e.key === "Escape") { findBar.classList.remove("on"); try { const wv = activeWebview(); if (wv) wv.stopFindInPage("clearSelection"); } catch (err) {} }
 });
 
 // ── Vision Panel ─────────────────────────────────────────────
@@ -2341,11 +2456,8 @@ if (tabContextMenu) tabContextMenu.addEventListener("click", (e) => {
   tabContextMenu.classList.remove("on");
 });
 
-// Clicking a tab's group color dot cycles the color (Chrome behavior).
-if (tabStrip) tabStrip.addEventListener("click", (e) => {
-  const dot = e.target.closest("[data-grp]");
-  if (dot) { e.stopPropagation(); groupTab(dot.dataset.grp); }
-});
+// NOTE: tab strip click/drag handling is delegated once near renderTabs()
+// (single listener for activate, close, group-dot, and drag reorder).
 
 // ── Browser Menu ──────────────────────────────────────────────
 const browserMenu = $("#browserMenu");
@@ -2524,20 +2636,362 @@ function renderExtPopup() {
     renderExtPopup(); renderExtensionsPage();
   }));
 }
-function renderExtensionsPage() {
-  const host = document.getElementById("extensionsPage");
-  if (!host) return;
-  const sheet = host.querySelector(".sheet");
-  if (!sheet) return;
-  let html = '<div class="sheet"><h1>Extensions</h1><p class="sheet-lede">JARVIS is built in. It is not a store banner.</p><div class="group">';
-  EXTENSIONS.forEach((ext) => {
-    const st = extStatus(ext.id);
-    html += '<div class="row"><div><div class="name">' + escapeHtml(ext.name) + '</div><div class="sub">' + escapeHtml(ext.sub) + '</div></div>' +
-      '<span class="chip' + (st.pinned ? " ok" : "") + '">' + (st.pinned ? "Pinned" : "Unpinned") + '</span>' +
-      '<span class="chip ' + (st.enabled ? "ok" : "") + '">' + (st.enabled ? "Enabled" : "Disabled") + '</span></div>';
+// ── Permissions Page (real allowlist) ────────────────────────
+function renderPermissionsPage() {
+  var listEl = document.getElementById('permissionsList');
+  if (!listEl || !window.orbit?.permissions) return;
+  window.orbit.permissions.list().then(function(perms) {
+    if (!perms || perms.length === 0) {
+      listEl.innerHTML = '<div class="panel-muted" style="padding:16px;text-align:center">No site permissions granted. Sites must ask, and you approve via the omnibox lock icon.</div>';
+      return;
+    }
+    var html = '';
+    perms.forEach(function(entry, idx) {
+      var host = entry.origin || '';
+      try { host = new URL(entry.origin).hostname; } catch (e) {}
+      html += '<div class="row">';
+      html += '<div style="flex:1"><div class="name">' + escapeHtml(host) + '</div><div class="sub">' + escapeHtml((entry.permissions || []).join(', ')) + '</div></div>';
+      html += '<button class="chip-btn" data-perm-revoke="' + idx + '">Revoke</button>';
+      html += '</div>';
+    });
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('[data-perm-revoke]').forEach(function(btn) {
+      btn.onclick = function() {
+        var entry = perms[parseInt(btn.dataset.permRevoke)];
+        if (entry) {
+          window.orbit.permissions.revoke(entry.origin).then(function() {
+            showToast('ok', 'Permission Revoked', entry.origin);
+            renderPermissionsPage();
+          });
+        }
+      };
+    });
+  }).catch(function() {
+    listEl.innerHTML = '<div class="panel-muted" style="padding:16px;text-align:center">Could not load permissions.</div>';
   });
-  html += '</div></div>';
-  sheet.outerHTML = html;
+}
+
+// ── Downloads Page (real download tracking) ──────────────────
+function renderDownloadsPage() {
+  var page = document.getElementById('downloadsPage');
+  if (!page) return;
+  var group = page.querySelector('.group');
+  if (!group) return;
+  if (!window.orbit?.downloads) return;
+
+  window.orbit.downloads.list().then(function(list) {
+    if (!list || list.length === 0) {
+      group.innerHTML = '<div class="panel-muted" style="padding:24px;text-align:center">No downloads yet. Files you download will appear here.</div>';
+      return;
+    }
+    var html = '';
+    list.forEach(function(d) {
+      var pct = d.total > 0 ? Math.round((d.received / d.total) * 100) : 0;
+      var size = d.total > 0 ? formatBytes(d.received) + ' / ' + formatBytes(d.total) : formatBytes(d.received);
+      var chip = '';
+      if (d.state === 'complete') chip = '<span class="chip ok">Complete</span>';
+      else if (d.state === 'cancelled') chip = '<span class="chip bad">Cancelled</span>';
+      else if (d.state === 'interrupted') chip = '<span class="chip warn">Interrupted</span>';
+      else chip = '<span class="chip">' + pct + '%</span>';
+      var actions = '';
+      if (d.state === 'downloading') {
+        actions = '<button class="chip-btn" data-dl-cancel="' + d.id + '">Cancel</button>';
+      } else if (d.state === 'complete') {
+        actions = '<button class="chip-btn" data-dl-show="' + d.id + '">Show</button>';
+      }
+      var progress = d.state === 'downloading' && d.total > 0
+        ? '<div style="width:100%;height:2px;background:var(--jb-border);border-radius:1px;margin-top:6px"><div style="width:' + pct + '%;height:100%;background:var(--jb-accent);border-radius:1px"></div></div>'
+        : '';
+      html += '<div class="row" style="flex-wrap:wrap">';
+      html += '<div style="flex:1;min-width:200px"><div class="name">' + escapeHtml(d.filename) + '</div><div class="sub">' + escapeHtml(truncateUrl(d.url)) + ' \u00b7 ' + size + '</div>' + progress + '</div>';
+      html += chip + actions;
+      html += '</div>';
+    });
+    group.innerHTML = html;
+    group.querySelectorAll('[data-dl-cancel]').forEach(function(btn) {
+      btn.onclick = function() { window.orbit.downloads.cancel(parseInt(btn.dataset.dlCancel)); };
+    });
+    group.querySelectorAll('[data-dl-show]').forEach(function(btn) {
+      btn.onclick = function() { window.orbit.downloads.show(parseInt(btn.dataset.dlShow)); };
+    });
+  }).catch(function() {});
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  var units = ['B', 'KB', 'MB', 'GB'];
+  var i = 0;
+  while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+  return Math.round(bytes * 10) / 10 + ' ' + units[i];
+}
+
+function renderExtensionsPage() {
+  const listEl = document.getElementById("extensionsList");
+  if (!listEl) return;
+  let html = '<div class="row"><div><div class="name">JARVIS</div><div class="sub">Built into Orbit \u00b7 native intelligence</div></div><span class="chip ok">Built in</span></div>';
+  if (typeof EXTENSIONS !== "undefined") {
+    EXTENSIONS.forEach((ext) => {
+      const st = extStatus(ext.id);
+      html += '<div class="row"><div><div class="name">' + escapeHtml(ext.name) + '</div><div class="sub">' + escapeHtml(ext.sub) + '</div></div>' +
+        '<span class="chip' + (st.pinned ? " ok" : "") + '">' + (st.pinned ? "Pinned" : "Unpinned") + '</span>' +
+        '<span class="chip ' + (st.enabled ? "ok" : "") + '">' + (st.enabled ? "Enabled" : "Disabled") + '</span></div>';
+    });
+  }
+  listEl.innerHTML = html;
+}
+
+// ── Omnibox lock security state (Chrome-style) ──────────────
+function updateOmniLock(url) {
+  var lock = document.getElementById('omniLock');
+  if (!lock) return;
+  lock.classList.remove('insecure', 'internal');
+  if (!url || url === 'about:blank' || url.startsWith('orbit://')) {
+    lock.classList.add('internal');
+    lock.title = 'Internal page';
+    return;
+  }
+  try {
+    var proto = new URL(url).protocol;
+    if (proto === 'https:') {
+      lock.title = 'Connection is secure';
+    } else {
+      lock.classList.add('insecure');
+      lock.title = 'Not secure \u2014 connection is not encrypted';
+    }
+  } catch (e) {
+    lock.classList.add('internal');
+  }
+}
+
+// ── Floating JARVIS Chat Window (draggable + resizable) ──────
+var jarvisFloat = document.getElementById('jarvisFloat');
+var jarvisFloatHead = document.getElementById('jarvisFloatHead');
+var jarvisFloatBody = document.getElementById('jarvisFloatBody');
+var jarvisFloatInput = document.getElementById('jarvisFloatInput');
+var jarvisFloatSend = document.getElementById('jarvisFloatSend');
+var _floatMsgSeq = 0;
+
+function toggleJarvisFloat(force) {
+  if (!jarvisFloat) return;
+  var show = (typeof force === 'boolean') ? force : !jarvisFloat.classList.contains('on');
+  jarvisFloat.classList.toggle('on', show);
+  jarvisFloat.classList.remove('minimized');
+  if (show) {
+    // Restore saved position if the window is still on-screen
+    try {
+      var pos = JSON.parse(localStorage.getItem('jarvis-float-pos') || 'null');
+      if (pos && pos.left >= 0 && pos.top >= 0 && pos.left < window.innerWidth - 80 && pos.top < window.innerHeight - 60) {
+        jarvisFloat.style.left = pos.left + 'px';
+        jarvisFloat.style.top = pos.top + 'px';
+        jarvisFloat.style.right = 'auto';
+        jarvisFloat.style.bottom = 'auto';
+      }
+    } catch (e) {}
+    if (jarvisFloatInput) setTimeout(function() { jarvisFloatInput.focus(); }, 60);
+  }
+}
+
+function floatAppend(role, text) {
+  if (!jarvisFloatBody) return;
+  var div = document.createElement('div');
+  div.className = 'jarvis-float-msg ' + role;
+  div.textContent = text;
+  jarvisFloatBody.appendChild(div);
+  jarvisFloatBody.scrollTop = jarvisFloatBody.scrollHeight;
+}
+
+async function floatSend() {
+  var text = jarvisFloatInput.value.trim();
+  if (!text) return;
+  jarvisFloatInput.value = '';
+  floatAppend('user', text);
+  setMatrix('thinking');
+  try {
+    // Same brain as the sidebar: bridge first, Needle fallback
+    if (window.dshNative && window.dshNative.status.connected) {
+      var tab = tabs.get(activeTabId);
+      var page = tab ? { url: tab.url, title: tab.title } : null;
+      var res = await window.dshNative.chat(text, { page });
+      if (res && res.success === false) {
+        floatAppend('error', res.error || 'Connection failed');
+      }
+    } else if (window.orbit?.jarvis && !jarvisOnline) {
+      window.orbit.jarvis.chat(text, 'orbit-float');
+      floatAppend('system', 'Sent to JARVIS bridge \u2014 waiting for reply.');
+    } else {
+      // Needle parallel agent (fast path)
+      var nr = window.needleAgent.route(text);
+      var exec = await window.needleAgent.execute(nr);
+      if (exec.done) floatAppend('jarvis', exec.result);
+      else if (exec.success) floatAppend('jarvis', exec.result);
+      else floatAppend('error', exec.result || 'Could not complete that.');
+    }
+  } catch (err) {
+    floatAppend('error', err.message || 'Something went wrong.');
+  } finally {
+    setMatrix('idle');
+  }
+}
+
+if (jarvisFloatHead) {
+  // Drag by the header (pointer events work for mouse + touch)
+  var _drag = null;
+  jarvisFloatHead.addEventListener('pointerdown', function(e) {
+    if (e.target.closest('.jarvis-float-btn')) return; // don't drag from buttons
+    var rect = jarvisFloat.getBoundingClientRect();
+    _drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    jarvisFloatHead.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  jarvisFloatHead.addEventListener('pointermove', function(e) {
+    if (!_drag) return;
+    var x = e.clientX - _drag.dx;
+    var y = e.clientY - _drag.dy;
+    // Keep the window on-screen
+    x = Math.max(0, Math.min(x, window.innerWidth - 60));
+    y = Math.max(0, Math.min(y, window.innerHeight - 42));
+    jarvisFloat.style.left = x + 'px';
+    jarvisFloat.style.top = y + 'px';
+    jarvisFloat.style.right = 'auto';
+    jarvisFloat.style.bottom = 'auto';
+  });
+  jarvisFloatHead.addEventListener('pointerup', function() {
+    if (!_drag) return;
+    _drag = null;
+    try {
+      var rect = jarvisFloat.getBoundingClientRect();
+      localStorage.setItem('jarvis-float-pos', JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+    } catch (e) {}
+  });
+
+  // Resize from top-left corner
+  var floatResizeHandle = document.getElementById('jarvisFloatResize');
+  var _rz = null;
+  if (floatResizeHandle) {
+    floatResizeHandle.addEventListener('pointerdown', function(e) {
+      var rect = jarvisFloat.getBoundingClientRect();
+      _rz = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height };
+      floatResizeHandle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    floatResizeHandle.addEventListener('pointermove', function(e) {
+      if (!_rz) return;
+      var w = Math.max(260, _rz.w - (e.clientX - _rz.x));
+      var h = Math.max(300, _rz.h - (e.clientY - _rz.y));
+      jarvisFloat.style.width = Math.min(w, window.innerWidth * 0.9) + 'px';
+      jarvisFloat.style.height = Math.min(h, window.innerHeight * 0.8) + 'px';
+    });
+    floatResizeHandle.addEventListener('pointerup', function() { _rz = null; });
+  }
+}
+
+if (document.getElementById('jarvisFloatClose')) {
+  document.getElementById('jarvisFloatClose').addEventListener('click', function() { toggleJarvisFloat(false); });
+}
+if (document.getElementById('jarvisFloatMin')) {
+  document.getElementById('jarvisFloatMin').addEventListener('click', function() {
+    jarvisFloat.classList.toggle('minimized');
+  });
+}
+var jarvisFloatBtn = document.getElementById('jarvisFloatBtn');
+if (jarvisFloatBtn) jarvisFloatBtn.addEventListener('click', function() { toggleJarvisFloat(); });
+if (jarvisFloatSend) jarvisFloatSend.addEventListener('click', floatSend);
+if (jarvisFloatInput) {
+  jarvisFloatInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); floatSend(); }
+    if (e.key === 'Escape') toggleJarvisFloat(false);
+  });
+}
+// Escape closes it globally when open and not typing
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && jarvisFloat && jarvisFloat.classList.contains('on') &&
+      document.activeElement !== jarvisFloatInput) {
+    toggleJarvisFloat(false);
+  }
+});
+
+// Ctrl+Shift+K handled by the main keydown handler (see global shortcuts)
+// Sync float matrix animation with global agent state
+var _origSetMatrix = setMatrix;
+setMatrix = function(state) {
+  _origSetMatrix(state);
+  var fm = document.getElementById('jarvisFloatMatrix');
+  if (fm) fm.dataset.state = state;
+};
+
+// ── Tasks Page (real companion + agent task state) ───────────
+function renderTasksPage() {
+  var listEl = document.getElementById('tasksList');
+  if (!listEl) return;
+  var rows = '';
+  // Companions are the real task runners
+  var companions = (typeof _companions !== 'undefined') ? _companions : [];
+  if (companions.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">\u2699</div>No tasks yet.<br>Create a Companion in the JARVIS sidebar to run autonomous browsing tasks.</div>';
+    return;
+  }
+  companions.forEach(function(c) {
+    var chip = '';
+    if (c.status === 'running') chip = '<span class="chip ask">Running</span>';
+    else if (c.status === 'paused') chip = '<span class="chip warn">Paused</span>';
+    else if (c.status === 'done') chip = '<span class="chip ok">Done</span>';
+    else if (c.status === 'error') chip = '<span class="chip bad">Failed</span>';
+    else chip = '<span class="chip">Idle</span>';
+    var elapsed = c.created ? Math.max(1, Math.round((Date.now() - c.created) / 60000)) + 'm' : '';
+    rows += '<div class="row">';
+    rows += '<div style="flex:1"><div class="name">' + escapeHtml(c.task || c.name) + '</div><div class="sub">' + escapeHtml(c.name) + (c.tabs && c.tabs.length ? ' \u00b7 ' + c.tabs.length + ' tab(s)' : '') + '</div></div>';
+    rows += chip + '<span class="meta">' + elapsed + '</span>';
+    rows += '</div>';
+  });
+  listEl.innerHTML = rows;
+}
+
+// ── Memory Page (real saved memories) ─────────────────────────
+let _memories = JSON.parse(localStorage.getItem('orbit-memories') || '[]');
+
+function renderMemoryPage() {
+  var listEl = document.getElementById('memoryList');
+  if (!listEl) return;
+  if (_memories.length === 0) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">\u{1F9E0}</div>No saved memories yet.<br>JARVIS remembers facts you save here across sessions.</div>';
+  } else {
+    var html = '';
+    _memories.forEach(function(m, idx) {
+      var date = new Date(m.time).toLocaleDateString();
+      html += '<div class="row">';
+      html += '<div style="flex:1"><div class="name">' + escapeHtml(m.text) + '</div><div class="sub">Saved \u00b7 ' + date + '</div></div>';
+      html += '<span class="chip">Saved</span><button class="chip-btn" data-mem-del="' + idx + '">Forget</button>';
+      html += '</div>';
+    });
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('[data-mem-del]').forEach(function(btn) {
+      btn.onclick = function() {
+        var idx = parseInt(btn.dataset.memDel);
+        var removed = _memories.splice(idx, 1);
+        localStorage.setItem('orbit-memories', JSON.stringify(_memories));
+        showToast('info', 'Forgotten', removed[0] ? removed[0].text.substring(0, 40) : '');
+        renderMemoryPage();
+      };
+    });
+  }
+  // Wire save input
+  var input = document.getElementById('memoryInput');
+  var saveBtn = document.getElementById('memorySaveBtn');
+  if (input && saveBtn && !saveBtn.dataset.wired) {
+    saveBtn.dataset.wired = '1';
+    function saveMemory() {
+      var text = input.value.trim();
+      if (!text) return;
+      _memories.push({ text: text, time: Date.now() });
+      localStorage.setItem('orbit-memories', JSON.stringify(_memories));
+      input.value = '';
+      showToast('ok', 'Memory Saved', text.substring(0, 40));
+      renderMemoryPage();
+    }
+    saveBtn.onclick = saveMemory;
+    input.onkeydown = function(e) { if (e.key === 'Enter') saveMemory(); };
+  }
 }
 
 // ── Site Settings Popup (lock icon — Chrome-style) ───────────
@@ -2673,6 +3127,8 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); omniInput.focus(); omniInput.select(); return; }
   // Ctrl+Shift+J: Toggle sidebar
   if (ctrl && shift && e.key.toLowerCase() === "j") { e.preventDefault(); jarvisBtn.click(); return; }
+  // Ctrl+Shift+K: Floating JARVIS chat window
+  if (ctrl && shift && e.key.toLowerCase() === "k") { e.preventDefault(); toggleJarvisFloat(); return; }
   if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); toggleSplitView(); return; }
   if (ctrl && shift && e.key.toLowerCase() === "r") { e.preventDefault(); openReaderMode(); return; }
   // Ctrl+Shift+F: Tab search
@@ -3513,6 +3969,7 @@ function toggleShortcutsOverlay() {
           <div class="shortcuts-group">
             <h3>JARVIS</h3>
             <div class="shortcut"><kbd>Ctrl+Shift+J</kbd><span>Toggle sidebar</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+K</kbd><span>Floating JARVIS chat</span></div>
             <div class="shortcut"><kbd>Ctrl+K</kbd><span>Command palette</span></div>
             <div class="shortcut"><kbd>Ctrl+/</kbd><span>This overlay</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Split view</span></div>
@@ -3675,6 +4132,16 @@ updatePerfHud();
 // Show initial JARVIS welcome
 Chat.renderPanel("jarvis");
 
+// ── Session restore prompt (Chrome-style "Restore pages?") ────
+try {
+  var _lastSession = JSON.parse(localStorage.getItem('orbit-session') || 'null');
+  var _hadRealTabs = _lastSession && Array.isArray(_lastSession.tabs) &&
+    _lastSession.tabs.some(function(t) { return t.url && !String(t.url).startsWith('orbit://'); });
+  if (_hadRealTabs && sessionBanner) {
+    setTimeout(function() { sessionBanner.classList.add('on'); }, 800);
+  }
+} catch (e) {}
+
 // ── First-Run: Auto-detect Chrome for import ──────────────────
 if (!localStorage.getItem('orbit-imported-once') && window.orbit?.chrome) {
   window.orbit.chrome.detect().then(function(browsers) {
@@ -3764,3 +4231,30 @@ setInterval(function() {
     }
   }, 10);
 }, 5000);
+
+// ── Live downloads updates → toast + page refresh ────────────
+if (window.orbit?.downloads?.onUpdated) {
+  var _lastDlState = {};
+  window.orbit.downloads.onUpdated(function(list) {
+    (list || []).forEach(function(d) {
+      var prev = _lastDlState[d.id];
+      if (prev !== d.state) {
+        _lastDlState[d.id] = d.state;
+        if (d.state === 'complete') {
+          showToast('ok', 'Download Complete', d.filename);
+          ErrorLogger.info('Download complete: ' + d.filename, 'downloads');
+        } else if (d.state === 'interrupted') {
+          showToast('warn', 'Download Interrupted', d.filename);
+        } else if (d.state === 'cancelled') {
+          showToast('info', 'Download Cancelled', d.filename);
+        } else if (d.state === 'downloading' && !prev) {
+          showToast('info', 'Downloading', d.filename);
+          // Auto-navigate to downloads page is NOT forced; show toast only
+        }
+      }
+    });
+    // Refresh the downloads page if it's currently visible
+    var dlPage = document.getElementById('downloadsPage');
+    if (dlPage && dlPage.classList.contains('on')) renderDownloadsPage();
+  });
+}

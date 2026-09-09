@@ -96,6 +96,15 @@ contextBridge.exposeInMainWorld("orbit", {
     navigateTo: (callback) => {
       ipcRenderer.on("navigate-to", (_, url) => callback(url));
     },
+    agentRead: (callback) => {
+      ipcRenderer.on("agent-read", () => callback());
+    },
+    agentClick: (callback) => {
+      ipcRenderer.on("agent-click", (_, args) => callback(args));
+    },
+    agentType: (callback) => {
+      ipcRenderer.on("agent-type", (_, args) => callback(args));
+    },
     tabSleep: (callback) => {
       ipcRenderer.on("tab-sleep", (_, id) => callback(id));
     },
@@ -152,6 +161,13 @@ contextBridge.exposeInMainWorld("orbit", {
       allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),
       revoke: (origin, permission) => ipcRenderer.invoke("permissions:revoke", origin, permission),
       list: () => ipcRenderer.invoke("permissions:list"),
+    },
+    downloads: {
+      list: () => ipcRenderer.invoke("downloads:list"),
+      clear: () => ipcRenderer.invoke("downloads:clear"),
+      cancel: (id) => ipcRenderer.invoke("downloads:cancel", id),
+      show: (id) => ipcRenderer.invoke("downloads:show", id),
+      onUpdated: (cb) => ipcRenderer.on("downloads-updated", (_e, list) => cb(list)),
     },
     performance: {
       status: () => ipcRenderer.invoke("performance:status"),

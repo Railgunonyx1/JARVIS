@@ -136,79 +136,123 @@
   }
 
   // ── Tool Executor ──────────────────────────────────────────────
+  // All page tools target the ACTIVE WEBVIEW (a guest web page), never the
+  // browser UI window — navigating window.location would destroy the shell.
+  function _activeWv() {
+    try {
+      if (typeof activeWebview === 'function') {
+        var wv = activeWebview();
+        if (wv && wv.classList && !wv.classList.contains('hidden')) return wv;
+      }
+    } catch (e) { /* fallthrough */ }
+    return null;
+  }
+
+  // Runs JS inside the guest page; returns a Promise of the result value.
+  function _evalGuest(code) {
+    var wv = _activeWv();
+    if (!wv) return Promise.resolve(null);
+    try {
+      return Promise.resolve(wv.executeJavaScript(code, false));
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
   function executeTool(toolCall) {
     var tool = toolCall.tool;
     var args = toolCall.args || {};
 
     switch (tool) {
       case 'navigate':
-        window.location.href = args.url;
-        return Promise.resolve({ success: true, result: 'Navigating to ' + args.url });
+        if (typeof navigateTo === 'function') {
+          navigateTo(args.url);
+          return Promise.resolve({ success: true, result: 'Navigating to ' + args.url });
+        }
+        return Promise.resolve({ success: false, result: 'Navigation unavailable' });
 
       case 'search':
         var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(args.query);
-        window.location.href = searchUrl;
-        return Promise.resolve({ success: true, result: 'Searching: ' + args.query });
+        if (typeof navigateTo === 'function') {
+          navigateTo(searchUrl);
+          return Promise.resolve({ success: true, result: 'Searching: ' + args.query });
+        }
+        return Promise.resolve({ success: false, result: 'Search unavailable' });
 
       case 'click':
-        var el = document.querySelector(args.selector);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.click();
-          return Promise.resolve({ success: true, result: 'Clicked: ' + args.selector });
-        }
-        return Promise.resolve({ success: false, result: 'Not found: ' + args.selector });
+        return _evalGuest(
+          '(function(){ var el = document.querySelector(' + JSON.stringify(args.selector) + ');' +
+          ' if (!el) return "Not found: ' + args.selector + '";' +
+          ' el.scrollIntoView({behavior:"smooth",block:"center"}); el.click();' +
+          ' return "Clicked: ' + args.selector + '"; })()'
+        ).then(function(r) {
+          return { success: !!r && String(r).indexOf('Not found') === -1, result: r || 'No active page' };
+        });
 
       case 'type_text':
-        var input = document.querySelector(args.selector);
-        if (input) {
-          input.focus();
-          input.value = args.text;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-          return Promise.resolve({ success: true, result: 'Typed: ' + args.text });
-        }
-        return Promise.resolve({ success: false, result: 'Input not found: ' + args.selector });
+        return _evalGuest(
+          '(function(){ var input = document.querySelector(' + JSON.stringify(args.selector) + ');' +
+          ' if (!input) return "Input not found";' +
+          ' input.focus(); input.value = ' + JSON.stringify(args.text) + ';' +
+          ' input.dispatchEvent(new Event("input",{bubbles:true}));' +
+          ' input.dispatchEvent(new Event("change",{bubbles:true}));' +
+          ' return "Typed: ' + String(args.text).substring(0, 50) + '"; })()'
+        ).then(function(r) {
+          return { success: !!r && r !== 'Input not found', result: r || 'No active page' };
+        });
 
       case 'read_page':
-        var content = document.body.innerText.substring(0, 5000);
-        return Promise.resolve({ success: true, result: content });
+        return _evalGuest('document.body ? document.body.innerText.substring(0, 5000) : ""')
+          .then(function(content) {
+            if (!content) return { success: false, result: 'No active page' };
+            return { success: true, result: content };
+          });
 
       case 'scroll':
-        window.scrollBy(0, args.direction === 'down' ? 500 : -500);
-        return Promise.resolve({ success: true, result: 'Scrolled ' + args.direction });
+        return _evalGuest('window.scrollBy(0, ' + (args.direction === 'down' ? '500' : '-500') + '); "Scrolled ' + args.direction + '"')
+          .then(function(r) { return { success: true, result: r || 'No active page' }; });
 
       case 'back':
-        window.history.back();
-        return Promise.resolve({ success: true, result: 'Going back' });
+        var wvB = _activeWv();
+        if (wvB && wvB.canGoBack && wvB.canGoBack()) { wvB.goBack(); return Promise.resolve({ success: true, result: 'Going back' }); }
+        return Promise.resolve({ success: false, result: 'Nothing to go back to' });
 
       case 'forward':
-        window.history.forward();
-        return Promise.resolve({ success: true, result: 'Going forward' });
+        var wvF = _activeWv();
+        if (wvF && wvF.canGoForward && wvF.canGoForward()) { wvF.goForward(); return Promise.resolve({ success: true, result: 'Going forward' }); }
+        return Promise.resolve({ success: false, result: 'Nothing to go forward to' });
 
       case 'reload':
-        window.location.reload();
-        return Promise.resolve({ success: true, result: 'Reloading page' });
+        var wvR = _activeWv();
+        if (wvR) { wvR.reload(); return Promise.resolve({ success: true, result: 'Reloading page' }); }
+        return Promise.resolve({ success: false, result: 'No active page' });
 
       case 'new_tab':
         var url = args.url || 'orbit://newtab';
-        if (typeof createTab === 'function') createTab(url);
-        return Promise.resolve({ success: true, result: 'Opened new tab' });
+        if (typeof createTab === 'function') { createTab(url); return Promise.resolve({ success: true, result: 'Opened new tab' }); }
+        return Promise.resolve({ success: false, result: 'Tab creation unavailable' });
 
       case 'close_tab':
-        if (typeof closeTab === 'function' && typeof activeTabId !== 'undefined') closeTab(activeTabId);
-        return Promise.resolve({ success: true, result: 'Closed tab' });
+        if (typeof closeTab === 'function' && typeof activeTabId !== 'undefined' && activeTabId) {
+          closeTab(activeTabId);
+          return Promise.resolve({ success: true, result: 'Closed tab' });
+        }
+        return Promise.resolve({ success: false, result: 'No active tab' });
 
       case 'bookmark':
-        if (typeof addBookmark === 'function') addBookmark();
-        return Promise.resolve({ success: true, result: 'Bookmarked page' });
+        if (typeof addBookmark === 'function') { addBookmark(); return Promise.resolve({ success: true, result: 'Bookmarked page' }); }
+        return Promise.resolve({ success: false, result: 'Bookmark unavailable' });
 
       case 'screenshot':
-        if (typeof takeScreenshot === 'function') takeScreenshot();
-        return Promise.resolve({ success: true, result: 'Screenshot taken' });
+        if (typeof takeScreenshot === 'function') { takeScreenshot(); return Promise.resolve({ success: true, result: 'Screenshot taken' }); }
+        return Promise.resolve({ success: false, result: 'Screenshot unavailable' });
 
       case 'summarize':
-        return Promise.resolve({ success: true, result: 'Page content: ' + document.body.innerText.substring(0, 2000) });
+        return _evalGuest('document.body ? document.body.innerText.substring(0, 2000) : ""')
+          .then(function(content) {
+            if (!content) return { success: false, result: 'No active page' };
+            return { success: true, result: 'Page content: ' + content };
+          });
 
       case 'done':
         return Promise.resolve({ success: true, done: true, result: args.answer });
