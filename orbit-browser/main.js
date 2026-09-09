@@ -445,6 +445,67 @@ function initStore() {
   return store;
 }
 
+// ── Main Process Error Logger ────────────────────────────────
+const mainErrorLog = [];
+const MAX_MAIN_ERRORS = 200;
+
+function logMainError(level, message, detail) {
+  const entry = {
+    level: level,
+    message: String(message).substring(0, 500),
+    detail: String(detail || '').substring(0, 500),
+    timestamp: Date.now(),
+  };
+  mainErrorLog.push(entry);
+  if (mainErrorLog.length > MAX_MAIN_ERRORS) mainErrorLog.shift();
+  return entry;
+}
+
+// ── Private Tab PIN Protection (Safari-style) ────────────────────
+const crypto = require("crypto");
+
+function getPrivatePinHash() {
+  return store ? store.get("privatePinHash", "") : "";
+}
+
+function getPrivatePinSalt() {
+  return store ? store.get("privatePinSalt", "") : "";
+}
+
+function isPrivatePinEnabled() {
+  return !!getPrivatePinHash();
+}
+
+function hashPin(pin, salt) {
+  // PBKDF2 with SHA-256, 100k iterations
+  const key = crypto.pbkdf2Sync(pin, salt, 100000, 32, "sha256");
+  return key.toString("hex");
+}
+
+function setPrivatePin(pin) {
+  if (!store) return false;
+  if (!pin || pin.length < 4) throw new Error("PIN must be at least 4 characters");
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = hashPin(pin, salt);
+  store.set("privatePinHash", hash);
+  store.set("privatePinSalt", salt);
+  return true;
+}
+
+function verifyPrivatePin(pin) {
+  const hash = getPrivatePinHash();
+  const salt = getPrivatePinSalt();
+  if (!hash) return true; // No PIN set = allow
+  return hashPin(pin, salt) === hash;
+}
+
+function clearPrivatePin() {
+  if (store) {
+    store.delete("privatePinHash");
+    store.delete("privatePinSalt");
+  }
+}
+
 // ── Tab Management ────────────────────────────────────────────────
 const tabs = new Map();
 const webContentsIds = new Map(); // tabId -> guest webContents.id
@@ -776,6 +837,8 @@ function setupIPC() {
       external: Math.round(mem.external / 1024 / 1024),
     };
   });
+  ipcMain.handle("main:error-log", () => mainErrorLog);
+  ipcMain.handle("main:error-log-clear", () => { mainErrorLog.length = 0; return true; });
 
   // Chrome Import
   ipcMain.handle("chrome:detect", () => {
@@ -1121,6 +1184,20 @@ function createWindow(incognito = false) {
   // ── Window Controls (frameless window) ────────────────────────
   ipcMain.handle("window:create", () => { createWindow(false); return true; });
   ipcMain.handle("window:create-private", () => { createWindow(true); return true; });
+  ipcMain.handle("private:check-pin", (_, pin) => {
+    return verifyPrivatePin(pin || "");
+  });
+  ipcMain.handle("private:set-pin", (_, pin) => {
+    validateString(pin, "PIN", 128);
+    return setPrivatePin(pin);
+  });
+  ipcMain.handle("private:clear-pin", () => {
+    clearPrivatePin();
+    return true;
+  });
+  ipcMain.handle("private:is-locked", () => {
+    return isPrivatePinEnabled();
+  });
   ipcMain.handle("window:fullscreen", () => {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
     const next = !mainWindow.isFullScreen();
@@ -1175,11 +1252,12 @@ app.whenReady().then(() => {
 // ── Error Boundaries ──────────────────────────────────────────────
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] Uncaught exception:", err);
-  // Don't crash the whole browser for renderer errors
+  logMainError('error', err.message, err.stack);
 });
 
 process.on("unhandledRejection", (reason) => {
   console.error("[FATAL] Unhandled rejection:", reason);
+  logMainError('error', 'Unhandled rejection', String(reason));
 });
 
 app.on("window-all-closed", () => {
@@ -1254,7 +1332,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
-  protocol.handle("orbit", async (request) => {
+  const orbitHandler = async (request) => {
     // Stream the page from disk over Electron's async net.fetch: the handler
     // never blocks the main process (no sync fs.read) and sets the correct
     // Content-Type per file extension for free.
@@ -1272,5 +1350,12 @@ app.whenReady().then(() => {
     } catch (_) {
       return new Response("Not Found", { status: 404 });
     }
-  });
+  };
+  // Serve orbit:// to the main window AND to webview guests (persist:orbit
+  // partition) so first-party pages like the Import helper and Extension
+  // Store can run inside a hardened guest.
+  protocol.handle("orbit", orbitHandler);
+  try {
+    protocol.handle(session.fromPartition("persist:orbit"), "orbit", orbitHandler);
+  } catch (_) {/* partition session unavailable — main-window-only fallback */}
 });

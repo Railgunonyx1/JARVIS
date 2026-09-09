@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld("orbit", {
     domOptimize: (data) => ipcRenderer.invoke("perf:dom-optimize", data),
     gc: () => ipcRenderer.invoke("perf:gc"),
     memoryReport: () => ipcRenderer.invoke("perf:memory-report"),
+    errorLog: () => ipcRenderer.invoke("main:error-log"),
+    clearErrorLog: () => ipcRenderer.invoke("main:error-log-clear"),
   },
 
   // ── Window Controls ─────────────────────────────────────────────
@@ -60,6 +62,11 @@ contextBridge.exposeInMainWorld("orbit", {
     close: () => ipcRenderer.send("win-close"),
     create: () => ipcRenderer.invoke("window:create"),
     createPrivate: () => ipcRenderer.invoke("window:create-private"),
+    // Private tab PIN protection (Safari-style)
+    checkPin: (pin) => ipcRenderer.invoke("private:check-pin", pin),
+    setPin: (pin) => ipcRenderer.invoke("private:set-pin", pin),
+    clearPin: () => ipcRenderer.invoke("private:clear-pin"),
+    isLocked: () => ipcRenderer.invoke("private:is-locked"),
     fullscreen: () => ipcRenderer.invoke("window:fullscreen"),
   },
 

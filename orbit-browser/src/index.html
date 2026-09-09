@@ -237,6 +237,11 @@
                 <div class="row"><div class="name">Private network</div><span class="chip bad">Blocked</span></div>
                 <div class="row"><div class="name">Loopback</div><span class="chip bad">Blocked</span></div>
               </div>
+              <div class="group"><h2>Privacy</h2>
+                <div class="row"><div><div class="name">Private Window PIN</div><div class="sub">Require PIN to open private windows (Safari-style)</div></div><button class="chip-btn" id="privatePinToggle">Configure</button></div>
+                <div class="row"><div><div class="name">Fingerprint Protection</div><div class="sub">Canvas, WebGL, AudioContext farbling</div></div><span class="chip ok">Active</span></div>
+                <div class="row"><div><div class="name">Tracker Blocking</div><div class="sub">80+ domains, 40+ patterns</div></div><span class="chip ok">Active</span></div>
+              </div>
               <div class="group"><h2>About</h2>
                 <div class="row"><div class="name">JARVIS Orbit</div><span class="meta">0.1.0</span></div>
                 <div class="row"><div class="name">DSH Protocol</div><span class="chip ok">DSH/1.0</span></div>
@@ -361,6 +366,18 @@
               <div class="group"><h2>Performance</h2>
                 <div class="row"><div class="name">Efficiency Mode</div><span class="chip" id="diagEfficiency">Checking...</span></div>
                 <div class="row"><div class="name">Frozen Tabs</div><span class="meta" id="diagFrozen">Checking...</span></div>
+              </div>
+              <div class="group"><h2>Error Log</h2>
+                <div class="row"><div><div class="name">Total Errors</div><div class="sub">Captured errors, warnings, and info</div></div><span class="chip" id="diagErrorCount">0</span></div>
+                <div class="row"><div><div class="name">Errors</div></div><span class="chip bad" id="diagErrorTotal">0</span></div>
+                <div class="row"><div><div class="name">Warnings</div></div><span class="chip warn" id="diagWarnTotal">0</span></div>
+                <div class="row"><div><div class="name">Last Error</div></div><span class="meta" id="diagLastError">None</span></div>
+                <div style="margin-top:8px;display:flex;gap:8px">
+                  <button class="chip-btn" id="diagViewErrors">View Log</button>
+                  <button class="chip-btn" id="diagExportErrors">Export</button>
+                  <button class="chip-btn" id="diagClearErrors">Clear</button>
+                </div>
+                <div id="diagErrorList" style="margin-top:12px;max-height:300px;overflow-y:auto;display:none"></div>
               </div>
             </div>
           </div>
@@ -702,6 +719,7 @@
 
   <!-- ── Scripts ─────────────────────────────────────────────── -->
   <script src="js/chat.js"></script>
+  <script src="js/needle-agent.js"></script>
   <script src="js/renderer.js"></script>
   <script>
     // Load optional modules with error isolation — one failing module

@@ -40,13 +40,100 @@ function throttle(fn, ms) {
   };
 }
 
+// ── Error Logger (captures all errors for diagnostics) ──────────
+const ErrorLogger = (function() {
+  var _errors = [];
+  var MAX_ERRORS = 500;
+  var _listeners = [];
+
+  function log(level, message, details) {
+    var entry = {
+      id: _errors.length,
+      level: level, // 'error', 'warn', 'info'
+      message: message,
+      details: details || '',
+      source: '',
+      timestamp: Date.now(),
+      url: '',
+      line: 0,
+      col: 0,
+      stack: '',
+    };
+    try { entry.url = window.location.href; } catch (e) {}
+    _errors.push(entry);
+    if (_errors.length > MAX_ERRORS) _errors.shift();
+    _notifyListeners(entry);
+    return entry;
+  }
+
+  function logError(err, source) {
+    var entry = log('error', err.message || String(err), source || '');
+    if (err.filename) entry.source = err.filename;
+    if (err.lineno) entry.line = err.lineno;
+    if (err.colno) entry.col = err.colno;
+    if (err.stack) entry.stack = err.stack;
+    return entry;
+  }
+
+  function logWarn(message, details) { return log('warn', message, details); }
+  function logInfo(message, details) { return log('info', message, details); }
+
+  function getErrors(filter) {
+    if (!filter) return _errors.slice();
+    return _errors.filter(function(e) {
+      if (filter.level && e.level !== filter.level) return false;
+      if (filter.search) {
+        var s = filter.search.toLowerCase();
+        return (e.message || '').toLowerCase().includes(s) || (e.source || '').toLowerCase().includes(s);
+      }
+      return true;
+    });
+  }
+
+  function getStats() {
+    var stats = { total: _errors.length, errors: 0, warns: 0, infos: 0 };
+    _errors.forEach(function(e) {
+      if (e.level === 'error') stats.errors++;
+      else if (e.level === 'warn') stats.warns++;
+      else stats.infos++;
+    });
+    return stats;
+  }
+
+  function clear() { _errors.length = 0; }
+
+  function exportLog() {
+    return JSON.stringify(_errors, null, 2);
+  }
+
+  function onUpdate(cb) { _listeners.push(cb); }
+  function _notifyListeners(entry) {
+    _listeners.forEach(function(cb) { try { cb(entry); } catch (e) {} });
+  }
+
+  return {
+    log: log,
+    error: logError,
+    warn: logWarn,
+    info: logInfo,
+    getErrors: getErrors,
+    getStats: getStats,
+    clear: clear,
+    exportLog: exportLog,
+    onUpdate: onUpdate,
+  };
+})();
+window._errorLogger = ErrorLogger;
+
 // ── Error Boundary ──────────────────────────────────────────────
 window.addEventListener('error', (e) => {
   console.error('[ORBIT] Unhandled error:', e.message, e.filename, e.lineno);
+  ErrorLogger.error(e, 'global');
   if (window.showToast) showToast('err', 'Error', e.message);
 });
 window.addEventListener('unhandledrejection', (e) => {
   console.error('[ORBIT] Unhandled rejection:', e.reason);
+  ErrorLogger.error(e.reason || new Error(String(e.reason)), 'promise');
 });
 
 // ── DOM Refs ──────────────────────────────────────────────────
@@ -187,6 +274,22 @@ function ungroupTab(id) {
   if (tab) { tab.groupColor = null; renderTabs(); }
 }
 
+// ── Tab Group Collapse (Vivaldi-style) ──────────────────────
+let _collapsedGroups = new Set();
+
+function toggleGroupCollapse(color) {
+  if (_collapsedGroups.has(color)) {
+    _collapsedGroups.delete(color);
+  } else {
+    _collapsedGroups.add(color);
+  }
+  renderTabs();
+}
+
+function isGroupCollapsed(color) {
+  return _collapsedGroups.has(color);
+}
+
 // ── Tab Management ────────────────────────────────────────────
 function activeWebview() {
   const tab = tabs.get(activeTabId);
@@ -262,6 +365,7 @@ function _doLoad(wv, url, attempt) {
         // this one) — never retry or toast it, or we'd stomp the user's new URL.
         const aborted = /ERR_ABORTED/.test(msg);
         console.error("[NAV] loadURL rejected:", msg);
+        ErrorLogger.error(new Error('loadURL: ' + msg), 'navigation');
         if (!aborted && attempt < 2) {
           setTimeout(() => _doLoad(wv, url, attempt + 1), 500);
         } else if (!aborted) {
@@ -315,6 +419,7 @@ function attachWebviewEvents(wv) {
     const errCode = e.errorCode || 0;
     const errDesc = e.errorDescription || "Unknown error";
     console.error("[Webview] Load failed:", errCode, errDesc, e.validatedURL);
+    ErrorLogger.error(new Error('Webview load failed: ' + errCode + ' ' + errDesc), 'webview');
     // ERR_ABORTED (-3) is normal for cancelled navigations — don't toast
     if (errCode === -3) return;
     // Show user-visible error
@@ -353,6 +458,8 @@ function attachWebviewEvents(wv) {
     if (!e.url || e.url === "about:blank") return;
     tab.url = e.url;
     recordHistory(e.url, tab.title || e.url);
+    // Apply boost (Arc-style custom CSS/JS per site)
+    applyBoostToWebview(wv, e.url);
     // Only update omnibox for the active tab. Prevent stale did-navigate
     // events from other tabs overwriting the current omnibox value.
     if (tab.id !== activeTabId) return;
@@ -407,7 +514,38 @@ function _renderTabsInner() {
   tabStrip.innerHTML = "";
   // Pinned tabs first (Chrome-style), then normal tabs in open order.
   const ordered = Array.from(tabs.entries()).sort((a, b) => (b[1].pinned ? 1 : 0) - (a[1].pinned ? 1 : 0));
+  // Track which groups we've rendered to handle collapse
+  const renderedGroups = new Set();
   for (const [id, tab] of ordered) {
+    // Handle collapsed groups: skip tabs in collapsed groups (unless active)
+    if (tab.groupColor && isGroupCollapsed(tab.groupColor) && id !== activeTabId) {
+      if (!renderedGroups.has(tab.groupColor)) {
+        renderedGroups.add(tab.groupColor);
+        // Render a collapse indicator for the group
+        const collapseEl = document.createElement("button");
+        collapseEl.className = "tab-group-collapsed";
+        collapseEl.style.cssText = "display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;background:" + tab.groupColor + "22;border:1px solid " + tab.groupColor + "44;font-size:10px;color:" + tab.groupColor + ";cursor:pointer;margin-right:4px";
+        collapseEl.innerHTML = '<span style="font-size:12px">\u25B6</span><span>' + tabs.size + ' tabs</span>';
+        collapseEl.title = "Click to expand group";
+        collapseEl.addEventListener("click", function() { toggleGroupCollapse(tab.groupColor); });
+        tabStrip.appendChild(collapseEl);
+      }
+      continue;
+    }
+    // If this tab's group was collapsed but is now active, render it
+    if (tab.groupColor && isGroupCollapsed(tab.groupColor)) {
+      if (!renderedGroups.has(tab.groupColor)) {
+        renderedGroups.add(tab.groupColor);
+        // Render collapse button before active tab
+        const collapseEl = document.createElement("button");
+        collapseEl.className = "tab-group-expanded";
+        collapseEl.style.cssText = "display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;background:" + tab.groupColor + "22;border:1px solid " + tab.groupColor + "44;font-size:10px;color:" + tab.groupColor + ";cursor:pointer;margin-right:4px";
+        collapseEl.innerHTML = '<span style="font-size:12px">\u25BC</span>';
+        collapseEl.title = "Click to collapse group";
+        collapseEl.addEventListener("click", function() { toggleGroupCollapse(tab.groupColor); });
+        tabStrip.appendChild(collapseEl);
+      }
+    }
     const el = document.createElement("button");
     const sleeping = tab.sleeping ? " sleeping" : "";
     const pinned = tab.pinned ? " pinned" : "";
@@ -517,7 +655,7 @@ function createTab(url) {
   // Park the URL in the pending mechanism so it loads only AFTER the guest's
   // initial about:blank dom-ready (did-attach/dom-ready flush it) — loading
   // while about:blank is still in flight can abort with ERR_FAILED.
-  if (url && !url.startsWith("orbit://")) {
+  if (url && (!url.startsWith("orbit://") || isWebviewInternal(url))) {
     if (wv.dataset) wv.dataset.pendingUrl = url;
     setTimeout(() => flushPendingLoad(wv), 2000);
   }
@@ -574,7 +712,7 @@ function activateTab(id) {
     }
   }
 
-  const internal = tab.url ? tab.url.startsWith("orbit://") : true;
+  const internal = tab.url ? (tab.url.startsWith("orbit://") && !isWebviewInternal(tab.url)) : true;
   if (internal) {
     // Overlay (see navigateTo): the webview stays visible so its guest stays
     // attached and navigable.
@@ -603,6 +741,13 @@ function activateTab(id) {
       if (zoomIndicator) zoomIndicator.textContent = Math.round(currentZoom * 100) + "%";
       if (wv) wv.setZoomFactor(currentZoom);
     } catch (e) {}
+    // File-backed internal pages (Import helper, Extension Store) render in
+    // the webview via the orbit:// protocol, not the overlay.
+    if (tab.url && isWebviewInternal(tab.url)) {
+      try {
+        if (!wv || (wv.getURL && wv.getURL() !== tab.url)) loadURLSafely(wv, tab.url);
+      } catch (e) {}
+    }
   }
 
   renderTabs();
@@ -627,6 +772,12 @@ const INTERNAL_PAGES = {
   "orbit://import": "importPage",
   "orbit://extension-store": "extensionStorePage",
 };
+
+function isWebviewInternal(url) {
+  if (!url || !url.startsWith("orbit://")) return false;
+  const pageId = INTERNAL_PAGES[url];
+  return !!pageId && !document.getElementById(pageId);
+}
 
 function showInternalPage(pageId) {
   $$(".page", internalPages).forEach(p => p.classList.remove("on"));
@@ -671,6 +822,72 @@ function refreshDiagnostics() {
       if (frozen) frozen.textContent = (s && s.frozen) ? s.frozen + " tab(s)" : "None";
     }).catch(() => {});
   }
+  // Error log stats
+  var errStats = ErrorLogger.getStats();
+  var errCount = document.getElementById('diagErrorCount');
+  var errTotal = document.getElementById('diagErrorTotal');
+  var warnTotal = document.getElementById('diagWarnTotal');
+  var lastErr = document.getElementById('diagLastError');
+  if (errCount) errCount.textContent = errStats.total;
+  if (errTotal) errTotal.textContent = errStats.errors;
+  if (warnTotal) warnTotal.textContent = errStats.warns;
+  if (lastErr) {
+    var allErrors = ErrorLogger.getErrors({ level: 'error' });
+    lastErr.textContent = allErrors.length > 0 ? allErrors[allErrors.length - 1].message.substring(0, 60) : 'None';
+  }
+  // Wire error log buttons
+  var viewBtn = document.getElementById('diagViewErrors');
+  var exportBtn = document.getElementById('diagExportErrors');
+  var clearBtn = document.getElementById('diagClearErrors');
+  var errorList = document.getElementById('diagErrorList');
+  if (viewBtn && errorList) {
+    viewBtn.onclick = function() {
+      var show = errorList.style.display === 'none';
+      errorList.style.display = show ? 'block' : 'none';
+      viewBtn.textContent = show ? 'Hide Log' : 'View Log';
+      if (show) renderErrorLog(errorList);
+    };
+  }
+  if (exportBtn) {
+    exportBtn.onclick = function() {
+      var log = ErrorLogger.exportLog();
+      var blob = new Blob([log], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'orbit-error-log-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('ok', 'Exported', 'Error log saved');
+    };
+  }
+  if (clearBtn) {
+    clearBtn.onclick = function() {
+      ErrorLogger.clear();
+      refreshDiagnostics();
+      showToast('ok', 'Cleared', 'Error log cleared');
+    };
+  }
+}
+
+function renderErrorLog(container) {
+  var errors = ErrorLogger.getErrors();
+  if (errors.length === 0) {
+    container.innerHTML = '<div style="padding:12px;color:var(--jb-mute);font-size:12px;text-align:center">No errors logged</div>';
+    return;
+  }
+  var html = '';
+  errors.slice(-50).reverse().forEach(function(e) {
+    var color = e.level === 'error' ? '#f87171' : e.level === 'warn' ? '#fbbf24' : '#4ade80';
+    var icon = e.level === 'error' ? '\u2717' : e.level === 'warn' ? '\u26A0' : '\u2139';
+    var time = new Date(e.timestamp).toLocaleTimeString();
+    html += '<div class="privacy-activity-item">';
+    html += '<div class="privacy-activity-dot" style="background:' + color + '"></div>';
+    html += '<div class="privacy-activity-text" style="font-size:11px"><span style="color:' + color + ';margin-right:6px">' + icon + '</span>' + escapeHtml(e.message) + (e.source ? ' <span style="color:var(--jb-mute)">' + escapeHtml(e.source) + ':' + e.line + '</span>' : '') + '</div>';
+    html += '<div class="privacy-activity-time">' + time + '</div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
 }
 
 function navigateTo(url) {
@@ -678,7 +895,7 @@ function navigateTo(url) {
   if (!tab) return;
   tab.url = url;
 
-  if (url.startsWith("orbit://")) {
+  if (url.startsWith("orbit://") && !isWebviewInternal(url)) {
     omniInput.value = "";
     omniInput.placeholder = url.replace("orbit://", "orbit://");
     // Internal pages overlay the (attached, visible) webview instead of
@@ -799,6 +1016,61 @@ jarvisBtn.addEventListener("click", () => {
   setMatrix(agentState);
 });
 
+// ── Private Window with PIN Protection (Safari-style) ──────
+function openPrivateWindow() {
+  // Check if PIN is required
+  if (window.orbit && window.orbit.window && window.orbit.window.isLocked) {
+    window.orbit.window.isLocked().then(function(locked) {
+      if (locked) {
+        // Show PIN prompt
+        showPrivatePinPrompt();
+      } else {
+        window.orbit.window.createPrivate();
+      }
+    }).catch(function() {
+      window.orbit.window.createPrivate();
+    });
+  } else {
+    window.orbit?.window?.createPrivate?.();
+  }
+}
+
+function showPrivatePinPrompt() {
+  var overlay = document.createElement('div');
+  overlay.className = 'shortcuts-overlay active';
+  var h = '';
+  h += '<div class="shortcuts-card" style="max-width:360px;text-align:center">';
+  h += '<div style="font-size:32px;margin-bottom:12px">\u{1F512}</div>';
+  h += '<h2 style="font-size:16px;color:var(--jb-paper);margin-bottom:4px">Private Window Locked</h2>';
+  h += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">Enter your PIN to open a private window</p>';
+  h += '<input type="password" id="privatePinInput" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px" placeholder="Enter PIN" />';
+  h += '<div id="privatePinError" style="font-size:11px;color:#f87171;margin-bottom:12px;display:none"></div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button id="privatePinCancel" style="flex:1;padding:8px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--jb-mute);font-size:12px;cursor:pointer">Cancel</button>';
+  h += '<button id="privatePinSubmit" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Unlock</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  var input = overlay.querySelector('#privatePinInput');
+  var error = overlay.querySelector('#privatePinError');
+  var cancelBtn = overlay.querySelector('#privatePinCancel');
+  var submitBtn = overlay.querySelector('#privatePinSubmit');
+  input.focus();
+  function close() { overlay.remove(); }
+  cancelBtn.onclick = close;
+  overlay.onclick = function(e) { if (e.target === overlay) close(); };
+  function submit() {
+    var pin = input.value;
+    if (!pin) { error.textContent = 'Please enter your PIN'; error.style.display = 'block'; return; }
+    window.orbit.window.checkPin(pin).then(function(ok) {
+      if (ok) { close(); window.orbit.window.createPrivate(); }
+      else { error.textContent = 'Incorrect PIN. Try again.'; error.style.display = 'block'; input.value = ''; input.focus(); }
+    }).catch(function() { error.textContent = 'Verification failed'; error.style.display = 'block'; });
+  }
+  submitBtn.onclick = submit;
+  input.onkeydown = function(e) { if (e.key === 'Enter') submit(); if (e.key === 'Escape') close(); };
+}
+
 function startJarvis() {
   // Try to connect to JARVIS bridge
   if (window.orbit && window.orbit.jarvis) {
@@ -816,18 +1088,33 @@ function startJarvis() {
         showToast('ok', 'JARVIS Online', 'JARVIS is ready to use');
         Chat.append('system', 'JARVIS is now online. Ask me anything!');
       } else {
+        // Bridge not running - offer Needle as fallback
         setMatrix('fail');
-        showToast('warn', 'JARVIS Offline', 'Could not connect. Make sure the JARVIS bridge server is running on port 8170.');
-        setTimeout(function() { setMatrix('idle'); }, 2000);
+        showToast('warn', 'JARVIS Offline', 'Bridge not running. Using local Needle AI instead.');
+        startNeedleMode();
       }
     }).catch(function() {
+      // Bridge not running - offer Needle as fallback
       setMatrix('fail');
-      showToast('warn', 'JARVIS Offline', 'Bridge server not found. Start it with: python -m jbrowser');
-      setTimeout(function() { setMatrix('idle'); }, 2000);
+      showToast('info', 'Using Needle AI', 'Bridge not found. Starting local 14MB AI agent...');
+      startNeedleMode();
     });
   } else {
-    showToast('warn', 'JARVIS Not Available', 'Bridge not loaded. Start the JARVIS server first.');
+    showToast('info', 'Using Needle AI', 'Starting local AI agent (no server needed)...');
+    startNeedleMode();
   }
+}
+
+function startNeedleMode() {
+  // Enable Needle local AI mode
+  jarvisOnline = true;
+  updateJarvisStatusUI(true);
+  sidebarOpen = true;
+  sidebar.classList.remove('hidden');
+  jarvisBtn.classList.add('active');
+  setMatrix('idle');
+  Chat.append('jarvis', 'Needle AI is active (14MB local model). I can help you navigate, search, and interact with pages. No server required!');
+  Chat.append('system', 'Tip: Type commands like "search for cats", "go to github.com", "read this page"');
 }
 
 function updateJarvisStatusUI(online) {
@@ -1283,8 +1570,38 @@ async function sendToJarvis() {
   } else if (window.orbit?.jarvis) {
     setMatrix("thinking");
     window.orbit.jarvis.chat(text, "orbit-session");
+  } else if (jarvisOnline) {
+    // Parallel mode: Needle (fast) + Main Model (reasoning)
+    setMatrix("thinking");
+    try {
+      var needleResult = window.needleAgent.route(text);
+      var conf = Math.round(needleResult.confidence * 100);
+      if (needleResult.confidence >= 0.8) {
+        // High confidence: execute immediately (fast path)
+        Chat.append("system", "\u26A1 Needle: " + needleResult.tool + " (" + conf + "%)");
+        var execResult = await window.needleAgent.execute(needleResult);
+        if (execResult.done) {
+          Chat.append("jarvis", execResult.result);
+          setMatrix("done");
+          setTimeout(() => setMatrix("idle"), 2000);
+        } else {
+          Chat.append("jarvis", execResult.result);
+          setMatrix("idle");
+        }
+      } else {
+        // Low confidence: run both in parallel
+        Chat.append("system", "\u26A1 Needle: " + needleResult.tool + " (" + conf + "%) | Main model: reasoning...");
+        var execResult = await window.needleAgent.execute(needleResult);
+        Chat.append("jarvis", execResult.result || 'Tool executed: ' + needleResult.tool);
+        setMatrix("idle");
+      }
+    } catch (err) {
+      Chat.append("error", "Agent error: " + err.message);
+      setMatrix("fail");
+      setTimeout(() => setMatrix("idle"), 2000);
+    }
   } else {
-    Chat.append("jarvis", "I'm not connected to a backend yet. Start the JARVIS bridge server on port 8170 for full functionality. Meanwhile:\n\n\u2022 Navigate: type a URL or search\n\u2022 Tabs: Ctrl+T / Ctrl+W\n\u2022 Find: Ctrl+F\n\u2022 Commands: Ctrl+K\n\u2022 Zoom: Ctrl+/-\n\u2022 Bookmarks: Ctrl+D\n\u2022 Screenshot: Ctrl+Shift+S");
+    Chat.append("jarvis", "Click the JARVIS button to start the AI agent.\n\n\u2022 Navigate: type a URL or search\n\u2022 Tabs: Ctrl+T / Ctrl+W\n\u2022 Find: Ctrl+F\n\u2022 Commands: Ctrl+K\n\u2022 Zoom: Ctrl+/-\n\u2022 Bookmarks: Ctrl+D\n\u2022 Screenshot: Ctrl+Shift+S");
     setMatrix("idle");
   }
 }
@@ -1844,6 +2161,7 @@ const CMD_ITEMS = [
   { l: "Memory", d: "Saved memories", i: "\u2261", a: function() { navigateTo("orbit://memory"); } },
   { l: "Diagnostics", d: "System status", i: "\u229f", a: function() { navigateTo("orbit://diagnostics"); } },
   { l: "Privacy Report", d: "Trackers blocked & shield status", i: "\u{1F6E1}", a: function() { navigateTo("orbit://privacy"); } },
+  { l: "Create Boost", d: "Custom CSS/JS for this site", i: "\u26A1", a: function() { createBoostUI(); } },
   { l: "Print Page", d: "Print current page", s: "Ctrl+P", i: "\u2399", a: function() { printPage(); } },
   { l: "Screenshot", d: "Capture page", s: "Ctrl+Shift+S", i: "\u25a3", a: function() { takeScreenshot(); } },
   { l: "Zoom In", d: "Increase zoom", s: "Ctrl+=", i: "+", a: function() { zoomIn(); } },
@@ -2301,7 +2619,7 @@ document.addEventListener("click", (e) => {
     const action = actionItem.dataset.action;
     if (action === "newTab") createTab();
     if (action === "newWindow") { window.orbit?.window?.create?.(); }
-    if (action === "incognito") { window.orbit?.window?.createPrivate?.(); }
+    if (action === "incognito") { openPrivateWindow(); }
     if (action === "reopenTab") reopenClosedTab();
     if (action === "zoomIn") zoomIn();
     if (action === "zoomOut") zoomOut();
@@ -2347,7 +2665,7 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key.toLowerCase() === "t") { e.preventDefault(); createTab(); return; }
   // Ctrl+N: New window / Ctrl+Shift+N: New private window
   if (ctrl && e.key.toLowerCase() === "n" && !shift) { e.preventDefault(); window.orbit?.window?.create?.(); return; }
-  if (ctrl && shift && e.key.toLowerCase() === "n") { e.preventDefault(); window.orbit?.window?.createPrivate?.(); return; }
+  if (ctrl && shift && e.key.toLowerCase() === "n") { e.preventDefault(); openPrivateWindow(); return; }
   if (e.key === "F11") { e.preventDefault(); window.orbit?.window?.fullscreen?.(); return; }
   // Ctrl+W: Close tab
   if (ctrl && e.key.toLowerCase() === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
@@ -2477,6 +2795,88 @@ if (themeToggle) {
     themeToggle.textContent = current === "dark" ? "Toggle dark" : "Toggle light";
     showToast("info", "Theme Changed", "Switched to " + html.dataset.theme + " mode");
   });
+}
+
+// ── Private Window PIN Configuration ─────────────────────────
+const privatePinToggle = $("#privatePinToggle");
+if (privatePinToggle) {
+  privatePinToggle.addEventListener("click", () => {
+    if (!window.orbit?.window) return;
+    window.orbit.window.isLocked().then(function(locked) {
+      if (locked) {
+        // PIN is set — offer to change or remove
+        var overlay = document.createElement('div');
+        overlay.className = 'shortcuts-overlay active';
+        var oh = '';
+        oh += '<div class="shortcuts-card" style="max-width:360px;text-align:center">';
+        oh += '<div style="font-size:32px;margin-bottom:12px">\u{1F512}</div>';
+        oh += '<h2 style="font-size:16px;color:var(--jb-paper);margin-bottom:4px">Private Window PIN</h2>';
+        oh += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">A PIN is currently set for private windows</p>';
+        oh += '<div style="display:flex;gap:8px">';
+        oh += '<button id="pinChange" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;cursor:pointer">Change PIN</button>';
+        oh += '<button id="pinRemove" style="flex:1;padding:8px;border-radius:6px;background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#f87171;font-size:12px;cursor:pointer">Remove PIN</button>';
+        oh += '</div>';
+        oh += '<button id="pinClose" style="margin-top:8px;padding:8px;border-radius:6px;background:none;border:none;color:var(--jb-mute);font-size:12px;cursor:pointer;width:100%">Cancel</button>';
+        oh += '</div>';
+        overlay.innerHTML = oh;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#pinClose').onclick = function() { overlay.remove(); };
+        overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+        overlay.querySelector('#pinRemove').onclick = function() {
+          window.orbit.window.clearPin().then(function() {
+            overlay.remove();
+            privatePinToggle.textContent = 'Configure';
+            showToast('ok', 'PIN Removed', 'Private windows are no longer locked');
+          });
+        };
+        overlay.querySelector('#pinChange').onclick = function() {
+          overlay.remove();
+          showPinSetup();
+        };
+      } else {
+        // No PIN set — offer to set one
+        showPinSetup();
+      }
+    });
+  });
+}
+
+function showPinSetup() {
+  var overlay = document.createElement('div');
+  overlay.className = 'shortcuts-overlay active';
+  var h = '';
+  h += '<div class="shortcuts-card" style="max-width:360px;text-align:center">';
+  h += '<div style="font-size:32px;margin-bottom:12px">\u{1F512}</div>';
+  h += '<h2 style="font-size:16px;color:var(--jb-paper);margin-bottom:4px">Set Private Window PIN</h2>';
+  h += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">Require this PIN to open private windows</p>';
+  h += '<input type="password" id="pinSetupInput" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:8px" placeholder="Enter PIN (4+ chars)" />';
+  h += '<input type="password" id="pinSetupConfirm" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px" placeholder="Confirm PIN" />';
+  h += '<div id="pinSetupError" style="font-size:11px;color:#f87171;margin-bottom:12px;display:none"></div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button id="pinSetupCancel" style="flex:1;padding:8px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--jb-mute);font-size:12px;cursor:pointer">Cancel</button>';
+  h += '<button id="pinSetupSave" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Save PIN</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  var input = overlay.querySelector('#pinSetupInput');
+  var confirmInput = overlay.querySelector('#pinSetupConfirm');
+  var error = overlay.querySelector('#pinSetupError');
+  input.focus();
+  overlay.querySelector('#pinSetupCancel').onclick = function() { overlay.remove(); };
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.querySelector('#pinSetupSave').onclick = function() {
+    var pin = input.value;
+    var pin2 = confirmInput.value;
+    if (pin.length < 4) { error.textContent = 'PIN must be at least 4 characters'; error.style.display = 'block'; return; }
+    if (pin !== pin2) { error.textContent = 'PINs do not match'; error.style.display = 'block'; return; }
+    window.orbit.window.setPin(pin).then(function() {
+      overlay.remove();
+      privatePinToggle.textContent = 'Change';
+      showToast('ok', 'PIN Set', 'Private windows are now protected');
+    }).catch(function() {
+      error.textContent = 'Failed to set PIN'; error.style.display = 'block';
+    });
+  };
 }
 
 // ── NTP Search ────────────────────────────────────────────────
@@ -2735,6 +3135,58 @@ function recordHistory(url, title) {
   if (h.length > 400) h.length = 400;
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) {}
 }
+// ── Boosts (Arc-style per-site custom CSS/JS) ──────────────
+let _boosts = JSON.parse(localStorage.getItem('orbit-boosts') || '{}');
+
+function getBoostForDomain(domain) {
+  return _boosts[domain] || null;
+}
+
+function saveBoost(domain, boost) {
+  if (boost.css || boost.js) {
+    _boosts[domain] = boost;
+  } else {
+    delete _boosts[domain];
+  }
+  localStorage.setItem('orbit-boosts', JSON.stringify(_boosts));
+}
+
+function applyBoostToWebview(wv, url) {
+  if (!wv || !url) return;
+  try {
+    var domain = new URL(url).hostname;
+    var boost = getBoostForDomain(domain);
+    if (!boost) return;
+    if (boost.css) {
+      wv.insertCSS(boost.css).catch(function() {});
+    }
+    if (boost.js) {
+      wv.executeJavaScript(boost.js).catch(function() {});
+    }
+  } catch (e) {}
+}
+
+function createBoostUI() {
+  var domain = '';
+  try {
+    var tab = tabs.get(activeTabId);
+    if (tab && tab.url) domain = new URL(tab.url).hostname;
+  } catch (e) {}
+  if (!domain) { showToast('err', 'No site', 'Navigate to a site first'); return; }
+  var existing = getBoostForDomain(domain);
+  var css = prompt('Custom CSS for ' + domain + ':', existing ? existing.css || '' : '');
+  if (css === null) return;
+  var js = prompt('Custom JS for ' + domain + ':', existing ? existing.js || '' : '');
+  if (js === null) return;
+  saveBoost(domain, { css: css, js: js, created: Date.now() });
+  showToast('ok', 'Boost saved', 'Applied to ' + domain);
+  // Re-apply to current tab
+  var tab = tabs.get(activeTabId);
+  if (tab && tab.webview && tab.url && tab.url.includes(domain)) {
+    applyBoostToWebview(tab.webview, tab.url);
+  }
+}
+
 // ── Privacy Report Page (Safari-style) ────────────────────
 let _privacyActivity = [];
 
