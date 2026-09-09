@@ -31,6 +31,8 @@ class TabContext:
     title: str = ""
     active: bool = False
     created_at: float = field(default_factory=__import__("time").time)
+    last_activated_at: float = field(default_factory=__import__("time").time)
+    last_used_at: float = field(default_factory=__import__("time").time)
 
 
 class TabManager:
@@ -51,14 +53,26 @@ class TabManager:
         return context
 
     def activate(self, tab_id: str) -> TabContext | None:
+        import time
         with self._lock:
             ctx = self._tabs.get(tab_id)
             if ctx is None:
                 return None
+            now = time.time()
             self._active = tab_id
+            ctx.last_activated_at = now
+            ctx.last_used_at = now
             for other in self._tabs.values():
                 other.active = other.tab_id == tab_id
         return ctx
+
+    def touch(self, tab_id: str) -> None:
+        """Update last_used_at for a tab (e.g. on agent action)."""
+        import time
+        with self._lock:
+            ctx = self._tabs.get(tab_id)
+            if ctx is not None:
+                ctx.last_used_at = time.time()
 
     def active(self) -> TabContext | None:
         with self._lock:
@@ -79,8 +93,8 @@ class TabManager:
         with self._lock:
             removed = self._tabs.pop(tab_id, None) is not None
             if removed and self._active == tab_id:
-                # point active at the newest remaining tab, if any
-                remaining = sorted(self._tabs.values(), key=lambda t: t.created_at)
+                # point active at the most-recently-used remaining tab
+                remaining = sorted(self._tabs.values(), key=lambda t: t.last_used_at)
                 if remaining:
                     nxt = remaining[-1]
                     nxt.active = True
@@ -88,6 +102,11 @@ class TabManager:
                 else:
                     self._active = None
         return removed
+
+    def least_recently_used(self, n: int = 1) -> list[TabContext]:
+        """Return the n tabs sorted by least-recently-used (for eviction)."""
+        with self._lock:
+            return sorted(self._tabs.values(), key=lambda t: t.last_used_at)[:n]
 
     def __len__(self) -> int:
         with self._lock:

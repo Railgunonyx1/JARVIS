@@ -116,6 +116,65 @@ PREFERENCES: dict[str, Any] = {
 
 DEFAULT_TAB_LIMIT: int = 12  # Chrome telemetry: median ~320MB/tab; 12 is safe for 8GB+.
 
+
+# ── Browser Modes ────────────────────────────────────────────────
+# Different agent tasks benefit from different browser configurations.
+# Instead of one global profile, the agent selects a mode:
+#
+# TEXT MODE — fast text/DOM extraction, minimal resource load
+# INTERACTIVE MODE — full JS, normal resources, for clicking/forms
+# VISUAL MODE — images+CSS preserved, for screenshots/visual reasoning
+# RESEARCH MODE — text-optimized, multiple tabs, aggressive context compression
+class BrowserMode:
+    TEXT = "text"
+    INTERACTIVE = "interactive"
+    VISUAL = "visual"
+    RESEARCH = "research"
+
+
+_MODE_CONFIGS: dict[str, dict[str, Any]] = {
+    BrowserMode.TEXT: {
+        "resource_blocking": frozenset({"image", "media", "font", "stylesheet"}),
+        "preserve_tabs": False,
+        "description": "Minimal resources, fast text/DOM extraction",
+    },
+    BrowserMode.INTERACTIVE: {
+        "resource_blocking": frozenset(),
+        "preserve_tabs": True,
+        "description": "Full JS, normal resources, for clicking/forms",
+    },
+    BrowserMode.VISUAL: {
+        "resource_blocking": frozenset({"media", "font"}),
+        "preserve_tabs": True,
+        "description": "Images+CSS preserved, for screenshots/visual reasoning",
+    },
+    BrowserMode.RESEARCH: {
+        "resource_blocking": frozenset({"image", "media", "font", "stylesheet"}),
+        "preserve_tabs": True,
+        "description": "Text-optimized, multiple tabs, aggressive compression",
+    },
+}
+
+
+def get_mode_config(mode: str) -> dict[str, Any]:
+    """Return the configuration for a browser mode."""
+    return _MODE_CONFIGS.get(mode, _MODE_CONFIGS[BrowserMode.INTERACTIVE])
+
+
+def build_mode_kwargs(mode: str) -> dict[str, Any]:
+    """Return launch kwargs appropriate for the given browser mode."""
+    cfg = get_mode_config(mode)
+    return build_launch_kwargs(preserve_tabs=cfg.get("preserve_tabs", False))
+
+
+def build_mode_resource_blocking(mode: str) -> dict[str, Any] | None:
+    """Return resource blocking config for the mode, or None if no blocking."""
+    cfg = get_mode_config(mode)
+    kinds = cfg.get("resource_blocking")
+    if not kinds:
+        return None
+    return build_resource_blocking(kinds=kinds)
+
 # Resource kinds an agent-browser can safely block during text/DOM extraction.
 # Blocking these cuts page load bytes and renderer memory with no effect on
 # text, links, or interactive-element detection. Scripts and stylesheets stay

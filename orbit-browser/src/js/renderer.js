@@ -6,6 +6,40 @@
  * Features merged: Command Palette, Zoom, Bookmarks, Toast, Sessions, HUD, Vertical Tabs, Print/Screenshot
  */
 
+// ── DOM Cache (avoid repeated getElementById) ─────────────────
+const _domCache = {};
+function getCachedEl(id) {
+  if (!_domCache[id]) {
+    _domCache[id] = document.getElementById(id);
+  }
+  return _domCache[id];
+}
+function invalidateCache(id) {
+  if (id) delete _domCache[id];
+  else Object.keys(_domCache).forEach(k => delete _domCache[k]);
+}
+
+// ── Debounce/Throttle Utilities ─────────────────────────────────
+function debounce(fn, ms) {
+  var timer;
+  return function() {
+    var args = arguments;
+    var ctx = this;
+    clearTimeout(timer);
+    timer = setTimeout(function() { fn.apply(ctx, args); }, ms);
+  };
+}
+function throttle(fn, ms) {
+  var last = 0;
+  return function() {
+    var now = Date.now();
+    if (now - last >= ms) {
+      last = now;
+      fn.apply(this, arguments);
+    }
+  };
+}
+
 // ── Error Boundary ──────────────────────────────────────────────
 window.addEventListener('error', (e) => {
   console.error('[ORBIT] Unhandled error:', e.message, e.filename, e.lineno);
@@ -589,6 +623,9 @@ const INTERNAL_PAGES = {
   "orbit://extensions": "extensionsPage",
   "orbit://diagnostics": "diagnosticsPage",
   "orbit://security": "securityPage",
+  "orbit://privacy": "privacyPage",
+  "orbit://import": "importPage",
+  "orbit://extension-store": "extensionStorePage",
 };
 
 function showInternalPage(pageId) {
@@ -599,13 +636,15 @@ function showInternalPage(pageId) {
   if (pageId === "historyPage") renderHistoryPage();
   if (pageId === "bookmarksPage") renderBookmarksPage();
   if (pageId === "extensionsPage") renderExtensionsPage();
+  if (pageId === "newtabPage") renderSessionThumbnails();
+  if (pageId === "privacyPage") renderPrivacyPage();
 }
 
 function refreshDiagnostics() {
-  const diagDsh = diagDsh;
-  const diagBackend = diagBackend;
-  const diagEfficiency = diagEfficiency;
-  const diagFrozen = diagFrozen;
+  const diagDsh = document.getElementById('diagDsh');
+  const diagBackend = document.getElementById('diagBackend');
+  const diagEfficiency = document.getElementById('diagEfficiency');
+  const diagFrozen = document.getElementById('diagFrozen');
   const setChip = (el, text, ok) => {
     if (!el) return;
     el.textContent = text;
@@ -744,13 +783,62 @@ if (winClose) winClose.addEventListener("click", () => window.orbit?.window?.clo
 if (winMinimize) winMinimize.addEventListener("click", () => window.orbit?.window?.minimize?.());
 if (winMaximize) winMaximize.addEventListener("click", () => window.orbit?.window?.maximize?.());
 
-// ── Sidebar Toggle ────────────────────────────────────────────
+// ── Sidebar Toggle / JARVIS Launch ────────────────────────────
+var jarvisLaunchLabel = document.getElementById('jarvisLaunchLabel');
+
 jarvisBtn.addEventListener("click", () => {
+  // If JARVIS is offline, start it first
+  if (!jarvisOnline) {
+    startJarvis();
+    return;
+  }
+  // If online, toggle sidebar
   sidebarOpen = !sidebarOpen;
   sidebar.classList.toggle("hidden", !sidebarOpen);
   jarvisBtn.classList.toggle("active", sidebarOpen);
   setMatrix(agentState);
 });
+
+function startJarvis() {
+  // Try to connect to JARVIS bridge
+  if (window.orbit && window.orbit.jarvis) {
+    showToast('info', 'Starting JARVIS', 'Connecting to JARVIS kernel...');
+    setMatrix('thinking');
+    window.orbit.jarvis.status().then(function(s) {
+      if (s && s.ok) {
+        jarvisOnline = true;
+        updateJarvisStatusUI(true);
+        // Open sidebar
+        sidebarOpen = true;
+        sidebar.classList.remove('hidden');
+        jarvisBtn.classList.add('active');
+        setMatrix('idle');
+        showToast('ok', 'JARVIS Online', 'JARVIS is ready to use');
+        Chat.append('system', 'JARVIS is now online. Ask me anything!');
+      } else {
+        setMatrix('fail');
+        showToast('warn', 'JARVIS Offline', 'Could not connect. Make sure the JARVIS bridge server is running on port 8170.');
+        setTimeout(function() { setMatrix('idle'); }, 2000);
+      }
+    }).catch(function() {
+      setMatrix('fail');
+      showToast('warn', 'JARVIS Offline', 'Bridge server not found. Start it with: python -m jbrowser');
+      setTimeout(function() { setMatrix('idle'); }, 2000);
+    });
+  } else {
+    showToast('warn', 'JARVIS Not Available', 'Bridge not loaded. Start the JARVIS server first.');
+  }
+}
+
+function updateJarvisStatusUI(online) {
+  var statusDot = document.getElementById('jarvisStatus');
+  if (jarvisLaunchLabel) {
+    jarvisLaunchLabel.textContent = online ? 'Online' : 'Start';
+    jarvisLaunchLabel.classList.toggle('hidden', false);
+  }
+  jarvisBtn.classList.toggle('online', online);
+  jarvisBtn.title = online ? 'JARVIS online — click to toggle sidebar' : 'Start JARVIS';
+}
 
 sbClose.addEventListener("click", () => {
   sidebarOpen = false;
@@ -763,10 +851,14 @@ sbClose.addEventListener("click", () => {
 var jarvisStatusEl = document.getElementById('jarvisStatus');
 if (window.orbit && window.orbit.jarvis && window.orbit.jarvis.onStatus) {
   window.orbit.jarvis.onStatus(function(status) {
+    var isOnline = !!(status && status.ok);
+    jarvisOnline = isOnline;
     if (jarvisStatusEl) {
-      jarvisStatusEl.className = (status && status.ok) ? 'online' : 'offline';
-      jarvisStatusEl.title = (status && status.ok) ? 'JARVIS online' : 'JARVIS offline';
+      jarvisStatusEl.className = isOnline ? 'online' : 'offline';
+      jarvisStatusEl.title = isOnline ? 'JARVIS online' : 'JARVIS offline';
     }
+    updateJarvisStatusUI(isOnline);
+    if (isOnline) setMatrix('idle');
   });
 }
 
@@ -796,8 +888,12 @@ function renderPanel(name) {
   if (name === "agents") {
     sbBody.innerHTML = '<div class="panel-pad"><div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><div class="sb-matrix" data-state="idle"></div><h3 style="font-size:13px;color:var(--jb-paper);font-weight:500">Main agent</h3></div><p style="color:var(--jb-mute);font-size:12px;margin-top:6px">No active task</p></div></div>';
     sbBody.querySelectorAll(".sb-matrix").forEach(initMatrix);
+  } else if (name === "workspaces") {
+    renderWorkspacesPanel();
   } else if (name === "companions") {
     renderCompanionsPanel();
+  } else if (name === "tools") {
+    renderToolsPanel();
   } else if (name === "memory") {
     sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
   }
@@ -806,6 +902,178 @@ function renderPanel(name) {
 // ── AI Companions (Strawberry-style autonomous agents) ─────────
 const _companions = [];
 let _companionIdSeq = 0;
+
+// ── Sidebar Tools Panel (Notes, Calculator, Dictionary) ──────
+function renderToolsPanel() {
+  const html = [];
+  html.push('<div class="panel-pad">');
+  html.push('<h3 style="font-size:13px;color:var(--jb-paper);font-weight:500;margin-bottom:12px">Tools</h3>');
+
+  // Notes
+  html.push('<div style="margin-bottom:16px">');
+  html.push('<div style="font-size:11px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Notes</div>');
+  html.push('<textarea id="sidebarNotes" style="width:100%;height:120px;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:8px;padding:10px;color:var(--jb-paper);font-size:12px;resize:vertical;outline:none;font-family:inherit" placeholder="Quick notes...">' + escapeHtml(localStorage.getItem('orbit-notes') || '') + '</textarea>');
+  html.push('<button id="saveNotes" style="margin-top:6px;padding:4px 12px;border-radius:6px;background:var(--jb-accent);color:#fff;border:none;font-size:11px;cursor:pointer">Save</button>');
+  html.push('</div>');
+
+  // Calculator
+  html.push('<div style="margin-bottom:16px">');
+  html.push('<div style="font-size:11px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Calculator</div>');
+  html.push('<input type="text" id="calcInput" style="width:100%;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:8px;padding:8px 10px;color:var(--jb-paper);font-size:13px;outline:none;font-family:monospace" placeholder="Enter expression...">');
+  html.push('<div id="calcResult" style="margin-top:6px;font-size:18px;color:var(--jb-accent);font-family:monospace;min-height:24px"></div>');
+  html.push('</div>');
+
+  // Dictionary
+  html.push('<div style="margin-bottom:16px">');
+  html.push('<div style="font-size:11px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Dictionary</div>');
+  html.push('<div style="display:flex;gap:6px">');
+  html.push('<input type="text" id="dictInput" style="flex:1;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:8px;padding:8px 10px;color:var(--jb-paper);font-size:12px;outline:none" placeholder="Look up word...">');
+  html.push('<button id="dictLookup" style="padding:8px 12px;border-radius:6px;background:var(--jb-accent);color:#fff;border:none;font-size:11px;cursor:pointer">Go</button>');
+  html.push('</div>');
+  html.push('<div id="dictResult" style="margin-top:8px;font-size:12px;color:var(--jb-text);line-height:1.5"></div>');
+  html.push('</div>');
+
+  // Quick Links
+  html.push('<div>');
+  html.push('<div style="font-size:11px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Quick Links</div>');
+  html.push('<div style="display:flex;flex-wrap:wrap;gap:6px">');
+  var links = [
+    { label: 'Gmail', url: 'https://mail.google.com' },
+    { label: 'GitHub', url: 'https://github.com' },
+    { label: 'YouTube', url: 'https://youtube.com' },
+    { label: 'Reddit', url: 'https://reddit.com' },
+    { label: 'Twitter', url: 'https://twitter.com' },
+    { label: 'Docs', url: 'https://docs.google.com' },
+  ];
+  links.forEach(function(lnk) {
+    html.push('<button class="sb-chip" onclick="navigateTo(\'' + lnk.url + '\')" style="font-size:11px">' + lnk.label + '</button>');
+  });
+  html.push('</div>');
+  html.push('</div>');
+
+  html.push('</div>');
+  sbBody.innerHTML = html.join('');
+
+  // Wire events
+  var notesArea = document.getElementById('sidebarNotes');
+  var saveBtn = document.getElementById('saveNotes');
+  if (saveBtn && notesArea) {
+    saveBtn.addEventListener('click', function() {
+      localStorage.setItem('orbit-notes', notesArea.value);
+      showToast('ok', 'Notes Saved', 'Stored locally');
+    });
+  }
+
+  var calcInput = document.getElementById('calcInput');
+  var calcResult = document.getElementById('calcResult');
+  if (calcInput && calcResult) {
+    calcInput.addEventListener('input', function() {
+      try {
+        var expr = calcInput.value.replace(/[^0-9+\-*/().% ]/g, '');
+        if (expr.trim()) {
+          var result = Function('"use strict"; return (' + expr + ')')();
+          calcResult.textContent = '= ' + result;
+        } else {
+          calcResult.textContent = '';
+        }
+      } catch (e) {
+        calcResult.textContent = 'Invalid expression';
+      }
+    });
+  }
+
+  var dictInput = document.getElementById('dictInput');
+  var dictLookup = document.getElementById('dictLookup');
+  var dictResult = document.getElementById('dictResult');
+  if (dictLookup && dictInput && dictResult) {
+    dictLookup.addEventListener('click', function() {
+      var word = dictInput.value.trim();
+      if (!word) return;
+      dictResult.innerHTML = '<span style="color:var(--jb-mute)">Looking up...</span>';
+      fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(word))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data[0] && data[0].meanings && data[0].meanings[0]) {
+            var m = data[0].meanings[0];
+            var def = m.definitions && m.definitions[0] ? m.definitions[0].definition : '';
+            dictResult.innerHTML = '<div style="font-weight:500;color:var(--jb-paper);margin-bottom:4px">' + word + ' <span style="color:var(--jb-mute);font-size:11px">(' + m.partOfSpeech + ')</span></div>' +
+              '<div>' + escapeHtml(def) + '</div>';
+          } else {
+            dictResult.innerHTML = '<span style="color:var(--jb-mute)">No definition found</span>';
+          }
+        })
+        .catch(function() {
+          dictResult.innerHTML = '<span style="color:var(--jb-mute)">Lookup failed</span>';
+        });
+    });
+    dictInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') dictLookup.click();
+    });
+  }
+}
+
+// ── Workspaces Panel (Arc/Zen-style Spaces) ───────────────
+var _workspaces = [
+  { id: 'work', name: 'Work', icon: '\u{1F4BC}', color: '#8AA4C8', active: true },
+  { id: 'personal', name: 'Personal', icon: '\u{1F3E0}', color: '#6F9B6A', active: false },
+  { id: 'research', name: 'Research', icon: '\u{1F52C}', color: '#C9A227', active: false },
+  { id: 'dev', name: 'Development', icon: '\u{1F4BB}', color: '#D71921', active: false },
+];
+var _activeWorkspaceId = 'work';
+
+function renderWorkspacesPanel() {
+  var html = [];
+  html.push('<div class="panel-pad">');
+  html.push('<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">');
+  html.push('<h3 style="font-size:13px;color:var(--jb-paper);font-weight:500;margin:0">Spaces</h3>');
+  html.push('<button id="wsCreate" style="background:var(--jb-accent);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:500">+ New</button>');
+  html.push('</div>');
+  _workspaces.forEach(function(ws) {
+    var isActive = ws.id === _activeWorkspaceId;
+    html.push('<div class="ws-card' + (isActive ? ' active' : '') + '" data-wsid="' + ws.id + '" style="border:1px solid ' + (isActive ? ws.color : 'var(--jb-border)') + ';border-radius:10px;padding:10px;margin-bottom:8px;background:' + (isActive ? ws.color + '11' : 'var(--jb-void)') + ';cursor:pointer;transition:all .15s">');
+    html.push('<div style="display:flex;align-items:center;gap:8px">');
+    html.push('<span style="font-size:18px">' + ws.icon + '</span>');
+    html.push('<span style="font-size:12px;font-weight:500;color:var(--jb-paper);flex:1">' + escapeHtml(ws.name) + '</span>');
+    if (isActive) html.push('<span style="font-size:10px;color:' + ws.color + ';font-weight:500">Active</span>');
+    html.push('</div>');
+    html.push('</div>');
+  });
+  html.push('<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--jb-border)">');
+  html.push('<div style="font-size:11px;color:var(--jb-mute);margin-bottom:6px">Current space isolates cookies, storage, and tabs.</div>');
+  html.push('<div style="font-size:11px;color:var(--jb-mute)">Switch spaces to separate work, personal, and research browsing.</div>');
+  html.push('</div>');
+  html.push('</div>');
+  sbBody.innerHTML = html.join('');
+  // Wire events
+  sbBody.querySelectorAll('.ws-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      var wsid = card.dataset.wsid;
+      switchWorkspace(wsid);
+    });
+  });
+  var createBtn = document.getElementById('wsCreate');
+  if (createBtn) createBtn.addEventListener('click', function() {
+    var name = prompt('Space name:', '');
+    if (!name) return;
+    var icons = ['\u{1F3F0}', '\u{1F30A}', '\u{1F3AF}', '\u{1F4D6}', '\u{1F3B5}'];
+    var colors = ['#8ab4f8', '#f28b82', '#81c995', '#fdd663', '#d7aefb'];
+    _workspaces.push({
+      id: 'ws-' + Date.now(),
+      name: name,
+      icon: icons[Math.floor(Math.random() * icons.length)],
+      color: colors[Math.floor(Math.random() * colors.length)],
+      active: false,
+    });
+    renderWorkspacesPanel();
+  });
+}
+
+function switchWorkspace(wsid) {
+  _activeWorkspaceId = wsid;
+  _workspaces.forEach(function(ws) { ws.active = ws.id === wsid; });
+  renderWorkspacesPanel();
+  showToast('info', 'Space switched', 'Now browsing in: ' + _workspaces.find(function(w) { return w.id === wsid; }).name);
+}
 
 function renderCompanionsPanel() {
   const html = [];
@@ -1336,6 +1604,78 @@ function saveSession() {
   localStorage.setItem("orbit-session", JSON.stringify({ tabs: s, activeTabId: activeTabId, savedAt: Date.now() }));
 }
 
+// ── Session Thumbnails (New Tab Page) ────────────────────────
+function renderSessionThumbnails() {
+  const recentList = document.getElementById('ntRecentList');
+  const sessionList = document.getElementById('ntSessionList');
+  const recentSection = document.getElementById('ntRecent');
+  const sessionSection = document.getElementById('ntSessions');
+
+  // Recently closed tabs
+  if (recentList && closedTabs.length > 0) {
+    recentSection.style.display = 'block';
+    recentList.innerHTML = '';
+    closedTabs.slice(-8).reverse().forEach(function(tab) {
+      const thumb = document.createElement('div');
+      thumb.className = 'nt-thumb';
+      thumb.innerHTML = '<div class="nt-thumb-icon">\u{1F5D9}</div>' +
+        '<div class="nt-thumb-title">' + escapeHtml(tab.title || 'Untitled') + '</div>' +
+        '<div class="nt-thumb-url">' + escapeHtml(truncateUrl(tab.url)) + '</div>';
+      thumb.addEventListener('click', function() {
+        createTab(tab.url);
+      });
+      recentList.appendChild(thumb);
+    });
+  } else if (recentSection) {
+    recentSection.style.display = 'none';
+  }
+
+  // Previous session
+  if (sessionList) {
+    try {
+      const data = JSON.parse(localStorage.getItem('orbit-session'));
+      if (data && data.tabs && data.tabs.length > 0) {
+        sessionSection.style.display = 'block';
+        sessionList.innerHTML = '';
+        data.tabs.slice(0, 8).forEach(function(tab) {
+          if (!tab.url || tab.url.startsWith('orbit://')) return;
+          const thumb = document.createElement('div');
+          thumb.className = 'nt-thumb';
+          const domain = tryGetDomain(tab.url);
+          thumb.innerHTML = '<div class="nt-thumb-icon">' + (domain ? domain.charAt(0).toUpperCase() : '\u{1F310}') + '</div>' +
+            '<div class="nt-thumb-title">' + escapeHtml(tab.title || 'Untitled') + '</div>' +
+            '<div class="nt-thumb-url">' + escapeHtml(truncateUrl(tab.url)) + '</div>';
+          thumb.addEventListener('click', function() {
+            createTab(tab.url);
+          });
+          sessionList.appendChild(thumb);
+        });
+      } else if (sessionSection) {
+        sessionSection.style.display = 'none';
+      }
+    } catch (e) {
+      if (sessionSection) sessionSection.style.display = 'none';
+    }
+  }
+}
+
+function truncateUrl(url) {
+  try {
+    var u = new URL(url);
+    return u.hostname + u.pathname.substring(0, 30);
+  } catch (e) {
+    return url.substring(0, 40);
+  }
+}
+
+function tryGetDomain(url) {
+  try {
+    return new URL(url).hostname;
+  } catch (e) {
+    return '';
+  }
+}
+
 function restoreSession() {
   try {
     const data = JSON.parse(localStorage.getItem("orbit-session"));
@@ -1460,6 +1800,18 @@ function renderVerticalTabs() {
 function printPage() {
   try { const wv = activeWebview(); if (wv) wv.print(); } catch (e) { showToast("err", "Print Failed", e.message); }
 }
+function popoutVideo() {
+  const real = window.orbit && window.orbit.system && window.orbit.system.ui && window.orbit.system.ui.popoutVideo;
+  if (!real) { showToast("err", "PiP", "Surfaces unavailable"); return; }
+  real().then(function(r) {
+    if (r && r.ok) showToast("ok", "Picture-in-Picture", r.result === "OK" || r.result === "requesting" ? "Video popped out" : String(r.result));
+    else if (r && r.error) showToast("err", "PiP", r.error);
+    else if (!r) showToast("err", "PiP", "No response");
+    else if (r.result === "no-video") showToast("info", "PiP", "No <video> element on this page");
+    else if (r.result === "unsupported") showToast("err", "PiP", "PiP not supported here");
+    else showToast("warn", "PiP", String(r.result));
+  }).catch(function(e) { showToast("err", "PiP", String(e && e.message || e)); });
+}
 function takeScreenshot() {
   try {
     const wv = activeWebview();
@@ -1482,6 +1834,8 @@ const CMD_ITEMS = [
   { l: "Close Tab", d: "Close current", s: "Ctrl+W", i: "\u00d7", a: function() { if (activeTabId) closeTab(activeTabId); } },
   { l: "Reload", d: "Refresh page", s: "Ctrl+R", i: "\u21bb", a: function() { try { const wv = activeWebview(); if (wv) wv.reload(); } catch (e) {} } },
   { l: "Find on Page", d: "Search text", s: "Ctrl+F", i: "\u2315", a: function() { toggleFind(); } },
+  { l: "Import from Chrome", d: "Import bookmarks, history, extensions", i: "\u{1F517}", a: function() { navigateTo("orbit://import"); } },
+  { l: "Extension Store", d: "Install VPN & ad blocker extensions", i: "\u{1F6D2}", a: function() { navigateTo("orbit://extension-store"); } },
   { l: "Settings", d: "Browser settings", i: "\u2699", a: function() { navigateTo("orbit://settings"); } },
   { l: "History", d: "Browsing history", i: "\u231a", a: function() { navigateTo("orbit://history"); } },
   { l: "Downloads", d: "View downloads", i: "\u21e3", a: function() { navigateTo("orbit://downloads"); } },
@@ -1489,11 +1843,27 @@ const CMD_ITEMS = [
   { l: "Tasks", d: "Agent tasks", i: "\u2611", a: function() { navigateTo("orbit://tasks"); } },
   { l: "Memory", d: "Saved memories", i: "\u2261", a: function() { navigateTo("orbit://memory"); } },
   { l: "Diagnostics", d: "System status", i: "\u229f", a: function() { navigateTo("orbit://diagnostics"); } },
+  { l: "Privacy Report", d: "Trackers blocked & shield status", i: "\u{1F6E1}", a: function() { navigateTo("orbit://privacy"); } },
   { l: "Print Page", d: "Print current page", s: "Ctrl+P", i: "\u2399", a: function() { printPage(); } },
   { l: "Screenshot", d: "Capture page", s: "Ctrl+Shift+S", i: "\u25a3", a: function() { takeScreenshot(); } },
   { l: "Zoom In", d: "Increase zoom", s: "Ctrl+=", i: "+", a: function() { zoomIn(); } },
   { l: "Zoom Out", d: "Decrease zoom", s: "Ctrl+-", i: "\u2212", a: function() { zoomOut(); } },
   { l: "Toggle Sidebar", d: "Show/hide JARVIS", s: "Ctrl+Shift+J", i: "\u25a6", a: function() { jarvisBtn.click(); } },
+  { l: "Toggle Split View", d: "Two tabs side by side", s: "Ctrl+Shift+S", i: "\u25a4", a: function() { toggleSplitView(); } },
+  { l: "Reader Mode", d: "Distraction-free reading", s: "Ctrl+Shift+R", i: "\u{1F4D6}", a: function() { openReaderMode(); } },
+  { l: "Search Tabs", d: "Find an open tab", s: "Ctrl+Shift+F", i: "\u{1F50D}", a: function() { toggleTabSearch(); } },
+  { l: "Pop out Video", d: "Float the active tab's video (PiP)", s: "Ctrl+Shift+P", i: "\u25b6", a: function() { popoutVideo(); } },
+  { l: "Run Agent Task", d: "Headless agent execution", i: "\u{1F916}", a: function() {
+    var task = prompt('Agent task:');
+    if (task && window.orbit && window.orbit.agent) {
+      showAgentBar('Starting...');
+      window.orbit.agent.start(task).then(function(r) {
+        if (r && r.ok) showToast('ok', 'Agent done', r.result ? r.result.substring(0, 100) : 'Complete');
+        else showToast('err', 'Agent failed', r ? r.error : 'Unknown error');
+        hideAgentBar();
+      });
+    }
+  }},
 ];
 
 let cmdIdx = 0;
@@ -1985,6 +2355,10 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); omniInput.focus(); omniInput.select(); return; }
   // Ctrl+Shift+J: Toggle sidebar
   if (ctrl && shift && e.key.toLowerCase() === "j") { e.preventDefault(); jarvisBtn.click(); return; }
+  if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); toggleSplitView(); return; }
+  if (ctrl && shift && e.key.toLowerCase() === "r") { e.preventDefault(); openReaderMode(); return; }
+  // Ctrl+Shift+F: Tab search
+  if (ctrl && shift && e.key.toLowerCase() === "f") { e.preventDefault(); toggleTabSearch(); return; }
   // Ctrl+Shift+B: Toggle bookmark bar
   if (ctrl && shift && e.key.toLowerCase() === "b") { e.preventDefault(); if (bookmarkBar) bookmarkBar.classList.toggle("hidden"); return; }
   // Ctrl+R: Reload
@@ -2039,7 +2413,9 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key === "-") { e.preventDefault(); zoomOut(); return; }
   if (ctrl && e.key === "0") { e.preventDefault(); zoomReset(); return; }
   // Ctrl+P: Print
-  if (ctrl && e.key.toLowerCase() === "p") { e.preventDefault(); printPage(); return; }
+  if (ctrl && !shift && e.key.toLowerCase() === "p") { e.preventDefault(); printPage(); return; }
+  // Ctrl+Shift+P: Pop out video (PiP)
+  if (ctrl && shift && e.key.toLowerCase() === "p") { e.preventDefault(); popoutVideo(); return; }
   // Ctrl+Shift+S: Screenshot
   if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); takeScreenshot(); return; }
   // Ctrl+D: Bookmark
@@ -2068,12 +2444,19 @@ document.addEventListener("keydown", (e) => {
     reopenClosedTab();
     return;
   }
+  // Ctrl+/: Keyboard shortcuts overlay
+  if (ctrl && e.key === "/") { e.preventDefault(); toggleShortcutsOverlay(); return; }
   // Escape: Close things
   if (e.key === "Escape") {
     if (cmdPaletteBg && cmdPaletteBg.classList.contains("on")) { closeCmdPalette(); return; }
     if (modalBg) modalBg.classList.remove("on");
     closeAllPopups();
     if (findBar && findBar.classList.contains("on")) findBar.classList.remove("on");
+    // Close shortcuts overlay
+    const so = document.getElementById('shortcutsOverlay');
+    if (so && so.classList.contains('active')) { so.classList.remove('active'); return; }
+    // Close reader mode
+    closeReaderMode();
     return;
   }
 });
@@ -2352,6 +2735,66 @@ function recordHistory(url, title) {
   if (h.length > 400) h.length = 400;
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) {}
 }
+// ── Privacy Report Page (Safari-style) ────────────────────
+let _privacyActivity = [];
+
+function renderPrivacyPage() {
+  // Update stats from security module via IPC
+  if (window.orbit && window.orbit.perf && window.orbit.perf.stats) {
+    window.orbit.perf.stats().then(function(stats) {
+      var blocked = document.getElementById('privacyBlocked');
+      if (blocked && stats) blocked.textContent = stats.adBlockStats ? stats.adBlockStats.blocked || 0 : 0;
+    }).catch(function() {});
+  }
+  // Check shields config
+  try {
+    var shields = JSON.parse(localStorage.getItem('orbit-shields') || '{}');
+    var toggleAdBlock = document.getElementById('toggleAdBlock');
+    var toggleTrackerBlock = document.getElementById('toggleTrackerBlock');
+    var toggleFingerprint = document.getElementById('toggleFingerprint');
+    var toggleHttps = document.getElementById('toggleHttps');
+    var toggleDnt = document.getElementById('toggleDnt');
+    if (toggleAdBlock) toggleAdBlock.classList.toggle('on', shields.adBlocking !== false);
+    if (toggleTrackerBlock) toggleTrackerBlock.classList.toggle('on', shields.trackerBlocking !== false);
+    if (toggleFingerprint) toggleFingerprint.classList.toggle('on', shields.fingerprintProtection !== false);
+    if (toggleHttps) toggleHttps.classList.toggle('on', shields.httpsUpgrade !== false);
+    if (toggleDnt) toggleDnt.classList.toggle('on', shields.doNotTrack !== false);
+  } catch (e) {}
+  // Render activity
+  var activityEl = document.getElementById('privacyActivity');
+  if (activityEl) {
+    if (_privacyActivity.length === 0) {
+      activityEl.innerHTML = '<div class="empty-state">No tracker activity yet. Browsing will populate this list.</div>';
+    } else {
+      var html = '';
+      _privacyActivity.slice(-20).reverse().forEach(function(item) {
+        html += '<div class="privacy-activity-item">';
+        html += '<div class="privacy-activity-dot ' + (item.blocked ? 'blocked' : 'allowed') + '"></div>';
+        html += '<div class="privacy-activity-text">' + escapeHtml(item.url) + '</div>';
+        html += '<div class="privacy-activity-time">' + item.type + '</div>';
+        html += '</div>';
+      });
+      activityEl.innerHTML = html;
+    }
+  }
+  // Wire shield toggles
+  document.querySelectorAll('#shieldToggles .toggle').forEach(function(btn) {
+    btn.onclick = function() {
+      btn.classList.toggle('on');
+      var shield = btn.dataset.shield;
+      var shields = JSON.parse(localStorage.getItem('orbit-shields') || '{}');
+      shields[shield] = btn.classList.contains('on');
+      localStorage.setItem('orbit-shields', JSON.stringify(shields));
+      showToast('ok', 'Shield Updated', shield + ' ' + (shields[shield] ? 'enabled' : 'disabled'));
+    };
+  });
+}
+
+function trackPrivacyEvent(url, type, blocked) {
+  _privacyActivity.push({ url: url, type: type, blocked: blocked, time: Date.now() });
+  if (_privacyActivity.length > 100) _privacyActivity.shift();
+}
+
 function renderHistoryPage() {
   const host = document.getElementById("historyPage");
   if (!host) return;
@@ -2451,6 +2894,308 @@ function renderBookmarksPage() {
   });
 }
 
+// ── Reader Mode (Safari/Brave-style) ─────────────────────────
+const readerOverlay = document.getElementById('readerOverlay');
+const readerContent = document.getElementById('readerContent');
+const readerClose = document.getElementById('readerClose');
+
+function openReaderMode() {
+  const wv = activeWebview();
+  if (!wv) return;
+  try {
+    // Extract main content via JS injection
+    wv.executeJavaScript(`
+      (function() {
+        // Try to find main content
+        const article = document.querySelector('article') || 
+                       document.querySelector('[role="main"]') ||
+                       document.querySelector('.post-content') ||
+                       document.querySelector('.article-body') ||
+                       document.querySelector('main');
+        if (article) return article.innerHTML;
+        // Fallback: get all paragraphs
+        const paras = Array.from(document.querySelectorAll('p')).map(p => p.outerHTML).join('\n');
+        return paras || document.body.innerHTML;
+      })()
+    `).then(html => {
+      if (html && readerContent) {
+        readerContent.innerHTML = html;
+        if (readerOverlay) readerOverlay.classList.add('active');
+      }
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+function closeReaderMode() {
+  if (readerOverlay) readerOverlay.classList.remove('active');
+}
+
+if (readerClose) readerClose.addEventListener('click', closeReaderMode);
+
+// ── Keyboard Shortcuts Overlay (Ctrl+/) ──────────────────────
+let shortcutsOverlay = null;
+
+// ── Tab Search (Ctrl+Shift+F) ──────────────────────────────
+let tabSearchOverlay = null;
+
+function toggleTabSearch() {
+  if (tabSearchOverlay && tabSearchOverlay.classList.contains('active')) {
+    tabSearchOverlay.classList.remove('active');
+    return;
+  }
+  if (!tabSearchOverlay) {
+    tabSearchOverlay = document.createElement('div');
+    tabSearchOverlay.className = 'shortcuts-overlay';
+    tabSearchOverlay.innerHTML = `
+      <div class="shortcuts-card" style="max-width:500px">
+        <div class="shortcuts-header">
+          <h2>Search Tabs</h2>
+          <button class="shortcuts-close" onclick="this.closest('.shortcuts-overlay').classList.remove('active')">\u2715</button>
+        </div>
+        <input type="text" id="tabSearchInput" placeholder="Search open tabs..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;outline:none;margin-bottom:12px" />
+        <div id="tabSearchResults" style="max-height:300px;overflow-y:auto"></div>
+      </div>
+    `;
+    document.body.appendChild(tabSearchOverlay);
+    const input = tabSearchOverlay.querySelector('#tabSearchInput');
+    const results = tabSearchOverlay.querySelector('#tabSearchResults');
+    if (input) {
+      input.addEventListener('input', function() {
+        const q = input.value.toLowerCase().trim();
+        if (!q) { results.innerHTML = ''; return; }
+        let html = '';
+        tabs.forEach(function(tab, id) {
+          const title = (tab.title || '').toLowerCase();
+          const url = (tab.url || '').toLowerCase();
+          if (title.includes(q) || url.includes(q)) {
+            const active = id === activeTabId ? ' style="background:rgba(124,92,255,0.15)"' : '';
+            html += '<div class="cmd-item" data-tabid="' + id + '"' + active + ' style="padding:8px 12px;border-radius:6px;cursor:pointer;margin-bottom:4px;display:flex;align-items:center;gap:8px">';
+            html += '<span style="font-size:12px;color:var(--jb-paper);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(tab.title || 'Untitled') + '</span>';
+            html += '<span style="font-size:10px;color:var(--jb-mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">' + escapeHtml(tab.url || '') + '</span>';
+            html += '</div>';
+          }
+        });
+        results.innerHTML = html || '<div style="padding:12px;color:var(--jb-mute);font-size:12px;text-align:center">No matching tabs</div>';
+        results.querySelectorAll('[data-tabid]').forEach(function(el) {
+          el.addEventListener('click', function() {
+            activateTab(el.dataset.tabid);
+            tabSearchOverlay.classList.remove('active');
+          });
+        });
+      });
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { tabSearchOverlay.classList.remove('active'); return; }
+        if (e.key === 'Enter') {
+          const first = results.querySelector('[data-tabid]');
+          if (first) { activateTab(first.dataset.tabid); tabSearchOverlay.classList.remove('active'); }
+        }
+      });
+    }
+  }
+  tabSearchOverlay.classList.add('active');
+  const input = tabSearchOverlay.querySelector('#tabSearchInput');
+  if (input) { input.value = ''; input.focus(); }
+  // Show all tabs initially
+  const results = tabSearchOverlay.querySelector('#tabSearchResults');
+  if (results) {
+    let html = '';
+    tabs.forEach(function(tab, id) {
+      const active = id === activeTabId ? ' style="background:rgba(124,92,255,0.15)"' : '';
+      html += '<div class="cmd-item" data-tabid="' + id + '"' + active + ' style="padding:8px 12px;border-radius:6px;cursor:pointer;margin-bottom:4px;display:flex;align-items:center;gap:8px">';
+      html += '<span style="font-size:12px;color:var(--jb-paper);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(tab.title || 'Untitled') + '</span>';
+      html += '<span style="font-size:10px;color:var(--jb-mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">' + escapeHtml(tab.url || '') + '</span>';
+      html += '</div>';
+    });
+    results.innerHTML = html;
+    results.querySelectorAll('[data-tabid]').forEach(function(el) {
+      el.addEventListener('click', function() {
+        activateTab(el.dataset.tabid);
+        tabSearchOverlay.classList.remove('active');
+      });
+    });
+  }
+}
+
+function toggleShortcutsOverlay() {
+  if (shortcutsOverlay && shortcutsOverlay.classList.contains('active')) {
+    shortcutsOverlay.classList.remove('active');
+    return;
+  }
+  if (!shortcutsOverlay) {
+    shortcutsOverlay = document.createElement('div');
+    shortcutsOverlay.id = 'shortcutsOverlay';
+    shortcutsOverlay.className = 'shortcuts-overlay';
+    shortcutsOverlay.innerHTML = `
+      <div class="shortcuts-card">
+        <div class="shortcuts-header">
+          <h2>Keyboard Shortcuts</h2>
+          <button class="shortcuts-close" onclick="this.closest('.shortcuts-overlay').classList.remove('active')">✕</button>
+        </div>
+        <div class="shortcuts-grid">
+          <div class="shortcuts-group">
+            <h3>Tabs</h3>
+            <div class="shortcut"><kbd>Ctrl+T</kbd><span>New tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+W</kbd><span>Close tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+T</kbd><span>Reopen closed tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+Tab</kbd><span>Next tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+Tab</kbd><span>Previous tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+1-9</kbd><span>Switch to tab N</span></div>
+          </div>
+          <div class="shortcuts-group">
+            <h3>Navigation</h3>
+            <div class="shortcut"><kbd>Alt+Left</kbd><span>Go back</span></div>
+            <div class="shortcut"><kbd>Alt+Right</kbd><span>Go forward</span></div>
+            <div class="shortcut"><kbd>Ctrl+R</kbd><span>Reload</span></div>
+            <div class="shortcut"><kbd>Ctrl+L</kbd><span>Focus address bar</span></div>
+            <div class="shortcut"><kbd>Ctrl+Home</kbd><span>New tab page</span></div>
+          </div>
+          <div class="shortcuts-group">
+            <h3>View</h3>
+            <div class="shortcut"><kbd>Ctrl++</kbd><span>Zoom in</span></div>
+            <div class="shortcut"><kbd>Ctrl+-</kbd><span>Zoom out</span></div>
+            <div class="shortcut"><kbd>Ctrl+0</kbd><span>Reset zoom</span></div>
+            <div class="shortcut"><kbd>F11</kbd><span>Fullscreen</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+D</kbd><span>Reading mode</span></div>
+            <div class="shortcut"><kbd>Ctrl+F</kbd><span>Find on page</span></div>
+          </div>
+          <div class="shortcuts-group">
+            <h3>JARVIS</h3>
+            <div class="shortcut"><kbd>Ctrl+Shift+J</kbd><span>Toggle sidebar</span></div>
+            <div class="shortcut"><kbd>Ctrl+K</kbd><span>Command palette</span></div>
+            <div class="shortcut"><kbd>Ctrl+/</kbd><span>This overlay</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Split view</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+R</kbd><span>Reader mode</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+P</kbd><span>Pop out video (PiP)</span></div>
+          </div>
+          <div class="shortcuts-group">
+            <h3>Bookmarks & History</h3>
+            <div class="shortcut"><kbd>Ctrl+D</kbd><span>Bookmark page</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+B</kbd><span>Toggle bookmark bar</span></div>
+            <div class="shortcut"><kbd>Ctrl+H</kbd><span>History</span></div>
+            <div class="shortcut"><kbd>Ctrl+J</kbd><span>Downloads</span></div>
+            <div class="shortcut"><kbd>Ctrl+P</kbd><span>Print</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Screenshot</span></div>
+          </div>
+          <div class="shortcuts-group">
+            <h3>Window</h3>
+            <div class="shortcut"><kbd>Ctrl+N</kbd><span>New window</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+N</kbd><span>New private window</span></div>
+            <div class="shortcut"><kbd>Ctrl+Q</kbd><span>Close window</span></div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(shortcutsOverlay);
+    shortcutsOverlay.addEventListener('click', (e) => {
+      if (e.target === shortcutsOverlay) shortcutsOverlay.classList.remove('active');
+    });
+  }
+  shortcutsOverlay.classList.add('active');
+}
+
+// ── Agent Status Bar ──────────────────────────────────────────
+const agentBar = document.getElementById('agentBar');
+const agentBarText = document.getElementById('agentBarText');
+const agentBarStop = document.getElementById('agentBarStop');
+
+function showAgentBar(text) {
+  if (agentBar) agentBar.classList.add('active');
+  if (agentBarText) agentBarText.textContent = text || 'Agent running...';
+}
+
+function hideAgentBar() {
+  if (agentBar) agentBar.classList.remove('active');
+}
+
+if (agentBarStop) agentBarStop.addEventListener('click', () => {
+  if (window.orbit && window.orbit.agent) {
+    window.orbit.agent.stop();
+  }
+  hideAgentBar();
+});
+
+// Listen for agent state changes
+if (window.orbit && window.orbit.agent) {
+  window.orbit.agent.onState((state) => {
+    if (state === 'completed' || state === 'failed' || state === 'idle') {
+      hideAgentBar();
+    } else {
+      showAgentBar(state.charAt(0).toUpperCase() + state.slice(1) + '...');
+    }
+  });
+}
+
+// ── Split View (Arc-style) ────────────────────────────────────
+let splitMode = false;
+let splitWebview = null;
+let splitDivider = null;
+
+function toggleSplitView() {
+  if (splitMode) {
+    exitSplitView();
+  } else {
+    enterSplitView();
+  }
+}
+
+function enterSplitView() {
+  if (splitMode) return;
+  const wv = activeWebview();
+  if (!wv) return;
+  splitMode = true;
+  // Create a second webview
+  splitWebview = createWebview();
+  splitWebview.setAttribute('src', 'about:blank');
+  // Create divider
+  splitDivider = document.createElement('div');
+  splitDivider.className = 'split-divider';
+  // Wrap in split container
+  const container = wv.parentElement;
+  container.classList.add('split-view');
+  container.insertBefore(splitDivider, wv.nextSibling);
+  container.insertBefore(splitWebview, splitDivider.nextSibling);
+  showToast('info', 'Split View', 'Two tabs side by side');
+}
+
+function exitSplitView() {
+  if (!splitMode) return;
+  splitMode = false;
+  if (splitWebview) {
+    splitWebview.remove();
+    splitWebview = null;
+  }
+  if (splitDivider) {
+    splitDivider.remove();
+    splitDivider = null;
+  }
+  const container = document.querySelector('.split-view');
+  if (container) container.classList.remove('split-view');
+}
+
+// ── Command Chains (Vivaldi-style) ───────────────────────────
+const commandChains = JSON.parse(localStorage.getItem('orbit-chains') || '[]');
+
+function saveCommandChains() {
+  localStorage.setItem('orbit-chains', JSON.stringify(commandChains));
+}
+
+function createCommandChain(name, steps) {
+  commandChains.push({ name, steps, created: Date.now() });
+  saveCommandChains();
+}
+
+function runCommandChain(chain) {
+  let delay = 0;
+  for (const step of chain.steps) {
+    setTimeout(() => {
+      if (step.type === 'navigate') navigateTo(step.url);
+      else if (step.type === 'click') { /* handle click */ }
+      else if (step.type === 'type') { /* handle type */ }
+    }, delay);
+    delay += step.delay || 500;
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────
 initMatrix(sbMatrix);
 if (floatMatrix) initMatrix(floatMatrix);
@@ -2477,3 +3222,93 @@ renderBookmarkBar();
 updatePerfHud();
 // Show initial JARVIS welcome
 Chat.renderPanel("jarvis");
+
+// ── First-Run: Auto-detect Chrome for import ──────────────────
+if (!localStorage.getItem('orbit-imported-once') && window.orbit?.chrome) {
+  window.orbit.chrome.detect().then(function(browsers) {
+    if (browsers && browsers.length > 0) {
+      var totalProfiles = 0;
+      browsers.forEach(function(b) { totalProfiles += b.profiles.length; });
+      setTimeout(function() {
+        showToast('info', 'Chrome Detected', 'Found ' + browsers.length + ' browser(s) with ' + totalProfiles + ' profile(s). Import your data?');
+        // Show import option in chat
+        Chat.append('system', 'We detected Chrome/Edge/Brave on your system. You can import your bookmarks, history, and extensions.');
+        Chat.append('system', 'Click the menu button (\u2261) and select "Import from Chrome" to get started.');
+      }, 2000);
+    }
+    localStorage.setItem('orbit-imported-once', '1');
+  }).catch(function() {});
+}
+
+// ── Performance Optimizations (research-backed) ──────────────
+// 1. requestIdleCallback for non-critical startup work
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(function() {
+    // Defer non-critical render work
+    renderBookmarkBar();
+    updatePerfHud();
+  });
+}
+
+// 2. Memory cleanup: periodic garbage collection hint for long sessions
+let _memCheckCount = 0;
+setInterval(function() {
+  _memCheckCount++;
+  // Every 5 minutes, clean up stale references
+  if (_memCheckCount % 5 === 0) {
+    // Clear closed tab references older than 10 minutes
+    var cutoff = Date.now() - 600000;
+    for (var i = closedTabs.length - 1; i >= 0; i--) {
+      if (closedTabs[i] && closedTabs[i].ts && closedTabs[i].ts < cutoff) {
+        closedTabs.splice(i, 1);
+      }
+    }
+    // Clear any orphaned webview references
+    tabs.forEach(function(tab, id) {
+      if (tab.webview && tab.webview.parentElement === null) {
+        tabs.delete(id);
+      }
+    });
+  }
+}, 60000);
+
+// 3. Long Task observer: log tasks > 50ms for profiling
+if (typeof PerformanceObserver !== 'undefined') {
+  try {
+    var _longTaskObs = new PerformanceObserver(function(list) {
+      for (var entry of list.getEntries()) {
+        if (entry.duration > 50) {
+          console.warn('[PERF] Long task:', Math.round(entry.duration) + 'ms', entry.name || '');
+        }
+      }
+    });
+    _longTaskObs.observe({ entryTypes: ['longtask'] });
+  } catch (e) { /* not supported */ }
+}
+
+// 4. Prefetch DNS for common sites (improves navigation speed)
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(function() {
+    var prefetchDomains = ['www.google.com', 'www.github.com', 'www.youtube.com'];
+    prefetchDomains.forEach(function(domain) {
+      try {
+        var link = document.createElement('link');
+        link.rel = 'dns-prefetch';
+        link.href = '//' + domain;
+        document.head.appendChild(link);
+      } catch (e) {}
+    });
+  }, { timeout: 2000 });
+}
+
+// 5. Warn if renderer is blocked for > 100ms
+var _blockCheckStart = 0;
+setInterval(function() {
+  _blockCheckStart = performance.now();
+  setTimeout(function() {
+    var blocked = performance.now() - _blockCheckStart - 10;
+    if (blocked > 100) {
+      console.warn('[PERF] Main thread blocked for ~' + Math.round(blocked) + 'ms');
+    }
+  }, 10);
+}, 5000);

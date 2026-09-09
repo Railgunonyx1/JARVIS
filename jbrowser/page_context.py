@@ -19,6 +19,11 @@ MAX_INTERACTIVES = 60
 # single read never walks the whole tree; handles are stable within the scan.
 MAX_SCAN_ELEMENTS = 200
 
+# Global generation counter: incremented on every full page context build.
+# Element handles include this generation so stale handles from a previous
+# DOM state can be detected and rejected.
+_generation: int = 0
+
 
 @dataclass
 class PageContext:
@@ -32,11 +37,13 @@ class PageContext:
     forms: list[dict[str, Any]] = field(default_factory=list)
     viewport: dict[str, Any] = field(default_factory=dict)
 
+    generation: int = 0
+
     def to_prompt_block(self) -> str:
         """Render a compact representation suitable for model context."""
         lines = [f"URL: {self.url}", f"Title: {self.title}"]
         if self.interactives:
-            lines.append("\nInteractive elements:")
+            lines.append(f"\nInteractive elements (gen={self.generation}):")
             for el in self.interactives[:MAX_INTERACTIVES]:
                 lines.append(
                     f"  [{el.get('handle')}] <{el.get('tag')}> "
@@ -59,16 +66,19 @@ def build_page_context(page: Any) -> PageContext:
         - ``.query_selector_all(sel)`` returning elements with
           ``.get_attribute(name)``, ``.inner_text()``
     """
+    global _generation
+    _generation += 1
     ctx = PageContext(
         url=str(getattr(page, "url", "") or ""),
         title=_safe_title(page),
+        generation=_generation,
     )
     try:
         ctx.text = (page.evaluate("() => document.body.innerText") or "")[:20000]
     except Exception:
         ctx.text = ""
     ctx.links = _extract_links(page)
-    ctx.interactives = _extract_interactives(page)
+    ctx.interactives = _extract_interactives(page, generation=_generation)
     ctx.viewport = _extract_viewport(page)
     ctx.forms = _extract_forms(page)
     return ctx
@@ -90,19 +100,61 @@ _SELECTOR = (
 _INTERESTING = ("a", "button", "input", "select", "textarea")
 
 
-def _extract_interactives(page: Any) -> list[dict[str, Any]]:
-    """Map DOM elements to stable handles (index-based, stable within a page)."""
+def parse_handle(handle: str) -> tuple[int, int] | None:
+    """Parse an element handle string and return (index, generation) or None.
+
+    Handles are formatted as ``el<idx>_g<generation>``.  Returns None if the
+    handle is malformed.
+    """
+    if not handle.startswith("el"):
+        return None
+    try:
+        parts = handle.split("_g")
+        idx = int(parts[0][2:])
+        gen = int(parts[1]) if len(parts) > 1 else 0
+        return (idx, gen)
+    except (ValueError, IndexError):
+        return None
+
+
+def is_handle_stale(handle: str, current_generation: int) -> bool:
+    """Return True if the handle's generation doesn't match the current one."""
+    parsed = parse_handle(handle)
+    if parsed is None:
+        return True
+    return parsed[1] != current_generation
+
+
+def _extract_interactives(page: Any, generation: int = 0) -> list[dict[str, Any]]:
+    """Map DOM elements to generation-bound handles.
+
+    Handles are formatted as ``el_<idx>_g<generation>`` so stale handles from
+    a previous DOM scan can be detected.  The generation is included in the
+    prompt block so the model knows when handles are outdated.
+    """
     out: list[dict[str, Any]] = []
     try:
         elements = page.query_selector_all(_SELECTOR)
     except Exception:
         return out
     for idx, el in enumerate(elements[:MAX_SCAN_ELEMENTS]):
-        handle = f"el{idx}"
+        handle = f"el{idx}_g{generation}"
         try:
             tag = (el.evaluate("e => e.tagName") or "").lower()
         except Exception:
             tag = "?"
+        try:
+            selector = el.evaluate(
+                "e => { let s = e.tagName.toLowerCase();"
+                " if (e.id) return s + '#' + e.id;"
+                " if (e.name) return s + '[name="' + e.name + '"]';"
+                " let p = e.parentElement;"
+                " if (p) { let ci = Array.from(p.children).indexOf(e);"
+                " return p.tagName.toLowerCase() + ' > ' + s + ':nth-child(' + (ci+1) + ')'; }"
+                " return s; }"
+            ) or ""
+        except Exception:
+            selector = ""
         out.append({
             "handle": handle,
             "tag": tag,
@@ -110,6 +162,8 @@ def _extract_interactives(page: Any) -> list[dict[str, Any]]:
             "label": _attr(el, "aria-label"),
             "text": _attr(el, "inner_text"),
             "href": _attr(el, "href"),
+            "selector": selector[:200],
+            "generation": generation,
         })
     return out[:MAX_INTERACTIVES]
 

@@ -44,6 +44,9 @@ class BrowserController:
         # Playwright engine.
         self._lock = threading.RLock()
         self._default_session: str = ""
+        # Current trace_id: set by the agent loop per-task so every browser
+        # event is correlated to the originating agent request.
+        self._trace_id: str = ""
 
     # ------------------------------------------------------------ sessions
     def ensure_session(self, session_id: str = "", *, persistent: bool = False) -> str:
@@ -82,7 +85,7 @@ class BrowserController:
             sid = self.ensure_session(session_id)
             info = self.backend.create_tab(sid, url)
             emit_browser_event(TAB_CREATED, {"tab_id": info.tab_id, "url": info.url},
-                               session_id=sid)
+                               session_id=sid, trace_id=self._trace_id)
             return {
                 "tab_id": info.tab_id, "session_id": sid,
                 "url": info.url, "title": info.title, "active": info.active,
@@ -93,7 +96,8 @@ class BrowserController:
             sid = self._session_of(tab_id)
             ok = self.backend.close_tab(tab_id)
             if ok:
-                emit_browser_event(TAB_CLOSED, {"tab_id": tab_id}, session_id=sid)
+                emit_browser_event(TAB_CLOSED, {"tab_id": tab_id},
+                                   session_id=sid, trace_id=self._trace_id)
             return {"closed": ok, "tab_id": tab_id}
 
     def list_tabs(self) -> list[dict]:
@@ -107,7 +111,8 @@ class BrowserController:
             info = self.backend.switch_tab(tab_id)
             if hasattr(info, "tab_id"):
                 emit_browser_event(TAB_ACTIVATED, {"tab_id": info.tab_id},
-                                   session_id=self._session_of(info.tab_id))
+                                   session_id=self._session_of(info.tab_id),
+                                   trace_id=self._trace_id)
                 return {"tab_id": info.tab_id, "url": info.url, "title": info.title}
             return {"tab_id": tab_id}
 
@@ -118,8 +123,10 @@ class BrowserController:
         return self._default_session
 
     # ---------------------------------------------------------- navigation
-    def navigate(self, url: str, tab_id: str | None = None) -> dict:
+    def navigate(self, url: str, tab_id: str | None = None, *,
+                 trace_id: str | None = None) -> dict:
         with self._lock:
+            tid = trace_id or self._trace_id
             sid = self._default_session
             if tab_id is None:
                 ensure = self.ensure_session()
@@ -127,20 +134,23 @@ class BrowserController:
                 # ensure an active tab exists
                 if not self.backend.active_tab():
                     self.new_tab(url="", session_id=sid)
-            emit_browser_event(NAVIGATION_STARTED, {"url": url}, session_id=sid)
+            emit_browser_event(NAVIGATION_STARTED, {"url": url},
+                               session_id=sid, trace_id=tid)
             try:
                 info = self.backend.navigate(url, tab_id=tab_id)
             except Exception:
                 emit_browser_event(NAVIGATION_COMPLETED,
                                    {"tab_id": "", "url": url, "error": True},
-                                   session_id=sid)
+                                   session_id=sid, trace_id=tid)
                 raise
             info_tab = getattr(info, "tab_id", "")
             info_url = getattr(info, "url", url)
             emit_browser_event(NAVIGATION_COMPLETED,
-                               {"tab_id": info_tab, "url": info_url}, session_id=sid)
+                               {"tab_id": info_tab, "url": info_url},
+                               session_id=sid, trace_id=tid)
             emit_browser_event(PAGE_LOADED,
-                               {"tab_id": info_tab, "url": info_url}, session_id=sid)
+                               {"tab_id": info_tab, "url": info_url},
+                               session_id=sid, trace_id=tid)
             return {"url": info_url, "title": getattr(info, "title", "")}
 
     def go_back(self, tab_id: str | None = None) -> None:
@@ -246,17 +256,28 @@ class BrowserController:
             self.backend.scroll(direction, amount, tab_id=tab_id)
 
     def execute_script(self, script: str, tab_id: str | None = None) -> str:
-        self.ensure_session()
-        self.emit_agent_action("execute_script", {})
-        return self.backend.execute_script(script, tab_id=tab_id)
+        with self._lock:
+            self.ensure_session()
+            self.emit_agent_action("execute_script", {})
+            return self.backend.execute_script(script, tab_id=tab_id)
+
+    def set_trace_id(self, trace_id: str) -> None:
+        """Set the current trace_id for all subsequent browser events.
+
+        Called by the agent loop at task start so every browser event is
+        correlated to the originating agent request.
+        """
+        self._trace_id = trace_id or ""
 
     def emit_agent_action(self, name: str, payload: dict[str, Any]) -> None:
         emit_browser_event(AGENT_ACTION, {"action": name, **payload},
-                           session_id=self._default_session)
+                           session_id=self._default_session,
+                           trace_id=self._trace_id)
 
     def emit_action_completed(self, name: str, payload: dict[str, Any]) -> None:
         emit_browser_event(ACTION_COMPLETED, {"action": name, **payload},
-                           session_id=self._default_session)
+                           session_id=self._default_session,
+                           trace_id=self._trace_id)
 
 
 _controller: BrowserController | None = None

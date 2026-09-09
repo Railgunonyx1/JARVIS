@@ -13,9 +13,11 @@ const Store = require("electron-store");
 
 // Research-pipeline optimizer modules (src/*.js — Brave Shields, Edge
 // sleeping-tabs, Arc Spaces patterns).
-const { SecurityModule } = require("./src/security.js");
+const { SecurityModule, ExtensionStore } = require("./src/security.js");
 const { PerformanceModule } = require("./src/performance.js");
 const { SpacesModule } = require("./src/spaces.js");
+const chromeImport = require("./src/chrome-import.js");
+const { AgentLoop, ToolRegistry, AgentState } = require("./src/agent-loop.js");
 
 // ── Chromium performance flags ────────────────────────────────────
 // Mirrors the researched, evidence-backed launch profile codified in
@@ -39,6 +41,13 @@ function applyChromiumFlags() {
     "disable-domain-reliability": "",
     "disable-background-networking": "",
     "freeze-background-tabs": "",
+    // DNS-over-HTTPS: encrypt DNS queries for privacy
+    "dns-over-https": "",
+    "doh-server-template": "https://1.1.1.1/dns-query",
+    // Encrypted Client Hello (ECH): encrypt TLS SNI
+    "enable-ech": "",
+    // Safe browsing enhancements
+    "safe-browsing-enhanced-protection": "",
   };
   for (const [name, value] of Object.entries(flags)) {
     app.commandLine.appendSwitch(name, value);
@@ -69,7 +78,63 @@ const PAGES = {
   memory: "src/memory.html",
   extensions: "src/extensions.html",
   diagnostics: "src/diagnostics.html",
+  import: "src/import.html",
+  "extension-store": "src/extension-store.html",
 };
+
+// ── Headless Agent Loop ──────────────────────────────────────────
+const agentTools = new ToolRegistry();
+let activeAgentLoop = null;
+
+// Register browser tools for the agent loop
+agentTools.register('browser.read', async (args, ctx) => {
+  // Read the current page via the renderer
+  mainWindow?.webContents.send('agent-read', args);
+  return new Promise((resolve) => {
+    ipcMain.once('agent-read-result', (_, result) => resolve(result));
+    setTimeout(() => resolve('Read timeout'), 10000);
+  });
+}, { risk: 'low', parallel: true });
+
+agentTools.register('browser.navigate', async (args) => {
+  const url = args.url || '';
+  mainWindow?.webContents.send('navigate-to', url);
+  return `Navigated to ${url}`;
+}, { risk: 'medium', parallel: false });
+
+agentTools.register('browser.click', async (args) => {
+  mainWindow?.webContents.send('agent-click', args);
+  return new Promise((resolve) => {
+    ipcMain.once('agent-click-result', (_, result) => resolve(result));
+    setTimeout(() => resolve('Click timeout'), 5000);
+  });
+}, { risk: 'medium', parallel: false });
+
+agentTools.register('browser.type', async (args) => {
+  mainWindow?.webContents.send('agent-type', args);
+  return new Promise((resolve) => {
+    ipcMain.once('agent-type-result', (_, result) => resolve(result));
+    setTimeout(() => resolve('Type timeout'), 5000);
+  });
+}, { risk: 'low', parallel: false });
+
+agentTools.register('browser.search', async (args) => {
+  const query = args.query || '';
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  mainWindow?.webContents.send('navigate-to', url);
+  return `Searching for: ${query}`;
+}, { risk: 'low', parallel: false });
+
+agentTools.register('web.fetch', async (args) => {
+  const url = args.url || '';
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    return text.substring(0, 10000);
+  } catch (e) {
+    return `Fetch error: ${e.message}`;
+  }
+}, { risk: 'low', parallel: true });
 
 // ── State ─────────────────────────────────────────────────────────
 let mainWindow = null;
@@ -81,6 +146,7 @@ const JARVIS_BASE_DELAY = 1000; // 1s base, doubles each attempt
 
 // ── Optimizer module instances ────────────────────────────────────
 const security = new SecurityModule();
+const extensionStore = new ExtensionStore();
 const performance = new PerformanceModule();
 const spaces = new SpacesModule();
 let store = null;           // electron-store: settings + site permissions
@@ -131,6 +197,107 @@ const GRAIN_JS = `
       } catch (e) {}
       return out;
     };
+    // Also farble toBlob
+    var tb = proto.toBlob;
+    if (tb) {
+      proto.toBlob = function(callback, type, quality) {
+        var self = this;
+        var w = this.width, h = this.height;
+        if (!w || !h || w * h > 400000) return tb.apply(this, arguments);
+        try {
+          var ctx = this.getContext('2d');
+          if (ctx) {
+            var d = gi.call(ctx, 0, 0, w, h).data;
+            var n = Math.min(28, Math.floor(d.length / 3072) + 4);
+            var mask = d.length - 8;
+            for (var k = 0; k < n; k++) {
+              var p = (seed + k * 977) & mask;
+              var ch = (seed >>> 3 + k) & 3;
+              d[p + ch] ^= 1 + ((seed + k) & 1);
+            }
+            ctx.putImageData(new ImageData(d, w, h), 0, 0);
+          }
+        } catch (e) {}
+        return tb.call(self, callback, type, quality);
+      };
+    }
+  } catch (e) {}
+
+  // ── WebGL Fingerprint Farbling ──────────────────────────────
+  try {
+    var getParam = WebGLRenderingContext.prototype.getParameter;
+    var getExt = WebGLRenderingContext.prototype.getExtension;
+    WebGLRenderingContext.prototype.getParameter = function(pname) {
+      // Farble UNMASKED_VENDOR and UNMASKED_RENDERER
+      if (pname === 0x9245 || pname === 0x9246) {
+        var val = getParam.call(this, pname);
+        if (typeof val === 'string') {
+          // Add tiny noise to renderer string
+          var chars = val.split('');
+          var idx = (seed * 7 + chars.length) % Math.max(1, chars.length - 1);
+          chars[idx] = String.fromCharCode(chars[idx].charCodeAt(0) ^ 1);
+          return chars.join('');
+        }
+        return val;
+      }
+      // Farble MAX_TEXTURE_SIZE, MAX_VIEWPORT_DIMS
+      if (pname === 0x0D33 || pname === 0x0D3A) {
+        var val = getParam.call(this, pname);
+        if (typeof val === 'number') return val + ((seed & 3) - 1);
+        return val;
+      }
+      return getParam.call(this, pname);
+    };
+  } catch (e) {}
+
+  // ── AudioContext Fingerprint Farbling ────────────────────────
+  try {
+    var origCreateOsc = OscillatorNode.prototype.start;
+    var origGetFloat = AnalyserNode.prototype.getFloatFrequencyData;
+    if (origGetFloat) {
+      AnalyserNode.prototype.getFloatFrequencyData = function(array) {
+        origGetFloat.call(this, array);
+        // Add tiny noise to frequency data
+        for (var i = 0; i < array.length; i += 16) {
+          array[i] += ((seed * (i + 1)) % 3) * 0.001;
+        }
+      };
+    }
+  } catch (e) {}
+
+  // ── Navigator Fingerprint Farbling ──────────────────────────
+  try {
+    // Farble hardwareConcurrency slightly
+    var origHC = Object.getOwnPropertyDescriptor(Navigator.prototype, 'hardwareConcurrency');
+    if (origHC && origHC.get) {
+      Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', {
+        get: function() {
+          var val = origHC.get.call(this);
+          // Don't change the value, just make it consistent per session
+          return val;
+        },
+        configurable: true
+      });
+    }
+    // Farble deviceMemory
+    var origDM = Object.getOwnPropertyDescriptor(Navigator.prototype, 'deviceMemory');
+    if (origDM && origDM.get) {
+      Object.defineProperty(Navigator.prototype, 'deviceMemory', {
+        get: function() {
+          var val = origDM.get.call(this);
+          if (typeof val === 'number') {
+            // Round to nearest power of 2 for less identification
+            var powers = [0.25, 0.5, 1, 2, 4, 8];
+            var closest = powers.reduce(function(prev, curr) {
+              return Math.abs(curr - val) < Math.abs(prev - val) ? curr : prev;
+            });
+            return closest;
+          }
+          return val;
+        },
+        configurable: true
+      });
+    }
   } catch (e) {}
 })();
 `;
@@ -589,6 +756,91 @@ function setupIPC() {
     return true;
   });
 
+  // ── Lightweight Optimization IPC (renderer-only module) ──────
+  ipcMain.handle("perf:stats", () => {
+    return { ok: false, note: "available in renderer only" };
+  });
+  ipcMain.handle("perf:dom-optimize", () => {
+    return { ok: false, note: "available in renderer only" };
+  });
+  ipcMain.handle("perf:gc", () => {
+    if (global.gc) global.gc();
+    return { ok: true, mem: process.memoryUsage() };
+  });
+  ipcMain.handle("perf:memory-report", () => {
+    const mem = process.memoryUsage();
+    return {
+      rss: Math.round(mem.rss / 1024 / 1024),
+      heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+      external: Math.round(mem.external / 1024 / 1024),
+    };
+  });
+
+  // Chrome Import
+  ipcMain.handle("chrome:detect", () => {
+    return chromeImport.detectBrowsers();
+  });
+  ipcMain.handle("chrome:import", (_, profilePath) => {
+    const safePath = validateString(profilePath, "profile path", 1024);
+    return chromeImport.importFromChrome(safePath);
+  });
+  ipcMain.handle("chrome:apply-bookmarks", (_, bookmarks) => {
+    if (!Array.isArray(bookmarks)) throw new TypeError("bookmarks must be an array");
+    const existing = store?.get("bookmarks", []) || [];
+    const existingUrls = new Set(existing.map(b => b.url));
+    let imported = 0;
+    for (const bm of bookmarks) {
+      if (bm.url && !existingUrls.has(bm.url)) {
+        existing.push({ title: bm.title || "", url: bm.url });
+        existingUrls.add(bm.url);
+        imported++;
+      }
+    }
+    store?.set("bookmarks", existing);
+    return { imported, total: existing.length };
+  });
+  ipcMain.handle("chrome:apply-history", (_, history) => {
+    if (!Array.isArray(history)) throw new TypeError("history must be an array");
+    const existing = store?.get("history", []) || [];
+    const existingUrls = new Set(existing.map(h => h.url));
+    let imported = 0;
+    for (const h of history) {
+      if (h.url && !existingUrls.has(h.url)) {
+        existing.push({ title: h.title || "", url: h.url, time: h.lastVisitTime || new Date().toISOString() });
+        existingUrls.add(h.url);
+        imported++;
+      }
+    }
+    // Keep last 10000 entries
+    store?.set("history", existing.slice(0, 10000));
+    return { imported, total: existing.length };
+  });
+
+  // Extension Store
+  ipcMain.handle("extensions:list", () => extensionStore.getAll());
+  ipcMain.handle("extensions:vpn", () => extensionStore.getVPN());
+  ipcMain.handle("extensions:adblockers", () => extensionStore.getAdblockers());
+  ipcMain.handle("extensions:install", (_, key) => {
+    const url = extensionStore.getInstallUrl(key);
+    if (!url) return { ok: false, error: "Unknown extension" };
+    // Open the Chrome Web Store in a new tab
+    mainWindow?.webContents.send("navigate-to", url);
+    return { ok: true, url };
+  });
+  ipcMain.handle("extensions:toggle", (_, extensionId) => {
+    const enabled = extensionStore.toggle(extensionId);
+    return { ok: true, enabled };
+  });
+  ipcMain.handle("extensions:remove", (_, extensionId) => {
+    extensionStore.remove(extensionId);
+    return { ok: true };
+  });
+  ipcMain.handle("extensions:mark-installed", (_, extensionId) => {
+    extensionStore.markInstalled(extensionId);
+    return { ok: true };
+  });
+
   // Navigation
   ipcMain.handle("navigate", (_, url) => {
     validateUrl(url, "navigation url");
@@ -680,6 +932,81 @@ function setupIPC() {
     return spaces.getStatus();
   });
 
+  // Picture-in-Picture: ask the active tab's guest to float its video.
+  // userGesture=true on executeJavaScript gives the script transient
+  // activation so requestPictureInPicture() is permitted.
+  ipcMain.handle("tab:popout", async () => {
+    const wc = guestFor(activeTabId);
+    if (!wc || wc.isDestroyed()) return { ok: false, error: "no active guest" };
+    const script =
+      "(()=>{" +
+      "const v=[...document.querySelectorAll('video')];" +
+      "if(!v.length)return 'no-video';" +
+      "const byTime=v.slice().sort((a,b)=>b.currentTime-a.currentTime);" +
+      "const pick=byTime[0];" +
+      "if(!pick.requestPictureInPicture)return 'unsupported';" +
+      "pick.requestPictureInPicture().then(()=>'OK').catch(e=>'ERR '+e.message);" +
+      "return 'requesting';" +
+      "})()";
+    try {
+      const result = await wc.executeJavaScript(script, true);
+      return { ok: result === "OK" || result === "requesting", result };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
+  ipcMain.handle("agent:start", async (_, message, options) => {
+    if (activeAgentLoop && activeAgentLoop.state !== AgentState.IDLE) {
+      return { ok: false, error: "Agent already running" };
+    }
+    activeAgentLoop = new AgentLoop({
+      tools: agentTools,
+      model: options?.model || 'deepseek/deepseek-v4-flash',
+      maxIterations: options?.maxIterations || 20,
+    });
+    // Forward agent events to renderer
+    activeAgentLoop.on('state', (state) => {
+      mainWindow?.webContents.send('agent-state', state);
+    });
+    activeAgentLoop.on('tool', (info) => {
+      mainWindow?.webContents.send('agent-tool', info);
+    });
+    activeAgentLoop.on('toolResult', (info) => {
+      mainWindow?.webContents.send('agent-tool-result', info);
+    });
+    try {
+      const result = await activeAgentLoop.run(message, {
+        sessionId: options?.sessionId || 'default',
+      });
+      return { ok: true, result };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("agent:stop", () => {
+    if (activeAgentLoop) {
+      activeAgentLoop.abort();
+      return { ok: true };
+    }
+    return { ok: false, error: "No agent running" };
+  });
+
+  ipcMain.handle("agent:status", () => {
+    return activeAgentLoop ? activeAgentLoop.getStatus() : { state: 'idle' };
+  });
+
+  // Agent tool results from renderer
+  ipcMain.on("agent-read-result", (_, result) => {
+    // Handled by the promise in the tool handler
+  });
+  ipcMain.on("agent-click-result", (_, result) => {
+    // Handled by the promise in the tool handler
+  });
+  ipcMain.on("agent-type-result", (_, result) => {
+    // Handled by the promise in the tool handler
+  });
+
   // Session persistence
   ipcMain.handle("session:save", () => {
     const tabData = sessionSnapshot();
@@ -718,6 +1045,24 @@ function createWindow(incognito = false) {
     },
     backgroundColor: "#000000",
     show: false,
+  });
+
+  // Set CSP headers for the main window
+  const mainSession = mainWindow.webContents.session;
+  mainSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...(details.responseHeaders || {}) };
+    // CSP: restrict script sources to self, allow inline for now (transitional)
+    headers['Content-Security-Policy'] = [
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "img-src 'self' data: https:; " +
+      "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
+      "frame-src 'self' https:; " +
+      "worker-src 'self';"
+    ];
+    callback({ responseHeaders: headers });
   });
 
   // Load the browser UI

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extension Store</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      padding: 32px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; color: #fff; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 24px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .tab-btn {
+      padding: 6px 14px; border-radius: 8px; border: 1px solid #222;
+      background: transparent; color: #888; font-size: 12px; cursor: pointer;
+      transition: all .15s;
+    }
+    .tab-btn.active { background: #7c5cff; color: #fff; border-color: #7c5cff; }
+    .tab-btn:hover:not(.active) { border-color: #444; color: #ccc; }
+    .ext-card {
+      border: 1px solid #222; border-radius: 12px; padding: 16px;
+      margin-bottom: 10px; transition: border-color .15s;
+    }
+    .ext-card:hover { border-color: #444; }
+    .ext-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .ext-icon { font-size: 28px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #111; border-radius: 10px; }
+    .ext-info { flex: 1; }
+    .ext-name { font-size: 14px; font-weight: 500; color: #fff; }
+    .ext-desc { font-size: 12px; color: #888; margin-top: 2px; }
+    .ext-badges { display: flex; gap: 6px; margin-top: 6px; }
+    .badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 4px;
+      background: #1a1a2e; color: #888;
+    }
+    .badge.free { background: #0a2a0a; color: #4ade80; }
+    .badge.oss { background: #1a1a0a; color: #fbbf24; }
+    .badge.vpn { background: #0a1a2a; color: #60a5fa; }
+    .ext-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .btn {
+      padding: 6px 14px; border-radius: 8px; border: none;
+      font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-install { background: #7c5cff; color: #fff; }
+    .btn-open { background: #222; color: #e0e0e0; border: 1px solid #333; }
+    .btn-danger { background: #2a0a0a; color: #f87171; border: 1px solid #3a1a1a; }
+    .installed-label { font-size: 11px; color: #4ade80; display: flex; align-items: center; gap: 4px; }
+    .search-box {
+      width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #222;
+      background: #111; color: #e0e0e0; font-size: 13px; margin-bottom: 16px;
+      outline: none;
+    }
+    .search-box:focus { border-color: #7c5cff; }
+    .search-box::placeholder { color: #555; }
+    .section-title { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 8px; }
+    .empty-state { text-align: center; padding: 32px 0; color: #555; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Extension Store</h1>
+  <p class="subtitle">Install VPN and ad blocker extensions for Orbit.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-filter="all">All</button>
+    <button class="tab-btn" data-filter="adblocker">Ad Blockers</button>
+    <button class="tab-btn" data-filter="vpn">VPN</button>
+  </div>
+
+  <input type="text" class="search-box" id="searchBox" placeholder="Search extensions...">
+
+  <div id="extList"></div>
+
+  <script>
+    const { extensions: extApi } = window.orbit;
+    let allExtensions = [];
+    let currentFilter = 'all';
+
+    async function loadExtensions() {
+      allExtensions = await extApi.list();
+      renderExtensions();
+    }
+
+    function renderExtensions() {
+      const query = document.getElementById('searchBox').value.toLowerCase();
+      const list = document.getElementById('extList');
+
+      let filtered = allExtensions;
+      if (currentFilter !== 'all') {
+        filtered = filtered.filter(e => e.type === currentFilter);
+      }
+      if (query) {
+        filtered = filtered.filter(e =>
+          e.name.toLowerCase().includes(query) ||
+          e.description.toLowerCase().includes(query)
+        );
+      }
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state">No extensions found.</div>';
+        return;
+      }
+
+      let html = '';
+      const grouped = {
+        adblocker: filtered.filter(e => e.type === 'adblocker'),
+        vpn: filtered.filter(e => e.type === 'vpn'),
+      };
+
+      for (const [type, exts] of Object.entries(grouped)) {
+        if (exts.length === 0) continue;
+        const label = type === 'adblocker' ? 'Ad Blockers' : 'VPN';
+        html += '<div class="section-title">' + label + '</div>';
+
+        for (const ext of exts) {
+          html += '<div class="ext-card" data-key="' + ext.key + '">';
+          html += '<div class="ext-header">';
+          html += '<div class="ext-icon">' + ext.icon + '</div>';
+          html += '<div class="ext-info">';
+          html += '<div class="ext-name">' + escHtml(ext.name) + '</div>';
+          html += '<div class="ext-desc">' + escHtml(ext.description) + '</div>';
+          html += '<div class="ext-badges">';
+          if (ext.free) html += '<span class="badge free">Free</span>';
+          if (ext.dataLimit) html += '<span class="badge">' + escHtml(ext.dataLimit) + '</span>';
+          if (ext.openSource) html += '<span class="badge oss">Open Source</span>';
+          if (ext.type === 'vpn') html += '<span class="badge vpn">VPN</span>';
+          html += '</div>';
+          html += '</div>';
+          html += '</div>';
+          html += '<div class="ext-actions">';
+          html += '<button class="btn btn-install" data-action="install" data-key="' + ext.key + '">Install</button>';
+          html += '<button class="btn btn-open" data-action="open-store" data-key="' + ext.key + '">Chrome Web Store</button>';
+          html += '</div>';
+          html += '</div>';
+        }
+      }
+
+      list.innerHTML = html;
+
+      // Wire events
+      list.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const action = btn.dataset.action;
+          const key = btn.dataset.key;
+          if (action === 'install') {
+            btn.textContent = 'Installing...';
+            btn.disabled = true;
+            await extApi.install(key);
+            // Mark as installed locally
+            const ext = allExtensions.find(e => e.key === key);
+            if (ext) await extApi.markInstalled(ext.id);
+            btn.textContent = 'Installed ✓';
+            btn.style.background = '#0a2a0a';
+            btn.style.color = '#4ade80';
+          } else if (action === 'open-store') {
+            const ext = allExtensions.find(e => e.key === key);
+            if (ext && ext.chromeWebStore) {
+              window.open(ext.chromeWebStore, '_blank');
+            }
+          }
+        });
+      });
+    }
+
+    function escHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Tab filters
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderExtensions();
+      });
+    });
+
+    // Search
+    document.getElementById('searchBox').addEventListener('input', renderExtensions);
+
+    // Init
+    loadExtensions();
+  </script>
+</body>
+</html>

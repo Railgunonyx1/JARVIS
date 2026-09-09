@@ -19,6 +19,7 @@ development servers, or other machine-local endpoints.
 from __future__ import annotations
 
 import ipaddress
+import socket
 from urllib.parse import urlparse
 
 # Known public DNS suffixes mapped to "not private" heuristics. We rely on DNS
@@ -29,6 +30,31 @@ _LOCALHOST_HOSTS = {"localhost", "localhost.localdomain", "localtest.me"}
 
 class NetworkPolicyError(Exception):
     """Raised when a navigation target is denied by the network policy."""
+
+
+def _check_dns_resolution(host: str, netloc: str, allow_private: bool) -> None:
+    """Resolve hostname via DNS and reject if any result is a private/internal IP.
+
+    This prevents DNS rebinding attacks where an attacker-controlled domain
+    resolves to 127.0.0.1, 192.168.x.x, or other internal addresses after
+    the initial hostname check passes.
+    """
+    if allow_private:
+        return
+    try:
+        results = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except (socket.gaierror, OSError):
+        # DNS resolution failed — deny by default (safe posture).
+        raise NetworkPolicyError(
+            f"DNS resolution failed for {netloc}; denying by default"
+        )
+    for family, _type, _proto, _canonname, sockaddr in results:
+        ip_str = sockaddr[0]
+        if _is_private_ip(ip_str):
+            raise NetworkPolicyError(
+                f"hostname {host} resolves to private IP {ip_str}; "
+                f"blocked by network policy (DNS rebinding protection)"
+            )
 
 
 def _is_private_ip(host: str) -> bool:
@@ -99,6 +125,7 @@ class BrowserNetworkPolicy:
         if self._allowed(netloc) or self._allowed(host):
             return url
 
+        # Check the hostname itself first (handles IP literals).
         if _is_private_ip(host) and not self.allow_private:
             raise NetworkPolicyError(
                 f"private/loopback destination blocked by network policy: {netloc}"
@@ -107,6 +134,13 @@ class BrowserNetworkPolicy:
             raise NetworkPolicyError(
                 f"loopback destination blocked by network policy: {netloc}"
             )
+
+        # DNS-aware validation: resolve hostname and check all resulting IPs.
+        # This prevents DNS rebinding attacks where a public hostname resolves
+        # to a private/internal address after validation.
+        if not _is_private_ip(host):
+            _check_dns_resolution(host, netloc, self.allow_private)
+
         if not self.allow_public_http and not url.lower().startswith("https://"):
             raise NetworkPolicyError(
                 f"plain-HTTP destination blocked by network policy: {netloc}"

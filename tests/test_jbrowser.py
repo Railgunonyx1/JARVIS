@@ -237,17 +237,19 @@ class TestPageContext:
         assert ctx.title == "Example Title"
         assert ctx.text == "Hello world\nSome link text here"
         assert len(ctx.interactives) == 3
-        assert ctx.interactives[0]["handle"] == "el0"
+        assert ctx.interactives[0]["handle"].startswith("el0_g")
         assert ctx.interactives[0]["tag"] == "a"
         assert ctx.interactives[2]["tag"] == "input"
+        assert ctx.interactives[0]["generation"] == ctx.generation
         assert ctx.links == ["https://a.com", "https://b.com"]
 
     def test_prompt_block_renders(self):
         ctx = build_page_context(_FakePage())
         block = ctx.to_prompt_block()
         assert "https://example.com" in block
-        assert "[el0]" in block
+        assert "[el0_g" in block
         assert "Links" in block
+        assert f"gen={ctx.generation}" in block
 
 
 # ---------------------------------------------------------------------------

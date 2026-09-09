@@ -45,6 +45,14 @@ contextBridge.exposeInMainWorld("orbit", {
     },
   },
 
+  // ── Performance / Lightweight Module ────────────────────────
+  perf: {
+    stats: () => ipcRenderer.invoke("perf:stats"),
+    domOptimize: (data) => ipcRenderer.invoke("perf:dom-optimize", data),
+    gc: () => ipcRenderer.invoke("perf:gc"),
+    memoryReport: () => ipcRenderer.invoke("perf:memory-report"),
+  },
+
   // ── Window Controls ─────────────────────────────────────────────
   window: {
     minimize: () => ipcRenderer.send("win-minimize"),
@@ -92,6 +100,39 @@ contextBridge.exposeInMainWorld("orbit", {
     },
   },
 
+  // ── Headless Agent Loop ────────────────────────────────────────
+  agent: {
+    start: (message, options) => ipcRenderer.invoke('agent:start', message, options),
+    stop: () => ipcRenderer.invoke('agent:stop'),
+    status: () => ipcRenderer.invoke('agent:status'),
+    onState: (callback) => ipcRenderer.on('agent-state', (_, state) => callback(state)),
+    onTool: (callback) => ipcRenderer.on('agent-tool', (_, info) => callback(info)),
+    onToolResult: (callback) => ipcRenderer.on('agent-tool-result', (_, info) => callback(info)),
+    // Send tool results back to main process
+    sendReadResult: (result) => ipcRenderer.send('agent-read-result', result),
+    sendClickResult: (result) => ipcRenderer.send('agent-click-result', result),
+    sendTypeResult: (result) => ipcRenderer.send('agent-type-result', result),
+  },
+
+  // ── Chrome Import ──────────────────────────────────────────────
+  chrome: {
+    detect: () => ipcRenderer.invoke("chrome:detect"),
+    import: (profilePath) => ipcRenderer.invoke("chrome:import", profilePath),
+    applyBookmarks: (bookmarks) => ipcRenderer.invoke("chrome:apply-bookmarks", bookmarks),
+    applyHistory: (history) => ipcRenderer.invoke("chrome:apply-history", history),
+  },
+
+  // ── Extension Store ────────────────────────────────────────────
+  extensions: {
+    list: () => ipcRenderer.invoke("extensions:list"),
+    vpn: () => ipcRenderer.invoke("extensions:vpn"),
+    adblockers: () => ipcRenderer.invoke("extensions:adblockers"),
+    install: (key) => ipcRenderer.invoke("extensions:install", key),
+    toggle: (extensionId) => ipcRenderer.invoke("extensions:toggle", extensionId),
+    remove: (extensionId) => ipcRenderer.invoke("extensions:remove", extensionId),
+    markInstalled: (extensionId) => ipcRenderer.invoke("extensions:mark-installed", extensionId),
+  },
+
   // ── System (Shields / Permissions / Performance / Spaces) ───────
   system: {
     security: {
@@ -112,6 +153,9 @@ contextBridge.exposeInMainWorld("orbit", {
     spaces: {
       list: () => ipcRenderer.invoke("spaces:list"),
       switch: (id) => ipcRenderer.invoke("spaces:switch", id),
+    },
+    ui: {
+      popoutVideo: () => ipcRenderer.invoke("tab:popout"),
     },
     session: {
       clearSiteData: (origin) => ipcRenderer.invoke("session:clear-site-data", origin),

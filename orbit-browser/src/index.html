@@ -87,19 +87,15 @@
             <path d="M11.5 9v5M9 11.5h5" stroke="currentColor"/>
           </svg>
         </button>
-        <button class="nav-btn" id="jarvisBtn" title="JARVIS sidebar" style="position:relative">
+        <button class="nav-btn jarvis-launch" id="jarvisBtn" title="Start JARVIS" style="position:relative">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="3" cy="3" r=".9" fill="currentColor"/>
-            <circle cx="8" cy="3" r=".9" fill="currentColor"/>
-            <circle cx="13" cy="3" r=".9" fill="currentColor"/>
-            <circle cx="3" cy="8" r=".9" fill="currentColor"/>
-            <circle cx="8" cy="8" r=".9" fill="currentColor"/>
-            <circle cx="13" cy="8" r=".9" fill="currentColor"/>
-            <circle cx="3" cy="13" r=".9" fill="currentColor"/>
-            <circle cx="8" cy="13" r=".9" fill="currentColor"/>
-            <circle cx="13" cy="13" r=".9" fill="currentColor"/>
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <circle cx="5.5" cy="6.5" r="1" fill="currentColor"/>
+            <circle cx="10.5" cy="6.5" r="1" fill="currentColor"/>
+            <path d="M5.5 10.5c.8 1 4.2 1 5 0" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/>
           </svg>
-          <span id="jarvisStatus" class="offline" style="position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;border:1px solid var(--jb-bg)"></span>
+          <span id="jarvisStatus" class="offline" title="JARVIS offline"></span>
+          <span id="jarvisLaunchLabel" class="jarvis-launch-label">Start</span>
         </button>
         <button class="nav-btn" id="profileBtn" title="Profile">
           <span class="toolbar-avatar">P</span>
@@ -205,6 +201,16 @@
                 </svg>
                 <span>Tasks</span>
               </button>
+            </div>
+            <!-- Recently Closed Tabs -->
+            <div class="nt-recent" id="ntRecent" style="display:none">
+              <div class="nt-recent-title">Recently Closed</div>
+              <div class="nt-recent-list" id="ntRecentList"></div>
+            </div>
+            <!-- Session Thumbnails -->
+            <div class="nt-sessions" id="ntSessions" style="display:none">
+              <div class="nt-session-title">Previous Session</div>
+              <div class="nt-session-list" id="ntSessionList"></div>
             </div>
             <div class="nt-footer">Personal · JARVIS ready</div>
           </div>
@@ -401,6 +407,75 @@
               </div>
             </div>
           </div>
+
+          <!-- ── Privacy Report Page ─────────────────────────── -->
+          <div class="page" id="privacyPage">
+            <div class="sheet">
+              <h1>Privacy Report</h1>
+              <p class="sheet-lede">Trackers blocked, fingerprint protection status, and privacy insights.</p>
+              
+              <div class="privacy-stats" id="privacyStats">
+                <div class="privacy-stat-card">
+                  <div class="privacy-stat-icon" style="background:rgba(74,222,128,0.15);color:#4ade80">\u{1F6E1}</div>
+                  <div class="privacy-stat-value" id="privacyBlocked">0</div>
+                  <div class="privacy-stat-label">Trackers Blocked</div>
+                </div>
+                <div class="privacy-stat-card">
+                  <div class="privacy-stat-icon" style="background:rgba(124,92,255,0.15);color:#7c5cff">\u{1F50D}</div>
+                  <div class="privacy-stat-value" id="privacyFingerprint">Protected</div>
+                  <div class="privacy-stat-label">Fingerprint Status</div>
+                </div>
+                <div class="privacy-stat-card">
+                  <div class="privacy-stat-icon" style="background:rgba(251,191,36,0.15);color:#fbbf24">\u{1F512}</div>
+                  <div class="privacy-stat-value" id="privacyCookies">Standard</div>
+                  <div class="privacy-stat-label">Cookie Policy</div>
+                </div>
+                <div class="privacy-stat-card">
+                  <div class="privacy-stat-icon" style="background:rgba(248,113,113,0.15);color:#f87171">\u{1F310}</div>
+                  <div class="privacy-stat-value" id="privacyHttps">Upgrading</div>
+                  <div class="privacy-stat-label">HTTPS Mode</div>
+                </div>
+              </div>
+
+              <div class="section-title" style="margin-top:24px">Shield Settings</div>
+              <div class="shield-toggles" id="shieldToggles">
+                <div class="import-row">
+                  <div><span class="label">Ad Blocking</span></div>
+                  <button class="toggle on" id="toggleAdBlock" data-shield="adBlocking"></button>
+                </div>
+                <div class="import-row">
+                  <div><span class="label">Tracker Blocking</span></div>
+                  <button class="toggle on" id="toggleTrackerBlock" data-shield="trackerBlocking"></button>
+                </div>
+                <div class="import-row">
+                  <div><span class="label">Fingerprint Protection</span></div>
+                  <button class="toggle on" id="toggleFingerprint" data-shield="fingerprintProtection"></button>
+                </div>
+                <div class="import-row">
+                  <div><span class="label">HTTPS Upgrade</span></div>
+                  <button class="toggle on" id="toggleHttps" data-shield="httpsUpgrade"></button>
+                </div>
+                <div class="import-row">
+                  <div><span class="label">Do Not Track</span></div>
+                  <button class="toggle on" id="toggleDnt" data-shield="doNotTrack"></button>
+                </div>
+              </div>
+
+              <div class="section-title" style="margin-top:24px">Recent Activity</div>
+              <div id="privacyActivity" class="privacy-activity">
+                <div class="empty-state">No tracker activity yet. Browsing will populate this list.</div>
+              </div>
+
+              <div style="margin-top:24px;padding:16px;border-radius:12px;background:var(--jb-void);border:1px solid var(--jb-border)">
+                <div style="font-size:13px;font-weight:500;color:var(--jb-paper);margin-bottom:8px">\u{1F4A1} How Privacy Works</div>
+                <div style="font-size:12px;color:var(--jb-mute);line-height:1.6">
+                  Orbit uses Brave Shields-inspired protections. Ad and tracker blocking uses pattern matching against 80+ known domains and 40+ URL patterns.
+                  Fingerprint farbling randomizes canvas, WebGL, and AudioContext outputs per-site so trackers see a different fingerprint each session.
+                  HTTPS upgrade automatically redirects HTTP to HTTPS for all non-local sites.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -428,12 +503,14 @@
 
         <nav class="sb-nav" id="sbNav">
           <button class="on" data-panel="jarvis">JARVIS</button>
+          <button data-panel="workspaces">\u25A3 Spaces</button>
           <button data-panel="agents">Agents</button>
           <button data-panel="companions">Companions</button>
           <button data-panel="vision">Vision</button>
           <button data-panel="activity">Activity</button>
           <button data-panel="memory">Memory</button>
           <button data-panel="chat-history">History</button>
+          <button data-panel="tools">Tools</button>
         </nav>
 
         <div class="sb-context" id="sbContext">
@@ -504,9 +581,12 @@
       <button class="menu-item" data-nav="orbit://tasks">Tasks</button>
       <button class="menu-item" data-nav="orbit://memory">Memory</button>
       <button class="menu-item" data-nav="orbit://extensions">Extensions</button>
+      <button class="menu-item" data-nav="orbit://extension-store">Extension Store</button>
+      <button class="menu-item" data-nav="orbit://import">Import from Chrome</button>
       <div class="menu-sep"></div>
       <button class="menu-item" data-nav="orbit://settings">Settings</button>
       <button class="menu-item" data-nav="orbit://diagnostics">Diagnostics</button>
+      <button class="menu-item" data-nav="orbit://privacy">Privacy Report</button>
       <div class="menu-sep"></div>
       <button class="menu-item" id="aboutOrbit">About JARVIS Orbit</button>
     </div>
@@ -655,5 +735,19 @@
       window.requestIdleCallback ? requestIdleCallback(loadBatch, {timeout:1000}) : setTimeout(loadBatch, 50);
     })();
   </script>
+
+  <!-- ── Reader Mode Overlay ────────────────────────────────── -->
+  <div class="reader-overlay" id="readerOverlay">
+    <button class="reader-close" id="readerClose" title="Close reader">✕</button>
+    <div class="reader-header"><h3>Reader Mode</h3></div>
+    <div class="reader-content" id="readerContent"></div>
+  </div>
+
+  <!-- ── Agent Status Bar ──────────────────────────────────── -->
+  <div class="agent-bar" id="agentBar">
+    <div class="agent-bar-dot"></div>
+    <div class="agent-bar-text" id="agentBarText">Agent running...</div>
+    <button class="agent-bar-stop" id="agentBarStop">Stop</button>
+  </div>
 </body>
 </html>
