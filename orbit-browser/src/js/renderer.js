@@ -194,6 +194,7 @@ let tileMode = false;
 let tabMru = [];
 let sidebarOpen = true;
 let jarvisOnline = false;
+const ntpDrafts = new Map(); // per-tab New Tab search drafts (cleaned in closeTab)
 let agentState = "idle";
 let bookmarks = JSON.parse(localStorage.getItem("orbit-bookmarks") || "[]");
 let zoomLevels = JSON.parse(localStorage.getItem("orbit-zoom") || "{}");
@@ -445,8 +446,9 @@ function attachWebviewEvents(wv) {
     if (tab && tab.id === activeTabId) {
       omniInput.placeholder = "Search Google or enter URL";
       // Update URL in omnibox
+      let url = "";
       try {
-        const url = wv.getURL();
+        url = wv.getURL();
         if (url && url !== "about:blank") {
           omniInput.value = url.replace(/^https?:\/\//, "");
         }
@@ -688,6 +690,7 @@ function createTab(url) {
 function closeTab(id) {
   const tab = tabs.get(id);
   if (!tab) return;
+  ntpDrafts.delete(id);
   // Remember the tab for Ctrl+Shift+T reopen (skip internal pages).
   if (tab.url && !tab.url.startsWith("orbit://")) {
     closedTabs.push({ url: tab.url, title: tab.title || tab.url });
@@ -810,7 +813,13 @@ function showInternalPage(pageId) {
   if (pageId === "historyPage") renderHistoryPage();
   if (pageId === "bookmarksPage") renderBookmarksPage();
   if (pageId === "extensionsPage") renderExtensionsPage();
-  if (pageId === "newtabPage") renderSessionThumbnails();
+  if (pageId === "newtabPage") {
+    renderSessionThumbnails();
+    // Fresh New Tab pages open with an empty search box; revisiting an
+    // existing tab restores its own draft (the input is shared DOM).
+    const ntp = document.getElementById("ntpSearch");
+    if (ntp) ntp.value = ntpDrafts.get(activeTabId) || "";
+  }
   if (pageId === "privacyPage") renderPrivacyPage();
   if (pageId === "downloadsPage") renderDownloadsPage();
   if (pageId === "permissionsPage") renderPermissionsPage();
@@ -2450,7 +2459,7 @@ if (tabContextMenu) tabContextMenu.addEventListener("click", (e) => {
   if (action === "reopenTab") reopenClosedTab();
   if (action === "duplicate" && contextTabId) { const tab = tabs.get(contextTabId); if (tab) createTab(tab.url); }
   if (action === "closeTab" && contextTabId) closeTab(contextTabId);
-  if (action === "closeOthers" && contextTabId) { for (const [id] of tabs) { if (id !== contextTabId) { clearSleepTimer(id); clearHibernateTimer(id); tabs.delete(id); } } activateTab(contextTabId); renderTabs(); }
+  if (action === "closeOthers" && contextTabId) { for (const [id] of tabs) { if (id !== contextTabId) { ntpDrafts.delete(id); clearSleepTimer(id); clearHibernateTimer(id); tabs.delete(id); } } activateTab(contextTabId); renderTabs(); }
   if (action === "closeRight" && contextTabId) {
     const ids = Array.from(tabs.keys());
     const idx = ids.indexOf(contextTabId);
@@ -3350,6 +3359,9 @@ function showPinSetup() {
 // ── NTP Search ────────────────────────────────────────────────
 const ntpSearch = $("#ntpSearch");
 if (ntpSearch) {
+  ntpSearch.addEventListener("input", () => {
+    if (activeTabId != null) ntpDrafts.set(activeTabId, ntpSearch.value);
+  });
   ntpSearch.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       const value = ntpSearch.value.trim();
@@ -3358,6 +3370,7 @@ if (ntpSearch) {
       if (value.match(/^https?:\/\//)) url = value;
       else if (value.match(/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/)) url = "https://" + value;
       else url = "https://www.google.com/search?q=" + encodeURIComponent(value);
+      ntpDrafts.set(activeTabId, "");
       navigateTo(url);
     }
   });

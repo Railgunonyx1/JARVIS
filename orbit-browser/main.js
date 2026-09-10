@@ -5,7 +5,7 @@
  * NOT an extension — a standalone browser built on Electron (Chromium).
  */
 
-const { app, BrowserWindow, ipcMain, session, protocol, net } = require("electron");
+const { app, BrowserWindow, ipcMain, session, protocol, net, webContents } = require("electron");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const WebSocket = require("ws");
