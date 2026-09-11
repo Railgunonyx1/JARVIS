@@ -190,17 +190,20 @@ class ModelGatewayEngine(StreamEngine):
         prompt = self._build_prompt(messages, page)
         emit({"type": "start", "session_id": session_id, "backend": self.name})
         out: list[str] = []
+        produced = 0
         limit = self.budget.max_output_chars
         try:
             async def _stream() -> str:
+                nonlocal produced
                 async for chunk in self._streamer(
                     prompt, self.system_prompt, self.max_tokens,
                 ):
-                    remaining = limit - len("".join(out))
+                    remaining = limit - produced
                     if remaining <= 0:
                         break
                     piece = chunk if len(chunk) <= remaining else chunk[:remaining]
                     out.append(piece)
+                    produced += len(piece)
                     emit({"type": "delta", "text": piece})
                 return "".join(out)
 

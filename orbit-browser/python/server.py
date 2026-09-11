@@ -211,16 +211,20 @@ class JarvisBridge:
             )
 
             with urlopen(req, timeout=30) as resp:
-                # Parse SSE response
+                # Parse SSE response. The kernel emits {"type": ...} events
+                # (start|delta|done|error).
                 full_response = ""
                 for line in resp.read().decode().split("\n"):
                     if line.startswith("data: "):
                         try:
                             chunk = json.loads(line[6:])
-                            if chunk.get("kind") == "delta":
+                            if chunk.get("type") == "delta":
                                 full_response += chunk.get("text", "")
-                            elif chunk.get("kind") == "done":
+                            elif chunk.get("type") == "done":
                                 return full_response or chunk.get("text", "")
+                            elif chunk.get("type") == "error":
+                                print(f"[BRIDGE] kernel error: {chunk.get('message', '')[:200]}")
+                                return None
                         except json.JSONDecodeError:
                             continue
                 return full_response or None

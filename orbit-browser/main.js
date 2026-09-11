@@ -1174,16 +1174,11 @@ function createWindow(incognito = false) {
   // Connect to JARVIS
   connectJarvis();
 
-  // Restore previous session or create new tab
-  const lastSession = store?.get("lastSession", []) || [];
-  if (lastSession.length > 0 && lastSession.some(t => t.url && !t.url.startsWith("orbit://"))) {
-    // Restore non-internal tabs from last session
-    for (const tab of lastSession.filter(t => t.url && !t.url.startsWith("orbit://"))) {
-      createTab(tab.url);
-    }
-  } else {
-    createTab("orbit://newtab");
-  }
+  // Always boot on a New Tab. Restoring the previous session is the
+  // renderer's choice via the "Restore pages?" banner (orbit-session in
+  // localStorage) — auto-restoring here too made the banner's Restore
+  // button duplicate every tab.
+  createTab("orbit://newtab");
 
   mainWindow.on("closed", () => {
     // Save session before closing (live URLs via sessionSnapshot)

@@ -1,61 +1,103 @@
 /**
- * JARVIS Orbit — Chat Module
+ * JARVIS Orbit — Chat Module (per-tab conversations)
  *
- * Single owner of ALL chat state: persistence, message rendering,
- * streaming, history search, activity feed, slash-command discoverability.
+ * Each browser tab has its own conversation.  Switching tabs swaps the
+ * chat panel; new tabs start with a fresh (empty) conversation.
  *
  * Public API (window.Chat):
  *   Chat.init(bodyEl, navEl)           – wire DOM references
+ *   Chat.setTab(tabId)                 – switch active conversation
+ *   Chat.forgetTab(tabId)              – discard a tab's history
+ *   Chat.pendingStreamTabId            – set before async send
  *   Chat.append(role, content)         – render + persist a message
  *   Chat.beginStream()                 – start a streaming bubble
  *   Chat.updateStream(fullText)        – update streaming text
  *   Chat.endStream(finalText)          – finalize + persist stream
  *   Chat.renderPanel(name)             – render sidebar panel
  *   Chat.isStreaming()                 – true while a stream is active
- *   Chat.clear()                       – wipe history
+ *   Chat.clearActive()                 – wipe active tab's history
+ *   Chat.clearAll()                    – wipe every tab's history
+ *   Chat.showCmdPopup / hideCmdPopup
+ *   Chat.COMMANDS
  */
 ;(function () {
   "use strict";
 
-  // ── State ─────────────────────────────────────────────────────
   const STORAGE_KEY = "orbit-chat-history";
   const MAX_MESSAGES = 500;
   const RESTORE_LIMIT = 80;
   const HISTORY_RENDER_LIMIT = 100;
 
-  let history = [];
-  let bodyEl = null;     // #sbBody
-  let navEl = null;      // #sbNav
+  // ── Per-tab state ────────────────────────────────────────────
+  let tabHistories = new Map();   // tabId → [{ role, content, time }]
+  let activeTabId = null;         // currently visible tab
+  let streamTabId = null;         // tab that owns the in-flight stream
+  let _streamAttached = false;   // is streamingEl in the DOM right now?
+
+  let bodyEl = null;   // #sbBody
+  let navEl = null;    // #sbNav
   let streamingEl = null;
   let streamingText = "";
   let activePanel = "jarvis";
 
-  // ── Persistence ───────────────────────────────────────────────
+  // Set by renderer before async send so beginStream routes to the right tab
+  let pendingStreamTabId = null;
+
+  // ── Per-tab helpers ──────────────────────────────────────────
+  function getTabHistory(tabId) {
+    if (!tabHistories.has(tabId)) tabHistories.set(tabId, []);
+    return tabHistories.get(tabId);
+  }
+
+  function pushToTab(tabId, role, content) {
+    const hist = getTabHistory(tabId);
+    hist.push({ role, content, time: Date.now() });
+    if (hist.length > MAX_MESSAGES) {
+      hist.splice(0, hist.length - MAX_MESSAGES);
+    }
+    persistAll();
+  }
+
+  function allMessages() {
+    const out = [];
+    for (const [, hist] of tabHistories) out.push(...hist);
+    return out;
+  }
+
+  // ── Persistence ──────────────────────────────────────────────
   function loadHistory() {
     try {
-      history = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { tabHistories = new Map(); return; }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        tabHistories = new Map([["__legacy__", parsed]]);
+      } else {
+        tabHistories = new Map(Object.entries(parsed));
+      }
     } catch (_) {
-      history = [];
+      tabHistories = new Map();
     }
   }
 
-  function persist() {
+  function persistAll() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+      const obj = {};
+      for (const [k, v] of tabHistories) obj[k] = v;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
     } catch (_) {
-      // localStorage full — trim oldest
-      history = history.slice(-Math.floor(MAX_MESSAGES / 2));
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch (_) {}
+      for (const [k, v] of tabHistories) {
+        tabHistories.set(k, v.slice(-Math.floor(MAX_MESSAGES / 2)));
+      }
+      try {
+        const obj = {};
+        for (const [k, v] of tabHistories) obj[k] = v;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+      } catch (_) {}
     }
   }
 
-  function pushMessage(role, content) {
-    history.push({ role, content, time: Date.now() });
-    if (history.length > MAX_MESSAGES) history = history.slice(-MAX_MESSAGES);
-    persist();
-  }
-
-  // ── Message Rendering ─────────────────────────────────────────
+  // ── Message Rendering ────────────────────────────────────────
   const LABELS = { user: "You", jarvis: "JARVIS", error: "Error", system: "System" };
 
   function messageHTML(role, content) {
@@ -78,57 +120,112 @@
 
   function appendMessage(role, content) {
     if (!bodyEl) return;
+    // If a stream is in flight for a different tab, route system/error there
+    var targetTab = (streamingEl && streamTabId && streamTabId !== activeTabId)
+      ? streamTabId : activeTabId;
+    if (targetTab && targetTab !== activeTabId) {
+      if (role === "user" || role === "jarvis" || role === "error") {
+        pushToTab(targetTab, role, content);
+      }
+      return;
+    }
     bodyEl.appendChild(createMessageEl(role, content));
     bodyEl.scrollTop = bodyEl.scrollHeight;
-    // Persist user/jarvis/error (not system — ephemeral)
     if (role === "user" || role === "jarvis" || role === "error") {
-      pushMessage(role, content);
+      pushToTab(activeTabId, role, content);
     }
   }
 
-  // ── Streaming ─────────────────────────────────────────────────
+  // ── Streaming ────────────────────────────────────────────────
   function beginStream() {
-    if (!bodyEl) return;
-    // Don't create a second stream
     if (streamingEl) return;
+    streamTabId = pendingStreamTabId || activeTabId;
+    pendingStreamTabId = null;
     streamingEl = document.createElement("div");
     streamingEl.className = "chat-msg chat-msg--jarvis chat-msg--streaming";
     streamingEl.innerHTML =
       '<div class="chat-label">JARVIS</div>' +
       '<div class="chat-content streaming-text" style="color:var(--jb-text)"></div>';
-    bodyEl.appendChild(streamingEl);
     streamingText = "";
+
+    if (streamTabId === activeTabId) {
+      bodyEl.appendChild(streamingEl);
+      _streamAttached = true;
+    } else {
+      _streamAttached = false;
+    }
   }
 
   function updateStream(fullText) {
-    if (!streamingEl) beginStream();
+    if (!streamingEl) { beginStream(); return; }
     streamingText = fullText || "";
     const textEl = streamingEl.querySelector(".streaming-text");
     if (textEl) textEl.textContent = streamingText;
-    bodyEl.scrollTop = bodyEl.scrollHeight;
+    if (_streamAttached) bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
   function endStream(finalText) {
-    if (!streamingEl) return;
+    if (!streamingEl) {
+      // Stream was detached by tab switch — finalize into the owning tab
+      if (streamTabId && finalText) pushToTab(streamTabId, "jarvis", finalText);
+      streamTabId = null;
+      return;
+    }
     const text = finalText || streamingText;
     const textEl = streamingEl.querySelector(".streaming-text");
     if (textEl) textEl.textContent = text;
-    // Transition from streaming to permanent message
-    streamingEl.className = "chat-msg chat-msg--jarvis";
+    var targetTab = streamTabId || activeTabId;
+    if (_streamAttached) {
+      if (text) {
+        // Swap the streaming bubble for the finalized message in place,
+        // so the reply is visible without a panel re-render.
+        bodyEl.replaceChild(createMessageEl("jarvis", text), streamingEl);
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      } else {
+        bodyEl.removeChild(streamingEl);
+      }
+    }
     streamingEl = null;
+    _streamAttached = false;
     streamingText = "";
-    // Persist the completed response
-    if (text) pushMessage("jarvis", text);
+    streamTabId = null;
+    if (text) pushToTab(targetTab, "jarvis", text);
   }
 
-  // ── History Restore ───────────────────────────────────────────
+  // ── Tab switching ────────────────────────────────────────────
+  function setTab(tabId) {
+    if (!tabId || activeTabId === tabId) return;
+
+    // Detach in-flight stream from the old tab's DOM (keep it alive in JS)
+    if (streamingEl && _streamAttached) {
+      streamingEl.remove();
+      _streamAttached = false;
+    }
+
+    activeTabId = tabId;
+    restoreChat();
+
+    // Re-attach if this tab owns the stream
+    if (streamingEl && !_streamAttached && streamTabId === tabId) {
+      bodyEl.appendChild(streamingEl);
+      _streamAttached = true;
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+  }
+
+  function forgetTab(tabId) {
+    tabHistories.delete(tabId);
+    persistAll();
+  }
+
+  // ── History Restore ──────────────────────────────────────────
   function restoreChat() {
     if (!bodyEl) return;
-    // If a stream is active, don't destroy it
-    if (streamingEl) return;
+    if (streamingEl && _streamAttached) return; // stream live — don't destroy it
     bodyEl.innerHTML = "";
-    if (history.length === 0) {
-      const online = window._jarvisOnline;
+    var hist = getTabHistory(activeTabId);
+    if (hist.length === 0) {
+      var online = window._jarvisOnline;
       bodyEl.innerHTML =
         '<div class="chat-empty">' +
           '<div class="chat-empty-status">' + (online ? "READY" : "OFF") + "</div>" +
@@ -140,17 +237,17 @@
         "</div>";
       return;
     }
-    const msgs = history.slice(-RESTORE_LIMIT);
-    const frag = document.createDocumentFragment();
-    for (const entry of msgs) {
-      frag.appendChild(createMessageEl(entry.role, entry.content));
+    var msgs = hist.slice(-RESTORE_LIMIT);
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < msgs.length; i++) {
+      frag.appendChild(createMessageEl(msgs[i].role, msgs[i].content));
     }
     bodyEl.appendChild(frag);
     bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
-  // ── Slash-Command Autocomplete ────────────────────────────────
-  const COMMANDS = [
+  // ── Slash-Command Autocomplete ───────────────────────────────
+  var COMMANDS = [
     { cmd: "/task",     desc: "Run an autonomous agent task" },
     { cmd: "/research", desc: "Research a topic" },
     { cmd: "/summarize",desc: "Summarize the current page" },
@@ -161,48 +258,39 @@
     { cmd: "/help",     desc: "Show available commands" },
   ];
 
-  let cmdPopupEl = null;
+  var cmdPopupEl = null;
 
   function ensureCmdPopup() {
     if (cmdPopupEl) return cmdPopupEl;
     cmdPopupEl = document.createElement("div");
     cmdPopupEl.className = "cmd-popup";
     cmdPopupEl.style.display = "none";
-    // Insert after the composer
-    const composer = bodyEl && bodyEl.closest(".sidebar");
+    var composer = bodyEl && bodyEl.closest(".sidebar");
     if (composer) composer.appendChild(cmdPopupEl);
     return cmdPopupEl;
   }
 
   function showCmdPopup(filter) {
-    const popup = ensureCmdPopup();
-    const q = (filter || "").toLowerCase();
-    const matches = COMMANDS.filter(
-      (c) => !q || c.cmd.includes(q) || c.desc.toLowerCase().includes(q)
+    var popup = ensureCmdPopup();
+    var q = (filter || "").toLowerCase();
+    var matches = COMMANDS.filter(
+      function (c) { return !q || c.cmd.includes(q) || c.desc.toLowerCase().includes(q); }
     );
-    if (matches.length === 0) {
-      popup.style.display = "none";
-      return;
-    }
+    if (matches.length === 0) { popup.style.display = "none"; return; }
     popup.innerHTML = matches
-      .map(
-        (c) =>
-          '<div class="cmd-popup-item" data-cmd="' + c.cmd + '">' +
-            '<span class="cmd-popup-cmd">' + c.cmd + "</span>" +
-            '<span class="cmd-popup-desc">' + c.desc + "</span>" +
-          "</div>"
-      )
+      .map(function (c) {
+        return '<div class="cmd-popup-item" data-cmd="' + c.cmd + '">' +
+          '<span class="cmd-popup-cmd">' + c.cmd + "</span>" +
+          '<span class="cmd-popup-desc">' + c.desc + "</span>" +
+          "</div>";
+      })
       .join("");
     popup.style.display = "block";
-    // Wire click handlers
-    popup.querySelectorAll(".cmd-popup-item").forEach((el) => {
-      el.addEventListener("mousedown", (e) => {
+    popup.querySelectorAll(".cmd-popup-item").forEach(function (el) {
+      el.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        const input = document.getElementById("sbInput");
-        if (input) {
-          input.value = el.dataset.cmd + " ";
-          input.focus();
-        }
+        var input = document.getElementById("sbInput");
+        if (input) { input.value = el.dataset.cmd + " "; input.focus(); }
         popup.style.display = "none";
       });
     });
@@ -212,32 +300,23 @@
     if (cmdPopupEl) cmdPopupEl.style.display = "none";
   }
 
-  // ── Panel Rendering ───────────────────────────────────────────
+  // ── Panel Rendering ──────────────────────────────────────────
   function renderPanel(name) {
     activePanel = name;
-    if (name === "jarvis") {
-      restoreChat();
-      return;
-    }
-    if (name === "chat-history") {
-      renderHistoryPanel();
-      return;
-    }
-    if (name === "activity") {
-      renderActivityPanel();
-      return;
-    }
-    // Non-chat panels: signal renderer.js to handle (vision, agents, memory)
+    if (name === "jarvis") { restoreChat(); return; }
+    if (name === "chat-history") { renderHistoryPanel(); return; }
+    if (name === "activity") { renderActivityPanel(); return; }
     if (window._renderNonChatPanel) window._renderNonChatPanel(name);
   }
 
   function renderHistoryPanel() {
     if (!bodyEl) return;
+    var msgs = allMessages();
     bodyEl.innerHTML =
       '<div class="panel-pad">' +
-        '<input type="text" id="chatSearchInput" class="chat-search" placeholder="Search chat history..." />' +
+        '<input type="text" id="chatSearchInput" class="chat-search" placeholder="Search all conversations..." />' +
         '<div class="chat-history-meta">' +
-          '<span class="chat-history-count">' + history.length + " messages</span>" +
+          '<span class="chat-history-count">' + msgs.length + " messages across all tabs</span>" +
           '<button id="clearChatHistory" class="chat-history-clear">Clear all</button>' +
         "</div>" +
         '<div id="chatHistoryList" class="chat-history-list"></div>' +
@@ -245,40 +324,39 @@
 
     renderHistoryList("");
 
-    const searchInput = document.getElementById("chatSearchInput");
+    var searchInput = document.getElementById("chatSearchInput");
     if (searchInput) {
-      let debounceTimer;
-      searchInput.addEventListener("input", () => {
+      var debounceTimer;
+      searchInput.addEventListener("input", function () {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => renderHistoryList(searchInput.value), 120);
+        debounceTimer = setTimeout(function () { renderHistoryList(searchInput.value); }, 120);
       });
       searchInput.focus();
     }
 
-    const clearBtn = document.getElementById("clearChatHistory");
+    var clearBtn = document.getElementById("clearChatHistory");
     if (clearBtn) {
-      clearBtn.addEventListener("click", () => {
-        if (confirm("Clear all chat history?")) {
-          history = [];
+      clearBtn.addEventListener("click", function () {
+        if (confirm("Clear all chat history from every tab?")) {
+          tabHistories.clear();
           localStorage.removeItem(STORAGE_KEY);
           renderHistoryList("");
-          const countEl = bodyEl.querySelector(".chat-history-count");
-          if (countEl) countEl.textContent = "0 messages";
+          var countEl = bodyEl.querySelector(".chat-history-count");
+          if (countEl) countEl.textContent = "0 messages across all tabs";
         }
       });
     }
   }
 
   function renderHistoryList(query) {
-    const list = document.getElementById("chatHistoryList");
+    var list = document.getElementById("chatHistoryList");
     if (!list) return;
-
-    let filtered = history;
+    var msgs = allMessages();
+    var filtered = msgs;
     if (query) {
-      const q = query.toLowerCase();
-      filtered = history.filter((m) => (m.content || "").toLowerCase().includes(q));
+      var q = query.toLowerCase();
+      filtered = msgs.filter(function (m) { return (m.content || "").toLowerCase().includes(q); });
     }
-
     if (filtered.length === 0) {
       list.innerHTML =
         '<div class="chat-history-empty">' +
@@ -286,23 +364,22 @@
         "</div>";
       return;
     }
-
-    const shown = filtered.slice(-HISTORY_RENDER_LIMIT).reverse();
-    let html = "";
-    let lastDay = "";
-
-    for (const entry of shown) {
-      const d = new Date(entry.time);
-      const day = d.toLocaleDateString();
+    var shown = filtered.slice(-HISTORY_RENDER_LIMIT).reverse();
+    var html = "";
+    var lastDay = "";
+    for (var i = 0; i < shown.length; i++) {
+      var entry = shown[i];
+      var d = new Date(entry.time);
+      var day = d.toLocaleDateString();
       if (day !== lastDay) {
         lastDay = day;
         html += '<div class="chat-history-date">' + day + "</div>";
       }
-      const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const label = LABELS[entry.role] || entry.role;
-      const preview = (entry.content || "").substring(0, 120);
+      var time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      var label = LABELS[entry.role] || entry.role;
+      var preview = (entry.content || "").substring(0, 120);
       html +=
-        '<div class="chat-history-item" data-idx="' + history.indexOf(entry) + '">' +
+        '<div class="chat-history-item">' +
           '<div class="chat-history-item-header">' +
             '<span class="chat-history-item-label">' + label + "</span>" +
             '<span class="chat-history-item-time">' + time + "</span>" +
@@ -310,51 +387,26 @@
           '<div class="chat-history-item-preview">' + escapeHtml(preview) + "</div>" +
         "</div>";
     }
-
     list.innerHTML = html;
-
-    // Click: switch to JARVIS panel and scroll to message
-    list.querySelectorAll(".chat-history-item").forEach((el) => {
-      el.addEventListener("click", () => {
-        // Switch nav to JARVIS
-        if (navEl) {
-          navEl.querySelectorAll("button").forEach((b) => {
-            b.classList.toggle("on", b.dataset.panel === "jarvis");
-          });
-        }
-        activePanel = "jarvis";
-        restoreChat();
-        // Scroll to the corresponding message
-        const idx = parseInt(el.dataset.idx, 10);
-        if (!isNaN(idx) && bodyEl) {
-          const msgs = bodyEl.querySelectorAll(".chat-msg");
-          // The restored messages start at history.length - RESTORE_LIMIT
-          const offset = idx - (history.length - Math.min(history.length, RESTORE_LIMIT));
-          if (offset >= 0 && offset < msgs.length) {
-            msgs[offset].scrollIntoView({ behavior: "smooth", block: "center" });
-            msgs[offset].classList.add("chat-msg--highlight");
-            setTimeout(() => msgs[offset].classList.remove("chat-msg--highlight"), 2000);
-          }
-        }
-      });
-    });
   }
 
   function renderActivityPanel() {
     if (!bodyEl) return;
-    const recent = history.slice(-10).reverse();
+    var msgs = allMessages();
+    var recent = msgs.slice(-10).reverse();
 
     if (recent.length === 0) {
       bodyEl.innerHTML = '<div class="panel-pad panel-muted">No recent activity.</div>';
       return;
     }
 
-    let html = '<div class="panel-pad"><div class="panel-section-label">Recent Activity</div>';
-    for (const entry of recent) {
-      const d = new Date(entry.time);
-      const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const label = entry.role === "user" ? "You asked" : "JARVIS replied";
-      const preview = (entry.content || "").substring(0, 80);
+    var html = '<div class="panel-pad"><div class="panel-section-label">Recent Activity</div>';
+    for (var i = 0; i < recent.length; i++) {
+      var entry = recent[i];
+      var d = new Date(entry.time);
+      var time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      var label = entry.role === "user" ? "You asked" : "JARVIS replied";
+      var preview = (entry.content || "").substring(0, 80);
       html +=
         '<div class="activity-item">' +
           '<div class="activity-meta">' + time + " \u00b7 " + label + "</div>" +
@@ -365,29 +417,37 @@
     bodyEl.innerHTML = html;
   }
 
-  // ── Init ──────────────────────────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────────
   function init(body, nav) {
     bodyEl = body;
     navEl = nav;
     loadHistory();
   }
 
-  // ── Public API ────────────────────────────────────────────────
+  // ── Public API ───────────────────────────────────────────────
   window.Chat = {
-    init,
+    init: init,
     append: appendMessage,
-    beginStream,
-    updateStream,
-    endStream,
-    renderPanel,
-    isStreaming: () => !!streamingEl,
-    clear: () => {
-      history = [];
+    beginStream: beginStream,
+    updateStream: updateStream,
+    endStream: endStream,
+    renderPanel: renderPanel,
+    setTab: setTab,
+    forgetTab: forgetTab,
+    isStreaming: function () { return !!streamingEl; },
+    clearActive: function () {
+      tabHistories.delete(activeTabId);
+      persistAll();
+      if (bodyEl) bodyEl.innerHTML = "";
+    },
+    clearAll: function () {
+      tabHistories.clear();
       localStorage.removeItem(STORAGE_KEY);
       if (bodyEl) bodyEl.innerHTML = "";
     },
-    showCmdPopup,
-    hideCmdPopup,
-    COMMANDS,
+    showCmdPopup: showCmdPopup,
+    hideCmdPopup: hideCmdPopup,
+    COMMANDS: COMMANDS,
+    set pendingStreamTabId(v) { pendingStreamTabId = v; },
   };
 })();

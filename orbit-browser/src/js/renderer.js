@@ -715,6 +715,7 @@ function closeTab(id) {
   } else {
     renderTabs();
   }
+  if (window.Chat) Chat.forgetTab(id);
 }
 
 function activateTab(id) {
@@ -723,6 +724,7 @@ function activateTab(id) {
   tabMru = [id].concat(tabMru.filter((x) => x !== id));
   window.__orbitTabMru = tabMru;
   activeTabId = id;
+  if (window.Chat) Chat.setTab(id);
 
   // Wake this tab and start sleep timers for others
   wakeTab(id);
@@ -1583,29 +1585,32 @@ async function sendToJarvis() {
   if (!text) return;
   sbInput.value = "";
   Chat.hideCmdPopup();
+  if (window.Chat) Chat.pendingStreamTabId = activeTabId;
   Chat.append("user", text);
-  
+
   // Slash commands
   if (text.startsWith("/")) {
     handleDshCommand(text);
     return;
   }
-  
-  // DSH native (built into JARVIS)
+
+  // DSH native (direct kernel HTTP stream). Note: streams resolve as soon as
+  // the SSE reader starts; the reply renders via dshNative's 'message' events
+  // (start/delta/done handled in the wiring block below).
   if (window.dshNative && window.dshNative.status.connected) {
     setMatrix("thinking");
     const tab = tabs.get(activeTabId);
     const page = tab ? { url: tab.url, title: tab.title } : null;
     const streamResult = await window.dshNative.chat(text, { page });
-    if (streamResult.streamId) {
-    } else if (streamResult.success === false) {
+    if (streamResult && streamResult.success === false) {
       Chat.append("error", streamResult.error || "Connection failed");
       setMatrix("fail");
       setTimeout(() => setMatrix("idle"), 2000);
     }
+    // streamId case: events render the reply; nothing more to do here.
   } else if (window.orbit?.jarvis) {
     setMatrix("thinking");
-    window.orbit.jarvis.chat(text, "orbit-session");
+    window.orbit.jarvis.chat(text, "orbit-tab-" + activeTabId);
   } else if (jarvisOnline) {
     // Parallel mode: Needle (fast) + Main Model (reasoning)
     setMatrix("thinking");
@@ -1744,9 +1749,16 @@ function syncJarvisOnline(val) {
 }
 
 // ── DSH Native Events ──────────────────────────────────────────
-if (window.dshNative) {
+// dsh-native.js is lazy-loaded AFTER this file (index.html critical-module
+// loader), so window.dshNative does not exist at parse time. Wire as soon
+// as it appears: bounded poll, handlers attach exactly once.
+function wireDshNative() {
+  const dsh = window.dshNative;
+  if (!dsh || dsh.__orbitWired) return !!dsh;
+  dsh.__orbitWired = true;
+  window.__orbitDshWired = true;
   // Status updates
-  window.dshNative.on('status', (status) => {
+  dsh.on('status', (status) => {
     syncJarvisOnline(status.connected && status.kernel === 'online');
     if (statusDot) statusDot.className = 'status-dot ' + (jarvisOnline ? 'online' : 'offline');
     if (statusLabel) statusLabel.textContent = jarvisOnline ? 'ONLINE' : 'OFF';
@@ -1765,7 +1777,7 @@ if (window.dshNative) {
   });
   
   // Chat messages — all persistence handled by Chat.endStream()
-  window.dshNative.on('message', (event) => {
+  dsh.on('message', (event) => {
     switch (event.type) {
       case 'start':
         setMatrix('thinking');
@@ -1775,7 +1787,7 @@ if (window.dshNative) {
         updateStreamingMessage(event.text, event.fullText);
         break;
       case 'done':
-        finalizeStreamingMessage(event.text);
+        finalizeStreamingMessage(event.text || '(no response)');
         setMatrix('done');
         setTimeout(() => setMatrix('idle'), 2000);
         break;
@@ -1783,7 +1795,7 @@ if (window.dshNative) {
   });
   
   // Agent events
-  window.dshNative.on('agent', (event) => {
+  dsh.on('agent', (event) => {
     switch (event.type) {
       case 'start':
         setMatrix('running');
@@ -1801,12 +1813,18 @@ if (window.dshNative) {
   });
   
   // Errors
-  window.dshNative.on('error', (event) => {
+  dsh.on('error', (event) => {
     Chat.append('error', event.message || 'JARVIS error');
     setMatrix('fail');
     setTimeout(() => setMatrix('idle'), 2000);
   });
+  return true;
 }
+(function waitForDshNative(attempts) {
+  if (wireDshNative()) return;
+  if (attempts > 100) { console.warn('[ORBIT] dsh-native.js never appeared; JARVIS UI disabled'); return; }
+  setTimeout(function () { waitForDshNative(attempts + 1); }, 100);
+})(0);
 
 // ── Streaming — delegates to Chat module ────────────────────────
 function updateStreamingMessage(delta, fullText) {
@@ -2837,7 +2855,7 @@ async function floatSend() {
         floatAppend('error', res.error || 'Connection failed');
       }
     } else if (window.orbit?.jarvis && !jarvisOnline) {
-      window.orbit.jarvis.chat(text, 'orbit-float');
+      window.orbit.jarvis.chat(text, "orbit-tab-" + (activeTabId || "float"));
       floatAppend('system', 'Sent to JARVIS bridge \u2014 waiting for reply.');
     } else {
       // Needle parallel agent (fast path)

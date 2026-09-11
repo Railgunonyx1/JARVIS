@@ -358,3 +358,24 @@ Freebuff is an ad-supported service. Prompts, messages, code, files, and reposit
 - Referenced in project consolidation at `C:\Users\aayan\Desktop\JARVIS/`
 
 ---
+
+## Research Round 2 (2026-09) — Orbit Workspace Pipeline
+
+| Project | URL | What it is | Stack / License | Verdict for JARVIS |
+|---------|-----|------------|-----------------|--------------------|
+| Invidious | github.com/iv-org/invidious | Privacy front-end for YouTube; JSON API (search/videos/captions/comments/audio), subscriptions, watch-history import/export, no official YT API | Crystal / AGPL-3.0 | **Consume, don't import.** Point the browser at public instances (Privacy-Redirect style) or self-host; expose `youtube.*` tools (search, video metadata, **captions→transcript** for summarization, audio-only). |
+| OpenMAIC | github.com/THU-MAIC/OpenMAIC | Multi-agent interactive classroom (LangGraph director graph, two-stage outline→scene generation, playback state machine) | TS/Next.js + LangGraph | **Pattern only.** Two-stage generation + state-machine turn-taking map to JARVIS harness planning layer; no Python to lift. |
+| MiniMind | github.com/jingyaogong/minimind | From-scratch 64M LLM training: tokenizer, pretrain, SFT, LoRA, RLHF (DPO/PPO/GRPO/CISPO), tool-calling data | Python/PyTorch / Apache-2.0 | **Reference resource.** Agentic RL + tool-call dataset formats; YaRN RoPE extrapolation. Not drop-in (toy scale). |
+| QuinnAI | github.com/qosha1/quinn-ai | Hierarchical AI org: worker tree, dual state machines (lifecycle+runtime), provider-agnostic sessions | Python ≥3.11 / MIT | **Highest immediate fit.** Provider abstraction + separating lifecycle from runtime state in `core/agent/state.py`; beads→owned memory entries. Skip CEO/org scaffolding. |
+| Needle2 | github.com/cactus-compute/needle | 45M on-device tool-calling LLM, 14 MB quantized binary (JAX/C engine, WASM), confidence-gated JSON tool calls | Python (JAX)/C / Apache-2.0 | **Techniques > code.** (1) confidence-gated escalation for `tools/classification.py`; (2) embedding-based tool pre-filter (top-5) before model call; (3) schema-constrained decoding hardening in `tool_service.py`; (6) LoRA fine-tune→single binary as local browser-router fallback. |
+| God's Eye | github.com/bilawalsidhu/gods-eye-view | Real-time geospatial dashboard: 3D globe (CesiumJS), 13 live layers (flights/ships/sats/fires), NVG/FLIR/CRT GLSL modes, 28-tool voice agent | Vanilla JS + CesiumJS / MIT | **Best workspace candidate.** Host as `orbit://geoview` webview; wire live data via bridge 8171; replace voice wiring with JARVIS agent kernel; GLSL visual modes as global Orbit capability; data-layer module pattern for new feeds. |
+| F1 monitoring | FastF1 + OpenF1 + F1-Telemetry | Live/historical F1 telemetry; FastF1 (post-session), OpenF1 API (live JSON; paid/self-host for live), Three.js 3D viewers | Python / MIT, open-source | **Wrap, don't build.** FastF1+OpenF1 backend → F1-Telemetry-style Three.js as `orbit://f1` workspace. "Live" is mostly race-replay in reality. |
+| F1 simulator | github.com/GamePointAnalytics/f1-race-simulator | Single-file HTML5 F1 race sim: tyre deg, fuel, DRS, configurable drivers/laps; zero deps | Vanilla JS/HTML / MIT | **Easiest win.** Ship in an `orbit://f1sim` webview (add/remove drivers is already config). Python wrapper later for FastF1-fed lap times. |
+
+### Round-2 Takeaways
+1. **Adopt quickly (>10 min ROI):** Needle confidence-gating + tool pre-filter design into `tools/classification.py`; Quinn state-machine split; Invidious `youtube.*` tools reading captions (transcript = summarizable); F1 simulator as an internal page.
+2. **Bigger builds (schedule later):** God's Eye `orbit://geoview` workspace; F1 live workspace; STORM/PaperQA2 academic-research skills suite.
+3. **Reference only:** MiniMind internals, OpenMAIC LangGraph (needs Python port).
+4. **Integration seams:** all web-based pieces live in a `<webview>` under `orbit://` + bridge messages; all model/archive pieces are Python tools through `ToolExecutionService`.
+
+---
