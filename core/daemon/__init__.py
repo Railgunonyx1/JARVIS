@@ -22,9 +22,10 @@ from core.config import Config
 # Import event bus system (P0-4 architecture invariant)
 from core.daemon.events import SCHEMA_VERSION, BusEvent, make_session_id, make_trace_id
 
-# Harness Selector (P0-3) — canonical harness selection authority
-from core.harness_selector import HarnessSelector
-
+# Harness Selector (P0-3) — canonical harness selection authority lives in
+# core.harness (runtime.kernel owns the instance). The legacy cascade-tier
+# selector (core.harness_selector) was quarantined — it was never wired
+# beyond this re-export, which itself had no in-repo consumers.
 # Model Gateway (P0-2) — single model selection authority
 from providers.model_gateway import ModelGateway
 
@@ -45,7 +46,6 @@ __all__ = [
     "make_session_id",
     "make_trace_id",
     "ModelGateway",
-    "HarnessSelector",
 ]
 
 
