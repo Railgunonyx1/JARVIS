@@ -451,6 +451,8 @@
               <div class="group"><h2>Performance</h2>
                 <div class="row"><div class="name">Efficiency Mode</div><span class="chip" id="diagEfficiency">Checking...</span></div>
                 <div class="row"><div class="name">Frozen Tabs</div><span class="meta" id="diagFrozen">Checking...</span></div>
+                <div class="row"><div class="name">Sleeping Tabs</div><span class="meta" id="diagSleeping">Checking...</span></div>
+                <div class="row"><div class="name">Tab Memory</div><span class="meta" id="diagMem">Checking...</span></div>
               </div>
               <div class="group"><h2>Error Log</h2>
                 <div class="row"><div><div class="name">Total Errors</div><div class="sub">Captured errors, warnings, and info</div></div><span class="chip" id="diagErrorCount">0</span></div>
@@ -596,6 +598,10 @@
             </span>
           </div>
           <div class="sb-grow"></div>
+          <button class="sb-model-chip" id="sbModelChip" title="Model" style="display:none">
+            <span class="sb-model-name" id="sbModelName">AUTO</span>
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 3l2.5 2.5L6.5 3" stroke="currentColor" stroke-width="1"/></svg>
+          </button>
           <button class="sb-icon" id="sbClose" title="Close sidebar">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.2"/>
@@ -828,6 +834,15 @@
 
   <!-- ── Scripts ─────────────────────────────────────────────── -->
   <script src="js/chat.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/tabs.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/jarvis.js"></script>
+  <script src="js/nav-tools.js"></script>
+  <script src="js/menus.js"></script>
+  <script src="js/pages.js"></script>
+  <script src="js/settings-ux.js"></script>
+  <script src="js/data-pages.js"></script>
   <link rel="stylesheet" href="css/f1-nothing.css" />
   <script src="js/workspace.js"></script>
   <script src="js/yt.js"></script>
