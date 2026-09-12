@@ -41,6 +41,18 @@ exit /b %errorlevel%
 
 :MAIN
 
+REM ── 0. Background Electron deps (overlaps service boot) ───────────
+REM If Electron is missing, npm install starts detached NOW so it runs
+REM while the kernel and bridge boot underneath, instead of serially
+REM after them. Section 4 waits on it (with a ceiling) and falls back
+REM to a synchronous install so failures stay loud.
+set "NPM_INSTALLING=0"
+if not exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" (
+    echo   [..] Installing dependencies in background...
+    set "NPM_INSTALLING=1"
+    powershell -NoProfile -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','npm install --prefer-offline --no-audit --no-fund 1>nul 2>&1' -WorkingDirectory '%~dp0orbit-browser' -WindowStyle Hidden" >nul 2>&1
+)
+
 REM ── 1. JARVIS kernel backend (8170) ─────────────────────────────
 call :PORT_LIVE 8170
 if not errorlevel 1 (
@@ -95,12 +107,25 @@ goto WAIT_LOOP
 :SERVICES_READY
 
 REM ── 4. Ensure Electron is present ───────────────────────────────
-if not exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" (
-    echo   [..] Installing dependencies ^(one-time^)...
-    cd /d "%~dp0orbit-browser"
-    call npm install --prefer-offline --no-audit --no-fund >nul 2>&1
-    cd /d "%~dp0"
-)
+REM If a background install is running, wait on it (~60s ceiling);
+REM otherwise fall through to a synchronous install (equiv. old path).
+if exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" goto ELECTRON_OK
+if "!NPM_INSTALLING!"=="0" goto ELECTRON_SYNC
+
+set "NPMPOLL=0"
+:ELECTRON_WAIT
+set /a NPMPOLL+=1
+if exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" goto ELECTRON_OK
+if !NPMPOLL! GTR 60 goto ELECTRON_SYNC
+ping -n 2 127.0.0.1 >nul
+goto ELECTRON_WAIT
+
+:ELECTRON_SYNC
+cd /d "%~dp0orbit-browser"
+if not exist "node_modules\electron\dist\electron.exe" call npm install --prefer-offline --no-audit --no-fund >nul 2>&1
+cd /d "%~dp0"
+
+:ELECTRON_OK
 if not exist "%~dp0orbit-browser\node_modules\electron\dist\electron.exe" (
     echo   [!!] Electron install failed - run "npm install" in orbit-browser.
     ping -n 6 127.0.0.1 >nul

@@ -19,10 +19,8 @@ import asyncio
 import json
 import sys
 import time
-import threading
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 # Add project root to path
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -341,10 +339,10 @@ async def main(ws_host: str, ws_port: int, bridge_host: str, bridge_port: int):
     BRIDGE_HOST = bridge_host
     BRIDGE_PORT = bridge_port
 
-    print(f"[BRIDGE] JARVIS Orbit WebSocket Bridge")
+    print("[BRIDGE] JARVIS Orbit WebSocket Bridge")
     print(f"[BRIDGE] WebSocket: ws://{ws_host}:{ws_port}")
     print(f"[BRIDGE] JARVIS Backend: http://{bridge_host}:{bridge_port}")
-    print(f"[BRIDGE] Waiting for Electron browser to connect...")
+    print("[BRIDGE] Waiting for Electron browser to connect...")
 
     async with serve(handler, ws_host, ws_port):
         await asyncio.Future()  # Run forever
