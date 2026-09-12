@@ -514,6 +514,8 @@ function clearPrivatePin() {
 const tabs = new Map();
 const webContentsIds = new Map(); // tabId -> guest webContents.id
 const frozenTabs = new Set();     // tabId currently frozen (sleeping)
+let sleepCheckTimer = null;       // sleeping-tabs engine tick
+let sleepCheckTimers = [];        // all engine intervals (for clean stop)
 let activeTabId = null;
 
 function createTab(url = "orbit://newtab") {
@@ -637,11 +639,55 @@ async function wakeTab(id) {
   }
 }
 
-function runSleepCheck() {
+async function runSleepCheck() {
   for (const [id, tab] of tabs) {
+    // Memory accounting: measure each guest's real footprint once per sweep.
+    // getProcessMemoryInfo is the guest's dedicated process (webviews are
+    // process-isolated), so this is true per-tab usage, not a share.
+    // NB: it returns a Promise — await, or .workingSetSize is undefined→NaN.
+    const wcId = webContentsIds.get(id);
+    if (wcId) {
+      try {
+        const wc = webContents.fromId(wcId);
+        if (wc && !wc.isDestroyed()) {
+          const info = await wc.getProcessMemoryInfo();
+          // Electron returns KB (some platforms KiB); MB for the HUD.
+          const mb = (Number.isFinite(info.workingSetSize) ? Math.round(info.workingSetSize / 1024) : 0);
+          performance.updateTabMemory(id, mb);
+        }
+      } catch (_) { /* guest gone between map check and read */ }
+    }
     if (tab.agentOwned) continue;
     if (performance.shouldSleep(id)) freezeTab(id);
   }
+}
+
+// Live audio protection: event-driven, not sampled. WebContents
+// audioStateChanged fires the moment a tab starts/stops sound, so an audible
+// tab is protected within the same tick instead of up to a 60s sampling gap
+// (config.excludeAudible otherwise dead config).
+function refreshAudibleState(id) {
+  const wcId = webContentsIds.get(id);
+  if (!wcId) return;
+  try {
+    const wc = webContents.fromId(wcId);
+    if (wc && !wc.isDestroyed()) performance.setAudible(id, !!wc.isCurrentlyAudible());
+  } catch (_) { /* guest gone */ }
+}
+
+// ── Sleeping-tabs engine: check every 60s, freeze stale background tabs.
+// runSleepCheck is the single authority (it performs the real lifecycle
+// freeze); PerformanceModule's internal sleepCheck stays off — it only
+// flips state flags without freezing and logs noisily.
+function startSleepingEngine() {
+  sleepCheckTimer = setInterval(runSleepCheck, 60000);
+  sleepCheckTimers.push(sleepCheckTimer);
+}
+
+function stopSleepingEngine() {
+  sleepCheckTimers.forEach(clearInterval);
+  sleepCheckTimers = [];
+  sleepCheckTimer = null;
 }
 
 // ── JARVIS WebSocket Connection ───────────────────────────────────
@@ -1156,6 +1202,9 @@ function createWindow(incognito = false) {
   // Connect to JARVIS
   connectJarvis();
 
+  // Start the sleeping-tabs engine (freeze stale background tabs every 60s)
+  startSleepingEngine();
+
   // Always boot on a New Tab. Restoring the previous session is the
   // renderer's choice via the "Restore pages?" banner (orbit-session in
   // localStorage) — auto-restoring here too made the banner's Restore
@@ -1169,7 +1218,7 @@ function createWindow(incognito = false) {
     // Cleanup
     mainWindow = null;
     jarvisWs?.close();
-    performance.stopSleepCheck?.();
+    stopSleepingEngine();
   });
 
   // ── Window Controls (frameless window) ────────────────────────
@@ -1276,9 +1325,8 @@ app.whenReady().then(() => {
   }
   setupIPC();
   createWindow();
-  // Compact interval keeps tab-discard state fresh without busy work and
-  // drives the real freeze/wake sleeping engine for hidden webviews.
-  setInterval(runSleepCheck, 60000);
+  // The sleeping engine is started inside createWindow (startSleepingEngine)
+  // — exactly one timer pair per window lifecycle.
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1300,7 +1348,7 @@ process.on("unhandledRejection", (reason) => {
 
 app.on("window-all-closed", () => {
   jarvisWs?.close();
-  performance.stopSleepCheck?.();
+  stopSleepingEngine();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -1335,6 +1383,18 @@ app.on("web-contents-created", (_event, contents) => {
     contents.on("dom-ready", () => {
       if (security.config.fingerprintProtection) {
         contents.executeJavaScript(GRAIN_JS).catch(() => {});
+      }
+    });
+
+    // Real-time audio protection for the sleeping engine: the instant a tab
+    // starts playing sound it is excluded from freezing (no sampling gap).
+    // Per-tab memory accounting feeds performance.totalMemoryMB (previously
+    // always 0 — nothing ever measured tab memory); the measurement itself
+    // rides the sleep sweep in runSleepCheck.
+    const wcId = contents.id;
+    contents.on("audio-state-changed", () => {
+      for (const [tabId, mapped] of webContentsIds) {
+        if (mapped === wcId) { refreshAudibleState(tabId); break; }
       }
     });
   }

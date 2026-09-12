@@ -865,6 +865,11 @@ function refreshDiagnostics() {
       setChip(diagEfficiency, eff ? "On" : "Off", !!eff);
       const frozen = diagFrozen;
       if (frozen) frozen.textContent = (s && s.frozen) ? s.frozen + " tab(s)" : "None";
+      // Real engine numbers: sleeping tabs + measured memory across guests.
+      const mem = document.getElementById("diagMem");
+      if (mem) mem.textContent = (s && s.totalMemoryMB > 0) ? s.totalMemoryMB + " MB" : "Measuring...";
+      const sleep = document.getElementById("diagSleeping");
+      if (sleep) sleep.textContent = (s && s.sleepingTabs > 0) ? s.sleepingTabs + " tab(s)" : "None";
     }).catch(() => {});
   }
   // Error log stats
@@ -2346,14 +2351,31 @@ const perfData = { fps: 60, memMB: 0, domCount: 0, lastFrameTime: performance.no
   requestAnimationFrame(fpsLoop);
 })();
 
-// Memory usage (with fallback for non-Chrome)
+// Memory usage: the renderer heap is only this page's own JS — the real
+// number users care about is all tabs. Main samples every guest process on
+// the sleep sweep (getProcessMemoryInfo per webContents) and reports it via
+// performance:status.totalMemoryMB; fall back to heap, then tab estimate.
+let _tabMemMB = 0;
 function getMemoryMB() {
+  if (_tabMemMB > 0) return _tabMemMB;
   if (performance.memory) {
     return Math.round(performance.memory.usedJSHeapSize / 1048576);
   }
   // Fallback: estimate from tab count (rough: ~30MB per tab)
   return tabs.size * 30;
 }
+
+async function pollTabMemory() {
+  try {
+    const s = await window.orbit?.system?.performance?.status?.();
+    if (s && typeof s.totalMemoryMB === "number" && s.totalMemoryMB > 0) {
+      _tabMemMB = s.totalMemoryMB;
+      updatePerfHud();
+    }
+  } catch (_) { /* main busy — keep last value */ }
+}
+setInterval(pollTabMemory, 30000);
+pollTabMemory();
 
 // Cached DOM refs for perf HUD (avoid repeated getElementById)
 const _perfRefs = {};
@@ -3606,6 +3628,13 @@ const HIBERNATE_TIMEOUT = 10 * 60 * 1000;
 const sleepTimers = new Map();
 const hibernateTimers = new Map();
 
+function isTabAudible(tab) {
+  if (!tab) return false;
+  if (tab.muted) return false; // muted tabs can't play audio
+  try { return !!(tab.webview && tab.webview.isCurrentlyAudible && tab.webview.isCurrentlyAudible()); }
+  catch (e) { return false; }
+}
+
 function startSleepTimer(id) {
   clearSleepTimer(id);
   clearHibernateTimer(id);
@@ -3623,8 +3652,12 @@ function startSleepTimer(id) {
 function startHibernateTimer(id) {
   hibernateTimers.set(id, setTimeout(function() {
     const tab = tabs.get(id);
-    if (tab && tab.sleeping && id !== activeTabId) {
+    // Audible tabs are never hibernated — hibernation blanks the guest and
+    // would kill playback. Retry on the same delay until silent.
+    if (tab && tab.sleeping && id !== activeTabId && !isTabAudible(tab)) {
       hibernateTab(id);
+    } else if (tab && isTabAudible(tab)) {
+      startHibernateTimer(id);
     }
   }, HIBERNATE_TIMEOUT - SLEEP_TIMEOUT));
 }
@@ -4426,15 +4459,13 @@ setInterval(function() {
   }
 }, 60000);
 
-// 3. Long Task observer: log tasks > 50ms for profiling
+// 3. Long Task observer: keep a rolling count for diagnostics instead of
+// console-spamming every janky frame (a busy page fired this every second).
 if (typeof PerformanceObserver !== 'undefined') {
   try {
+    window.__orbitLongTasks = 0;
     var _longTaskObs = new PerformanceObserver(function(list) {
-      for (var entry of list.getEntries()) {
-        if (entry.duration > 50) {
-          console.warn('[PERF] Long task:', Math.round(entry.duration) + 'ms', entry.name || '');
-        }
-      }
+      window.__orbitLongTasks += list.getEntries().length;
     });
     _longTaskObs.observe({ entryTypes: ['longtask'] });
   } catch (e) { /* not supported */ }

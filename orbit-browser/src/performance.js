@@ -78,7 +78,6 @@ class PerformanceModule {
     this.config = { ...PERFORMANCE_CONFIG };
     this.tabs = new Map();
     this.totalMemory = 0;
-    this.sleepCheckInterval = null;
     this.activeTabId = null;
   }
 
@@ -92,10 +91,27 @@ class PerformanceModule {
   }
 
   /**
-   * Unregister a tab
+   * Unregister a tab (its measured memory leaves the total — otherwise
+   * closed tabs' usage leaks into totalMemory forever).
    */
   unregisterTab(id) {
-    this.tabs.delete(id);
+    const tab = this.tabs.get(id);
+    if (tab) {
+      this.totalMemory -= tab.memoryUsage;
+      this.tabs.delete(id);
+    }
+  }
+
+  /**
+   * Mark a tab's live audio state (audible tabs never sleep).
+   * Driven by WebContents.audioStateChanged in main.js.
+   */
+  setAudible(id, audible) {
+    const tab = this.tabs.get(id);
+    if (tab && tab.isAudible !== !!audible) {
+      tab.isAudible = !!audible;
+      if (audible) tab.touch(); // playing now = freshly active
+    }
   }
 
   /**
@@ -266,32 +282,9 @@ class PerformanceModule {
     };
   }
 
-  /**
-   * Start automatic sleep checking
-   */
-  startSleepCheck(intervalMs = 60000) {
-    this.stopSleepCheck();
-
-    this.sleepCheckInterval = setInterval(() => {
-      for (const [id, tab] of this.tabs) {
-        if (this.shouldSleep(id) && !tab.isSleeping) {
-          tab.sleep();
-          // Emit event: tab should be suspended
-          console.log(`[PERF] Tab ${id} sleeping after inactivity`);
-        }
-      }
-    }, intervalMs);
-  }
-
-  /**
-   * Stop automatic sleep checking
-   */
-  stopSleepCheck() {
-    if (this.sleepCheckInterval) {
-      clearInterval(this.sleepCheckInterval);
-      this.sleepCheckInterval = null;
-    }
-  }
+  // NOTE: the sleep loop itself lives in main.js (runSleepCheck) — it is the
+  // single authority that both flags state and performs the real Chromium
+  // freeze. This module deliberately has no internal timer.
 }
 
 // ── Export ─────────────────────────────────────────────────────────
