@@ -17,8 +17,9 @@ import json
 import math
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 MAX_SAMPLES = 500
 
@@ -64,15 +65,13 @@ def tool_dispatch_latency(iterations: int = 30) -> list[float]:
     Samples inside one persistent event loop (like the real agent loop) after
     a short warmup, so the metric reflects per-call cost, not loop creation.
     """
-    import asyncio
 
     from core.agent.permissions import PermissionEngine
     from core.agent.tool_service import ToolExecutionService
     from core.decision_logger import DecisionLogger
+    from orbit.tools import build_orbit_tools
     from providers.types import ToolCall
     from tools.registry import ToolRegistry
-
-    from orbit.tools import build_orbit_tools
 
     logger = DecisionLogger()
     registry = ToolRegistry()
@@ -109,8 +108,8 @@ def tool_dispatch_latency(iterations: int = 30) -> list[float]:
 
 def controller_facade_latency(iterations: int = 30) -> list[float]:
     """BrowserController -> CDP backend facade round trip (fake transport)."""
-    from orbit.cdp import CDPBackend
     from jbrowser.controller import BrowserController
+    from orbit.cdp import CDPBackend
 
     class FakePage:
         url = "https://example.com/"

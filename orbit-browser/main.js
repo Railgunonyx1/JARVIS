@@ -1124,20 +1124,23 @@ function createWindow(incognito = false) {
     show: false,
   });
 
-  // Set CSP headers for the main window
+  // Set CSP headers for the main window (single handler — a second
+  // onHeadersReceived on the same session silently replaces the first).
   const mainSession = mainWindow.webContents.session;
   mainSession.webRequest.onHeadersReceived((details, callback) => {
     const headers = { ...(details.responseHeaders || {}) };
-    // CSP: restrict script sources to self, allow inline for now (transitional)
     headers['Content-Security-Policy'] = [
       "default-src 'self'; " +
       "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "font-src 'self' https://fonts.gstatic.com; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "font-src 'self'; " +
       "img-src 'self' data: https:; " +
-      "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
+      "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
       "frame-src 'self' https:; " +
-      "worker-src 'self';"
+      "worker-src 'self'; " +
+      "object-src 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self';"
     ];
     callback({ responseHeaders: headers });
   });
@@ -1148,27 +1151,6 @@ function createWindow(incognito = false) {
   // Show when ready
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
-  });
-
-  // Set CSP headers on the main window
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [
-          "default-src 'self'; " +
-          "script-src 'self' 'unsafe-inline'; " +
-          "style-src 'self' 'unsafe-inline'; " +
-          "img-src 'self' data: https:; " +
-          "font-src 'self' data:; " +
-          "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https:; " +
-          "frame-src 'self' https:; " +
-          "object-src 'none'; " +
-          "base-uri 'self'; " +
-          "form-action 'self'; "
-        ],
-      },
-    });
   });
 
   // Connect to JARVIS

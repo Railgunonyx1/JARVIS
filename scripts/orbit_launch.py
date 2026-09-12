@@ -218,7 +218,7 @@ class Launcher:
         if not browser:
             self.status("Orbit's Chromium not found.", "error")
             self.status("Install unbranded Chromium or set J_BROWSER_CHROMIUM_PATH:", "warn")
-            self.status(f"  $env:J_BROWSER_CHROMIUM_PATH = \"C:\\path\\to\\chrome.exe\"", "info")
+            self.status("  $env:J_BROWSER_CHROMIUM_PATH = \"C:\\path\\to\\chrome.exe\"", "info")
             self.status("", "info")
             self.status("Or install via Playwright (recommended):", "info")
             self.status("  pip install playwright && playwright install chromium", "info")

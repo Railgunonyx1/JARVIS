@@ -1993,3 +1993,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .yt-btn{font-family:var(--jb-font-mono);font-size:10px;padding:3px 8px;background:transparent;border:1px solid var(--jb-border);color:var(--jb-text);cursor:pointer;letter-spacing:.04em}
 .yt-btn:hover{background:var(--jb-surface-hover);border-color:var(--jb-glyph)}
 .yt-embed{width:100%;aspect-ratio:16/9;border:none;background:#000}
+
+/* ── Workspace pages: God's Eye / F1 monitor ───────────────── */
+.workspace-page{overflow:auto}
+.ge-wrap{display:flex;flex-direction:column;gap:10px;padding:18px 22px;max-width:1200px;margin:0 auto;height:100%;box-sizing:border-box}
+.ge-head{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.ge-head>div:first-child{flex:1;min-width:260px}
+.ge-title{font-family:var(--jb-font-mono);font-size:20px;letter-spacing:.18em;margin:0 0 4px}
+.ge-lede{font-size:11px;color:var(--jb-mute);margin:0;max-width:560px}
+.ge-live{font-family:var(--jb-font-mono);font-size:11px;color:var(--jb-text);border:1px solid var(--jb-border-subtle);padding:6px 10px;white-space:nowrap}
+.ge-ask{display:flex;gap:6px}
+.ge-q{background:var(--jb-void);border:1px solid var(--jb-border);color:var(--jb-text);font-family:var(--jb-font-ui);font-size:11px;padding:6px 10px;width:210px}
+.ge-q:focus{outline:1px solid var(--jb-glyph);outline-offset:-1px}
+.ge-btn{background:var(--jb-text);color:var(--jb-bg);border:none;font-family:var(--jb-font-mono);font-size:10px;letter-spacing:.08em;padding:6px 12px;cursor:pointer;text-transform:uppercase}
+.ge-btn:hover{background:var(--jb-glyph)}
+.ge-banner{margin-top:8px;font-family:var(--jb-font-mono);font-size:10px;color:var(--jb-text);border:1px solid var(--jb-border);border-left:3px solid var(--jb-text);padding:6px 10px}
+.ge-world{width:100%;height:420px;background:#050507;border:1px solid var(--jb-border-subtle)}
+.ge-log-wrap{border:1px solid var(--jb-border-subtle);background:var(--jb-surface)}
+.ge-log-head{font-family:var(--jb-font-mono);font-size:9px;letter-spacing:.14em;color:var(--jb-mute);padding:6px 10px;border-bottom:1px solid var(--jb-border-subtle);text-transform:uppercase}
+.ge-log{height:110px;overflow-y:auto;padding:6px 10px;font-family:var(--jb-font-mono);font-size:10px;color:var(--jb-text-secondary)}
+.ge-log-err{color:var(--jb-danger)}
+.f1-main{display:flex;gap:10px;align-items:stretch}
+.f1-track{flex:1;height:460px;background:#050507;border:1px solid var(--jb-border-subtle)}
+.f1-side{width:250px;flex-shrink:0;border:1px solid var(--jb-border-subtle);background:var(--jb-surface);display:flex;flex-direction:column}
+.f1-lb{overflow-y:auto;flex:1;padding:4px 0}
+.f1-lb-row{display:flex;align-items:center;gap:8px;padding:5px 10px;font-family:var(--jb-font-mono);font-size:11px;color:var(--jb-text);border-bottom:1px solid var(--jb-border-subtle)}
+.f1-pos{width:20px;color:var(--jb-mute)}
+.f1-chip{width:10px;height:10px;flex-shrink:0}
+.f1-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

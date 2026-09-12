@@ -450,5 +450,21 @@
     hideCmdPopup: hideCmdPopup,
     COMMANDS: COMMANDS,
     set pendingStreamTabId(v) { pendingStreamTabId = v; },
+    /**
+     * Render a pre-built DOM node as the newest chat message and persist a
+     * text fallback into the tab history. Rich messages (result cards,
+     * workspaces output) render through this so a panel re-render restores
+     * the text form instead of losing the message entirely.
+     */
+    appendNode: function (role, node, textFallback) {
+      if (!bodyEl) return;
+      if (streamingEl && _streamAttached) return; // don't fight an active stream
+      var wrapped = document.createElement('div');
+      wrapped.className = 'chat-msg chat-msg--' + role;
+      wrapped.appendChild(node);
+      bodyEl.appendChild(wrapped);
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+      if (textFallback) pushToTab(activeTabId, role, textFallback);
+    },
   };
 })();

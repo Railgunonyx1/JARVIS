@@ -93,7 +93,7 @@ def measure_startup() -> dict[str, Any]:
     start = time.perf_counter()
     proc = subprocess.run(
         [sys.executable, str(_STARTUP_PROBE)],
-        capture_output=True, text=True, timeout=300, cwd=str(ROOT),
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT), check=False,
     )
     wall_ms = (time.perf_counter() - start) * 1000.0
     if proc.returncode != 0:
@@ -164,7 +164,6 @@ async def _run_offline_task(loop, task: dict[str, Any]) -> dict[str, Any]:
         from core.context.budget import estimate_tokens
         record["context_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(
             json.dumps(messages, default=str))
-        context_ms = (time.perf_counter() - t) * 1000.0
 
         tool_ms = 0.0
         outputs: list[str] = []

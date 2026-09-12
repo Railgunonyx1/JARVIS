@@ -13,6 +13,7 @@
  *   YT.transcript(videoId)      -> { title, uploader, text }
  *   YT.summarize(video)         -> streams a JARVIS summary into the sidebar
  *   YT.renderResults(items)     -> renders a result card list into the sidebar
+ *   YT.command(args)            — the /yt slash command (owned here, not in renderer.js)
  */
 (function () {
   'use strict';
@@ -161,8 +162,6 @@
   // Routes through the existing dshNative chat pipeline so the summary
   // streams into the sidebar like any JARVIS reply.
   async function summarize(video) {
-    var status = document.querySelector('[data-yt-status]');
-    if (status) status.textContent = 'Fetching transcript…';
     var tr;
     try {
       tr = await transcript(video.id);
@@ -170,7 +169,6 @@
       if (window.Chat) Chat.append('error', 'Transcript failed: ' + e.message);
       return;
     }
-    if (status) status.textContent = tr.note || 'Summarizing…';
     if (!tr.text) {
       if (window.Chat) Chat.append('jarvis', 'No captions for "' + tr.title + '" — nothing to summarize.');
       return;
@@ -190,9 +188,6 @@
   // All external strings go through textContent/attributes — no innerHTML
   // with untrusted data (XSS-safe DOM construction).
   function renderResults(items) {
-    var body = document.getElementById('sbBody');
-    if (!body) return;
-
     var wrap = document.createElement('div');
     wrap.className = 'yt-results';
 
@@ -258,16 +253,69 @@
       wrap.appendChild(card);
     });
 
-    body.appendChild(wrap);
-    body.scrollTop = body.scrollHeight;
+    // Render through Chat.appendNode so the cards live inside the chat's
+    // per-tab ownership (restored as a text summary after re-render) instead
+    // of fighting it for #sbBody.
+    if (window.Chat && Chat.appendNode) {
+      var text = items.slice(0, 3).map(function (v) { return v.title + ' \u2014 ' + v.uploader; }).join('\n');
+      Chat.appendNode('system', wrap, items.length + ' private results:\n' + text);
+    } else {
+      var body = document.getElementById('sbBody');
+      if (body) { body.appendChild(wrap); body.scrollTop = body.scrollHeight; }
+    }
   }
 
   // ------------------------------------------------------------------ wire
+  // The /yt command is owned here: one place for parsing, errors and the
+  // chat surface it renders into. renderer.js dispatches to YT.command.
+  async function command(args) {
+    var q = (args || '').trim();
+    var chat = function (role, msg) { if (window.Chat) Chat.append(role, msg); };
+
+    if (!q) {
+      chat('jarvis',
+        'Private YouTube usage: /yt <search>\n' +
+        '  \u25B8 /yt lofi beats          \u2014 tracking-free search\n' +
+        '  \u25B8 /yt summarize <videoUrl> \u2014 summarize any video\u2019s transcript\n' +
+        '  \u25B8 results open via youtube-nocookie embeds by default');
+      return;
+    }
+
+    // Transcript path: /yt summarize <url-or-id>
+    var m = q.match(/^(?:summarize|summary)\s+(\S+)/i);
+    if (m) {
+      var vm = m[1].match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{6,})/) || m[1].match(/^([\w-]{6,})$/);
+      if (!vm) { chat('error', 'Could not find a video id in: ' + m[1]); return; }
+      chat('system', 'Fetching transcript\u2026');
+      try {
+        await summarize({ id: vm[1], title: m[1] });
+      } catch (e) {
+        chat('error', 'YT summarize failed: ' + e.message);
+      }
+      return;
+    }
+
+    // Search path
+    chat('system', 'Searching privately via Piped/Invidious\u2026');
+    try {
+      var results = await search(q);
+      if (!results.length) { chat('jarvis', 'No results for \"' + q + '\".'); return; }
+      renderResults(results);
+      var summary = results.slice(0, 3).map(function (v, i) {
+        return (i + 1) + '. ' + v.title + ' \u2014 ' + v.uploader;
+      }).join('\n');
+      chat('jarvis', 'Found ' + results.length + ' tracking-free results:\n\n' + summary);
+    } catch (e) {
+      chat('error', 'Private YouTube search failed: ' + e.message);
+    }
+  }
+
   window.YT = {
     search: search,
     transcript: transcript,
     summarize: summarize,
     renderResults: renderResults,
+    command: command,
     fmtDuration: fmtDuration,
     parseTTML: parseTTML,
     instances: INSTANCES,

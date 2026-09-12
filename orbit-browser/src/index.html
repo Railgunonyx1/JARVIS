@@ -193,6 +193,20 @@
               <input type="text" id="ntpSearch" placeholder="Search Google or enter URL" autofocus />
             </label>
             <div class="nt-tiles">
+              <button class="nt-tile" data-url="orbit://goodeye">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+                <span>God's Eye</span>
+              </button>
+              <button class="nt-tile" data-url="orbit://f1">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M2 12l4-6h6l4 6" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="9" cy="13" r="1.6" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+                <span>F1 Live</span>
+              </button>
               <button class="nt-tile" data-url="orbit://bookmarks">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <path d="M5 3h8v13l-4-2.5L5 16V3z" stroke="currentColor" stroke-width="1.2"/>
@@ -263,6 +277,53 @@
               <div class="group"><h2>About</h2>
                 <div class="row"><div class="name">JARVIS Orbit</div><span class="meta">0.1.0</span></div>
                 <div class="row"><div class="name">DSH Protocol</div><span class="chip ok">DSH/1.0</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- God's Eye workspace -->
+          <div class="page workspace-page" id="goodeyePage">
+            <div class="ge-wrap">
+              <div class="ge-head">
+                <div>
+                  <h1 class="ge-title">GOD'S EYE</h1>
+                  <p class="ge-lede">Live public signals on one globe — aircraft, earthquakes, the ISS. Tracking-free, key-free, all fetched from your device.</p>
+                </div>
+                <div class="ge-live" id="geLive">ISS acquiring…</div>
+                <div class="ge-ask">
+                  <input id="geQuestion" class="ge-q" placeholder="Ask JARVIS about the current picture…" />
+                  <button id="geAsk" class="ge-btn">Ask JARVIS</button>
+                </div>
+              </div>
+              <canvas id="geWorld" class="ge-world"></canvas>
+              <div class="ge-log-wrap">
+                <div class="ge-log-head">SIGNAL LOG</div>
+                <div id="geLog" class="ge-log"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- F1 live monitor -->
+          <div class="page workspace-page" id="f1Page">
+            <div class="ge-wrap">
+              <div class="ge-head">
+                <div>
+                  <h1 class="ge-title">F1 LIVE</h1>
+                  <p class="ge-lede">Real-time Formula 1 telemetry via OpenF1 — GPS track plot, running order, JARVIS commentary. Free public data.</p>
+                  <div id="f1Banner" class="ge-banner" style="display:none"></div>
+                </div>
+                <div class="ge-live" id="f1Info">Loading session…</div>
+                <div class="ge-ask">
+                  <input id="f1Question" class="ge-q" placeholder="Ask JARVIS about the race…" />
+                  <button id="f1Ask" class="ge-btn">Ask JARVIS</button>
+                </div>
+              </div>
+              <div class="f1-main">
+                <canvas id="f1Track" class="f1-track"></canvas>
+                <div class="f1-side">
+                  <div class="ge-log-head">RUNNING ORDER</div>
+                  <div id="f1Leaderboard" class="f1-lb"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -619,8 +680,9 @@
       <button class="menu-item" data-nav="orbit://downloads">Downloads</button>
       <button class="menu-item" data-nav="orbit://bookmarks">Bookmarks</button>
       <div class="menu-sep"></div>
-      <button class="menu-item" data-nav="orbit://tasks">Tasks</button>
-      <button class="menu-item" data-nav="orbit://memory">Memory</button>
+      <button class="menu-item" data-nav="orbit://tasks">Tasks</button>                <button class="menu-item" data-nav="orbit://goodeye">God's Eye</button>
+                <button class="menu-item" data-nav="orbit://f1">F1 Monitor</button>
+                <button class="menu-item" data-nav="orbit://memory">Memory</button>
       <button class="menu-item" data-nav="orbit://extensions">Extensions</button>
       <button class="menu-item" data-nav="orbit://extension-store">Extension Store</button>
       <button class="menu-item" data-nav="orbit://import">Import from Chrome</button>
@@ -766,7 +828,11 @@
 
   <!-- ── Scripts ─────────────────────────────────────────────── -->
   <script src="js/chat.js"></script>
+  <link rel="stylesheet" href="css/f1-nothing.css" />
+  <script src="js/workspace.js"></script>
   <script src="js/yt.js"></script>
+  <script src="js/goodeye.js"></script>
+  <script src="js/f1.js"></script>
   <script src="js/needle-agent.js"></script>
   <script src="js/renderer.js"></script>
   <script>

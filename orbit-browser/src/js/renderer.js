@@ -799,6 +799,8 @@ const INTERNAL_PAGES = {
   "orbit://privacy": "privacyPage",
   "orbit://import": "importPage",
   "orbit://extension-store": "extensionStorePage",
+  "orbit://goodeye": "goodeyePage",
+  "orbit://f1": "f1Page",
 };
 
 function isWebviewInternal(url) {
@@ -827,6 +829,11 @@ function showInternalPage(pageId) {
   if (pageId === "permissionsPage") renderPermissionsPage();
   if (pageId === "memoryPage") renderMemoryPage();
   if (pageId === "tasksPage") renderTasksPage();
+  if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
+  if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
+  // Workspaces poll in the background; stop them when their page hides.
+  if (pageId !== "goodeyePage" && window.GoodEye) window.GoodEye.stop();
+  if (pageId !== "f1Page" && window.OrbitF1) window.OrbitF1.stop();
 }
 
 function refreshDiagnostics() {
@@ -1835,7 +1842,7 @@ function handleDshCommand(text) {
       takeScreenshot();
       break;
     case "/yt":
-      handleYtCommand(args);
+      if (window.YT) window.YT.command(args);
       break;
     case "/status":
       showDshStatus();
@@ -1846,43 +1853,6 @@ function handleDshCommand(text) {
       break;
     default:
       send("error", "Unknown command: " + cmd + ". Type /help for available commands.");
-  }
-}
-
-async function handleYtCommand(args) {
-  const q = (args || "").trim();
-  if (!q) {
-    Chat.append("jarvis",
-      "Private YouTube usage: /yt <search>\n" +
-      "  \u25B8 /yt lofi beats          \u2014 tracking-free search\n" +
-      "  \u25B8 /yt summarize <videoUrl> \u2014 summarize any video's transcript\n" +
-      "  \u25B8 results open via youtube-nocookie embeds by default");
-    return;
-  }
-  // Transcript path: /yt summarize <url-or-id>
-  const m = q.match(/^(?:summarize|summary)\s+(\S+)/i);
-  if (m) {
-    const vm = m[1].match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{6,})/) || m[1].match(/^([\w-]{6,})$/);
-    if (!vm) { Chat.append("error", "Could not find a video id in: " + m[1]); return; }
-    Chat.append("system", "Fetching transcript\u2026");
-    const video = { id: vm[1], title: m[1] };
-    try {
-      await window.YT.summarize(video);
-    } catch (e) {
-      Chat.append("error", "YT summarize failed: " + e.message);
-    }
-    return;
-  }
-  // Search path
-  Chat.append("system", "Searching privately via Piped/Invidious\u2026");
-  try {
-    const results = await window.YT.search(q);
-    if (!results.length) { Chat.append("jarvis", "No results for \"" + q + "\"."); return; }
-    window.YT.renderResults(results);
-    const summary = results.slice(0, 3).map((v, i) => (i + 1) + ". " + v.title + " \u2014 " + v.uploader).join("\n");
-    Chat.append("jarvis", "Found " + results.length + " tracking-free results:\n\n" + summary);
-  } catch (e) {
-    Chat.append("error", "Private YouTube search failed: " + e.message);
   }
 }
 

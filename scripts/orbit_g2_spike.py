@@ -10,7 +10,7 @@ Acceptance criteria (from the locked spec / foundation decision doc):
   7. Network policy / loopback-only foundation holds (binds as expected).
 
 Runtime is resolved via J_BROWSER_CHROMIUM_PATH or the Playwright build detected
-under %LOCALAPPDATA%\ms-playwright — never the user's installed Chrome, never a
+under %LOCALAPPDATA%\\ms-playwright — never the user's installed Chrome, never a
 hardcoded user path.
 
 Run (hermetic-ish; launches a real headed Chromium window):
@@ -27,7 +27,6 @@ import json
 import os
 import socket
 import subprocess
-import sys
 import time
 import urllib.request
 from pathlib import Path
