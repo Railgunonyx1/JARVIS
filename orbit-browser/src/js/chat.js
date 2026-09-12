@@ -255,6 +255,7 @@
     { cmd: "/read",     desc: "Read page content" },
     { cmd: "/screenshot",desc: "Capture the page" },
     { cmd: "/status",   desc: "Show JARVIS/DSH status" },
+    { cmd: "/yt",       desc: "Private YouTube search (no tracking)" },
     { cmd: "/help",     desc: "Show available commands" },
   ];
 

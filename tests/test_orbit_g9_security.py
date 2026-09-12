@@ -14,11 +14,10 @@ import re
 from core.agent.permissions import PermissionEngine
 from core.agent.tool_service import ToolExecutionService
 from core.decision_logger import DecisionLogger
-from providers.types import ToolCall
-from tools.registry import ToolRegistry
-
 from orbit import tools as orbit_tools
 from orbit.tools import build_orbit_tools
+from providers.types import ToolCall
+from tools.registry import ToolRegistry
 
 
 def _service(logger, handler=None) -> ToolExecutionService:

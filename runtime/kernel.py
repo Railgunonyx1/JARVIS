@@ -12,7 +12,7 @@ The legacy :class:`JarvisKernel` OS-style skeleton is kept for compatibility.
 import asyncio
 import atexit
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from runtime.startup_profile import get_profiler
 
@@ -140,8 +140,8 @@ def build_kernel(mode: str = "agent", max_iterations: int = 10,
     with profiler.phase("import.harness"):
         from core.harness import HarnessSelector
     with profiler.phase("import.tool_service"):
-        from core.agent.tool_service import ToolExecutionService
         from core.agent.permissions import PermissionEngine
+        from core.agent.tool_service import ToolExecutionService
         from core.agent.tools import AgentToolExecutor
         from core.decision_logger import get_decision_logger
     with profiler.phase("config"):
@@ -153,7 +153,13 @@ def build_kernel(mode: str = "agent", max_iterations: int = 10,
         project = (ProjectContext.discover(project_dir) if project_dir
                    else ProjectContext.discover())
     with profiler.phase("providers.router"):
-        router = ProviderRouter(models_config, _load_api_keys())
+        from core.api_keys import router_api_keys
+
+        # router_api_keys() normalizes "<provider>_api_key" entries to the
+        # plain-provider shape ProviderRouter expects — raw keys silently
+        # drop every keyed provider (groq/openrouter/opencode_zen/...) and
+        # leave only ollama + omni_route.
+        router = ProviderRouter(models_config, router_api_keys())
     with profiler.phase("events"):
         event_bus = get_event_bus()
     with profiler.phase("model_gateway"):

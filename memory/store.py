@@ -347,7 +347,7 @@ class MemoryStore:
 
     def get_blob(self, key: str, owner: str | None = None) -> dict | None:
         """Return ``{key, data, mime, size, category, meta, created_at}``."""
-        from memory.keyspace import can_read, parse_key
+        from memory.keyspace import can_read
 
         with self._lock:
             row = self._conn.execute(

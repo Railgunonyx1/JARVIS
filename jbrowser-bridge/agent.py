@@ -47,26 +47,19 @@ def build_orbit_agent_loop(
     (denied without a confirmation handler).
     """
     from core.agent.loop import AgentLoop as _AgentLoop
-    from core.agent.permissions import PermissionEngine
+    from core.api_keys import router_api_keys
     from core.decision_logger import get_decision_logger
     from core.harness import Harness, HarnessConfig, HarnessType
-    from providers.router import ProviderRouter
-    from runtime.kernel import _load_api_keys, _load_models_config
-    from tools.registry import ToolRegistry
-
-    from orbit.tools import build_orbit_tools
     from orbit.recovery import BrowserRecovery
+    from orbit.tools import build_orbit_tools
+    from providers.router import ProviderRouter
+    from runtime.kernel import _load_models_config
+    from tools.registry import ToolRegistry
 
     registry = ToolRegistry()
     registry.register_many(build_orbit_tools())
 
     logger = get_decision_logger()
-    permissions = PermissionEngine(
-        logger,
-        mode="agent",
-        confirmation_handler=confirmation_handler,
-        fail_closed_risky=True,
-    )
     _verified = os.environ.get("JARVIS_ORBIT_VERIFY", "0") in ("1", "true")
     harness = Harness(HarnessConfig(
         harness_type=HarnessType.MINIMAL,
@@ -76,7 +69,7 @@ def build_orbit_agent_loop(
         max_tool_calls_per_step=4,
     ))
     return _AgentLoop(
-        router=ProviderRouter(_load_models_config(), _load_api_keys()),
+        router=ProviderRouter(_load_models_config(), router_api_keys()),
         registry=registry,
         decision_logger=logger,
         harness=harness,

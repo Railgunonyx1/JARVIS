@@ -43,6 +43,18 @@ known-first-party = [
     "core", "memory", "providers", "tools", "runtime", "cli", "security",
 ]
 
+[tool.ruff.lint.extend-per-file-ignores]
+# JS-expression templates deliberately use %/.format over f-strings (escaped
+# braces inside JS bodies). Line-length exceptions are long embedded strings.
+"orbit/cdp.py" = ["UP031", "UP032", "E501"]
+"memory/user_profile.py" = ["E501"]
+"tools/__init__.py" = ["E501"]
+"core/harness_selector.py" = ["E501"]
+
+# Tests intentionally use mock lambdas, one-line assert rows, long fixture
+# strings, and assert-False negative checks.
+"tests/*" = ["PLW0108", "E702", "E501", "E731", "B011"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

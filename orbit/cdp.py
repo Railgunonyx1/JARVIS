@@ -35,8 +35,6 @@ from websockets.sync.client import connect as ws_connect
 from core.locks import OWNER_SYSTEM, OWNER_USER, ResourceLockedError, get_resource_lock
 from jbrowser.backend.base import BrowserBackend, TabInfo
 from jbrowser.events import (
-    ACTION_COMPLETED,
-    AGENT_ACTION,
     NAVIGATION_COMPLETED,
     NAVIGATION_STARTED,
     PAGE_LOADED,
@@ -47,7 +45,7 @@ from jbrowser.events import (
 )
 from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError
 from jbrowser.tabs import TabManager
-from orbit.registry import OWNER_AGENT, OrbitTarget, TargetRegistry
+from orbit.registry import OWNER_AGENT, TargetRegistry
 
 logger = logging.getLogger("orbit.cdp")
 
@@ -218,7 +216,7 @@ class CDPConnection:
             except Exception:
                 pass
 
-    def __enter__(self) -> "CDPConnection":
+    def __enter__(self) -> CDPConnection:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -424,7 +422,7 @@ class CDPBackend(BrowserBackend):
                 subprocess.run(
                     ["taskkill", "/PID", str(pid), "/T", "/F"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    timeout=10,
+                    timeout=10, check=False,
                 )
                 return
             except Exception:
@@ -757,8 +755,8 @@ class CDPBackend(BrowserBackend):
         self._ensure_page_dom(conn)
         if selector:
             expr = (
-                "(function(){var el=document.querySelector(%r);"
-                "return el?el.innerText.slice(0,5000):'';})()" % selector
+                "(function(){{var el=document.querySelector({!r});"
+                "return el?el.innerText.slice(0,5000):'';}})()".format(selector)
             )
         else:
             expr = _JS_PAGE_TEXT
@@ -837,8 +835,8 @@ class CDPBackend(BrowserBackend):
         conn = self._page_conn(key)
         self._ensure_page_dom(conn)
         expr = (
-            "(function(){var el=document.querySelector(%r);"
-            "if(!el)return false;el.scrollIntoView({block:'center'});el.click();return true;})()" % selector
+            "(function(){{var el=document.querySelector({!r});"
+            "if(!el)return false;el.scrollIntoView({{block:'center'}});el.click();return true;}})()".format(selector)
         )
         res = self._eval(conn, expr)
         return bool(res.get("result", {}).get("value", False))
@@ -849,13 +847,12 @@ class CDPBackend(BrowserBackend):
         self._ensure_page_dom(conn)
         safe_text = json.dumps(text)
         expr = (
-            "(function(){var el=document.querySelector(%r);if(!el)return false;"
+            "(function(){{var el=document.querySelector({!r});if(!el)return false;"
             "el.focus();var setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set||"
             "Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;"
-            "setter?setter.call(el,%s):(el.value=%s);"
-            "el.dispatchEvent(new Event('input',{bubbles:true}));"
-            "el.dispatchEvent(new Event('change',{bubbles:true}));return true;})()"
-            % (selector, safe_text, safe_text)
+            "setter?setter.call(el,{}):(el.value={});"
+            "el.dispatchEvent(new Event('input',{{bubbles:true}}));"
+            "el.dispatchEvent(new Event('change',{{bubbles:true}}));return true;}})()".format(selector, safe_text, safe_text)
         )
         res = self._eval(conn, expr)
         return bool(res.get("result", {}).get("value", False))

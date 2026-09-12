@@ -17,6 +17,11 @@ class GeminiProvider(LLMProvider):
         self.api_key = api_key
         self._client = None
         self._sdk_package = "google.generativeai"
+        # The google-genai client has no useful default timeout — a dead
+        # endpoint hangs for minutes and stalls the router's fallback chain.
+        # Bound every request so the chain can move on (configurable via
+        # [gemini] timeout_seconds in config/models.toml).
+        self._timeout_seconds = float(config.get("timeout_seconds", 45.0))
 
     def _get_client(self):
         if self._client is None:
@@ -109,11 +114,14 @@ class GeminiProvider(LLMProvider):
         start = time.time()
         try:
             import asyncio
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=self._model,
-                contents=contents,
-                config=config,
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.models.generate_content,
+                    model=self._model,
+                    contents=contents,
+                    config=config,
+                ),
+                timeout=self._timeout_seconds,
             )
             latency = (time.time() - start) * 1000
             text = ""
@@ -196,7 +204,10 @@ class GeminiProvider(LLMProvider):
 
         try:
             while True:
-                item = await queue.get()
+                # Bound the inter-chunk wait: the producer thread is daemonized
+                # and generate_content itself is unbounded, so a stalled
+                # endpoint would otherwise block this consumer forever.
+                item = await asyncio.wait_for(queue.get(), timeout=self._timeout_seconds)
                 if item is sentinel:
                     break
                 if isinstance(item, Exception):

@@ -20,9 +20,6 @@ import pytest  # noqa: F401  (fixtures)
 from core.agent.permissions import PermissionEngine
 from core.agent.tool_service import ToolExecutionService
 from core.decision_logger import DecisionLogger
-from providers.types import ToolCall
-from tools.registry import ToolRegistry
-
 from memory.keyspace import (
     KIND_AGENT,
     can_read,
@@ -34,7 +31,8 @@ from memory.keyspace import (
 from memory.store import BLOB_MAX_BYTES, MemoryStore
 from orbit.memory import get_orbit_memory, reset_orbit_memory
 from orbit.tools import build_orbit_tools
-
+from providers.types import ToolCall
+from tools.registry import ToolRegistry
 
 # ---------------------------------------------------------------------------
 # Keyspace rules
@@ -72,7 +70,6 @@ class TestKeyspace:
         user = "user"
         sys = "system"
         ag1 = owner_key(KIND_AGENT, "main")
-        ag2 = owner_key(KIND_AGENT, "research-1")
         assert can_write("user.notes.x", user)
         assert not can_write("system.orbit.x", user)
         assert not can_write("agent.main.notes.x", user)

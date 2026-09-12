@@ -19,7 +19,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 
 # Event emission is lazy-imported to avoid circular import with
 # core.daemon.__init__. skills registry. During initialization or testing,
@@ -82,13 +82,13 @@ class HarnessSelector:
         self.skill_registry = skill_registry
 
         # Harness availability tracking: tier → list of available harness names
-        self._available_harnesses: Dict[str, List[str]] = {}
+        self._available_harnesses: dict[str, list[str]] = {}
 
         # Session affinity: session_id → (harness_name, expires_at)
-        self._session_affinity: Dict[str, tuple[str, float]] = {}
+        self._session_affinity: dict[str, tuple[str, float]] = {}
 
         # Selection history for monitoring
-        self._selection_history: List[Dict[str, Any]] = []
+        self._selection_history: list[dict[str, Any]] = []
 
         # Emission source
         self._source = "harness_selector"
@@ -103,9 +103,9 @@ class HarnessSelector:
         self,
         tier: str = "medium",
         *,
-        capability: Optional[List[str]] = None,
+        capability: list[str] | None = None,
         capability_filter: str = CAP_CLOUD_ALLOWED,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         emit: bool = True,
     ) -> str:
         """Select a harness for the given tier and capabilities.
@@ -179,7 +179,7 @@ class HarnessSelector:
         # Fall back to placeholder names based on tier
         return f"harness_{tier}"
 
-    def _has_capabilities(self, harness: str, capability: List[str]) -> bool:
+    def _has_capabilities(self, harness: str, capability: list[str]) -> bool:
         """Check if a harness supports the required capabilities.
 
         In a production system this would query harness metadata.
@@ -197,7 +197,7 @@ class HarnessSelector:
     # -----------------------------------------------------------------
 
     def select_draft_harness(
-        self, tier: str = "medium", session_id: Optional[str] = None, emit: bool = True
+        self, tier: str = "medium", session_id: str | None = None, emit: bool = True
     ) -> str:
         """Select a draft (lighter) harness for the given tier.
 
@@ -215,7 +215,7 @@ class HarnessSelector:
         return harness
 
     def select_verification_harness(
-        self, tier: str = "medium", session_id: Optional[str] = None, emit: bool = True
+        self, tier: str = "medium", session_id: str | None = None, emit: bool = True
     ) -> str:
         """Select a verification harness for the given tier.
 
@@ -327,7 +327,7 @@ class HarnessSelector:
         except Exception as e:
             logger.debug(f"Failed to emit affinity event: {e}")
 
-    def get_session_affinity(self, session_id: Optional[str] = None) -> Optional[tuple[str, float]]:
+    def get_session_affinity(self, session_id: str | None = None) -> tuple[str, float] | None:
         """Get session affinity info.
 
         Returns (harness_name, expires_at) or None if not found/expired.
@@ -359,7 +359,7 @@ class HarnessSelector:
         harness: str,
         tier: str,
         success: bool,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Record a harness selection for monitoring/history.
 
@@ -388,7 +388,7 @@ class HarnessSelector:
         if len(self._selection_history) > 1000:
             self._selection_history = self._selection_history[-500:]
 
-    def get_selection_stats(self) -> Dict[str, Any]:
+    def get_selection_stats(self) -> dict[str, Any]:
         """Get harness selection statistics from history."""
         if not self._selection_history:
             return {"total": 0}
@@ -414,12 +414,12 @@ class HarnessSelector:
     def _ensure_session_affinity(self) -> None:
         """Ensure _session_affinity dict is initialized."""
         if not hasattr(self, "_session_affinity") or self._session_affinity is None:
-            self._session_affinity: Dict[str, tuple[str, float]] = {}
+            self._session_affinity: dict[str, tuple[str, float]] = {}
 
     def _ensure_selection_history(self) -> None:
         """Ensure _selection_history list is initialized."""
         if not hasattr(self, "_selection_history") or self._selection_history is None:
-            self._selection_history: List[Dict[str, Any]] = []
+            self._selection_history: list[dict[str, Any]] = []
 
     # -----------------------------------------------------------------
     # Module export

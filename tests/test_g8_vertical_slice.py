@@ -10,7 +10,6 @@ except for those two seams.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
 import threading
@@ -22,22 +21,20 @@ if str(BRIDGE_DIR) not in sys.path:
     sys.path.insert(0, str(BRIDGE_DIR))
 
 import pytest  # noqa: E402
+from agent import AgentEngine  # noqa: E402
+from backend import KernelBackend  # noqa: E402
+from server import serve  # noqa: E402
 
 from core.agent.loop import AgentLoop  # noqa: E402
 from core.agent.permissions import PermissionEngine  # noqa: E402
 from core.agent.tool_service import ToolExecutionService  # noqa: E402
-from core.decision_logger import get_decision_logger  # noqa: E402
 from core.harness import Harness, HarnessConfig, HarnessType  # noqa: E402
 from core.project import ProjectContext  # noqa: E402
 from orbit.cdp import CDPBackend  # noqa: E402
 from orbit.controller import get_orbit_controller, reset_orbit_controller  # noqa: E402
+from orbit.tools import build_orbit_tools  # noqa: E402
 from providers.types import LLMResponse, ToolCall  # noqa: E402
 from tools.registry import ToolRegistry  # noqa: E402
-
-from agent import AgentEngine  # noqa: E402
-from backend import KernelBackend  # noqa: E402
-from orbit.tools import build_orbit_tools  # noqa: E402
-from server import serve  # noqa: E402
 
 TARGET = "https://example.com/"
 
@@ -305,6 +302,5 @@ class TestKernelEngineSeam:
     def test_agent_engine_routes_through_kernel_backend(self):
         loop = KernelBackend(engine=AgentEngine(loop_factory=lambda: _build_loop(
             StreamRouter([("fine", None)]), _orbit_registry())))
-        events = []
         assert loop.status()["kernel"] == "online"
         assert loop.status()["engine"] == "agent_loop"

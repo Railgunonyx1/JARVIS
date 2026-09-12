@@ -210,7 +210,7 @@ class JarvisBridge:
                 method="POST",
             )
 
-            with urlopen(req, timeout=30) as resp:
+            with urlopen(req, timeout=120) as resp:
                 # Parse SSE response. The kernel emits {"type": ...} events
                 # (start|delta|done|error).
                 full_response = ""

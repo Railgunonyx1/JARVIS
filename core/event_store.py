@@ -7,7 +7,6 @@ Only records semantically meaningful events:
 Not every telemetry point — those go to MetricsCollector.
 """
 import json
-import orjson
 import logging
 import sqlite3
 import threading
@@ -15,6 +14,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import orjson
 
 logger = logging.getLogger("jarvis.event_store")
 

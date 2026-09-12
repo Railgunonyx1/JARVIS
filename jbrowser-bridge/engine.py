@@ -26,7 +26,7 @@ import asyncio
 import json
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 Emitter = Callable[[dict], None]
 
@@ -91,23 +91,13 @@ def _get_router():
     global _router_cache
     if _router_cache is None:
         _ensure_repo_root_imports()
-        from runtime.kernel import _load_api_keys, _load_models_config
+        from core.api_keys import router_api_keys
         from providers.router import ProviderRouter
-        # ProviderRouter expects API keys keyed by plain provider name
-        # ("gemini", "groq" ...) while the repo loader yields "<name>_api_key"
-        # (plus numbered extras like "groq_api_key_2"). Normalize so the cloud
-        # providers actually initialize instead of being silently skipped.
-        raw = _load_api_keys()
-        keys: dict = {k: v for k, v in raw.items() if "_" not in k}
-        for k, v in raw.items():
-            if k.endswith("_api_key"):
-                keys[k[: -len("_api_key")]] = v
-        for name in ("groq", "openrouter", "mistral"):
-            extras = [v for k, v in raw.items()
-                      if k.startswith(name + "_api_key_") and v]
-            if extras:
-                keys[name + "_extra"] = extras
-        _router_cache = ProviderRouter(_load_models_config(), keys)
+        from runtime.kernel import _load_models_config
+        # Single shared normalization (see core.api_keys.router_api_keys):
+        # maps "<provider>_api_key" (+ numbered extras) to the plain shape
+        # ProviderRouter expects, so keyed cloud providers initialize.
+        _router_cache = ProviderRouter(_load_models_config(), router_api_keys())
     return _router_cache
 
 

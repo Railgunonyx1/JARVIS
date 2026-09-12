@@ -4,20 +4,20 @@ cross-agent tab ownership. All hermetic (fake streamer / no providers)."""
 from __future__ import annotations
 
 import json
+import sys
 import threading
 from pathlib import Path
 
 import pytest
 
-import sys
-
 BRIDGE_DIR = Path(__file__).resolve().parent.parent / "jbrowser-bridge"
 if str(BRIDGE_DIR) not in sys.path:
     sys.path.insert(0, str(BRIDGE_DIR))
 
-from server import serve  # noqa: E402
 from backend import KernelBackend  # noqa: E402
 from engine import Budget, ModelGatewayEngine, trim_messages  # noqa: E402
+from server import serve  # noqa: E402
+
 from core.agent.state import TaskStatus  # noqa: E402
 from core.locks import ResourceLockedError  # noqa: E402
 from orbit.registry import TargetRegistry  # noqa: E402

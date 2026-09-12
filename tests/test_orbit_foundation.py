@@ -15,13 +15,11 @@ import pytest
 
 from core.locks import (
     OWNER_AGENT,
-    OWNER_SYSTEM,
     OWNER_USER,
     ResourceLock,
     ResourceLockedError,
     get_resource_lock,
 )
-
 
 # ── ResourceLock / ownership ────────────────────────────────────────────
 
@@ -140,7 +138,6 @@ def test_risk_gate_requires_confirmation_for_high_risk():
     """High-risk tools must be denied unless the confirmation handler approves."""
     from core.agent.permissions import PermissionEngine
     from core.decision_logger import get_decision_logger
-    from core.mode_manager import get_mode_manager
     from tools.schema import Tool
 
     decisions = []

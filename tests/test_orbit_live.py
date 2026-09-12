@@ -25,7 +25,6 @@ import pytest
 
 from orbit.cdp import CDPBackend, _find_chromium
 from orbit.runtime import OrbitRuntime
-from orbit.tools import build_orbit_tools
 
 _RUN_LIVE = os.environ.get("JARVIS_RUN_BROWSER_LIVE", "0") == "1"
 
@@ -88,8 +87,8 @@ def runtime(local_site):
     runtime = OrbitRuntime()
 
     # Bind the runtime to this backend so nothing touches the default process.
-    from orbit import tools as orbit_tools
     from jbrowser.controller import BrowserController
+    from orbit import tools as orbit_tools
     backend.launch()
     ctl = BrowserController(backend=backend, profile_root=Path("."))
     orbit_tools.get_orbit_controller = lambda *a, **k: ctl

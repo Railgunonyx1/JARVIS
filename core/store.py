@@ -21,12 +21,13 @@ Persistence is optional and injected via a serializer.
 from __future__ import annotations
 
 import json
-import orjson
 import logging
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+import orjson
 
 from core.core_events import CoreEvent
 from core.reducers import reduce

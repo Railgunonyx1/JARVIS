@@ -343,6 +343,7 @@ class TestToolExecutionService:
     def test_execute_known_tool(self):
         svc = ToolExecutionService(registry=build_default_registry())
         import os
+
         from core.project import ProjectContext
         root = str(ProjectContext.discover().root_path)
         tmp = os.path.join(root, ".test_svc.txt")
@@ -355,6 +356,7 @@ class TestToolExecutionService:
     def test_execute_appends_to_messages(self):
         svc = ToolExecutionService(registry=build_default_registry())
         import os
+
         from core.project import ProjectContext
         root = str(ProjectContext.discover().root_path)
         tmp = os.path.join(root, ".test_svc2.txt")
@@ -369,7 +371,7 @@ class TestToolExecutionService:
     def test_execute_tools_batch(self):
         svc = ToolExecutionService(registry=build_default_registry())
         import os
-        import tempfile
+
         from core.project import ProjectContext
         _root = str(ProjectContext.discover().root_path)
         tmp1 = os.path.join(_root, ".test_b1.txt")
@@ -610,7 +612,6 @@ class TestAgentLoopHarnessIntegration:
         assert result.success
 
     def test_loop_with_harness_and_gateway(self):
-        sel = HarnessSelector()
         hc = HarnessConfig(
             harness_type=HarnessType.CODING,
             max_iterations=20,

@@ -24,7 +24,7 @@ def build_default_registry() -> ToolRegistry:
         browser_switch_tab,
         browser_tabs,
     )
-    from tools.audit import run_audit, run_pytest
+    from tools.audit import run_audit
     from tools.browser import (
         browser_click,
         browser_extract,

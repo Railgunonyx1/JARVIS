@@ -47,7 +47,7 @@ def _check_dns_resolution(host: str, netloc: str, allow_private: bool) -> None:
         # DNS resolution failed — deny by default (safe posture).
         raise NetworkPolicyError(
             f"DNS resolution failed for {netloc}; denying by default"
-        )
+        ) from None
     for family, _type, _proto, _canonname, sockaddr in results:
         ip_str = sockaddr[0]
         if _is_private_ip(ip_str):

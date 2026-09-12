@@ -970,19 +970,181 @@ function navigateTo(url) {
 }
 
 // ── Omnibox ───────────────────────────────────────────────────
+// ── Omnibox Suggestions (Chrome-style) ──────────────────────
+const omniSuggest = $("#omniSuggest");
+let omniItems = [];
+let omniSel = -1;
+
+function omniUrlFor(value) {
+  if (!value) return null;
+  if (/^https?:\/\//.test(value)) return value;
+  if (value.startsWith("orbit://")) return value;
+  if (/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(value)) return "https://" + value;
+  return "https://www.google.com/search?q=" + encodeURIComponent(value);
+}
+
+function omniClose() {
+  if (omniSuggest) omniSuggest.hidden = true;
+  omniItems = []; omniSel = -1;
+}
+
+function _oiIcon(kind) {
+  if (kind === "tab") return "⧉";
+  if (kind === "bookmark") return "★";
+  if (kind === "history") return "⏱";
+  return "G";
+}
+
+function _oiLabel(kind) {
+  if (kind === "tab") return "Switch to tab";
+  if (kind === "bookmark") return "Bookmark";
+  if (kind === "history") return "History";
+  return "Google Search";
+}
+
+function _oiBold(main, q) {
+  main = String(main || "");
+  q = String(q || "").trim();
+  if (!q) return escapeHtml(main);
+  const i = main.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return escapeHtml(main);
+  return escapeHtml(main.slice(0, i)) + "<b>" + escapeHtml(main.slice(i, i + q.length)) + "</b>" + escapeHtml(main.slice(i + q.length));
+}
+
+function omniRender() {
+  if (!omniSuggest) return;
+  if (!omniItems.length) { omniClose(); return; }
+  const q = omniInput.value.trim();
+  let html = "";
+  omniItems.forEach(function(it, i) {
+    if (it.sep) { html += '<div class="omni-sep"></div>'; return; }
+    html +=
+      '<button class="omni-item' + (i === omniSel ? " sel" : "") + '" data-i="' + i + '">' +
+        '<span class="oi-icon">' + _oiIcon(it.kind) + "</span>" +
+        '<span class="oi-main">' + _oiBold(it.main, q) + "</span>" +
+        (it.sub ? '<span class="oi-sub">' + escapeHtml(it.sub) + "</span>" : "") +
+        '<span class="oi-kind">' + _oiLabel(it.kind) + "</span>" +
+      "</button>";
+  });
+  omniSuggest.innerHTML = html;
+  omniSuggest.hidden = false;
+}
+
+function omniBuildItems(value) {
+  const v = (value || "").trim().toLowerCase();
+  const items = [];
+  if (!v) { return items; }
+
+  // 1. Open tabs — switch instead of duplicating
+  tabs.forEach(function(tab, id) {
+    const hay = ((tab.title || "") + " " + (tab.url || "")).toLowerCase();
+    if (hay.includes(v) && items.length < 3) {
+      items.push({ kind: "tab", main: tab.title || tab.url, sub: tab.url, url: "__tab__" + id });
+    }
+  });
+
+  // 2. Bookmarks
+  for (const bm of bookmarks) {
+    const hay = ((bm.title || "") + " " + (bm.url || "")).toLowerCase();
+    if (hay.includes(v)) {
+      items.push({ kind: "bookmark", main: bm.title || bm.url, sub: bm.url, url: bm.url });
+      if (items.length >= 8) break;
+    }
+  }
+
+  // 3. History (newest first, most recent duplicate wins)
+  const seen = new Set();
+  for (const h of getHistory()) {
+    const hay = ((h.title || "") + " " + (h.url || "")).toLowerCase();
+    if (hay.includes(v) && !seen.has(h.url)) {
+      seen.add(h.url);
+      items.push({ kind: "history", main: h.title || h.url, sub: h.url, url: h.url });
+      if (items.length >= 8) break;
+    }
+  }
+
+  // 4. Fallback: search Google (always last, after a separator)
+  items.push({ sep: true });
+  items.push({ kind: "search", main: value.trim(), sub: "", url: omniUrlFor(value) });
+  return items;
+}
+
+function omniCommit(i) {
+  const it = omniItems[i];
+  if (!it) return;
+  omniClose();
+  if (it.url.startsWith("__tab__")) {
+    activateTab(it.url.slice(7));
+  } else {
+    navigateTo(it.url);
+  }
+  omniInput.blur();
+}
+
+let _omniTimer = null;
+omniInput.addEventListener("input", function() {
+  clearTimeout(_omniTimer);
+  _omniTimer = setTimeout(function() {
+    const value = omniInput.value;
+    if (!value.trim()) { omniClose(); return; }
+    omniItems = omniBuildItems(value);
+    omniSel = -1;
+    omniRender();
+  }, 60);
+});
+
+if (omniSuggest) {
+  omniSuggest.addEventListener("mousedown", function(e) {
+    // mousedown (not click) so the input's blur doesn't close us first
+    const btn = e.target.closest(".omni-item");
+    if (btn) { e.preventDefault(); omniCommit(parseInt(btn.dataset.i, 10)); }
+  });
+}
+
+omniInput.addEventListener("blur", function() {
+  // Delay so a mousedown on a suggestion wins the race
+  setTimeout(omniClose, 120);
+});
+
 omniInput.addEventListener("keydown", (e) => {
+  if (omniSuggest && !omniSuggest.hidden && omniItems.length) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      do { omniSel = (omniSel + 1) % omniItems.length; } while (omniItems[omniSel] && omniItems[omniSel].sep);
+      omniRender();
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      do { omniSel = (omniSel - 1 + omniItems.length) % omniItems.length; } while (omniItems[omniSel] && omniItems[omniSel].sep);
+      omniRender();
+      return;
+    }
+    if (e.key === "Enter" && omniSel >= 0) {
+      e.preventDefault();
+      omniCommit(omniSel);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      omniClose();
+      omniInput.blur();
+      return;
+    }
+  }
   if (e.key === "Enter") {
+    e.preventDefault();
     const value = omniInput.value.trim();
     if (!value) return;
-    let url;
-    if (value.match(/^https?:\/\//)) url = value;
-    else if (value.match(/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/)) url = "https://" + value;
-    else if (value.startsWith("orbit://")) url = value;
-    else url = "https://www.google.com/search?q=" + encodeURIComponent(value);
-    navigateTo(url);
+    navigateTo(omniUrlFor(value));
+    omniClose();
     omniInput.blur();
   }
 });
+
+// Chrome-style: focusing the omnibox selects its contents, so typing replaces
+// instead of appending to the previous page's URL.
+omniInput.addEventListener("focus", function() { omniInput.select(); });
 
 // ── Navigation Buttons (FIXED: use activeWebview()) ───────────
 backBtn.addEventListener("click", () => {
@@ -1672,6 +1834,9 @@ function handleDshCommand(text) {
     case "/screenshot":
       takeScreenshot();
       break;
+    case "/yt":
+      handleYtCommand(args);
+      break;
     case "/status":
       showDshStatus();
       break;
@@ -1681,6 +1846,43 @@ function handleDshCommand(text) {
       break;
     default:
       send("error", "Unknown command: " + cmd + ". Type /help for available commands.");
+  }
+}
+
+async function handleYtCommand(args) {
+  const q = (args || "").trim();
+  if (!q) {
+    Chat.append("jarvis",
+      "Private YouTube usage: /yt <search>\n" +
+      "  \u25B8 /yt lofi beats          \u2014 tracking-free search\n" +
+      "  \u25B8 /yt summarize <videoUrl> \u2014 summarize any video's transcript\n" +
+      "  \u25B8 results open via youtube-nocookie embeds by default");
+    return;
+  }
+  // Transcript path: /yt summarize <url-or-id>
+  const m = q.match(/^(?:summarize|summary)\s+(\S+)/i);
+  if (m) {
+    const vm = m[1].match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{6,})/) || m[1].match(/^([\w-]{6,})$/);
+    if (!vm) { Chat.append("error", "Could not find a video id in: " + m[1]); return; }
+    Chat.append("system", "Fetching transcript\u2026");
+    const video = { id: vm[1], title: m[1] };
+    try {
+      await window.YT.summarize(video);
+    } catch (e) {
+      Chat.append("error", "YT summarize failed: " + e.message);
+    }
+    return;
+  }
+  // Search path
+  Chat.append("system", "Searching privately via Piped/Invidious\u2026");
+  try {
+    const results = await window.YT.search(q);
+    if (!results.length) { Chat.append("jarvis", "No results for \"" + q + "\"."); return; }
+    window.YT.renderResults(results);
+    const summary = results.slice(0, 3).map((v, i) => (i + 1) + ". " + v.title + " \u2014 " + v.uploader).join("\n");
+    Chat.append("jarvis", "Found " + results.length + " tracking-free results:\n\n" + summary);
+  } catch (e) {
+    Chat.append("error", "Private YouTube search failed: " + e.message);
   }
 }
 
@@ -2236,6 +2438,26 @@ function renderVerticalTabs() {
     tabStripVertical.appendChild(el);
   });
 }
+
+// ── Vertical Tabs toggle (Arc/Zen-style), persisted ──────────
+const vtToggleBtn = $("#vtToggleBtn");
+function setVerticalTabs(on) {
+  if (!tabStripVertical) return;
+  tabStripVertical.classList.toggle("on", !!on);
+  if (vtToggleBtn) vtToggleBtn.classList.toggle("on", !!on);
+  try { localStorage.setItem("orbit-vtabs", on ? "1" : "0"); } catch (e) {}
+  renderVerticalTabs();
+}
+if (vtToggleBtn) {
+  vtToggleBtn.addEventListener("click", function() {
+    setVerticalTabs(!tabStripVertical.classList.contains("on"));
+  });
+}
+(function() {
+  let vOn = false;
+  try { vOn = localStorage.getItem("orbit-vtabs") === "1"; } catch (e) {}
+  setVerticalTabs(vOn);
+})();
 
 // ── Print and Screenshot ──────────────────────────────────────
 function printPage() {

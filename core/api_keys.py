@@ -101,6 +101,30 @@ def get_all_api_keys() -> dict:
     return dict(_merged_keys)
 
 
+def router_api_keys() -> dict:
+    """Return API keys normalized for ProviderRouter construction.
+
+    ProviderRouter looks up ``api_keys["<provider>"]`` (e.g. ``"groq"``) while
+    this loader yields ``"<provider>_api_key"`` (plus numbered extras like
+    ``"groq_api_key_2"``). Without normalization the router silently skips
+    every keyed provider and only keyless ones (ollama, omni_route) start.
+    This is the single owner of that mapping — build routers with::
+
+        ProviderRouter(models_config, router_api_keys())
+    """
+    raw = get_all_api_keys()
+    keys: dict = {k: v for k, v in raw.items() if "_" not in k}
+    for k, v in raw.items():
+        if k.endswith("_api_key"):
+            keys[k[: -len("_api_key")]] = v
+    for name in ("groq", "openrouter", "mistral"):
+        extras = [v for k, v in raw.items()
+                  if k.startswith(name + "_api_key_") and v]
+        if extras:
+            keys[name + "_extra"] = extras
+    return keys
+
+
 def reload_api_keys() -> dict:
     global _merged_keys
     with _keys_lock:

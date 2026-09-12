@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 import types
 from pathlib import Path
 
@@ -20,7 +19,6 @@ from jbrowser.controller import BrowserController
 from orbit.cdp import CDPBackend, NetworkPolicyError
 from orbit.registry import TargetRegistry
 from orbit.tools import build_orbit_tools
-
 
 # ---------------------------------------------------------------------------
 # Fake CDP transport: an in-memory connection that answers CDP commands and

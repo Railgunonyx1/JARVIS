@@ -41,7 +41,7 @@ class _Entry:
 class Lease:
     """Handed to the acquirer; release via ``.release()`` or context manager."""
 
-    lock: "ResourceLock"
+    lock: ResourceLock
     key: str
     owner: str
     reentrant: bool = field(default=False)
@@ -49,7 +49,7 @@ class Lease:
     def release(self) -> None:
         self.lock.release(self.key, self.owner)
 
-    def __enter__(self) -> "Lease":
+    def __enter__(self) -> Lease:
         return self
 
     def __exit__(self, *exc: Any) -> None:

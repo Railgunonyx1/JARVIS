@@ -20,10 +20,9 @@ from typing import Any
 from core.agent.permissions import PermissionEngine
 from core.agent.tool_service import ToolExecutionService
 from core.decision_logger import get_decision_logger
+from orbit.tools import build_orbit_tools
 from providers.types import ToolCall
 from tools.registry import ToolRegistry
-
-from orbit.tools import build_orbit_tools
 
 
 class OrbitRuntime:

@@ -16,9 +16,6 @@ import pytest  # noqa: F401  (fixtures)
 from core.agent.permissions import PermissionEngine
 from core.agent.tool_service import ToolExecutionService
 from core.decision_logger import DecisionLogger
-from providers.types import ToolCall
-from tools.registry import ToolRegistry
-
 from orbit.tools import build_orbit_tools
 from orbit.wizard import (
     ImportPlan,
@@ -27,6 +24,8 @@ from orbit.wizard import (
     parse_password_csv,
     run_import_analysis,
 )
+from providers.types import ToolCall
+from tools.registry import ToolRegistry
 
 SECRETS = ("S3cret-Pw!42", "hunter2", "CorrectHorse78!!")
 

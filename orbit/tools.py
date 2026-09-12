@@ -21,11 +21,10 @@ from typing import Any
 from core.locks import ResourceLockedError
 from jbrowser.page_context import PageContext
 from jbrowser.permissions import describe_permissions
-from tools.classification import classify_tool
-from tools.schema import Tool, ToolResult
-
 from memory.keyspace import KIND_AGENT, owner_key
 from orbit.controller import get_orbit_controller
+from tools.classification import classify_tool
+from tools.schema import Tool, ToolResult
 
 MAX_OUTPUT = 8000
 

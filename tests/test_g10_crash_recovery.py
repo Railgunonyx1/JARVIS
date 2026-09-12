@@ -19,18 +19,16 @@ import pytest  # noqa: F401  (fixtures)
 from core.agent.loop import AgentLoop
 from core.agent.permissions import PermissionEngine
 from core.agent.recovery import RecoveryOutcome, RecoveryProvider
-from core.agent.tool_service import ToolExecutionService
 from core.agent.state import FailureClass, TaskStatus
+from core.agent.tool_service import ToolExecutionService
 from core.harness import Harness, HarnessConfig, HarnessType
 from core.project import ProjectContext
 from orbit.cdp import CDPBackend
 from orbit.controller import get_orbit_controller, reset_orbit_controller
-from providers.types import LLMResponse, ToolCall
-from tools.registry import ToolRegistry
-
 from orbit.recovery import BROWSER_DOWN_MARKERS, BrowserRecovery, is_browser_down_error
 from orbit.tools import build_orbit_tools
-
+from providers.types import LLMResponse, ToolCall
+from tools.registry import ToolRegistry
 
 # ---------------------------------------------------------------------------
 # Fake browser transport that can crash and recover

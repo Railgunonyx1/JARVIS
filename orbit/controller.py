@@ -14,7 +14,6 @@ import threading
 from pathlib import Path
 
 from jbrowser.controller import BrowserController
-
 from orbit.cdp import CDPBackend
 
 

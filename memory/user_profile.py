@@ -8,10 +8,8 @@ the memory system at bootstrap so the agent always has this context.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
-
 
 USER_PROFILE = {
     "technical_interests": {
@@ -252,7 +250,7 @@ def load_user_profile() -> dict[str, Any]:
     path = get_user_profile_path()
     if path.exists():
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
