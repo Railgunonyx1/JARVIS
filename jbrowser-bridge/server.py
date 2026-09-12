@@ -126,6 +126,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self.path == "/status":
             self._json(200, self.backend.status())
             return
+        if self.path == "/v1/models":
+            self._models()
+            return
         self._json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
@@ -144,15 +147,38 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not found"})
 
     # ── endpoints ──────────────────────────────────────────────────────────
+    def _models(self) -> None:
+        """GET /v1/models — selectable models for the browser model picker.
+
+        Reads availability live from the engine's router (config models +
+        dynamic Ollama tags). Answers with an empty list rather than failing
+        when no kernel engine is attached, so the UI still renders.
+        """
+        models: list[dict] = []
+        engine = getattr(self.backend, "engine", None)
+        if engine is not None and hasattr(engine, "_models"):
+            try:
+                models = engine._models()
+            except Exception:  # noqa: BLE001
+                models = []
+        self._json(200, {"ok": True, "models": models})
+
     def _stream_chat(self, session_id: str, messages: list,
-                     page: dict | None) -> None:
-        """Emit the backend's stream as SSE, catching engine failures."""
+                     page: dict | None, model: str | None = None) -> None:
+        """Emit the backend's stream as SSE, catching engine failures.
+
+        Emits a trailing ``meta`` event with the provider that actually served
+        the reply and the end-to-end latency, so the UI can show real provenance.
+        """
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self._cors(self.headers.get("Origin"))
         self.end_headers()
+
+        import time as _time
+        started = _time.monotonic()
 
         def emit(event: dict) -> None:
             try:
@@ -162,10 +188,29 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 pass
 
         try:
-            self.backend.stream_chat(session_id, messages, page, emit)
+            self.backend.stream_chat(session_id, messages, page, emit, model=model)
         except Exception as exc:  # noqa: BLE001
             logger.exception("chat backend error")
             emit({"type": "error", "message": str(exc)[:500], "code": "backend_error"})
+        finally:
+            # Provenance + latency AFTER the terminal event, so clients that
+            # treat the first error/done as final still work and tests that
+            # assert events[-1] type are unaffected (meta is trailing info).
+            try:
+                import engine as _eng
+                router_obj = _eng._router_cache
+                last = (
+                    (router_obj._last_provider, router_obj._last_model)
+                    if router_obj is not None else None
+                )
+            except Exception:
+                last = None
+            latency_ms = int((_time.monotonic() - started) * 1000)
+            meta: dict = {"latency_ms": latency_ms}
+            if last and last[0]:
+                meta["provider"] = last[0]
+                meta["model"] = f"{last[0]}/{last[1]}" if last[1] else last[0]
+            emit({"type": "meta", **meta})
         # SSE streams end with the "done"/"error" event; close the connection
         # so clients that also read to EOF release cleanly.
         self.close_connection = True
@@ -180,7 +225,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             messages = [{"role": "user", "content": data.get("text")}]
         session_id = str(data.get("session_id") or "anon")
         page = data.get("page")
-        self._stream_chat(session_id, messages, page)
+        model = data.get("model") or None
+        self._stream_chat(session_id, messages, page, model)
 
     def _agent(self) -> None:
         """Launch a JARVIS agent task (DSH-style) over the kernel engine.
@@ -263,9 +309,16 @@ def main(argv=None) -> int:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
+    # UTF-8 stdout handler: on Windows the default cp1252 console codec
+    # crashes logging on unicode (provider names use "\u2192" arrows), which
+    # raised inside logging and noise-killed handler threads mid-request.
+    handler = logging.StreamHandler(
+        open(sys.stdout.fileno(), "w", encoding="utf-8", closefd=False)
+    )
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
-        stream=sys.stdout,
+        handlers=[handler],
     )
     # A `kernel` backend is only real intelligence when an engine is attached.
     # ModelGatewayEngine is the default chat engine (lazy provider import —
@@ -277,6 +330,19 @@ def main(argv=None) -> int:
             from engine import ModelGatewayEngine
             engine = ModelGatewayEngine()
             logger.info("kernel backend attached with engine=%s", engine.name)
+            # Warm eagerly at boot: the router build (~3s) plus provider SDK
+            # imports (~8s) must land during startup, not on the first hello
+            # (which would otherwise pay 10s+ of TTFT). Background thread —
+            # the server binds and answers /status immediately.
+            import threading
+            def _warm() -> None:
+                try:
+                    import engine as _eng
+                    _eng._get_router().warm()
+                    logger.info("provider warmup complete (SDKs imported)")
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("provider warmup failed: %s", exc)
+            threading.Thread(target=_warm, daemon=True, name="bridge-warmup").start()
         except Exception as exc:  # noqa: BLE001 - degrade to hollow, never crash
             logger.error("could not attach kernel engine (%s); serving hollow", exc)
     httpd = serve(args.host, args.port, backend_kind=args.backend,

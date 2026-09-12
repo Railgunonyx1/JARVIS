@@ -162,8 +162,10 @@ class TestKernelBackendWiring:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 events = _read_sse(resp)
             assert resp.status == 200
-            assert events[-1]["type"] == "error"
-            assert events[-1]["code"] == "backend_error"
+            # meta (latency/provenance) trails the terminal event
+            terminal = [e for e in events if e["type"] != "meta"][-1]
+            assert terminal["type"] == "error"
+            assert terminal["code"] == "backend_error"
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -244,7 +246,7 @@ class TestBridgeChatWithKernelEngine:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 events = _read_sse(resp)
             assert resp.status == 200
-            assert [e["type"] for e in events] == ["start", "delta", "done"]
+            assert [e["type"] for e in events if e["type"] != "meta"] == ["start", "delta", "done"]
             assert events[1]["text"] == "hello kernel"
             assert events[0]["backend"] == "fake"
         finally:

@@ -184,11 +184,14 @@ class GeminiProvider(LLMProvider):
 
         def _produce() -> None:
             try:
-                response = client.models.generate_content(
+                # google-genai 2.x: streaming is generate_content_stream; the
+                # generate_content(stream=True) call this used to make raises
+                # TypeError (no such kwarg), which made every Gemini attempt
+                # a guaranteed ~10s failure in the fallback chain.
+                response = client.models.generate_content_stream(
                     model=model or self._model,
                     contents=contents,
                     config=config,
-                    stream=True,
                 )
                 for chunk in response:
                     if chunk.text:

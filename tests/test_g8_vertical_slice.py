@@ -271,8 +271,10 @@ class TestVerticalSlice:
             httpd.shutdown()
             httpd.server_close()
         assert status == 200
-        assert [e["type"] for e in events][-1] == "done"
-        assert events[-1]["success"] is True
+        # The bridge emits a trailing "meta" provenance event after "done".
+        terminal = [e for e in events if e["type"] != "meta"]
+        assert terminal[-1]["type"] == "done"
+        assert terminal[-1]["success"] is True
         # The fake CDP page actually navigated: agent -> tool -> controller -> CDP.
         assert orbit_browser.url == TARGET
 

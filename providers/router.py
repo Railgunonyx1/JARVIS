@@ -2,8 +2,10 @@
 
 import asyncio
 import importlib
+import json
 import logging
 import time
+import urllib.request
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -47,6 +49,16 @@ def _lazy_import_provider(name: str) -> type:
 
 # Maximum retry-after delay before we fallback instead of waiting.
 _MAX_RETRY_WAIT_S = 5.0
+
+
+def _ollama_local_fetch(url: str, timeout: int = 3) -> bytes:
+    """Fetch a URL bypassing any system proxy — for localhost Ollama reads."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    resp = opener.open(url, timeout=timeout)
+    try:
+        return resp.read()
+    finally:
+        resp.close()
 
 
 class ProviderRouter:
@@ -391,6 +403,76 @@ class ProviderRouter:
 
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
 
+    def _model_for(self, provider_name: str, request_model: str | None) -> str | None:
+        """Resolve the request-scoped model override for one provider.
+
+        Ollama accepts any local tag, so the caller's choice always applies
+        there. Cloud providers only honor a choice that matches a model they
+        are configured for (their configured model or fallback) — a choice
+        aimed at one provider must never silently rewrite another's request.
+        """
+        if not request_model:
+            return None
+        if provider_name == "ollama":
+            return request_model
+        provider = self._providers.get(provider_name)
+        if provider is None:
+            return None
+        owned = {provider.model, provider.config.get("model")}
+        fallback = self._config.get(provider_name, {}).get("fallback", {})
+        if isinstance(fallback, dict) and fallback.get("model"):
+            owned.add(fallback.get("model"))
+        owned.discard(None)
+        return request_model if request_model in owned else None
+
+    def list_models(self) -> list[dict]:
+        """Every selectable model across the configured provider fleet.
+
+        One entry per provider's primary and fallback model plus its dynamic
+        Ollama tags, marked with availability so the UI can gray out providers
+        that are offline (missing key, rate-limited, circuit open).
+        """
+        models: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for name in self._chain:
+            provider = self._providers.get(name)
+            if provider is None:
+                continue
+            cfg = self._config.get(name, {}) or {}
+            available = bool(provider.is_available)
+            entries: list[tuple[str, str]] = [(provider.model, "primary")]
+            fallback = cfg.get("fallback", {})
+            if isinstance(fallback, dict) and fallback.get("model") and fallback.get("model") != provider.model:
+                entries.append((fallback["model"], "fallback"))
+            if name == "ollama":
+                for tag in self.ollama_tags():
+                    entries.append((tag, "local"))
+            for model, kind in entries:
+                key = (name, model)
+                if not model or key in seen:
+                    continue
+                seen.add(key)
+                models.append({
+                    "id": f"{name}/{model}",
+                    "provider": name,
+                    "model": model,
+                    "kind": kind,
+                    "available": available,
+                })
+        return models
+
+    def ollama_tags(self) -> list[str]:
+        """Live model tags from a running Ollama daemon ([] when offline)."""
+        ollama = self._providers.get("ollama")
+        if ollama is None:
+            return []
+        try:
+            raw = _ollama_local_fetch(f"{ollama.base_url}/api/tags", timeout=3)
+            data = json.loads(raw)
+            return [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+        except Exception:
+            return []
+
     async def complete_stream(
         self,
         messages: list[dict],
@@ -426,7 +508,10 @@ class ProviderRouter:
         with tracer.span("router.stream") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                # All providers get sanitized tools; Ollama provider re-maps internally
+                # Request-scoped model override: honor the caller's model on
+                # whichever provider actually owns it (Ollama swap + cloud
+                # providers whose configured model matches the choice).
+                _stream_model = self._model_for(provider_name, _request_model)
                 tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 while True:
@@ -435,7 +520,6 @@ class ProviderRouter:
                             start = time.perf_counter()
                             chars = 0
                             first_chunk = True
-                            _stream_model = _request_model if provider_name == "ollama" else None
                             async for chunk in provider.complete_stream(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
                                 model=_stream_model,

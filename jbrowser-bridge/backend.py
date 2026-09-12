@@ -31,7 +31,8 @@ class Backend(ABC):
 
     @abstractmethod
     def stream_chat(self, session_id: str, messages: list[dict[str, Any]],
-                    page: dict[str, Any] | None, emit: Emitter) -> None:
+                    page: dict[str, Any] | None, emit: Emitter,
+                    model: str | None = None) -> None:
         ...
 
 
@@ -63,7 +64,8 @@ class EchoBackend(Backend):
         return "; ".join(bits) or "no page context"
 
     def stream_chat(self, session_id: str, messages: list[dict[str, Any]],
-                    page: dict[str, Any] | None, emit: Emitter) -> None:
+                    page: dict[str, Any] | None, emit: Emitter,
+                    model: str | None = None) -> None:
         last = messages[-1]["content"] if messages else ""
         page_summary = self._page_summary(page)
 
@@ -131,9 +133,15 @@ class KernelBackend(Backend):
         return note
 
     def stream_chat(self, session_id: str, messages: list[dict[str, Any]],
-                    page: dict[str, Any] | None, emit: Emitter) -> None:
+                    page: dict[str, Any] | None, emit: Emitter,
+                    model: str | None = None) -> None:
         if self._engine is not None:
-            self._engine.stream_chat(session_id, messages, page, emit)
+            # Engines predate per-chat model selection; only pass the choice
+            # when the engine's signature supports it.
+            try:
+                self._engine.stream_chat(session_id, messages, page, emit, model=model)
+            except TypeError:
+                self._engine.stream_chat(session_id, messages, page, emit)
             return
         self._not_attached(session_id, emit)
 

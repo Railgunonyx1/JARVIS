@@ -24,11 +24,207 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
+
+def _split_model_choice(model: str | None) -> tuple[str | None, str | None]:
+    """Split a UI model choice into (provider, model).
+
+    Accepts ``"groq/llama-3.3-70b"`` (preferred), a bare model id (routed to
+    whichever provider claims it, Ollama tags always match locally), or a
+    provider name alone (that provider's configured model).
+    """
+    if not model:
+        return None, None
+    choice = str(model).strip()
+    if "/" in choice:
+        provider, _, model_id = choice.partition("/")
+        return provider or None, model_id or None
+    if choice in _PROVIDER_NAMES():
+        return choice, None
+    return None, choice
+
+
+def _PROVIDER_NAMES() -> set[str]:
+    """Provider names known to the router config (lazy, never raises)."""
+    try:
+        router = _get_router()
+        return set(getattr(router, "_providers", {}).keys())
+    except Exception:  # noqa: BLE001
+        return set()
+
 Emitter = Callable[[dict], None]
+
+
+# ── Shared event loop (latency) ──────────────────────────────────
+# asyncio.run() per message tears down every pooled HTTP connection and pays
+# a fresh TCP+TLS handshake to each provider on every hello (~1s+ of pure
+# latency). One persistent background loop keeps provider clients and their
+# connection pools warm across requests.
+_shared_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_shared_loop() -> asyncio.AbstractEventLoop:
+    global _shared_loop
+    if _shared_loop is None or _shared_loop.is_closed():
+        _shared_loop = asyncio.new_event_loop()
+        threading.Thread(
+            target=_shared_loop.run_forever, daemon=True, name="bridge-async-loop",
+        ).start()
+    return _shared_loop
+
+
+def _run_on_shared_loop(coro):
+    """Run ``coro`` on the persistent loop; block the caller until done."""
+    return asyncio.run_coroutine_threadsafe(coro, _get_shared_loop()).result()
+
+
+# ── First-token race (latency) ───────────────────────────────────
+_RACE_MAX_PROBES = 3
+
+
+def _make_think_filter():
+    """Stateful <think>-block filter (reasoning models stream their
+    thoughts first; users see only the answer). Returns (filter, flush).
+    Tag boundaries straddling chunks are handled by holding back the longest
+    buffer suffix that is a prefix of the tag."""
+    state = {"in": False, "buf": ""}
+    OPEN, CLOSE = "<think>", "</think>"
+
+    def _feed(piece: str) -> str:
+        state["buf"] += piece
+        out: list[str] = []
+        while state["buf"]:
+            if state["in"]:
+                end = state["buf"].find(CLOSE)
+                if end == -1:
+                    state["buf"] = state["buf"][-(len(CLOSE) - 1):]
+                    break
+                state["buf"] = state["buf"][end + len(CLOSE):]
+                state["in"] = False
+            else:
+                start = state["buf"].find(OPEN)
+                if start == -1:
+                    hold = 0
+                    for k in range(min(len(state["buf"]), len(OPEN) - 1), 0, -1):
+                        if state["buf"].endswith(OPEN[:k]):
+                            hold = k
+                            break
+                    emit_from = len(state["buf"]) - hold
+                    if emit_from > 0:
+                        out.append(state["buf"][:emit_from])
+                        state["buf"] = state["buf"][emit_from:]
+                    break
+                if start > 0:
+                    out.append(state["buf"][:start])
+                state["buf"] = state["buf"][start + len(OPEN):]
+                state["in"] = True
+        return "".join(out)
+
+    def _flush() -> str:
+        tail = state["buf"]
+        state["buf"] = ""
+        return "" if state["in"] else tail
+
+    return _feed, _flush
+
+
+def _race_providers(router, messages, system_prompt, max_tokens,
+                    model: str | None = None):
+    """Async generator fed by the first provider to emit a VISIBLE token.
+
+    Sequential fallback chains serialize every dead provider ahead of the
+    live one: a hello pays each unhealthy provider's connect/timeout before
+    the first token arrives. Healthy providers (top of the fallback chain,
+    capped at ``_RACE_MAX_PROBES``) start in parallel; the first to produce
+    a visible chunk wins (reasoning models' <think> preamble does NOT win —
+    the user wants the answer, not the thoughts) and the losers are
+    cancelled mid-flight. Down providers are filtered by the router's
+    availability check, so the steady state is a single warm connection.
+    """
+    chain = router._get_available_chain()[:_RACE_MAX_PROBES]
+    if not chain:
+        raise RuntimeError("No LLM providers available.")
+
+    async def _stream():
+        if len(chain) == 1:
+            feed, flush = _make_think_filter()
+            async for chunk in router._providers[chain[0]].complete_stream(
+                messages, system_prompt, max_tokens,
+            ):
+                visible = feed(chunk)
+                if visible:
+                    yield visible
+            tail = flush()
+            if tail:
+                yield tail
+            return
+
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def _pump(name: str) -> None:
+            provider = router._providers[name]
+            feed, _flush = _make_think_filter()
+            try:
+                async for chunk in provider.complete_stream(
+                    messages, system_prompt, max_tokens,
+                ):
+                    visible = feed(chunk)
+                    if visible:
+                        # Provenance: report the winner for the meta event
+                        # (the race bypasses router.complete_stream, which
+                        # would normally track _last_provider/_last_model).
+                        router._last_provider = name
+                        router._last_model = provider.model
+                        await queue.put(("chunk", name, visible))
+            except Exception:
+                pass  # a loser dying is expected; the race resolves regardless
+            finally:
+                tail = _flush()
+                if tail:
+                    await queue.put(("chunk", name, tail))
+                # put_nowait: unbounded queue, and a cancelled task's finally
+                # must never re-suspend (that would swallow the cancellation).
+                queue.put_nowait(("done", name, None))
+
+        task_by_name = {
+            name: asyncio.ensure_future(_pump(name)) for name in chain
+        }
+        winner: str | None = None
+        failures = 0
+        try:
+            while True:
+                kind, name, payload = await queue.get()
+                if kind == "done":
+                    if winner is None:
+                        failures += 1
+                        if failures == len(chain):
+                            raise RuntimeError(
+                                "All LLM providers failed to stream a reply."
+                            )
+                    elif name == winner:
+                        return  # winner finished: the reply is complete
+                    continue
+                # chunk
+                if winner is None:
+                    winner = name
+                    # Cancel only the losers — the winner's own task must keep
+                    # producing its remaining chunks.
+                    for loser, t in task_by_name.items():
+                        if loser != winner and not t.done():
+                            t.cancel()
+                if name == winner:
+                    yield payload
+                # losers' stray in-flight chunks are dropped by name check
+        finally:
+            for t in task_by_name.values():
+                if not t.done():
+                    t.cancel()
+
+    return _stream()
 
 
 @dataclass(frozen=True)
@@ -139,21 +335,38 @@ class ModelGatewayEngine(StreamEngine):
         self.max_tokens = max_tokens
 
     @staticmethod
-    def _default_streamer(messages, system_prompt, max_tokens):
-        """Real path: ProviderRouter.complete_stream with automatic fallback."""
+    def _default_streamer(messages, system_prompt, max_tokens,
+                          model: str | None = None):
+        """Real path: ProviderRouter.complete_stream with automatic fallback.
+
+        ``model`` is an optional ``"provider/model"`` or bare model id; the
+        router resolves which provider owns it and falls back safely. When no
+        explicit model is requested the first-token race starts the top
+        healthy providers in parallel so a dead one cannot gate the reply.
+        """
         router = _get_router()
+        preferred_provider, preferred_model = _split_model_choice(model)
+        if preferred_provider is None and preferred_model is None:
+            return _race_providers(router, messages, system_prompt, max_tokens, None)
 
         async def stream():
             async for chunk in router.complete_stream(
                 messages,
                 system_prompt,
                 max_tokens=max_tokens,
-                preferred_provider=None,
-                preferred_model=None,
+                preferred_provider=preferred_provider,
+                preferred_model=preferred_model,
             ):
                 yield chunk
 
         return stream()
+
+    def _models(self) -> list[dict]:
+        """Selectable models across the configured fleet (for /v1/models)."""
+        try:
+            return _get_router().list_models()
+        except Exception:  # noqa: BLE001 - discovery must never break chat
+            return []
 
     def _build_prompt(self, messages: list[dict], page: dict | None) -> list[dict]:
         window = trim_messages(messages, self.budget)
@@ -176,28 +389,92 @@ class ModelGatewayEngine(StreamEngine):
         return window
 
     def stream_chat(self, session_id: str, messages: list[dict],
-                    page: dict | None, emit: Emitter) -> str:
+                    page: dict | None, emit: Emitter,
+                    model: str | None = None) -> str:
         prompt = self._build_prompt(messages, page)
-        emit({"type": "start", "session_id": session_id, "backend": self.name})
+        emit({"type": "start", "session_id": session_id, "backend": self.name,
+              **({"model": model} if model else {})})
         out: list[str] = []
         produced = 0
         limit = self.budget.max_output_chars
+        # Reasoning models (groq qwen3.x, deepseek-reasoner) emit a leading
+        # <think>…</think> block; users should never see raw reasoning. The
+        # block streams across chunks, so filter statefully: buffer everything
+        # until the closing tag, then emit only the visible answer.
+        think_state = {"in": False, "buf": ""}
+
+        def _visible(piece: str) -> str:
+            st = think_state
+            st["buf"] += piece
+            out_chunks: list[str] = []
+            while st["buf"]:
+                if st["in"]:
+                    end = st["buf"].find("</think>")
+                    if end == -1:
+                        # Keep a tail in case the closing tag straddles chunks.
+                        st["buf"] = st["buf"][-8:]
+                        break
+                    st["buf"] = st["buf"][end + 8:]
+                    st["in"] = False
+                else:
+                    start = st["buf"].find("<think>")
+                    if start == -1:
+                        # No opening tag in the buffer. A partial "<think>" may
+                        # still straddle the next chunk: hold back the longest
+                        # suffix of the buffer that is a prefix of "<think>"
+                        # (tag-prefix overlap, classic KMP-style rule). That
+                        # covers any split position without false-holding on
+                        # ordinary text like "I <3 thinks".
+                        tag = "<think>"
+                        hold = 0
+                        for k in range(min(len(st["buf"]), len(tag) - 1), 0, -1):
+                            if st["buf"].endswith(tag[:k]):
+                                hold = k
+                                break
+                        emit_from = len(st["buf"]) - hold
+                        if emit_from > 0:
+                            out_chunks.append(st["buf"][:emit_from])
+                            st["buf"] = st["buf"][emit_from:]
+                        break
+                    if start > 0:
+                        out_chunks.append(st["buf"][:start])
+                    st["buf"] = st["buf"][start + 7:]
+                    st["in"] = True
+            return "".join(out_chunks)
+
         try:
             async def _stream() -> str:
                 nonlocal produced
-                async for chunk in self._streamer(
-                    prompt, self.system_prompt, self.max_tokens,
-                ):
+                # Streamers predating per-chat model selection take 3 args;
+                # try the 4-arg form first, fall back for custom/test streamers.
+                try:
+                    stream = self._streamer(
+                        prompt, self.system_prompt, self.max_tokens, model,
+                    )
+                except TypeError:
+                    stream = self._streamer(
+                        prompt, self.system_prompt, self.max_tokens,
+                    )
+                async for chunk in stream:
+                    visible = _visible(chunk)
+                    if not visible:
+                        continue
                     remaining = limit - produced
                     if remaining <= 0:
                         break
-                    piece = chunk if len(chunk) <= remaining else chunk[:remaining]
+                    piece = visible if len(visible) <= remaining else visible[:remaining]
                     out.append(piece)
                     produced += len(piece)
                     emit({"type": "delta", "text": piece})
+                # Flush anything still buffered (unclosed think block or tail).
+                tail = think_state["buf"]
+                if tail and not think_state["in"]:
+                    out.append(tail)
+                    produced += len(tail)
+                    emit({"type": "delta", "text": tail})
                 return "".join(out)
 
-            text = asyncio.run(_stream())
+            text = _run_on_shared_loop(_stream())
         except Exception as exc:  # noqa: BLE001 - the bridge must never crash
             emit({"type": "error", "message": str(exc)[:500], "code": "engine_error"})
             return ""
