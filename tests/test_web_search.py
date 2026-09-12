@@ -112,6 +112,43 @@ def test_repeated_query_hits_cache(monkeypatch):
     assert second.metadata["source"] == "cache"
 
 
+def test_score_results_reorders_relevance(monkeypatch):
+    calls = {"n": 0}
+    monkeypatch.setattr(
+        ws,
+        "_html_search",
+        lambda query, max_results: [
+            {"title": "News roundup", "snippet": "markets today", "url": "https://m.example"},
+            {"title": "JavaScript event loop guide",
+             "snippet": "async event loop python", "url": "https://j.example"},
+            {"title": "Perl programming", "snippet": "old language", "url": "https://p.example"},
+        ],
+    )
+    result = ws.web_search({"query": "javascript event loop", "limit": 3})
+    assert result.success is True
+    first_i = result.output.index("JavaScript event loop guide")
+    assert first_i < result.output.index("News roundup")
+
+
+def test_score_is_stable_tiebreak():
+    results = [
+        {"title": "Alpha", "snippet": "", "url": "https://a"},
+        {"title": "Beta", "snippet": "", "url": "https://b"},
+    ]
+    # No overlap -> scores equal -> original order preserved.
+    scored = ws._score_results("zzzqqq", results)
+    assert [r["title"] for r in scored] == ["Alpha", "Beta"]
+
+
+def test_exact_phrase_bonus():
+    results = [
+        {"title": "Unrelated article", "snippet": "", "url": "https://x"},
+        {"title": "asyncio event loop deep dive", "snippet": "", "url": "https://y"},
+    ]
+    scored = ws._score_results("asyncio event loop", results)
+    assert scored[0]["title"] == "asyncio event loop deep dive"
+
+
 def test_parse_lite_results():
     html = (
         "<a rel='nofollow' href='//duckduckgo.com/?q=python'>logo</a>"

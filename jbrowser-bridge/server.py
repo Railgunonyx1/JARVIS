@@ -169,6 +169,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
         Emits a trailing ``meta`` event with the provider that actually served
         the reply and the end-to-end latency, so the UI can show real provenance.
+
+        **Queue-based decoupling.** ``emit()`` pushes SSE events to a
+        ``threading.Queue`` instead of writing directly to the socket.  A
+        dedicated *drain* thread on the **handler** thread pops events and
+        performs the blocking ``wfile.write`` + ``wfile.flush``.  This keeps
+        the shared async loop free — a slow-reading SSE client now only
+        stalls its own drain thread, never every other concurrent chat.
         """
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -177,16 +184,41 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._cors(self.headers.get("Origin"))
         self.end_headers()
 
+        import queue
+        import threading
         import time as _time
-        started = _time.monotonic()
+
+        _DONE = object()
+        event_queue: queue.Queue = queue.Queue()
 
         def emit(event: dict) -> None:
-            try:
-                self.wfile.write(b"data: " + json.dumps(event).encode("utf-8") + b"\n\n")
-                self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
-                pass
+            event_queue.put(event)
 
+        def _drain() -> None:
+            """Pop SSE events and write them to the client socket.
+
+            Runs on the **handler** thread (separate from the shared async
+            loop).  The queue blocks on ``get()`` until the next event or
+            ``_DONE`` sentinel arrives; ``wfile.flush()`` applies natural
+            back-pressure that now only affects this drain thread and the
+            client it serves — never the loop.
+            """
+            while True:
+                ev = event_queue.get()
+                if ev is _DONE:
+                    break
+                try:
+                    self.wfile.write(b"data: " + json.dumps(ev).encode("utf-8") + b"\n\n")
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+
+        drain_thread = threading.Thread(
+            target=_drain, daemon=True, name="sse-drain",
+        )
+        drain_thread.start()
+
+        started = _time.monotonic()
         try:
             self.backend.stream_chat(session_id, messages, page, emit, model=model)
         except Exception as exc:  # noqa: BLE001
@@ -211,6 +243,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 meta["provider"] = last[0]
                 meta["model"] = f"{last[0]}/{last[1]}" if last[1] else last[0]
             emit({"type": "meta", **meta})
+            event_queue.put(_DONE)
+            drain_thread.join(timeout=2.0)
         # SSE streams end with the "done"/"error" event; close the connection
         # so clients that also read to EOF release cleanly.
         self.close_connection = True

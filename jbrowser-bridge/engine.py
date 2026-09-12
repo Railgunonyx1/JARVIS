@@ -102,7 +102,14 @@ def _run_on_shared_loop(coro):
 
 
 # ── First-token race (latency) ───────────────────────────────────
-_RACE_MAX_PROBES = 3
+# Reduced from 3 to 1: when the router's availability check says a provider
+# is healthy, don't race it against 2 others on every short request. The
+# availability check already filtered out the down providers; racing healthy
+# ones in parallel is what burned rate limits on hello-scale requests. A
+# single first-healthy probe keeps the fallback safety (the router still
+# falls back on transient errors) without paying 3x connect/timeout on each
+# turn.
+_RACE_MAX_PROBES = 1
 
 
 def _make_think_filter():

@@ -210,6 +210,68 @@ def _fmt_results(query: str, results: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# ── Keyword relevance scoring ───────────────────────────────────
+# The HTML lite path returns results in engine order, which is not the same
+# as relevance to the *user's* phrasing. A cheap lexical score reorders the
+# top of the list so the first results match the query best — Google-style —
+# at essentially zero cost (few results x few tokens).
+_STOPWORDS = frozenset((
+    "a", "an", "the", "and", "or", "but", "of", "for", "on", "in", "to",
+    "at", "by", "with", "is", "are", "was", "were", "be", "been", "what",
+    "who", "when", "where", "why", "how", "does", "do", "did", "can",
+    "could", "will", "would", "should", "about", "from", "into", "that",
+    "this", "these", "those", "it", "its", "as",
+))
+
+
+def _tokens(text: str) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return [w for w in words if w not in _STOPWORDS]
+
+
+def _score_results(query: str, results: list[dict]) -> list[dict]:
+    """Stable-sort results by lexical overlap with the query terms.
+
+    Title hits weigh more than snippet hits; the full query appearing
+    verbatim (or as a 2+ word phrase) in a title is a strong signal.
+    Original order is the tie-break, so near-equal results keep engine order.
+    """
+    if not query or not results:
+        return results
+    q = query.lower()
+    terms = _tokens(q)
+    if not terms:
+        return results
+    phrase = q.strip()
+    term_set = set(terms)
+
+    def _score(r: dict) -> tuple[int, int]:
+        title = (r.get("title") or "").lower()
+        snippet = (r.get("snippet") or "").lower()
+        title_tokens = _tokens(title)
+        snippet_tokens = _tokens(snippet)
+        score = 0
+        for t in term_set:
+            if t in title_tokens:
+                score += 2 if len(t) > 3 else 1
+        for t in term_set:
+            if t in snippet_tokens:
+                if len(t) > 3:
+                    score += 1
+                else:
+                    score += 0
+        # Exact-phrase bonus: the whole query sequence inside the title.
+        if phrase in title:
+            score += 8
+        elif any(part in title for part in (phrase[:24], phrase[-24:]) if len(part) >= 4):
+            score += 3
+        return score
+
+    scored = [(int(_score(r)), i, r) for i, r in enumerate(results)]
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [r for _, _, r in scored]
+
+
 def _fmt_news(query: str, results: list[dict]) -> str:
     if not results:
         return f"No news found for: {query}"
@@ -278,8 +340,10 @@ def web_search(args: dict[str, Any]) -> ToolResult:
         )
 
     results = _search(mode, query, limit, api_key)
-
     if results:
+        # Reorder engine results by lexical relevance to the query, then
+        # re-apply the requested limit (scoring may surface a better top-N).
+        results = _score_results(query, results)[:limit]
         _cache_put(cache_key, results)
         fmt = _fmt_news(query, results) if mode == "news" else _fmt_results(query, results)
         return ToolResult(
