@@ -23,7 +23,6 @@ backend never pay for it.
 from __future__ import annotations
 
 import asyncio
-import json
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
@@ -65,21 +64,41 @@ Emitter = Callable[[dict], None]
 # latency). One persistent background loop keeps provider clients and their
 # connection pools warm across requests.
 _shared_loop: asyncio.AbstractEventLoop | None = None
+_loop_lock = threading.Lock()
+
+# Upper bound on a single chat turn: a hung provider (SDK default is 120s)
+# must not pin the handler thread — the shared loop is the only one.
+_MSG_TIMEOUT_S = 30.0
 
 
 def _get_shared_loop() -> asyncio.AbstractEventLoop:
+    """Return the persistent loop, creating it exactly once.
+
+    Check-then-act is guarded so concurrent first-hello requests cannot spawn
+    two ``bridge-async-loop`` threads (loops and their connection pools would
+    split and leak).
+    """
     global _shared_loop
-    if _shared_loop is None or _shared_loop.is_closed():
-        _shared_loop = asyncio.new_event_loop()
-        threading.Thread(
-            target=_shared_loop.run_forever, daemon=True, name="bridge-async-loop",
-        ).start()
+    if _shared_loop is not None and not _shared_loop.is_closed():
+        return _shared_loop
+    with _loop_lock:
+        if _shared_loop is None or _shared_loop.is_closed():
+            loop = asyncio.new_event_loop()
+            threading.Thread(
+                target=loop.run_forever, daemon=True, name="bridge-async-loop",
+            ).start()
+            _shared_loop = loop
     return _shared_loop
 
 
 def _run_on_shared_loop(coro):
-    """Run ``coro`` on the persistent loop; block the caller until done."""
-    return asyncio.run_coroutine_threadsafe(coro, _get_shared_loop()).result()
+    """Run ``coro`` on the persistent loop; block the caller until done.
+
+    Bounded by ``_MSG_TIMEOUT_S`` — a provider that hangs (or an SDK whose
+    default timeout is 120s) cannot pin the handler thread forever.
+    """
+    future = asyncio.run_coroutine_threadsafe(coro, _get_shared_loop())
+    return future.result(timeout=_MSG_TIMEOUT_S)
 
 
 # ── First-token race (latency) ───────────────────────────────────
@@ -244,6 +263,33 @@ def _estimate_tokens(text: str) -> int:
         return len(text or "") // 4
 
 
+def _msg_tokens(msg: dict) -> int:
+    """Cheap token estimate for one message — length math, no JSON round-trip.
+
+    The old path serialized the whole window (and each dropped message) with
+    ``json.dumps`` just to run the same ``len(content) / 4`` heuristic — an
+    O(n^2) cost on the shared loop for a bound that only needs character
+    counts. Estimating from the string fields is equivalent for the /4 rule
+    and constant-time.
+    """
+    content = msg.get("content")
+    if isinstance(content, str):
+        return max(1, len(content) // 4)
+    if isinstance(content, list):
+        total = 0
+        for part in content:
+            if isinstance(part, dict):
+                for key in ("text", "content"):
+                    val = part.get(key)
+                    if isinstance(val, str):
+                        total += len(val)
+                        break
+            elif isinstance(part, str):
+                total += len(part)
+        return max(1, total // 4)
+    return max(1, len(str(content)) // 4)
+
+
 def trim_messages(messages: list[dict], budget: Budget) -> list[dict]:
     """Trim a chat window to the budget (system message always kept first)."""
     msgs = [m for m in (messages or []) if isinstance(m, dict) and m.get("content")]
@@ -259,11 +305,10 @@ def trim_messages(messages: list[dict], budget: Budget) -> list[dict]:
         msgs = msgs[-keep:]
 
     if budget.max_input_tokens > 0:
-        total = _estimate_tokens(json.dumps(head, default=str)) + \
-            _estimate_tokens(json.dumps(msgs, default=str))
+        total = sum(_msg_tokens(m) for m in head) + sum(_msg_tokens(m) for m in msgs)
         while msgs and total > budget.max_input_tokens:
             dropped = msgs.pop(0)
-            total -= _estimate_tokens(json.dumps(dropped, default=str))
+            total -= _msg_tokens(dropped)
     return head + msgs
 
 
@@ -283,17 +328,25 @@ Streamer = Callable[[list[dict], str, int], AsyncIterator[str]]
 
 
 def _get_router():
-    """Lazily build (and cache) the real provider router."""
+    """Lazily build (and cache) the real provider router.
+
+    Locked so a chat arriving before the boot warmup completes cannot build a
+    second router (an unlocked check-then-act here raced the warmup thread and
+    doubled the ~3s router build + ~8s SDK import on cold start).
+    """
     global _router_cache
-    if _router_cache is None:
-        _ensure_repo_root_imports()
-        from core.api_keys import router_api_keys
-        from providers.router import ProviderRouter
-        from runtime.kernel import _load_models_config
-        # Single shared normalization (see core.api_keys.router_api_keys):
-        # maps "<provider>_api_key" (+ numbered extras) to the plain shape
-        # ProviderRouter expects, so keyed cloud providers initialize.
-        _router_cache = ProviderRouter(_load_models_config(), router_api_keys())
+    if _router_cache is not None:
+        return _router_cache
+    with _router_lock:
+        if _router_cache is None:
+            _ensure_repo_root_imports()
+            from core.api_keys import router_api_keys
+            from providers.router import ProviderRouter
+            from runtime.kernel import _load_models_config
+            # Single shared normalization (see core.api_keys.router_api_keys):
+            # maps "<provider>_api_key" (+ numbered extras) to the plain shape
+            # ProviderRouter expects, so keyed cloud providers initialize.
+            _router_cache = ProviderRouter(_load_models_config(), router_api_keys())
     return _router_cache
 
 
@@ -313,6 +366,7 @@ def _ensure_repo_root_imports() -> None:
 
 
 _router_cache = None
+_router_lock = threading.Lock()
 
 
 class ModelGatewayEngine(StreamEngine):

@@ -93,7 +93,10 @@ _TIMEOUT_OVERRIDES: dict[str, float] = {
     "browser.open": 60.0,
     "browser.navigate": 60.0,
     "orbit.navigate": 60.0,
-    "web.search": 30.0,
+    # Inner search timeouts (8s Gemini / 6s HTML, raced in parallel) bound the
+    # real work; a 15s tool ceiling gives headroom without ever walking a ~60s
+    # serial chain.
+    "web.search": 15.0,
 }
 
 _CAPABILITY_OVERRIDES: dict[str, tuple[str, ...]] = {

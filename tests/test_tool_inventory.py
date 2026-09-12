@@ -279,7 +279,7 @@ def test_classify_tool_fills_defaults():
         permission="web.search", handler=noop, category="web",
     ))
     assert t.risk == "low"
-    assert t.timeout_seconds == 30.0
+    assert t.timeout_seconds == 15.0
     assert t.is_destructive is False
 
 
