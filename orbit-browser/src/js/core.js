@@ -167,8 +167,9 @@ const sbMatrix = $("#sbMatrix");
 const sbDot = $("#sbDot");
 const sbStateLabel = $("#sbStateLabel");
 const sbPageTitle = $("#sbPageTitle");
-const statusDot = $("#statusDot");
-const statusLabel = $("#statusLabel");
+// Toolbar JARVIS badge removed — status lives on the JARVIS button itself.
+const statusDot = null;
+const statusLabel = null;
 const floatGlyph = $("#floatGlyph");
 const floatMatrix = $("#floatMatrix");
 const floatTitle = $("#floatTitle");
@@ -181,7 +182,6 @@ const cmdPaletteBg = $("#cmdPaletteBg");
 const cmdInput = $("#cmdInput");
 const cmdResults = $("#cmdResults");
 const toastContainer = $("#toastContainer");
-const perfHud = $("#perfHud");
 const findBar = $("#findBar");
 const findInput = $("#findInput");
 const tabStripVertical = $("#tabStripVertical");
@@ -197,7 +197,8 @@ window._orbitTabs = tabs; // Expose for thumbnail/vision modules
 let activeTabId = null;
 let tileMode = false;
 let tabMru = [];
-let sidebarOpen = true;
+// Sidebar open state persists across restarts (default: open).
+let sidebarOpen = (function(){ try { return localStorage.getItem("orbit-sidebar-open") !== "0"; } catch (_) { return true; } })();
 let jarvisOnline = false;
 const ntpDrafts = new Map(); // per-tab New Tab search drafts (cleaned in closeTab)
 let agentState = "idle";

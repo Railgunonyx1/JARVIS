@@ -102,12 +102,14 @@
 
   function messageHTML(role, content) {
     const label = LABELS[role] || role;
-    const color = role === "user" ? "var(--jb-paper)" : "var(--jb-text)";
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return (
-      '<div class="chat-label">' + label + "</div>" +
-      '<div class="chat-content" style="color:' + color + '">' +
-        escapeHtml(content) +
-      "</div>"
+      '<div class="chat-msg-head">' +
+        '<span class="chat-role" data-role="' + role + '"></span>' +
+        '<span class="chat-label">' + label + "</span>" +
+        '<span class="chat-time">' + time + "</span>" +
+      "</div>" +
+      '<div class="chat-content">' + escapeHtml(content) + "</div>"
     );
   }
 
@@ -144,8 +146,12 @@
     streamingEl = document.createElement("div");
     streamingEl.className = "chat-msg chat-msg--jarvis chat-msg--streaming";
     streamingEl.innerHTML =
-      '<div class="chat-label">JARVIS</div>' +
-      '<div class="chat-content streaming-text" style="color:var(--jb-text)"></div>';
+      '<div class="chat-msg-head">' +
+        '<span class="chat-role" data-role="jarvis"></span>' +
+        '<span class="chat-label">JARVIS</span>' +
+        '<span class="chat-live-chip"><span class="chat-live-dot"></span>LIVE</span>' +
+      "</div>" +
+      '<div class="chat-content streaming-text"></div>';
     streamingText = "";
 
     if (streamTabId === activeTabId) {
@@ -228,11 +234,13 @@
       var online = window._jarvisOnline;
       bodyEl.innerHTML =
         '<div class="chat-empty">' +
-          '<div class="chat-empty-status">' + (online ? "READY" : "OFF") + "</div>" +
+          '<div class="chat-empty-glyph" aria-hidden="true"><i></i><i></i><i></i></div>' +
+          '<div class="chat-empty-status">' + (online ? "JARVIS READY" : "JARVIS OFFLINE") + "</div>" +
+          '<div class="chat-empty-meta">' + (online ? "MODEL AUTO \u00b7 STREAM ON" : "BROWSE NORMALLY \u00b7 STAND BY") + "</div>" +
           '<div class="chat-empty-sub">' +
             (online
-              ? "Ask me anything. I\u2019m always here."
-              : "JARVIS is offline. Browse normally.") +
+              ? "Ask anything, or try / commands."
+              : "Browse normally. Start JARVIS when you need me.") +
           "</div>" +
         "</div>";
       return;
@@ -255,6 +263,7 @@
     { cmd: "/read",     desc: "Read page content" },
     { cmd: "/screenshot",desc: "Capture the page" },
     { cmd: "/status",   desc: "Show JARVIS/DSH status" },
+    { cmd: "/model",    desc: "List or switch models (/model <provider/model>)" },
     { cmd: "/yt",       desc: "Private YouTube search (no tracking)" },
     { cmd: "/help",     desc: "Show available commands" },
   ];

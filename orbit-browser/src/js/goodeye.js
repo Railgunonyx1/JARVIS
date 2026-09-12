@@ -167,11 +167,25 @@
       buildAsk: buildAsk,
       onTick: tick,
     });
-    // Fixed backing store, CSS scales it — immune to first-show layout races.
-    W = world.width = 1200;
-    H = world.height = 520;
     wctx = world.getContext('2d');
+    // Backing store follows the element's CSS box: crisp at any window size
+    // and immune to first-show layout races (falls back to 1200x520).
+    var r = world.getBoundingClientRect();
+    W = world.width = Math.max(600, Math.round(r.width || 1200));
+    H = world.height = Math.max(300, Math.round(r.height || 520));
     drawWorld();
+    if (!start._resizeWired) {
+      start._resizeWired = true;
+      window.addEventListener('resize', function () {
+        if (!world || !ws) return;
+        var rr = world.getBoundingClientRect();
+        if (rr.width > 50 && rr.height > 50) {
+          W = world.width = Math.round(rr.width);
+          H = world.height = Math.round(rr.height);
+          drawWorld();
+        }
+      });
+    }
     ws.start();
     tick();
     ws.log('God\u2019s Eye online — fusing public signals.');

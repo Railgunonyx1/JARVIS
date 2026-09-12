@@ -70,17 +70,20 @@
           </svg>
         </span>
         <input type="text" id="omniInput" placeholder="Search Google or enter URL" spellcheck="false" autocomplete="off" />
-        <span class="zoom-indicator" id="zoomIndicator" title="Zoom level">100%</span>
+        <span class="zoom-indicator" id="zoomIndicator" title="Zoom level (click to reset)" style="display:none">100%</span>
         <span class="omni-star" id="omniStar" title="Bookmark this page">★</span>
         <div class="omni-progress" id="omniProgress"></div>
         <div class="omni-suggest" id="omniSuggest" hidden></div>
       </div>
 
       <div class="toolbar-right">
-        <div class="omni-status" id="jarvisStatusBadge">
-          <span class="status-dot offline" id="statusDot"></span>
-          <span id="statusLabel">OFF</span>
-        </div>
+        <button class="nav-btn" id="sysBtn" title="System">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="2" y="3" width="12" height="8" rx="1.2" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M5.5 13.5h5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <circle cx="8" cy="7" r="1.6" stroke="currentColor" stroke-width="1.1"/>
+          </svg>
+        </button>
         <button class="nav-btn" id="vtToggleBtn" title="Vertical tabs (Arc-style)">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <rect x="2" y="2.5" width="4.5" height="11" rx="1" stroke="currentColor"/>
@@ -129,7 +132,7 @@
     </div>
 
     <!-- ── Bookmark Bar ──────────────────────────────────────── -->
-    <div class="bookmark-bar" id="bookmarkBar">
+    <div class="bookmark-bar hidden" id="bookmarkBar">
       <button class="bm-add" id="bmAddBtn" title="Add bookmark">+</button>
       <div class="bm-sep"></div>
     </div>
@@ -182,6 +185,7 @@
           <!-- New Tab -->
           <div class="page newtab-page" id="newtabPage">
             <div class="nt-wordmark">ORBIT</div>
+            <div class="nt-osline"><span class="nt-os-dot" id="ntOsDot"></span>JARVIS OS · <span id="ntOsState">OFFLINE</span></div>
             <div class="nt-sub">Search with Google or ask JARVIS</div>
             <label class="nt-search">
               <svg width="16" height="16" viewBox="0 0 24 24">
@@ -206,6 +210,13 @@
                   <circle cx="9" cy="13" r="1.6" stroke="currentColor" stroke-width="1.2"/>
                 </svg>
                 <span>F1 Live</span>
+              </button>
+              <button class="nt-tile" data-url="orbit://worldmon">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="9" r="6.2" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M2.8 9h12.4M9 2.8c2.4 2.2 2.4 10.2 0 12.4M9 2.8c-2.4 2.2-2.4 10.2 0 12.4" stroke="currentColor" stroke-width="1"/>
+                </svg>
+                <span>World Monitor</span>
               </button>
               <button class="nt-tile" data-url="orbit://bookmarks">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -233,6 +244,15 @@
                 </svg>
                 <span>Tasks</span>
               </button>
+            </div>
+            <!-- Live telemetry strip: F1-style readouts of real browser state -->
+            <div class="nt-telemetry" id="ntTelemetry">
+              <div class="nt-tel-cell"><span class="nt-tel-label">UPTIME</span><span class="nt-tel-value" id="telUptime">0:00</span></div>
+              <div class="nt-tel-cell"><span class="nt-tel-label">TABS</span><span class="nt-tel-value" id="telTabs">0</span></div>
+              <div class="nt-tel-cell"><span class="nt-tel-label">MEM</span><span class="nt-tel-value" id="telMem">--</span></div>
+              <div class="nt-tel-cell"><span class="nt-tel-label">FPS</span><span class="nt-tel-value" id="telFps">--</span></div>
+              <div class="nt-tel-cell"><span class="nt-tel-label">SLEEPING</span><span class="nt-tel-value" id="telSleep">0</span></div>
+              <div class="nt-tel-cell"><span class="nt-tel-label">JARVIS</span><span class="nt-tel-value" id="telJarvis">OFF</span></div>
             </div>
             <!-- Recently Closed Tabs -->
             <div class="nt-recent" id="ntRecent" style="display:none">
@@ -299,6 +319,41 @@
               <div class="ge-log-wrap">
                 <div class="ge-log-head">SIGNAL LOG</div>
                 <div id="geLog" class="ge-log"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- World Monitor workspace -->
+          <div class="page workspace-page" id="worldmonPage">
+            <div class="ge-wrap">
+              <div class="ge-head">
+                <div>
+                  <h1 class="ge-title">WORLD MONITOR</h1>
+                  <p class="ge-lede">Global intelligence board — seismic events, the ISS, capital weather, markets. Public data, no keys, fetched from your device.</p>
+                </div>
+                <div class="ge-live" id="wmLive">Loading…</div>
+                <div class="ge-ask">
+                  <input id="wmQuestion" class="ge-q" placeholder="Ask JARVIS about the world…" />
+                  <button id="wmAsk" class="ge-btn">Ask JARVIS</button>
+                </div>
+              </div>
+              <canvas id="wmWorld" class="ge-world"></canvas>
+              <div class="wm-panels">
+                <div class="wm-panel">
+                  <div class="ge-log-head">SEISMIC — M4.5+ / 7 DAYS</div>
+                  <div id="wmQuakes" class="wm-list"></div>
+                </div>
+                <div class="wm-panel">
+                  <div class="ge-log-head">CAPITAL WEATHER</div>
+                  <div id="wmWx" class="wm-wxgrid"></div>
+                  <div class="ge-log-head" style="margin-top:10px">MARKETS</div>
+                  <div class="wm-mkt" id="wmBtc">—</div>
+                  <div class="wm-mkt" id="wmIss">ISS acquiring…</div>
+                </div>
+              </div>
+              <div class="ge-log-wrap">
+                <div class="ge-log-head">SIGNAL LOG</div>
+                <div id="wmLog" class="ge-log"></div>
               </div>
             </div>
           </div>
@@ -458,6 +513,7 @@
                 <div class="row"><div><div class="name">Total Errors</div><div class="sub">Captured errors, warnings, and info</div></div><span class="chip" id="diagErrorCount">0</span></div>
                 <div class="row"><div><div class="name">Errors</div></div><span class="chip bad" id="diagErrorTotal">0</span></div>
                 <div class="row"><div><div class="name">Warnings</div></div><span class="chip warn" id="diagWarnTotal">0</span></div>
+                <div class="row"><div><div class="name">Main process</div><div class="sub">Crashes, uncaught exceptions, tab hangs</div></div><span class="chip" id="diagMainErrors">0</span></div>
                 <div class="row"><div><div class="name">Last Error</div></div><span class="meta" id="diagLastError">None</span></div>
                 <div style="margin-top:8px;display:flex;gap:8px">
                   <button class="chip-btn" id="diagViewErrors">View Log</button>
@@ -639,6 +695,9 @@
           <div class="sb-composer-box">
             <textarea id="sbInput" rows="2" placeholder="Ask JARVIS anything..."></textarea>
             <div class="sb-composer-bar">
+              <button class="sb-mode" id="sbModeToggle" title="Plan: JARVIS proposes, you approve. Build: JARVIS acts." aria-pressed="false">
+                <span class="sb-mode-plan">Plan</span><span class="sb-mode-sep"></span><span class="sb-mode-build">Build</span>
+              </button>
               <div class="sb-grow"></div>
               <button class="sb-send" id="sbSend" title="Send">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -688,6 +747,7 @@
       <div class="menu-sep"></div>
       <button class="menu-item" data-nav="orbit://tasks">Tasks</button>                <button class="menu-item" data-nav="orbit://goodeye">God's Eye</button>
                 <button class="menu-item" data-nav="orbit://f1">F1 Monitor</button>
+                <button class="menu-item" data-nav="orbit://worldmon">World Monitor</button>
                 <button class="menu-item" data-nav="orbit://memory">Memory</button>
       <button class="menu-item" data-nav="orbit://extensions">Extensions</button>
       <button class="menu-item" data-nav="orbit://extension-store">Extension Store</button>
@@ -698,6 +758,24 @@
       <button class="menu-item" data-nav="orbit://privacy">Privacy Report</button>
       <div class="menu-sep"></div>
       <button class="menu-item" id="aboutOrbit">About JARVIS Orbit</button>
+    </div>
+
+    <!-- ── System Popover (system status; replaces old bottom HUD) -->
+    <div class="popover system-popup" id="systemPopup">
+      <div class="pop-header">
+        <span class="pop-title">System</span>
+        <span class="sys-ver" id="sysVersion">v0.1.0</span>
+      </div>
+      <div class="sys-grid">
+        <div class="sys-row"><span>JARVIS</span><span class="sys-val" id="sysJarvis"><span class="perf-dot off"></span>OFF</span></div>
+        <div class="sys-row"><span>Tabs</span><span class="sys-val" id="sysTabs">0</span></div>
+        <div class="sys-row"><span>Zoom</span><span class="sys-val" id="sysZoom">100%</span></div>
+        <div class="sys-row"><span>FPS</span><span class="sys-val" id="sysFps">--</span></div>
+        <div class="sys-row"><span>Memory</span><span class="sys-val" id="sysMem">--</span></div>
+        <div class="sys-row"><span>DOM nodes</span><span class="sys-val" id="sysDom">--</span></div>
+      </div>
+      <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://diagnostics">Open diagnostics</button>
     </div>
 
     <!-- ── Extension Popup ────────────────────────────────────── -->
@@ -758,6 +836,7 @@
       <div class="jarvis-float-head" id="jarvisFloatHead">
         <div class="sb-matrix" id="jarvisFloatMatrix" data-state="idle"></div>
         <b>JARVIS</b>
+        <span class="jarvis-float-badge" id="jarvisFloatBadge">FLOAT</span>
         <div class="jarvis-float-grow"></div>
         <button class="jarvis-float-btn" id="jarvisFloatMin" title="Minimize">
           <svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="1" fill="currentColor"/></svg>
@@ -767,7 +846,11 @@
         </button>
       </div>
       <div class="jarvis-float-body" id="jarvisFloatBody">
-        <div class="jarvis-float-msg system">Ask JARVIS anything — this window follows you anywhere.</div>
+        <div class="jarvis-float-welcome">
+          <div class="jfw-title">JARVIS</div>
+          <div class="jfw-meta">FLOAT MODE · FOLLOWS YOU</div>
+          <div class="jfw-sub">Ask anything. Drag the header, resize from the corner.</div>
+        </div>
       </div>
       <div class="jarvis-float-input">
         <input type="text" id="jarvisFloatInput" placeholder="Ask JARVIS..." spellcheck="false" />
@@ -791,17 +874,6 @@
       </div>
     </div>
 
-    <!-- ── Performance HUD ───────────────────────────────────── -->
-    <div class="perf-hud" id="perfHud" title="Click for diagnostics">
-      <div class="perf-hud-item"><span class="perf-dot off" id="perfJarvisDot"></span><span id="perfJarvis">JARVIS: --</span></div>
-      <div class="perf-hud-item"><span id="perfTabs">0 tabs</span></div>
-      <div class="perf-hud-item"><span id="perfZoom">100%</span></div>
-      <div class="perf-hud-item"><span id="perfFps">FPS: --</span></div>
-      <div class="perf-hud-item"><span id="perfMem">MEM: --MB</span></div>
-      <div class="perf-hud-item"><span id="perfDom">DOM: --</span></div>
-      <div class="perf-hud-grow"></div>
-      <div class="perf-hud-item"><span id="perfVersion">v0.1.0</span></div>
-    </div>
 
     <!-- ── Command Palette ───────────────────────────────────── -->
     <div class="cmd-palette-bg" id="cmdPaletteBg">
@@ -848,6 +920,7 @@
   <script src="js/yt.js"></script>
   <script src="js/goodeye.js"></script>
   <script src="js/f1.js"></script>
+  <script src="js/worldmon.js"></script>
   <script src="js/needle-agent.js"></script>
   <script src="js/renderer.js"></script>
   <script>
@@ -855,7 +928,7 @@
     // must never prevent the core renderer from working.
     (function() {
       // Critical: load immediately | Deferred: load during idle time
-      const critical = ['enhanced-security.js', 'dsh-native.js', 'tab-thumbnails.js'];
+      const critical = ['enhanced-security.js', 'dsh-native.js'];
       const deferred = [
         'enhanced-performance.js', 'tab-management.js', 'jarvis-integration.js',
         'page-cache.js', 'webview-pool.js', 'accessibility.js',

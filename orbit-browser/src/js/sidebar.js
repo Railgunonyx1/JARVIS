@@ -16,6 +16,7 @@ jarvisBtn.addEventListener("click", () => {
   sidebarOpen = !sidebarOpen;
   sidebar.classList.toggle("hidden", !sidebarOpen);
   jarvisBtn.classList.toggle("active", sidebarOpen);
+  try { localStorage.setItem("orbit-sidebar-open", sidebarOpen ? "1" : "0"); } catch (_) {}
   setMatrix(agentState);
 });
 
@@ -85,6 +86,7 @@ function startJarvis() {
         updateJarvisStatusUI(true);
         // Open sidebar
         sidebarOpen = true;
+        try { localStorage.setItem("orbit-sidebar-open", "1"); } catch (_) {}
         sidebar.classList.remove('hidden');
         jarvisBtn.classList.add('active');
         setMatrix('idle');
@@ -113,6 +115,7 @@ function startNeedleMode() {
   jarvisOnline = true;
   updateJarvisStatusUI(true);
   sidebarOpen = true;
+  try { localStorage.setItem("orbit-sidebar-open", "1"); } catch (_) {}
   sidebar.classList.remove('hidden');
   jarvisBtn.classList.add('active');
   setMatrix('idle');
@@ -132,6 +135,7 @@ function updateJarvisStatusUI(online) {
 
 sbClose.addEventListener("click", () => {
   sidebarOpen = false;
+  try { localStorage.setItem("orbit-sidebar-open", "0"); } catch (_) {}
   sidebar.classList.add("hidden");
   jarvisBtn.classList.remove("active");
   setMatrix(agentState);
@@ -154,6 +158,7 @@ if (window.orbit && window.orbit.jarvis && window.orbit.jarvis.onStatus) {
 
 if (floatGlyph) floatGlyph.addEventListener("click", () => {
   sidebarOpen = true;
+  try { localStorage.setItem("orbit-sidebar-open", "1"); } catch (_) {}
   sidebar.classList.remove("hidden");
   jarvisBtn.classList.add("active");
   setMatrix(agentState);

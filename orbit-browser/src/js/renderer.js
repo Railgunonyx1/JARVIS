@@ -330,6 +330,8 @@ window._renderNonChatPanel = function(name) {
 var bootTabId = createTab("orbit://newtab");
 var bootReplaced = false;
 setMatrix("idle");
+// Apply persisted sidebar visibility (sidebarOpen is restored in core.js).
+if (sidebar && !sidebarOpen) sidebar.classList.add("hidden");
 // Render dynamic popup contents (profiles, extensions) and sync the avatar.
 syncProfileAvatar();
 renderProfilePopup();

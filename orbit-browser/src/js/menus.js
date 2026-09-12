@@ -130,6 +130,18 @@ if (extBtn) extBtn.addEventListener("click", (e) => {
   extPopup.classList.toggle("on");
 });
 
+// ── System Popup (status formerly in the bottom HUD) ─────────
+const systemPopup = $("#systemPopup");
+const sysBtn = $("#sysBtn");
+if (sysBtn) sysBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeAllPopups();
+  updatePerfHudNow();
+  systemPopup.style.right = "130px";
+  systemPopup.style.top = "84px";
+  systemPopup.classList.toggle("on");
+});
+
 // ── Profile Popup ─────────────────────────────────────────────
 const profilePopup = $("#profilePopup");
 const profileBtn = $("#profileBtn");

@@ -251,10 +251,22 @@
       buildAsk: buildAsk,
       onTick: tick,
     });
-    // Fixed backing store, CSS scales it.
-    W = canvas.width = 1000;
-    H = canvas.height = 560;
     ctx = canvas.getContext('2d');
+    // Same responsive backing store as God's Eye (fallback 1000x560).
+    var r = canvas.getBoundingClientRect();
+    W = canvas.width = Math.max(500, Math.round(r.width || 1000));
+    H = canvas.height = Math.max(280, Math.round(r.height || 560));
+    if (!start._resizeWired) {
+      start._resizeWired = true;
+      window.addEventListener('resize', function () {
+        if (!canvas || !ws) return;
+        var rr = canvas.getBoundingClientRect();
+        if (rr.width > 50 && rr.height > 50) {
+          W = canvas.width = Math.round(rr.width);
+          H = canvas.height = Math.round(rr.height);
+        }
+      });
+    }
     ws.start();
     loadSession()
       .then(function () { pollLocations(); })

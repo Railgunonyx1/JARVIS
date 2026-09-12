@@ -45,6 +45,7 @@ class DSHNative {
       message: [],
       agent: [],
       error: [],
+      model: [],
     };
     
     this.init();
@@ -120,6 +121,7 @@ class DSHNative {
       sessionId = this.generateSessionId(),
       page = null,
       stream = true,
+      model = this.selectedModel || null,
     } = options;
     
     const payload = {
@@ -127,11 +129,49 @@ class DSHNative {
       session_id: sessionId,
       page,
     };
+    // Per-chat model selection: "provider/model" id from /v1/models. The
+    // bridge resolves which provider owns it; unset -> router default chain.
+    if (model) payload.model = model;
     
     if (stream) {
       return this.streamChat(payload, sessionId);
     } else {
       return this.sendChat(payload);
+    }
+  }
+
+  // ── Model Selection ───────────────────────────────────────────
+
+  get selectedModel() {
+    try {
+      return localStorage.getItem('orbit-model') || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set selectedModel(id) {
+    try {
+      if (id) localStorage.setItem('orbit-model', id);
+      else localStorage.removeItem('orbit-model');
+    } catch (_) { /* storage unavailable */ }
+    this.emit('model', id);
+  }
+
+  /** Fetch selectable models from the bridge (config + live Ollama tags). */
+  async listModels() {
+    try {
+      const response = await fetch(`${this.config.baseUrl}/v1/models`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return Array.isArray(data.models) ? data.models : [];
+    } catch (error) {
+      console.error('[DSH] listModels error:', error);
+      return [];
     }
   }
 
@@ -259,6 +299,18 @@ class DSHNative {
                       this.emit('message', {
                         type: 'done',
                         text: event.text || fullText,
+                        sessionId,
+                        streamId,
+                      });
+                      break;
+
+                    case 'meta':
+                      // Router telemetry: which provider/model actually served
+                      // the reply (event.model = "provider/model" id).
+                      this.emit('message', {
+                        type: 'meta',
+                        model: event.model || null,
+                        provider: event.provider || null,
                         sessionId,
                         streamId,
                       });
@@ -686,7 +738,7 @@ class DSHNative {
     this.cancelAllStreams();
     this.sessions.clear();
     this.messageQueue = [];
-    this.listeners = { status: [], message: [], agent: [], error: [] };
+    this.listeners = { status: [], message: [], agent: [], error: [], model: [] };
   }
 }
 

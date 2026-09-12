@@ -14,7 +14,11 @@ function setZoom(level) {
   currentZoom = Math.max(0.25, Math.min(5.0, level));
   const dom = getZoomDomain();
   if (dom) { zoomLevels[dom] = currentZoom; localStorage.setItem("orbit-zoom", JSON.stringify(zoomLevels)); }
-  if (zoomIndicator) zoomIndicator.textContent = Math.round(currentZoom * 100) + "%";
+  if (zoomIndicator) {
+    zoomIndicator.textContent = Math.round(currentZoom * 100) + "%";
+    // 100% is the default — hide the chip so the omnibox stays clean.
+    zoomIndicator.style.display = currentZoom === 1 ? "none" : "";
+  }
   const wv = activeWebview();
   if (wv) wv.setZoomFactor(currentZoom);
   updatePerfHud();
@@ -74,29 +78,23 @@ function updatePerfHud() {
   _perfHudPending = true;
   requestAnimationFrame(() => {
     _perfHudPending = false;
-    const jd = _getPerfRef("perfJarvisDot");
-    const jl = _getPerfRef("perfJarvis");
-    const tl = _getPerfRef("perfTabs");
-    const zl = _getPerfRef("perfZoom");
-    const fl = _getPerfRef("perfFps");
-    const ml = _getPerfRef("perfMem");
-    const dl = _getPerfRef("perfDom");
-    if (jd) jd.className = "perf-dot " + (jarvisOnline ? "ok" : "off");
-    if (jl) jl.textContent = "JARVIS: " + (jarvisOnline ? "ON" : "OFF");
-    if (tl) tl.textContent = tabs.size + " tab" + (tabs.size !== 1 ? "s" : "");
+    const jl = _getPerfRef("sysJarvis");
+    const tl = _getPerfRef("sysTabs");
+    const zl = _getPerfRef("sysZoom");
+    const fl = _getPerfRef("sysFps");
+    const ml = _getPerfRef("sysMem");
+    const dl = _getPerfRef("sysDom");
+    if (jl) {
+      jl.innerHTML = '<span class="perf-dot ' + (jarvisOnline ? "ok" : "off") +
+        '"></span>' + (jarvisOnline ? "ON" : "OFF");
+    }
+    if (tl) tl.textContent = String(tabs.size);
     if (zl) zl.textContent = Math.round(currentZoom * 100) + "%";
-    if (fl) fl.textContent = "FPS: " + perfData.fps;
-    if (ml) ml.textContent = "MEM: " + getMemoryMB() + "MB";
-    if (dl) dl.textContent = "DOM: " + document.body.childElementCount;
+    if (fl) fl.textContent = String(perfData.fps);
+    if (ml) ml.textContent = getMemoryMB() + " MB";
+    if (dl) dl.textContent = String(document.body.childElementCount);
   });
 }
-
-// Cleanup on window close
-window.addEventListener("beforeunload", function() {
-  saveSession();
-});
-
-if (perfHud) perfHud.addEventListener("click", function() { navigateTo("orbit://diagnostics"); });
 
 // ── Vertical Tabs ─────────────────────────────────────────────
 function renderVerticalTabs() {

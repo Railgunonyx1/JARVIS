@@ -331,6 +331,36 @@
     state: function() { return _state; },
     isReady: function() { return _state.needleReady; },
     setMainModelReady: function(ready) { _state.mainModelReady = ready; },
+
+    // ── Parallel tool calling ─────────────────────────────────────
+    // Detect local intent, fire the tool call NOW (fast path), and hand the
+    // same message to the main model (reasoning path) at the same time. The
+    // tool result lands in the sidebar immediately; the main model's reply
+    // streams in when ready. onFast/onMain let the caller render each branch.
+    executeParallel: function(query, handlers) {
+      handlers = handlers || {};
+      var route = needleRoute(query);
+      var local = route.confidence >= NEEDLE_HIGH_CONFIDENCE &&
+                  route.tool !== 'done';
+      if (!local) return { parallel: false, route: route };
+
+      // Fast path: execute the local tool immediately.
+      var fastP = executeTool(route).then(function(result) {
+        _state.mode = 'done';
+        if (handlers.onFast) {
+          handlers.onFast({
+            tool: route.tool, args: route.args,
+            confidence: route.confidence, result: result,
+          });
+        }
+        return result;
+      });
+
+      // Reasoning path: the caller streams the main model concurrently.
+      if (handlers.onMain) handlers.onMain();
+
+      return { parallel: true, route: route, fastPromise: fastP };
+    },
   };
 
 })();

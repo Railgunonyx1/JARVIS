@@ -49,6 +49,27 @@ if (sbInput) {
   });
 }
 
+// ── Plan / Build mode toggle (Freebuff-style) ─────────────────
+// Plan: JARVIS proposes and explains before acting (tools are announced,
+// not executed). Build: JARVIS acts — tool calls run immediately.
+// Default is Build (a browser agent that can act); Plan is one click away.
+window.orbitMode = localStorage.getItem("orbit-mode") || "build";
+const sbModeToggle = document.getElementById("sbModeToggle");
+function applyOrbitMode() {
+  if (sbModeToggle) sbModeToggle.dataset.mode = window.orbitMode;
+  sbModeToggle && sbModeToggle.setAttribute("aria-pressed", String(window.orbitMode === "plan"));
+}
+applyOrbitMode();
+if (sbModeToggle) sbModeToggle.addEventListener("click", function (e) {
+  e.stopPropagation();
+  window.orbitMode = window.orbitMode === "plan" ? "build" : "plan";
+  try { localStorage.setItem("orbit-mode", window.orbitMode); } catch (_) {}
+  applyOrbitMode();
+  Chat.append("system", window.orbitMode === "plan"
+    ? "Plan mode — JARVIS proposes before acting."
+    : "Build mode — JARVIS can act directly.");
+});
+
 async function sendToJarvis() {
   const text = sbInput.value.trim();
   if (!text) return;
@@ -71,12 +92,19 @@ async function sendToJarvis() {
     const tab = tabs.get(activeTabId);
     const page = tab ? { url: tab.url, title: tab.title } : null;
 
+    // Plan mode: JARVIS proposes, never acts. Skip the Needle fast-path
+    // (which executes tools immediately) and ask the model for a plan.
+    const planMode = window.orbitMode === "plan";
+    const prompt = planMode
+      ? "[PLAN MODE] Do not execute any tools. Instead, propose a short step-by-step plan for this request and wait for my confirmation: " + text
+      : text;
+
     // Needle parallel tool calling: when the local 14MB model recognizes a
     // concrete browser action (navigate/search/click/read/…), execute it
     // NOW via executeParallel and let the main model stream its reasoning
     // at the same time. Tool result lands sub-100ms; the model's answer
     // follows when ready. Pure Q&A skips the fast path entirely.
-    var par = window.needleAgent && window.needleAgent.executeParallel
+    var par = (!planMode && window.needleAgent && window.needleAgent.executeParallel)
       ? window.needleAgent.executeParallel(text, {
           onFast: function (fast) {
             var conf = Math.round(fast.confidence * 100);
@@ -95,7 +123,7 @@ async function sendToJarvis() {
         })
       : { parallel: false };
 
-    const streamResult = await window.dshNative.chat(text, { page });
+    const streamResult = await window.dshNative.chat(prompt, { page });
     if (streamResult && streamResult.success === false) {
       Chat.append("error", streamResult.error || "Connection failed");
       setMatrix("fail");
@@ -625,6 +653,8 @@ function renderBookmarkBar() {
     });
     bookmarkBar.appendChild(el);
   });
+  // Auto-hide: an empty bookmark bar is just a wasted 32px strip.
+  bookmarkBar.classList.toggle("hidden", bookmarks.length === 0);
 }
 
 function addBookmark() {
@@ -658,11 +688,56 @@ function saveSession() {
 }
 
 // ── Session Thumbnails (New Tab Page) ────────────────────────
+// ── New Tab telemetry strip (F1-style live readouts) ─────────
+var _bootTime = Date.now();
+var _telMemo = { mem: "--", sleep: 0, memAt: 0 };
+function updateNtpTelemetry() {
+  var up = document.getElementById('telUptime');
+  if (up) {
+    var s = Math.floor((Date.now() - _bootTime) / 1000);
+    up.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+  var tabsEl = document.getElementById('telTabs');
+  if (tabsEl) tabsEl.textContent = String(tabs.size);
+  var fpsEl = document.getElementById('telFps');
+  if (fpsEl) fpsEl.textContent = String(perfData.fps);
+  var jEl = document.getElementById('telJarvis');
+  if (jEl) {
+    jEl.textContent = jarvisOnline ? "ON" : "OFF";
+    jEl.classList.toggle("tel-live", jarvisOnline);
+  }
+  var st = document.getElementById('ntOsState');
+  if (st) {
+    st.textContent = jarvisOnline ? "ONLINE" : "OFFLINE";
+  }
+  var dot = document.getElementById('ntOsDot');
+  if (dot) dot.classList.toggle("on", jarvisOnline);
+  // Memory + sleeping tabs come from the main process (10s memo)
+  if (Date.now() - _telMemo.memAt > 10000) {
+    _telMemo.memAt = Date.now();
+    try {
+      window.orbit?.system?.performance?.status?.().then(function (st) {
+        if (!st) return;
+        _telMemo.mem = st.totalMemoryMB > 0 ? st.totalMemoryMB + " MB" : "--";
+        _telMemo.sleep = st.sleepingTabs || 0;
+        var m = document.getElementById('telMem');
+        if (m) m.textContent = _telMemo.mem;
+        var sl = document.getElementById('telSleep');
+        if (sl) sl.textContent = String(_telMemo.sleep);
+      }).catch(function () {});
+    } catch (_) {}
+  }
+}
+setInterval(function () {
+  if (document.getElementById('newtabPage') && document.getElementById('newtabPage').classList.contains("on")) updateNtpTelemetry();
+}, 1000);
+
 function renderSessionThumbnails() {
   const recentList = document.getElementById('ntRecentList');
   const sessionList = document.getElementById('ntSessionList');
   const recentSection = document.getElementById('ntRecent');
   const sessionSection = document.getElementById('ntSessions');
+  updateNtpTelemetry();
 
   // Recently closed tabs
   if (recentList && closedTabs.length > 0) {

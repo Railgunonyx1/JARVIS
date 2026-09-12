@@ -452,6 +452,45 @@ function initStore() {
 // ── Main Process Error Logger ────────────────────────────────
 const mainErrorLog = [];
 const MAX_MAIN_ERRORS = 200;
+// Disk persistence: the log survives restarts so a crash report from a
+// previous session is still readable from diagnostics. Written lazily
+// (debounced) to userData/error-log.json; failures are non-fatal.
+const fs = require("fs");
+const ERROR_LOG_PATH = () => {
+  try { return path.join(app.getPath("userData"), "error-log.json"); }
+  catch (_) { return null; }
+};
+let _errorLogFlushTimer = null;
+
+function _loadErrorLogFromDisk() {
+  const p = ERROR_LOG_PATH();
+  if (!p) return;
+  try {
+    if (fs.existsSync(p)) {
+      const parsed = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (Array.isArray(parsed)) {
+        mainErrorLog.length = 0;
+        parsed.slice(-MAX_MAIN_ERRORS).forEach((e) => mainErrorLog.push(e));
+      }
+    }
+  } catch (_) { /* corrupt file -> start fresh */ }
+}
+
+function _flushErrorLogToDisk() {
+  const p = ERROR_LOG_PATH();
+  if (!p) return;
+  try {
+    fs.writeFileSync(p, JSON.stringify(mainErrorLog.slice(-MAX_MAIN_ERRORS)));
+  } catch (_) { /* disk full/locked -> drop, log stays in memory */ }
+}
+
+function _scheduleErrorLogFlush() {
+  if (_errorLogFlushTimer) return;
+  _errorLogFlushTimer = setTimeout(() => {
+    _errorLogFlushTimer = null;
+    _flushErrorLogToDisk();
+  }, 2000);
+}
 
 function logMainError(level, message, detail) {
   const entry = {
@@ -462,6 +501,7 @@ function logMainError(level, message, detail) {
   };
   mainErrorLog.push(entry);
   if (mainErrorLog.length > MAX_MAIN_ERRORS) mainErrorLog.shift();
+  _scheduleErrorLogFlush();
   return entry;
 }
 
@@ -640,25 +680,30 @@ async function wakeTab(id) {
 }
 
 async function runSleepCheck() {
+  measureAllTabMemory();
   for (const [id, tab] of tabs) {
-    // Memory accounting: measure each guest's real footprint once per sweep.
-    // getProcessMemoryInfo is the guest's dedicated process (webviews are
-    // process-isolated), so this is true per-tab usage, not a share.
-    // NB: it returns a Promise — await, or .workingSetSize is undefined→NaN.
-    const wcId = webContentsIds.get(id);
-    if (wcId) {
-      try {
-        const wc = webContents.fromId(wcId);
-        if (wc && !wc.isDestroyed()) {
-          const info = await wc.getProcessMemoryInfo();
-          // Electron returns KB (some platforms KiB); MB for the HUD.
-          const mb = (Number.isFinite(info.workingSetSize) ? Math.round(info.workingSetSize / 1024) : 0);
-          performance.updateTabMemory(id, mb);
-        }
-      } catch (_) { /* guest gone between map check and read */ }
-    }
     if (tab.agentOwned) continue;
     if (performance.shouldSleep(id)) freezeTab(id);
+  }
+}
+
+// Memory accounting: per-tab real footprint, sampled once per sweep.
+// app.getAppMetrics() is the reliable source — wc.getProcessMemoryInfo is
+// absent on webview webContents in this Electron build, and metrics()
+// returns every guest process in one call. workingSetSize is KB → MB.
+function measureAllTabMemory() {
+  let metrics;
+  try { metrics = app.getAppMetrics(); } catch (_) { return; }
+  if (!Array.isArray(metrics)) return;
+  const byPid = new Map(metrics.map((m) => [m.pid, m]));
+  for (const [id, wcId] of webContentsIds) {
+    try {
+      const wc = webContents.fromId(wcId);
+      if (!wc || wc.isDestroyed()) continue;
+      const pid = typeof wc.getOSProcessId === "function" ? wc.getOSProcessId() : null;
+      const kb = (pid && byPid.get(pid)?.memory?.workingSetSize) || 0;
+      if (kb > 0) performance.updateTabMemory(id, Math.round(kb / 1024));
+    } catch (_) { /* guest gone between map check and read */ }
   }
 }
 
@@ -1314,6 +1359,7 @@ if (!gotSingleInstanceLock) {
 app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   initStore();
+  _loadErrorLogFromDisk();
   installSecurity(getBrowserSession());
   attachDownloadHandlers(getBrowserSession());
   // Spellcheck off at the session boundary (webContents-level API is gone in
@@ -1349,6 +1395,7 @@ process.on("unhandledRejection", (reason) => {
 app.on("window-all-closed", () => {
   jarvisWs?.close();
   stopSleepingEngine();
+  _flushErrorLogToDisk();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -1378,6 +1425,16 @@ app.on("web-contents-created", (_event, contents) => {
       if (!/^(https?|about):/i.test(url)) {
         event.preventDefault();
       }
+    });
+    // Tab crash capture: a guest renderer dying lands in the error log
+    // (and on disk) with the reason, so diagnostics shows WHY a tab went
+    // blank instead of just "it broke".
+    contents.on("render-process-gone", (_e, details) => {
+      logMainError("error", "Tab crashed: " + (details.reason || "unknown"),
+        "exitCode=" + details.exitCode + " url=" + contents.getURL().substring(0, 200));
+    });
+    contents.on("unresponsive", () => {
+      logMainError("warn", "Tab became unresponsive", contents.getURL().substring(0, 200));
     });
     // Canvas fingerprint grain (Brave-Shields style), gated on the Shield.
     contents.on("dom-ready", () => {

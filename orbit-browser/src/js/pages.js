@@ -160,10 +160,24 @@ function toggleJarvisFloat(force) {
 
 function floatAppend(role, text) {
   if (!jarvisFloatBody) return;
-  var div = document.createElement('div');
-  div.className = 'jarvis-float-msg ' + role;
-  div.textContent = text;
-  jarvisFloatBody.appendChild(div);
+  // Clear the welcome placeholder on first real message
+  var ph = jarvisFloatBody.querySelector('.jarvis-float-welcome');
+  if (ph) ph.remove();
+  var wrap = document.createElement('div');
+  wrap.className = 'jfm jfm--' + role;
+  var time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  var labels = { user: 'YOU', jarvis: 'JARVIS', error: 'ERROR', system: 'SYS' };
+  wrap.innerHTML =
+    '<div class="jfm-head">' +
+      '<span class="jfm-role"></span>' +
+      '<span class="jfm-label">' + (labels[role] || role.toUpperCase()) + '</span>' +
+      '<span class="jfm-time">' + time + '</span>' +
+    '</div>';
+  var body = document.createElement('div');
+  body.className = 'jfm-text';
+  body.textContent = text;
+  wrap.appendChild(body);
+  jarvisFloatBody.appendChild(wrap);
   jarvisFloatBody.scrollTop = jarvisFloatBody.scrollHeight;
 }
 

@@ -9,11 +9,12 @@ function closeAllPopups() {
   if (extPopup) extPopup.classList.remove("on");
   if (profilePopup) profilePopup.classList.remove("on");
   if (sitePopup) sitePopup.classList.remove("on");
+  if (typeof systemPopup !== "undefined" && systemPopup) systemPopup.classList.remove("on");
   if (tabContextMenu) tabContextMenu.classList.remove("on");
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".popover") && !e.target.closest(".context-menu") && !e.target.closest("#menuBtn") && !e.target.closest("#extBtn") && !e.target.closest("#profileBtn") && !e.target.closest("#omniLock")) closeAllPopups();
+  if (!e.target.closest(".popover") && !e.target.closest(".context-menu") && !e.target.closest("#menuBtn") && !e.target.closest("#extBtn") && !e.target.closest("#profileBtn") && !e.target.closest("#sysBtn") && !e.target.closest("#omniLock")) closeAllPopups();
 });
 
 document.addEventListener("contextmenu", (e) => {
@@ -43,6 +44,11 @@ document.addEventListener("click", (e) => {
 // ── Sidebar Resize ────────────────────────────────────────────
 const resizeHandle = $("#resizeHandle");
 let isResizing = false;
+// Restore persisted width (clamped to the same 280-600 range).
+try {
+  const savedW = parseInt(localStorage.getItem("orbit-sidebar-w"), 10);
+  if (savedW >= 280 && savedW <= 600 && sidebar) sidebar.style.width = savedW + "px";
+} catch (_) {}
 if (resizeHandle) resizeHandle.addEventListener("mousedown", (e) => {
   isResizing = true;
   resizeHandle.classList.add("active");
@@ -61,6 +67,8 @@ document.addEventListener("mouseup", () => {
     if (resizeHandle) resizeHandle.classList.remove("active");
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
+    // Persist so the width survives restarts.
+    try { localStorage.setItem("orbit-sidebar-w", parseInt(sidebar.style.width, 10) || ""); } catch (_) {}
   }
 });
 

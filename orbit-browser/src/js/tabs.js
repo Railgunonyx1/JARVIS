@@ -177,6 +177,23 @@ function attachWebviewEvents(wv) {
     const t = tabOwnedBy(wv);
     if (t) window.orbit?.tabs?.attach?.(t.id, t.url, wv.getWebContentsId?.() || 0);
   });
+  // Tab crash recovery: log it, tell the user, and reload once so the tab
+  // isn't just a blank rectangle. Repeated crashes within 30s are NOT
+  // auto-reloaded (crash loop guard) — the user gets a toast instead.
+  wv.addEventListener("render-process-gone", (e) => {
+    const t = tabOwnedBy(wv);
+    const reason = e && e.details ? e.details.reason : "unknown";
+    ErrorLogger.error(new Error("Tab crashed: " + reason + (t ? " (" + t.url + ")" : "")), "tab-crash");
+    if (t && !t._lastCrashTs) t._lastCrashTs = 0;
+    const now = Date.now();
+    if (t && now - t._lastCrashTs > 30000) {
+      t._lastCrashTs = now;
+      showToast("warn", "Tab crashed — reloading", t.title || t.url || "");
+      setTimeout(() => { try { wv.reload(); } catch (_) {} }, 400);
+    } else {
+      showToast("err", "Tab keeps crashing", reason);
+    }
+  });
   wv.addEventListener("dom-ready", () => flushPendingLoad(wv));
   wv.addEventListener("did-fail-load", (e) => {
     // Only show errors for main-frame loads (not subresources)
@@ -334,7 +351,8 @@ function _renderTabsInner() {
     if (tab.agentOwned) {
       el.innerHTML = '<span class="tab-glyph"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="tab-title">' + escapeHtml(tab.title) + '</span><span class="tab-close" data-close="' + id + '">\u00d7</span>';
     } else {
-      el.innerHTML = '<span class="tab-fav">' + (tab.pinned ? '\u2702' : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>') + '</span>' + (tab.groupColor ? '<span class="tab-grp" data-grp="' + id + '" style="background:' + tab.groupColor + '" title="Click to change group color"></span>' : '') + '<span class="tab-title">' + escapeHtml(tab.title) + '</span>' + (tab.muted ? '<span class="tab-state" title="Muted">\u{1F507}</span>' : '') + '<span class="tab-close" data-close="' + id + '">\u00d7</span>';
+      // Pinned tabs: icon only — no title, no close button (Chrome-style)
+      el.innerHTML = '<span class="tab-fav">' + (tab.pinned ? '\u2702' : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor"/></svg>') + '</span>' + (tab.groupColor ? '<span class="tab-grp" data-grp="' + id + '" style="background:' + tab.groupColor + '" title="Click to change group color"></span>' : '') + (tab.pinned ? '' : '<span class="tab-title">' + escapeHtml(tab.title) + '</span>') + (tab.muted ? '<span class="tab-state" title="Muted">\u{1F507}</span>' : '') + (tab.pinned ? '' : '<span class="tab-close" data-close="' + id + '">\u00d7</span>');
     }
     if (tab.groupColor) el.style.borderTopColor = tab.groupColor;
 
@@ -530,7 +548,10 @@ function activateTab(id) {
     try {
       const domain = new URL(tab.url).hostname;
       currentZoom = zoomLevels[domain] || 1.0;
-      if (zoomIndicator) zoomIndicator.textContent = Math.round(currentZoom * 100) + "%";
+      if (zoomIndicator) {
+        zoomIndicator.textContent = Math.round(currentZoom * 100) + "%";
+        zoomIndicator.style.display = currentZoom === 1 ? "none" : "";
+      }
       if (wv) wv.setZoomFactor(currentZoom);
     } catch (e) {}
     // File-backed internal pages (Import helper, Extension Store) render in
@@ -565,6 +586,7 @@ const INTERNAL_PAGES = {
   "orbit://extension-store": "extensionStorePage",
   "orbit://goodeye": "goodeyePage",
   "orbit://f1": "f1Page",
+  "orbit://worldmon": "worldmonPage",
 };
 
 function isWebviewInternal(url) {
@@ -595,9 +617,11 @@ function showInternalPage(pageId) {
   if (pageId === "tasksPage") renderTasksPage();
   if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
   if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
+  if (pageId === "worldmonPage" && window.WorldMon) window.WorldMon.start();
   // Workspaces poll in the background; stop them when their page hides.
   if (pageId !== "goodeyePage" && window.GoodEye) window.GoodEye.stop();
   if (pageId !== "f1Page" && window.OrbitF1) window.OrbitF1.stop();
+  if (pageId !== "worldmonPage" && window.WorldMon) window.WorldMon.stop();
 }
 
 function refreshDiagnostics() {
@@ -636,7 +660,7 @@ function refreshDiagnostics() {
       if (sleep) sleep.textContent = (s && s.sleepingTabs > 0) ? s.sleepingTabs + " tab(s)" : "None";
     }).catch(() => {});
   }
-  // Error log stats
+  // Error log stats (merged: renderer ErrorLogger + main-process log)
   var errStats = ErrorLogger.getStats();
   var errCount = document.getElementById('diagErrorCount');
   var errTotal = document.getElementById('diagErrorTotal');
@@ -645,9 +669,25 @@ function refreshDiagnostics() {
   if (errCount) errCount.textContent = errStats.total;
   if (errTotal) errTotal.textContent = errStats.errors;
   if (warnTotal) warnTotal.textContent = errStats.warns;
+  // Main-process log (crashes, uncaught exceptions, tab hangs) — previously
+  // captured but never displayed anywhere.
+  var mainErrors = [];
+  try {
+    var mainResult = window.orbit && window.orbit.perf && window.orbit.perf.errorLog();
+    if (mainResult && typeof mainResult.then === 'function') {
+      mainResult.then(function (entries) {
+        mainErrors = entries || [];
+        var mainEl = document.getElementById('diagMainErrors');
+        if (mainEl) mainEl.textContent = String(mainErrors.length);
+        if (errorList && errorList.style.display !== 'none') renderErrorLog(errorList);
+      }).catch(function () {});
+    }
+  } catch (_) {}
   if (lastErr) {
     var allErrors = ErrorLogger.getErrors({ level: 'error' });
-    lastErr.textContent = allErrors.length > 0 ? allErrors[allErrors.length - 1].message.substring(0, 60) : 'None';
+    var lastMsg = allErrors.length > 0 ? allErrors[allErrors.length - 1].message : null;
+    if (!lastMsg && mainErrors.length > 0) lastMsg = mainErrors[mainErrors.length - 1].message;
+    lastErr.textContent = lastMsg ? lastMsg.substring(0, 60) : 'None';
   }
   // Wire error log buttons
   var viewBtn = document.getElementById('diagViewErrors');
@@ -678,6 +718,7 @@ function refreshDiagnostics() {
   if (clearBtn) {
     clearBtn.onclick = function() {
       ErrorLogger.clear();
+      try { if (window.orbit && window.orbit.perf && window.orbit.perf.clearErrorLog) window.orbit.perf.clearErrorLog(); } catch (_) {}
       refreshDiagnostics();
       showToast('ok', 'Cleared', 'Error log cleared');
     };
@@ -685,19 +726,29 @@ function refreshDiagnostics() {
 }
 
 function renderErrorLog(container) {
-  var errors = ErrorLogger.getErrors();
+  var errors = ErrorLogger.getErrors().map(function(e) {
+    return { level: e.level, message: e.message, source: e.source, line: e.line, timestamp: e.timestamp, origin: 'renderer' };
+  });
+  // Merge main-process entries (tab crashes, uncaught exceptions) if available.
+  try {
+    var mr = window.orbit && window.orbit.perf && window.orbit.perf.errorLog();
+    if (mr && typeof mr.then !== 'function' && Array.isArray(mr)) {
+      mr.forEach(function(e) { errors.push({ level: e.level, message: e.message, source: e.detail || '', line: 0, timestamp: e.timestamp, origin: 'main' }); });
+    }
+  } catch (_) {}
   if (errors.length === 0) {
     container.innerHTML = '<div style="padding:12px;color:var(--jb-mute);font-size:12px;text-align:center">No errors logged</div>';
     return;
   }
+  errors.sort(function(a, b) { return b.timestamp - a.timestamp; });
   var html = '';
-  errors.slice(-50).reverse().forEach(function(e) {
+  errors.slice(0, 60).forEach(function(e) {
     var color = e.level === 'error' ? '#f87171' : e.level === 'warn' ? '#fbbf24' : '#4ade80';
     var icon = e.level === 'error' ? '\u2717' : e.level === 'warn' ? '\u26A0' : '\u2139';
     var time = new Date(e.timestamp).toLocaleTimeString();
     html += '<div class="privacy-activity-item">';
     html += '<div class="privacy-activity-dot" style="background:' + color + '"></div>';
-    html += '<div class="privacy-activity-text" style="font-size:11px"><span style="color:' + color + ';margin-right:6px">' + icon + '</span>' + escapeHtml(e.message) + (e.source ? ' <span style="color:var(--jb-mute)">' + escapeHtml(e.source) + ':' + e.line + '</span>' : '') + '</div>';
+    html += '<div class="privacy-activity-text" style="font-size:11px"><span style="color:' + color + ';margin-right:6px">' + icon + '</span>' + (e.origin === 'main' ? '<span style="color:var(--jb-mute);margin-right:4px">[main]</span>' : '') + escapeHtml(e.message) + (e.source && e.origin !== 'main' ? ' <span style="color:var(--jb-mute)">' + escapeHtml(e.source) + ':' + e.line + '</span>' : '') + '</div>';
     html += '<div class="privacy-activity-time">' + time + '</div>';
     html += '</div>';
   });
