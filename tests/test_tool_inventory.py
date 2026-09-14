@@ -66,6 +66,8 @@ MUTATING_TOOLS = {
     "git.worktree",
     # Patch (write)
     "patch.replace", "patch.insert", "patch.delete",
+    # Session state — undo mutates files back to prior states
+    "session.undo",
     # Memory (write) — safe: identity/preference updates
     "memory.remember", "memory.forget",
     # Testing (mutating)

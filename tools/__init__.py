@@ -91,7 +91,9 @@ def build_default_registry() -> ToolRegistry:
         security_scan_code,
         security_scan_secrets,
     )
+    from tools.session_tools import session_undo
     from tools.shell import shell_execute
+    from tools.skills_tools import skills_list, skills_load
     from tools.system_monitor import system_status
     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
     from tools.web_search import web_search
@@ -1319,6 +1321,52 @@ def build_default_registry() -> ToolRegistry:
             permission="system.query",
             handler=runtime_status,
             category="runtime",
+        ),
+        # ── Skills (advertise-then-load) ────────────────────────
+        Tool(
+            name="skills.load",
+            description=(
+                "Load a named skill's full instructions into context "
+                "(progressive disclosure). Call when a task matches a listed "
+                "skill and you need its detailed workflow."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name, e.g. 'code_review'."},
+                },
+                "required": ["name"],
+            },
+            permission="filesystem.read",
+            handler=skills_load,
+            category="skills",
+        ),
+        Tool(
+            name="skills.list",
+            description="List all registered JARVIS skills with descriptions, tags, and risk.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="filesystem.read",
+            handler=skills_list,
+            category="skills",
+        ),
+        # ── Session state (undo) ─────────────────────────────────
+        Tool(
+            name="session.undo",
+            description=(
+                "Undo the most recent reversible action you took this session "
+                "(filesystem writes, patch edits). Call with list=true to show "
+                "what can be undone without doing it."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "list": {"type": "boolean", "description": "List undoable actions without undoing. Default false."},
+                },
+                "required": [],
+            },
+            permission="filesystem.write",
+            handler=session_undo,
+            category="session",
         ),
         Tool(
             name="runtime.latency",

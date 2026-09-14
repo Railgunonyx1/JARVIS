@@ -1,0 +1,10 @@
+{
+  "name": "frontend_design",
+  "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Covers aesthetic direction, typography, spacing, color systems, and making choices that avoid templated defaults. Use when the user asks for UI work, a redesign, or says a screen looks generic or basic. Ported from Anthropic's frontend-design.",
+  "instructions": "skills/instructions/frontend-design.md",
+  "tools": ["filesystem.read", "filesystem.write", "search.code", "patch.replace", "patch.insert"],
+  "tags": ["design", "ui", "frontend", "typography", "aesthetics"],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0"
+}

@@ -88,6 +88,15 @@ class OpenAICompatibleProvider(LLMProvider):
         """Override to inject extra HTTP headers into every SDK call."""
         return {}
 
+    def _extra_request_params(self) -> dict:
+        """Override to inject provider-specific request params.
+
+        Used for latency knobs like Groq's ``reasoning_effort`` ("none"
+        skips thinking tokens entirely — the single biggest TTFT win on
+        reasoning models) without per-provider copies of complete().
+        """
+        return {}
+
     # ── Rate-limit detection ────────────────────────────────────────────
 
     def _check_rate_limit(self, error_str: str) -> bool:
@@ -129,6 +138,9 @@ class OpenAICompatibleProvider(LLMProvider):
                     kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
+                extra = self._extra_request_params()
+                if extra:
+                    kwargs.update(extra)
                 response = await client.chat.completions.create(
                     model=self.config.get("model", self.default_model),
                     messages=full_messages,
@@ -191,6 +203,9 @@ class OpenAICompatibleProvider(LLMProvider):
                     kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
+                extra = self._extra_request_params()
+                if extra:
+                    kwargs.update(extra)
                 stream = await client.chat.completions.create(
                     model=model or self.config.get("model", self.default_model),
                     messages=full_messages,

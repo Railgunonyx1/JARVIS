@@ -1,0 +1,21 @@
+{
+  "name": "context_budget",
+  "description": "Audits Claude Code context window consumption across agents, skills, MCP servers, and rules. Identifies bloat, redundant components, and produces prioritized token-savings recommendations.",
+  "instructions": "skills/instructions/soc/context-budget.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "shell.execute",
+    "search.code",
+    "patch.replace",
+    "runtime.status"
+  ],
+  "tags": [
+    "context",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

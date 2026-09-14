@@ -1,0 +1,21 @@
+{
+  "name": "search_first",
+  "description": "Research-before-coding workflow. Search for existing tools, libraries, and patterns before writing custom code. Invokes the researcher agent.",
+  "instructions": "skills/instructions/soc/search-first.md",
+  "tools": [
+    "web.search",
+    "browser.open",
+    "filesystem.write",
+    "filesystem.read",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "search",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

@@ -12,9 +12,13 @@ logger = logging.getLogger("jarvis.providers.gemini")
 
 
 class GeminiProvider(LLMProvider):
-    def __init__(self, config: dict, api_key: str):
+    def __init__(self, config: dict, api_key: str,
+                 extra_keys: list[str] | None = None):
         super().__init__("gemini", config)
-        self.api_key = api_key
+        # Multi-key rotation on 429 (mirrors OpenAICompatProvider._rotate_key)
+        self._keys = [k for k in [api_key] + (extra_keys or []) if k]
+        self._key_index = 0
+        self.api_key = self._keys[0]
         self._client = None
         self._sdk_package = "google.generativeai"
         # The google-genai client has no useful default timeout — a dead
@@ -30,6 +34,16 @@ class GeminiProvider(LLMProvider):
             # Store model name for generate_content calls
             self._model = self.config.get("model", "gemini-2.0-flash")
         return self._client
+
+    def _rotate_key(self) -> bool:
+        """Move to the next API key; True when a fresh key is available."""
+        if len(self._keys) <= 1:
+            return False
+        self._key_index = (self._key_index + 1) % len(self._keys)
+        self.api_key = self._keys[self._key_index]
+        self._client = None  # force re-auth with the new key
+        logger.info("gemini: rotated to key index %d", self._key_index)
+        return True
 
     def _convert_messages(self, messages: list[dict], system_prompt: str | None = None):
         """Convert OpenAI-format messages (incl. tool_calls) to Gemini Content.
@@ -106,6 +120,17 @@ class GeminiProvider(LLMProvider):
         config: dict[str, Any] = {
             "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
             "temperature": temperature or self.config.get("temperature", 0.7),
+            # gemini-2.5-flash is a thinking model: without an explicit budget
+            # of 0 it spends seconds on hidden thoughts before the first
+            # visible token (Google's own guidance for lowest latency).
+            # Chat replies want speed; deep reasoning stays on the agent path
+            # via explicit config, not here.
+            "thinking_config": {"thinking_budget": 0},
+            # google-genai's automatic function calling wraps streaming calls
+            # in an SDK-side retry/round-trip loop (it logs "Direct use of AFC
+            # ... is not recommended"). We parse tool calls ourselves, so
+            # turn AFC off: fewer hidden round-trips, lower TTFT.
+            "automatic_function_calling": {"disable": True},
         }
         gemini_tools = to_gemini_tools(tools)
         if gemini_tools:
@@ -152,6 +177,10 @@ class GeminiProvider(LLMProvider):
             kind = classify_provider_error(error_str)
             if kind in (ErrorKind.RATE_LIMIT, ErrorKind.QUOTA_EXHAUSTED):
                 self.record_rate_limit()
+                if self._rotate_key():
+                    return await self.complete(
+                        messages, system_prompt, max_tokens, temperature, tools,
+                    )
             else:
                 self.record_failure(error_str)
             raise
@@ -173,6 +202,9 @@ class GeminiProvider(LLMProvider):
         config: dict[str, Any] = {
             "max_output_tokens": max_tokens or self.config.get("max_tokens", 8192),
             "temperature": temperature or self.config.get("temperature", 0.7),
+            # See _complete_once: thinking off + AFC off for lowest TTFT.
+            "thinking_config": {"thinking_budget": 0},
+            "automatic_function_calling": {"disable": True},
         }
         gemini_tools = to_gemini_tools(tools)
         if gemini_tools:

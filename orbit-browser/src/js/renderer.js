@@ -316,7 +316,7 @@ function runCommandChain(chain) {
 initMatrix(sbMatrix);
 if (floatMatrix) initMatrix(floatMatrix);
 // Initialize chat module with DOM refs
-if (window.Chat) Chat.init(sbBody, sbNav);
+if (window.Chat) Chat.init(sbBody, sbRail);
 // Wire non-chat panel renderer into Chat module
 window._renderNonChatPanel = function(name) {
   if (name === "vision") { renderVisionPanel(); return; }
@@ -339,6 +339,7 @@ renderExtPopup();
 renderBookmarkBar();
 updatePerfHud();
 // Show initial JARVIS welcome
+if (typeof _syncPanelTitle === "function") _syncPanelTitle("jarvis");
 Chat.renderPanel("jarvis");
 
 // ── Session restore prompt (Chrome-style "Restore pages?") ────

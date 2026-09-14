@@ -158,6 +158,9 @@ def _make_think_filter():
     return _feed, _flush
 
 
+_sticky_winner: str | None = None
+
+
 def _race_providers(router, messages, system_prompt, max_tokens,
                     model: str | None = None):
     """Async generator fed by the first provider to emit a VISIBLE token.
@@ -170,24 +173,60 @@ def _race_providers(router, messages, system_prompt, max_tokens,
     the user wants the answer, not the thoughts) and the losers are
     cancelled mid-flight. Down providers are filtered by the router's
     availability check, so the steady state is a single warm connection.
+
+    Sticky winner: the provider that won the last race leads the next one.
+    A 429ing chain head no longer costs its losers' connections on every
+    turn — the proven-fast provider gets retried first alone; only if it
+    fails does the full race re-form.
     """
-    chain = router._get_available_chain()[:_RACE_MAX_PROBES]
+    global _sticky_winner
+    full_chain = router._get_available_chain()
+    if _sticky_winner and _sticky_winner in full_chain:
+        chain = [_sticky_winner] + \
+            [n for n in full_chain if n != _sticky_winner][:_RACE_MAX_PROBES - 1]
+    else:
+        chain = full_chain[:_RACE_MAX_PROBES]
     if not chain:
         raise RuntimeError("No LLM providers available.")
 
     async def _stream():
         if len(chain) == 1:
+            global _sticky_winner
             feed, flush = _make_think_filter()
-            async for chunk in router._providers[chain[0]].complete_stream(
-                messages, system_prompt, max_tokens,
-            ):
-                visible = feed(chunk)
-                if visible:
-                    yield visible
-            tail = flush()
-            if tail:
-                yield tail
-            return
+            winner_provider = router._providers[chain[0]]
+            produced_any = False
+            try:
+                async for chunk in winner_provider.complete_stream(
+                    messages, system_prompt, max_tokens,
+                ):
+                    visible = feed(chunk)
+                    if visible:
+                        # Keep meta-event provenance identical to the race path.
+                        router._last_provider = chain[0]
+                        router._last_model = winner_provider.model
+                        produced_any = True
+                        yield visible
+                tail = flush()
+                if tail:
+                    yield tail
+                return
+            except Exception:
+                if produced_any:
+                    raise  # mid-stream failure cannot be replayed elsewhere
+                # Sticky winner / chain head dead before the first token:
+                # unstick and walk the FULL router chain (remaining healthy
+                # providers) instead of failing the turn.
+                _sticky_winner = None
+                async for chunk in router.complete_stream(
+                    messages, system_prompt, max_tokens,
+                ):
+                    visible = feed(chunk)
+                    if visible:
+                        yield visible
+                tail = flush()
+                if tail:
+                    yield tail
+                return
 
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -228,6 +267,9 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                     if winner is None:
                         failures += 1
                         if failures == len(chain):
+                            # Nobody produced a visible token: unstick so the
+                            # next turn re-forms the full race from scratch.
+                            _sticky_winner = None
                             raise RuntimeError(
                                 "All LLM providers failed to stream a reply."
                             )
@@ -237,6 +279,7 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                 # chunk
                 if winner is None:
                     winner = name
+                    _sticky_winner = name
                     # Cancel only the losers — the winner's own task must keep
                     # producing its remaining chunks.
                     for loser, t in task_by_name.items():
@@ -376,6 +419,63 @@ _router_cache = None
 _router_lock = threading.Lock()
 
 
+# ── Exact-match response cache ─────────────────────────────────
+# Identical chat turns (same trimmed prompt window, system prompt, model)
+# return the cached answer instantly — 0ms vs 200ms+. Correctness guard:
+# a cache entry is invalidated whenever any session sends a *new* message
+# shape (session content hash changes), so follow-ups never hit stale
+# text. Only short replies are cached (long/creative answers are not
+# worth the staleness risk).
+_RESPONSE_CACHE: dict[str, str] = {}
+_RESPONSE_CACHE_LOCK = threading.Lock()
+_RESPONSE_CACHE_MAX = 64
+_RESPONSE_CACHE_TTL_S = 300.0
+_RESPONSE_CACHE_MAX_LEN = 1200
+
+
+def _response_cache_key(prompt: list[dict], system_prompt: str,
+                        model: str | None) -> str | None:
+    """Cache key from the exact prompt window. None ⇒ do not cache."""
+    import hashlib
+    try:
+        # Only cache short, single-turn exchanges: long histories make
+        # exact-match hits rare and stale-hit risk higher.
+        user_msgs = [m for m in prompt if m.get("role") == "user"]
+        if len(user_msgs) != 1 or len(prompt) > 4:
+            return None
+        body = repr((prompt, system_prompt, model or ""))
+        return hashlib.sha256(body.encode("utf-8", "replace")).hexdigest()
+    except Exception:  # noqa: BLE001 - cache must never break chat
+        return None
+
+
+def _response_cache_get(key: str | None) -> str | None:
+    if not key:
+        return None
+    with _RESPONSE_CACHE_LOCK:
+        entry = _RESPONSE_CACHE.get(key)
+    if not entry:
+        return None
+    stored_at, text = entry.split("|", 1)
+    import time
+    if time.time() - float(stored_at) > _RESPONSE_CACHE_TTL_S:
+        with _RESPONSE_CACHE_LOCK:
+            _RESPONSE_CACHE.pop(key, None)
+        return None
+    return text
+
+
+def _response_cache_put(key: str | None, text: str) -> None:
+    if not key or not text or len(text) > _RESPONSE_CACHE_MAX_LEN:
+        return
+    import time
+    with _RESPONSE_CACHE_LOCK:
+        if len(_RESPONSE_CACHE) >= _RESPONSE_CACHE_MAX:
+            # drop the oldest entry (dict preserves insertion order)
+            _RESPONSE_CACHE.pop(next(iter(_RESPONSE_CACHE)), None)
+        _RESPONSE_CACHE[key] = f"{time.time()}|{text}"
+
+
 class ModelGatewayEngine(StreamEngine):
     """Stream a browser-agent reply through the JARVIS kernel/model gateway."""
 
@@ -449,10 +549,25 @@ class ModelGatewayEngine(StreamEngine):
             window = [{"role": "user", "content": "(empty request)"}]
         return window
 
+    # First visible token later than this → emit an instant acknowledgment
+    # (Mark-LIII "Instant Acknowledgment"): the user hears the assistant
+    # picked the message up instead of watching a silent spinner.
+    _ACK_AFTER_S = 1.5
+    _ACK_TEXT = "On it — working on that now…"
+
     def stream_chat(self, session_id: str, messages: list[dict],
                     page: dict | None, emit: Emitter,
                     model: str | None = None) -> str:
         prompt = self._build_prompt(messages, page)
+        cache_key = _response_cache_key(prompt, self.system_prompt, model)
+        cached = _response_cache_get(cache_key)
+        if cached:
+            emit({"type": "start", "session_id": session_id, "backend": self.name,
+                  **({"model": model} if model else {})})
+            emit({"type": "delta", "text": cached})
+            emit({"type": "meta", "latency_ms": 0, "cached": True})
+            emit({"type": "done", "id": session_id, "backend": self.name})
+            return cached
         emit({"type": "start", "session_id": session_id, "backend": self.name,
               **({"model": model} if model else {})})
         out: list[str] = []
@@ -504,8 +619,12 @@ class ModelGatewayEngine(StreamEngine):
             return "".join(out_chunks)
 
         try:
+            import time as _time
+            _turn_t0 = _time.monotonic()
+            _acked = False
+
             async def _stream() -> str:
-                nonlocal produced
+                nonlocal produced, _acked
                 # Streamers predating per-chat model selection take 3 args;
                 # try the 4-arg form first, fall back for custom/test streamers.
                 try:
@@ -519,7 +638,15 @@ class ModelGatewayEngine(StreamEngine):
                 async for chunk in stream:
                     visible = _visible(chunk)
                     if not visible:
+                        # Slow first token: acknowledge before the silence
+                        # becomes noticeable, at most once per turn.
+                        if (not _acked and not produced
+                                and _time.monotonic() - _turn_t0 > self._ACK_AFTER_S):
+                            _acked = True
+                            emit({"type": "ack", "text": self._ACK_TEXT})
                         continue
+                    if not _acked and not produced:
+                        _acked = True  # real token arrived: no ack needed
                     remaining = limit - produced
                     if remaining <= 0:
                         break
@@ -536,6 +663,7 @@ class ModelGatewayEngine(StreamEngine):
                 return "".join(out)
 
             text = _run_on_shared_loop(_stream())
+            _response_cache_put(cache_key, text)
         except Exception as exc:  # noqa: BLE001 - the bridge must never crash
             emit({"type": "error", "message": str(exc)[:500], "code": "engine_error"})
             return ""

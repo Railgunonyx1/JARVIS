@@ -1,0 +1,19 @@
+{
+  "name": "repo_scan",
+  "description": "Cross-stack source code asset audit \u2014 classifies every file, detects embedded third-party libraries, and delivers actionable four-level verdicts per module with interactive HTML reports.",
+  "instructions": "skills/instructions/soc/repo-scan.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "repo",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "git_workflow",
+  "description": "Git workflow patterns including branching strategies, commit conventions, merge vs rebase, conflict resolution, and collaborative development best practices for teams of all sizes.",
+  "instructions": "skills/instructions/soc/git-workflow.md",
+  "tools": [
+    "git.status",
+    "git.diff",
+    "git.log",
+    "git.commit",
+    "git.branch",
+    "filesystem.read",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "git",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

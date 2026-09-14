@@ -103,6 +103,12 @@ def filesystem_write(args: dict[str, Any]) -> ToolResult:
             except OSError:
                 pass
             raise
+        # Session undo (Mark-LIII pattern): reversible now, confirmable later.
+        from core.agent.undo import push_undo_for_write
+        push_undo_for_write(
+            path, before, content,
+            f"wrote {path.name or path}" + (" (created)" if not before else ""),
+        )
     except OSError as e:
         return ToolResult(success=False, error=f"Failed to write {path}: {e}")
     diff = _brief_diff(before, content)
@@ -198,9 +204,19 @@ def filesystem_delete(args: dict[str, Any]) -> ToolResult:
             metadata={"path": str(path), "type": "dir"},
         )
     try:
+        # Capture for undo before the file vanishes (text files only).
+        before_content = ""
+        try:
+            if path.stat().st_size <= 1_000_000:
+                before_content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            pass
         path.unlink()
     except OSError as e:
         return ToolResult(success=False, error=f"Failed to delete {path}: {e}")
+    from core.agent.undo import push_undo_for_write
+    if before_content:
+        push_undo_for_write(path, before_content, "", f"deleted {path.name or path}")
     return ToolResult(
         success=True,
         output=f"Deleted file {path}",

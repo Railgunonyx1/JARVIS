@@ -1,0 +1,20 @@
+{
+  "name": "api_design",
+  "description": "REST API design patterns including resource naming, status codes, pagination, filtering, error responses, versioning, and rate limiting for production APIs.",
+  "instructions": "skills/instructions/soc/api-design.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "shell.execute",
+    "patch.replace"
+  ],
+  "tags": [
+    "api",
+    "soc",
+    "open-code"
+  ],
+  "risk": "medium",
+  "timeout": 180,
+  "version": "1.0.0"
+}

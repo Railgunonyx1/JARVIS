@@ -1,5 +1,9 @@
 [router]
 default_provider = "gemini"
+# Order = race priority. Fast no-card providers first (groq/gemini heads),
+# then the free-LLM-API directory providers (freellm.net data) as a wide
+# middle tier, then slow/limited tails. Providers without API keys in
+# config/.env are skipped automatically at boot.
 fallback_chain = [
     "groq",
     "gemini",
@@ -7,8 +11,17 @@ fallback_chain = [
     "deepseek",
     "openrouter",
     "opencode_zen",
+    "kilo_code",
+    "agnes",
+    "llm7",
+    "github_models",
+    "cohere",
+    "zai",
     "mistral",
     "nvidia_nim",
+    "sambanova",
+    "scaleway",
+    "cloudflare_ai",
     "huggingface",
     "omni_route",
     "ollama",
@@ -146,6 +159,91 @@ max_tokens = 4096
 temperature = 0.7
 base_url = "https://api-inference.huggingface.co/v1"
 requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# ── Free-LLM-API directory providers (freellm.net, 2026-09 data) ──────
+# All plain OpenAI-compatible endpoints; each activates automatically when
+# its API key appears in config/.env (see SETUP-FREE-LLM-APIS.md for links).
+
+[llm7]
+model = "gpt-oss-20b"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.llm7.io/v1"
+requests_per_minute = 10
+requests_per_day = 800
+priority = 3
+
+[github_models]
+model = "openai/gpt-4.1-mini"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://models.github.ai/inference"
+requests_per_minute = 15
+requests_per_day = 300
+priority = 3
+
+[cohere]
+model = "command-a-111b"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.cohere.com/compatibility/v2"
+requests_per_minute = 20
+requests_per_day = 1000
+priority = 3
+
+[sambanova]
+model = "deepseek-v3-1"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.sambanova.ai/v1"
+requests_per_minute = 20
+requests_per_day = 20
+priority = 5
+
+[zai]
+model = "glm-4.7-flash"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.z.ai/api/paas/v4"
+requests_per_minute = 15
+requests_per_day = 300
+priority = 3
+
+[agnes]
+model = "agnes-2.0-flash"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://apihub.agnes-ai.com/v1"
+requests_per_minute = 30
+requests_per_day = 1000
+priority = 3
+
+[kilo_code]
+model = "nvidia/nemotron-3-ultra-550b-a55b:free"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.kilo.ai/api/gateway"
+requests_per_minute = 60
+requests_per_day = 2000
+priority = 3
+
+[scaleway]
+model = "qwen3-235b-a22b-instruct"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.scaleway.ai/v1"
+requests_per_minute = 15
+requests_per_day = 500
+priority = 5
+
+[cloudflare_ai]
+model = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run"
+requests_per_minute = 30
 requests_per_day = 500
 priority = 5
 

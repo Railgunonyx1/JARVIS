@@ -162,7 +162,8 @@ const sbClose = $("#sbClose");
 const sbBody = $("#sbBody");
 const sbInput = $("#sbInput");
 const sbSend = $("#sbSend");
-const sbNav = $("#sbNav");
+const sbRail = $("#sbRail");   // Opera GX-style icon rail (sidebar.js binds clicks)
+const sbPanelTitle = $("#sbPanelTitle");
 const sbMatrix = $("#sbMatrix");
 const sbDot = $("#sbDot");
 const sbStateLabel = $("#sbStateLabel");
@@ -240,6 +241,9 @@ function setMatrix(state) {
   }[state] || state.toUpperCase();
   if (sbStateLabel) sbStateLabel.textContent = jarvisOnline ? label : "OFF";
   const running = ["thinking", "planning", "running", "ask"].includes(state);
+  // Opera-rail pulse: chat icon breathes while the agent works
+  const chatRailBtn = sbRail?.querySelector('[data-panel="jarvis"]');
+  if (chatRailBtn) chatRailBtn.classList.toggle("agent-active", running && jarvisOnline);
   if (floatGlyph) floatGlyph.classList.toggle("show", running && !sidebarOpen && jarvisOnline);
   if (floatTitle) floatTitle.textContent = state === "ask" ? "Approval needed" : "Researching";
   if (floatMatrix) floatMatrix.dataset.state = state === "ask" ? "ask" : "running";

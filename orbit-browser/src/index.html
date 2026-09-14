@@ -648,40 +648,125 @@
       <!-- ── Resize Handle ──────────────────────────────────── -->
       <div class="resize-handle" id="resizeHandle"></div>
 
-      <!-- ── JARVIS Sidebar ──────────────────────────────────── -->
+      <!-- ── JARVIS Sidebar (Opera GX-style icon rail + panel) ── -->
       <aside class="sidebar" id="sidebar">
-        <div class="sb-head">
-          <div class="sb-matrix" id="sbMatrix" data-state="idle"></div>
-          <div class="sb-brand">
-            <span class="sb-title">JARVIS</span>
+        <nav class="sb-rail" id="sbRail" title="JARVIS sections">
+          <div class="sb-rail-top">
+            <button class="rail-btn" data-panel="jarvis" title="Chat" aria-label="Chat">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                  <circle cx="5.5" cy="6.5" r="1" fill="currentColor"/>
+                  <circle cx="10.5" cy="6.5" r="1" fill="currentColor"/>
+                  <path d="M5.5 10.5c.8 1 4.2 1 5 0" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Chat</span>
+            </button>
+            <button class="rail-btn" data-panel="chat-history" title="History" aria-label="History">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">History</span>
+            </button>
+            <button class="rail-btn" data-panel="agents" title="Agents" aria-label="Agents">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <rect x="3" y="4" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="6" cy="8" r="1" fill="currentColor"/>
+                  <circle cx="10" cy="8" r="1" fill="currentColor"/>
+                  <path d="M8 4V2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Agents</span>
+            </button>
+            <button class="rail-btn" data-panel="companions" title="Companions" aria-label="Companions">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <circle cx="5.5" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="11" cy="6.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M2 13c.4-2 1.8-3 3.5-3s3.1 1 3.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Companions</span>
+            </button>
+            <button class="rail-btn" data-panel="workspaces" title="Spaces" aria-label="Spaces">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                  <rect x="9" y="9" width="4.5" height="4.5" rx="1" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Spaces</span>
+            </button>
+          </div>
+          <div class="sb-rail-sep"></div>
+          <div class="sb-rail-mid">
+            <button class="rail-btn" data-panel="vision" title="Vision" aria-label="Vision">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4-6.5-4-6.5-4z" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="8" cy="8" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Vision</span>
+            </button>
+            <button class="rail-btn" data-panel="activity" title="Activity" aria-label="Activity">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M2 9h3l2-4 2 7 2-5 1.5 2H14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Activity</span>
+            </button>
+            <button class="rail-btn" data-panel="memory" title="Memory" aria-label="Memory">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2.5c-2 0-3.2 1.3-3.2 3 0 .6.2 1.1.4 1.5-.9.4-1.7 1.3-1.7 2.6 0 1.7 1.4 2.9 3.1 2.9h2.8c1.7 0 3.1-1.2 3.1-2.9 0-1.3-.8-2.2-1.7-2.6.2-.4.4-.9.4-1.5 0-1.7-1.2-3-3.2-3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Memory</span>
+            </button>
+            <button class="rail-btn" data-panel="tools" title="Tools" aria-label="Tools">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M9.5 6.5l4-4M3 13l4.5-4.5M11 2l3 3-2 2-3-3 2-2zM5 9l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Tools</span>
+            </button>
+          </div>
+          <div class="sb-rail-grow"></div>
+          <div class="sb-rail-bottom">
+            <div class="rail-status" id="railStatus" data-state="idle" title="JARVIS status">
+              <span class="rail-status-dot" id="sbDot"></span>
+            </div>
+          </div>
+        </nav>
+
+        <div class="sb-panel" id="sbPanel">
+          <div class="sb-panel-head" id="sbPanelHead">
+            <div class="sb-matrix" id="sbMatrix" data-state="idle"></div>
+            <span class="sb-panel-title" id="sbPanelTitle">JARVIS</span>
             <span class="sb-status">
-              <span class="sb-dot" id="sbDot"></span>
               <span id="sbStateLabel">OFF</span>
             </span>
+            <div class="sb-grow"></div>
+            <button class="sb-model-chip" id="sbModelChip" title="Model">
+              <span class="sb-model-pulse"></span>
+              <span class="sb-model-name" id="sbModelName">AUTO</span>
+            </button>
+            <button class="sb-icon" id="sbClose" title="Close sidebar">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+            </button>
           </div>
-          <div class="sb-grow"></div>
-          <button class="sb-model-chip" id="sbModelChip" title="Model">
-            <span class="sb-model-pulse"></span>
-            <span class="sb-model-name" id="sbModelName">AUTO</span>
-          </button>
-          <button class="sb-icon" id="sbClose" title="Close sidebar">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M5 3l4 4-4 4" stroke="currentColor" stroke-width="1.2"/>
-            </svg>
-          </button>
-        </div>
-
-        <nav class="sb-nav" id="sbNav">
-          <button class="on" data-panel="jarvis">JARVIS</button>
-          <button data-panel="workspaces">\u25A3 Spaces</button>
-          <button data-panel="agents">Agents</button>
-          <button data-panel="companions">Companions</button>
-          <button data-panel="vision">Vision</button>
-          <button data-panel="activity">Activity</button>
-          <button data-panel="memory">Memory</button>
-          <button data-panel="chat-history">History</button>
-          <button data-panel="tools">Tools</button>
-        </nav>
 
         <div class="sb-context" id="sbContext">
           <span class="sb-ctx-label">This page</span>
@@ -713,6 +798,7 @@
             </div>
           </div>
         </footer>
+        </div><!-- /sb-panel -->
       </aside>
     </div>
 

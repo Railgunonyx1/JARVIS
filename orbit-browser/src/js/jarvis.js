@@ -303,12 +303,12 @@ function wireDshNative() {
     syncJarvisOnline(status.connected && status.kernel === 'online');
     if (statusDot) statusDot.className = 'status-dot ' + (jarvisOnline ? 'online' : 'offline');
     if (statusLabel) statusLabel.textContent = jarvisOnline ? 'ONLINE' : 'OFF';
-    if (sbDot) sbDot.className = 'sb-dot ' + (jarvisOnline ? 'online' : 'offline');
+    if (sbDot) sbDot.className = 'rail-status-dot ' + (jarvisOnline ? 'online' : 'offline');
     setMatrix(jarvisOnline ? 'idle' : 'offline');
     updatePerfHud();
     
     // Update JARVIS panel status if visible
-    if (sbNav && sbNav.querySelector('[data-panel="jarvis"]')?.classList.contains('on')) {
+    if (sbRail && sbRail.querySelector('[data-panel="jarvis"]')?.classList.contains('on')) {
       // Refresh the JARVIS panel header with new status
       const jarvisPanel = sbBody.querySelector('.jarvis-status-header');
       if (jarvisPanel) {
@@ -573,7 +573,7 @@ if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
     syncJarvisOnline(status.ok && status.kernel === "online");
     if (statusDot) statusDot.className = "status-dot " + (jarvisOnline ? "online" : "offline");
     if (statusLabel) statusLabel.textContent = jarvisOnline ? "ONLINE" : "OFF";
-    if (sbDot) sbDot.className = "sb-dot " + (jarvisOnline ? "online" : "offline");
+    if (sbDot) sbDot.className = "rail-status-dot " + (jarvisOnline ? "online" : "offline");
     setMatrix(jarvisOnline ? "idle" : "offline");
     updatePerfHud();
   });
@@ -600,7 +600,7 @@ if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
     if (s && s.ok) {
       if (statusDot) statusDot.className = "status-dot " + (jarvisOnline ? "online" : "offline");
       if (statusLabel) statusLabel.textContent = jarvisOnline ? "ONLINE" : "OFF";
-      if (sbDot) sbDot.className = "sb-dot " + (jarvisOnline ? "online" : "offline");
+      if (sbDot) sbDot.className = "rail-status-dot " + (jarvisOnline ? "online" : "offline");
     }
   }).catch(function() {});
 }

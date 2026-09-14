@@ -1,0 +1,20 @@
+{
+  "name": "deployment_patterns",
+  "description": "Deployment workflows, CI/CD pipeline patterns, Docker containerization, health checks, rollback strategies, and production readiness checklists for web applications.",
+  "instructions": "skills/instructions/soc/deployment-patterns.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "deployment",
+    "soc",
+    "open-code"
+  ],
+  "risk": "medium",
+  "timeout": 180,
+  "version": "1.0.0"
+}

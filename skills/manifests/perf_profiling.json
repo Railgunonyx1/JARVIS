@@ -1,0 +1,9 @@
+{
+  "name": "perf_profiling",
+  "description": "Measure and reduce response time and resource use: run the benchmark harness, capture P50/P95/P99 latencies, profile hot paths, find N+1 and serial-when-parallel patterns, and validate optimizations against baseline. Use when something is slow (JARVIS replies, tool dispatch, browser startup) or before/after an optimization pass. Built around the repo's benchmark/ harness (orbit_timing, startup probe, gate).",
+  "tools": ["test.benchmark", "runtime.latency", "runtime.status", "shell.execute", "filesystem.read"],
+  "tags": ["performance", "profiling", "latency", "benchmark", "optimization"],
+  "risk": "low",
+  "timeout": 300,
+  "version": "1.0.0"
+}

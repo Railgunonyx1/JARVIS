@@ -36,6 +36,16 @@ _PROVIDER_CLASSES: dict[str, tuple[str, str]] = {
     "cerebras": ("providers.cerebras_provider", "CerebrasProvider"),
     "deepseek": ("providers.deepseek_provider", "DeepSeekProvider"),
     "huggingface": ("providers.huggingface_provider", "HuggingFaceProvider"),
+    # Generic free-tier providers (freellm-apis directory) — one shared module.
+    "llm7": ("providers.free_llm_providers", "LLM7Provider"),
+    "github_models": ("providers.free_llm_providers", "GitHubModelsProvider"),
+    "cloudflare_ai": ("providers.free_llm_providers", "CloudflareAIProvider"),
+    "cohere": ("providers.free_llm_providers", "CohereProvider"),
+    "sambanova": ("providers.free_llm_providers", "SambaNovaProvider"),
+    "zai": ("providers.free_llm_providers", "ZAIProvider"),
+    "agnes": ("providers.free_llm_providers", "AgnesProvider"),
+    "kilo_code": ("providers.free_llm_providers", "KiloCodeProvider"),
+    "scaleway": ("providers.free_llm_providers", "ScalewayProvider"),
 }
 
 
@@ -112,15 +122,34 @@ class ProviderRouter:
             "cerebras": CircuitBreaker(),
             "deepseek": CircuitBreaker(),
             "huggingface": CircuitBreaker(),
+            "llm7": CircuitBreaker(),
+            "github_models": CircuitBreaker(),
+            "cloudflare_ai": CircuitBreaker(),
+            "cohere": CircuitBreaker(),
+            "sambanova": CircuitBreaker(),
+            "zai": CircuitBreaker(),
+            "agnes": CircuitBreaker(),
+            "kilo_code": CircuitBreaker(),
+            "scaleway": CircuitBreaker(),
         }
         for _name, _breaker in self._circuit_breakers.items():
             _breaker.register(_name)
 
         # Provider constructor kwargs (only loaded when config has the key)
+        # every keyed provider supports numbered extra keys (KEY_2, KEY_3...)
+        # via <provider>_extra — rotation lives in OpenAICompatProvider._rotate_key
         _PROVIDER_KWARGS: dict[str, dict[str, Any]] = {
-            "groq": {"extra_keys": lambda: [k for k in api_keys.get("groq_extra", []) if k]},
-            "openrouter": {"extra_keys": lambda: [k for k in api_keys.get("openrouter_extra", []) if k]},
-            "mistral": {"extra_keys": lambda: [k for k in api_keys.get("mistral_extra", []) if k]},
+            name: {"extra_keys": (
+                lambda n=name: [k for k in api_keys.get(n + "_extra", []) if k]
+            )}
+            for name in (
+                "groq", "openrouter", "mistral", "gemini", "deepseek",
+                "llm7", "github_models", "cloudflare", "cohere",
+                "sambanova", "zai", "agnes", "kilo_code", "scaleway",
+                "zen", "together", "fireworks", "cerebras", "nvidia",
+                "perplexity", "xai",
+            )
+            if name in _PROVIDER_CLASSES
         }
 
         for name in list(config.keys()):
@@ -131,6 +160,17 @@ class ProviderRouter:
             if name not in ("ollama", "omni_route") and not provider_key:
                 continue
             if name not in _PROVIDER_CLASSES:
+                continue
+            # Vendor-mismatch guard: a key copied from the wrong vendor (e.g.
+            # an OpenRouter ``sk-or-v1-…`` pasted as DEEPSEEK_API_KEY) can
+            # never authenticate — skip it loudly instead of paying a doomed
+            # 401 round-trip in every fallback walk.
+            if name == "deepseek" and provider_key.startswith("sk-or-v1-"):
+                logger.error(
+                    "deepseek: DEEPSEEK_API_KEY is an OpenRouter key "
+                    "(sk-or-…). Set a real DeepSeek key or remove it — "
+                    "OpenRouter requests should use the openrouter provider."
+                )
                 continue
             try:
                 cls = _lazy_import_provider(name)

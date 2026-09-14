@@ -57,8 +57,23 @@ class Skill:
 
     name: str
     description: str
+    instructions_path: str = ""
     contracts: dict[str, SkillContract] = field(default_factory=lambda: {})
     enabled: bool = True
+
+    def load_instructions(self) -> str:
+        """Load this skill's full instructions (progressive disclosure).
+
+        Returns the markdown body, or "" when the skill ships none.
+        """
+        if not self.instructions_path:
+            return ""
+        path = get_project_root() / self.instructions_path
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError as e:
+            logger.warning("Cannot load instructions for %s: %s", self.name, e)
+            return ""
 
     @property
     def tags(self) -> list[str]:
@@ -145,6 +160,8 @@ class SkillRegistry:
             skill = Skill(name=name, description=metadata.description)
             self.skills[name] = skill
         skill.contracts["default"] = contract
+        if data.get("instructions"):
+            skill.instructions_path = str(data["instructions"])
 
     def get_skill(self, name: str) -> Skill | None:
         return self.skills.get(name)

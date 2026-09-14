@@ -372,8 +372,37 @@ def main(argv=None) -> int:
             def _warm() -> None:
                 try:
                     import engine as _eng
-                    _eng._get_router().warm()
+                    router = _eng._get_router()
+                    router.warm()
                     logger.info("provider warmup complete (SDKs imported)")
+                    # TTFT prewarm: open the TLS/TCP connection to the top
+                    # race providers with a 1-token ping so the first REAL
+                    # message skips the ~1-2s connection handshake and any
+                    # per-key first-request overhead. Failures are fine —
+                    # the connection cache is per-client and a 429 still
+                    # establishes the socket.
+                    import asyncio
+                    async def _ping(name: str) -> None:
+                        try:
+                            provider = router._providers.get(name)
+                            if provider is None:
+                                return
+                            async for _ in provider.complete_stream(
+                                [{"role": "user", "content": "1"}],
+                                "reply with the single character: 1", 2,
+                            ):
+                                break
+                        except Exception:
+                            pass
+                    async def _ping_all() -> None:
+                        await asyncio.gather(
+                            *(_ping(n) for n in router._get_available_chain()[:3])
+                        )
+                    try:
+                        asyncio.run(_ping_all())
+                        logger.info("TTFT prewarm complete (connections open)")
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("TTFT prewarm skipped: %s", exc)
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("provider warmup failed: %s", exc)
             threading.Thread(target=_warm, daemon=True, name="bridge-warmup").start()

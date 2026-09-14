@@ -42,6 +42,19 @@ ENV_TO_KEY = {
     "HF_API_KEY": "huggingface_api_key",
     "HUGGINGFACE_API_KEY": "huggingface_api_key",
     "OLLAMA_API_KEY": "ollama_api_key",
+    # Free-LLM-API directory providers (freellm.net)
+    "LLM7_API_KEY": "llm7_api_key",
+    "GITHUB_MODELS_API_KEY": "github_models_api_key",
+    "GITHUB_TOKEN": "github_models_api_key",
+    "CLOUDFLARE_API_KEY": "cloudflare_ai_api_key",
+    "CLOUDFLARE_API_TOKEN": "cloudflare_ai_api_key",
+    "COHERE_API_KEY": "cohere_api_key",
+    "SAMBANOVA_API_KEY": "sambanova_api_key",
+    "ZAI_API_KEY": "zai_api_key",
+    "ZHIPU_API_KEY": "zai_api_key",
+    "AGNES_API_KEY": "agnes_api_key",
+    "KILO_CODE_API_KEY": "kilo_code_api_key",
+    "SCALEWAY_API_KEY": "scaleway_api_key",
 }
 
 
@@ -117,11 +130,13 @@ def router_api_keys() -> dict:
     for k, v in raw.items():
         if k.endswith("_api_key"):
             keys[k[: -len("_api_key")]] = v
-    for name in ("groq", "openrouter", "mistral"):
-        extras = [v for k, v in raw.items()
-                  if k.startswith(name + "_api_key_") and v]
-        if extras:
-            keys[name + "_extra"] = extras
+    # numbered extras (e.g. GROQ_API_KEY_2) group under <provider>_extra for
+    # every provider, not just the original four
+    import re as _re
+    for k, v in raw.items():
+        m = _re.match(r"^([a-z_]+)_api_key_\d+$", k)
+        if m and v:
+            keys.setdefault(m.group(1) + "_extra", []).append(v)
     return keys
 
 

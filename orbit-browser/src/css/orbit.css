@@ -739,13 +739,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
+/* Sidebar shell: rail + panel side by side */
 .sidebar {
   width: 420px;
   flex: none;
   background: linear-gradient(180deg, #0d0d12 0%, #0a0a0f 100%);
   border-left: 1px solid var(--jb-border-subtle);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   min-height: 0;
   position: relative;
   overflow: hidden;
@@ -762,16 +763,141 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sidebar.hidden { display: none; }
 
 /* Sidebar header */
-.sb-head {
+.sb-panel-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   z-index: 1;
 }
+
+/* ── Opera GX-style icon rail ───────────────────────────── */
+.sb-rail {
+  width: 48px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  z-index: 2;
+}
+.sb-rail-top,
+.sb-rail-mid,
+.sb-rail-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.sb-rail-mid { margin-top: 0; }
+.sb-rail-sep {
+  width: 22px; height: 1px;
+  margin: 7px 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+.sb-rail-grow { flex: 1; }
+.rail-btn {
+  position: relative;
+  width: 36px; height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.42);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.rail-btn .rail-ico { display: flex; align-items: center; justify-content: center; }
+.rail-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+}
+.rail-btn.on {
+  background: var(--jb-border-subtle);
+  color: var(--jb-text);
+}
+.rail-btn.on::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 8px; bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--jb-text);
+}
+/* active-agent pulse on the chat icon while JARVIS runs */
+.rail-btn[data-panel="jarvis"].agent-active .rail-ico {
+  animation: railPulse 1.6s ease-in-out infinite;
+}
+@keyframes railPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+/* tooltips fly out to the right of the rail */
+.rail-tip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #1a1a22;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--jb-text);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease 0.15s, transform 0.12s ease 0.15s;
+  z-index: 30;
+}
+.rail-btn:hover .rail-tip,
+.rail-btn:focus-visible .rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+.rail-status {
+  width: 30px; height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+}
+.rail-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--jb-ghost);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.rail-status-dot.online {
+  background: var(--jb-success);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.55);
+}
+.rail-status-dot.offline { background: var(--jb-danger); }
+
+/* Panel column (right of the rail) */
+.sb-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
 .sb-brand { display: flex; flex-direction: column; gap: 3px; }
+.sb-panel-title {
+  font-family: var(--jb-font-display, inherit);
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--jb-paper);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .sb-title {
   font-family: var(--jb-font-display);
   font-size: 15px;
@@ -862,34 +988,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 @keyframes m-gather { 0%,100% { opacity:0.2 } 50% { opacity:0.9 } }
 
 /* Sidebar nav */
-.sb-nav {
-  display: flex;
-  gap: 2px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  overflow-x: auto;
-  position: relative;
-  z-index: 1;
-}
-.sb-nav::-webkit-scrollbar { display: none; }
-.sb-nav button {
-  padding: 5px 10px;
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-.sb-nav button.on {
-  background: var(--jb-border-subtle);
-  color: var(--jb-text);
-}
-.sb-nav button:hover:not(.on) {
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.6);
-}
+/* (old .sb-nav styles removed — replaced by Opera GX-style .sb-rail) */
 
 /* Sidebar context */
 .sb-context {
@@ -2155,21 +2254,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   border-left: 1px solid var(--jb-border);
 }
 .sb-nav {
-  display: flex; flex-wrap: wrap; gap: 2px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--jb-border-subtle);
+  display: none; /* replaced by .sb-rail */
 }
-.sb-nav button {
-  padding: 4px 8px;
-  font-size: 10px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  font-family: var(--jb-font-mono);
-  color: var(--jb-text-tertiary);
-  border-radius: var(--radius-sharp);
-}
-.sb-nav button:hover { color: var(--jb-text); background: var(--jb-surface); }
-.sb-nav button.on { color: var(--jb-void); background: var(--jb-paper); font-weight: 600; }
+.rail-btn { border-radius: var(--radius-sharp, 10px); }
+.rail-btn.on { color: var(--jb-void); background: var(--jb-paper); font-weight: 600; }
 
 /* Composer: square field, hairline border, white send */
 .sb-composer-box {
@@ -2200,7 +2288,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ── Focus visibility (a11y) ────────────────────────────────────── */
-.nav-btn:focus-visible, .sb-nav button:focus-visible, .menu-item:focus-visible {
+.nav-btn:focus-visible, .rail-btn:focus-visible, .menu-item:focus-visible {
   outline: 1px solid var(--jb-paper);
   outline-offset: 1px;
 }
@@ -2456,23 +2544,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .chat-empty-sub { font-size: 12px; color: var(--jb-mute); }
 
-/* ── Sidebar nav: F1 steering-wheel selector ───────────────────── */
-.sb-nav button {
+/* ── Sidebar nav: F1 steering-wheel selector (now .sb-rail) ────── */
+.rail-btn {
   border-radius: 2px;
   font-family: var(--jb-font-mono);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 5px 9px;
   border: 1px solid transparent;
 }
-.sb-nav button.on {
+.rail-btn.on {
   background: var(--jb-paper);
   color: var(--jb-void);
   border-color: var(--jb-paper);
   font-weight: 600;
 }
-.sb-nav button.on::before { content: ''; display: none; }
+.rail-btn.on::before { content: ''; display: none; }
 
 /* ── Composer: mode chip visible on glass ──────────────────────── */
 .sb-composer-box {

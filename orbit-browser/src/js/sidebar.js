@@ -164,16 +164,31 @@ if (floatGlyph) floatGlyph.addEventListener("click", () => {
   setMatrix(agentState);
 });
 
-// ── Sidebar Navigation ────────────────────────────────────────
-if (sbNav) sbNav.addEventListener("click", (e) => {
+// ── Sidebar Navigation (Opera GX-style icon rail) ─────────────
+const PANEL_TITLES = {
+  "jarvis": "JARVIS", "chat-history": "History", "agents": "Agents",
+  "companions": "Companions", "workspaces": "Spaces", "vision": "Vision",
+  "activity": "Activity", "memory": "Memory", "tools": "Tools",
+};
+const sbRail = document.getElementById("sbRail");
+const sbPanelTitle = document.getElementById("sbPanelTitle");
+if (sbRail) sbRail.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (btn?.dataset.panel) {
-    sbNav.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
+    sbRail.querySelectorAll("button").forEach(b => b.classList.toggle("on", b === btn));
     renderPanel(btn.dataset.panel);
   }
 });
 
+// Keep the rail highlight + panel header title in sync.
+function _syncPanelTitle(name) {
+  if (sbPanelTitle) sbPanelTitle.textContent = PANEL_TITLES[name] || "JARVIS";
+  if (sbRail) sbRail.querySelectorAll("button").forEach(b =>
+    b.classList.toggle("on", b.dataset.panel === name));
+}
+
 function renderPanel(name) {
+  _syncPanelTitle(name);
   // Delegate chat panels to Chat module
   if (name === "jarvis" || name === "chat-history" || name === "activity") {
     Chat.renderPanel(name);

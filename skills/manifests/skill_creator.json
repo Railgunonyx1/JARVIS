@@ -1,0 +1,10 @@
+{
+  "name": "skill_creator",
+  "description": "Create new JARVIS skills, modify and improve existing ones, and measure skill performance. Use when the user wants a new capability built as a skill, wants to edit or optimize a skill manifest, run evals against a skill, or improve a skill's description for better task-matching accuracy. Ported from Anthropic's skill-creator.",
+  "instructions": "skills/instructions/skill-creator.md",
+  "tools": ["filesystem.read", "filesystem.write", "filesystem.list", "search.code", "test.run", "test.benchmark"],
+  "tags": ["skills", "meta", "authoring", "evaluation"],
+  "risk": "medium",
+  "timeout": 180,
+  "version": "1.0.0"
+}

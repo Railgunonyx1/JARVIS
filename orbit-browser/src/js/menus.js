@@ -136,7 +136,7 @@ const sysBtn = $("#sysBtn");
 if (sysBtn) sysBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
-  updatePerfHudNow();
+  updatePerfHud();
   systemPopup.style.right = "130px";
   systemPopup.style.top = "84px";
   systemPopup.classList.toggle("on");

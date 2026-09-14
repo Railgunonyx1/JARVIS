@@ -56,6 +56,36 @@ _SMALL_FULL = (
     "Stop when done. Summarize briefly."
 )
 
+
+def _skills_block() -> str:
+    """One line per available skill (advertise-then-load, cached).
+
+    Descriptions are capped at 80 chars: the block sits in EVERY request's
+    prompt, so at 76 skills a full description list costs ~3.5k tokens of
+    prefill per turn; capped, it costs ~1k. Full descriptions remain
+    available via skills.list / skills.load.
+    """
+    global _SKILLS_CACHE
+    if _SKILLS_CACHE is None:
+        try:
+            from skills.registry import build_default_skill_registry
+            skills = build_default_skill_registry()
+            lines = []
+            for name, skill in sorted(skills.items()):
+                desc = (skill.description or "").strip()
+                if not desc:
+                    continue
+                if len(desc) > 80:
+                    desc = desc[:77].rstrip() + "..."
+                lines.append(f"- {name}: {desc}")
+            _SKILLS_CACHE = "\n".join(lines)
+        except Exception:
+            _SKILLS_CACHE = ""
+    return _SKILLS_CACHE
+
+
+_SKILLS_CACHE: str | None = None
+
 # Cache: project context string (changes rarely)
 _project_cache: dict[str, str] = {}
 
@@ -99,7 +129,19 @@ class AgentContextBuilder:
         is_small = model and any(s in model for s in ("1.5b", "1b", "3b"))
         prompt_base = _SMALL_FULL if is_small else _FULL
 
+        # Cache-friendly ordering (prefix-cache pattern, awesome-llm-token-
+        # optimization): STATIC content first — identity, rules, skill
+        # catalog — then per-project context, then per-session memory LAST.
+        # Providers that auto-cache prompt prefixes (OpenAI 1024+, Gemini
+        # implicit, DeepSeek disk KV) then hit on the stable head across
+        # turns instead of re-paying full input price every request.
         lines = [prompt_base]
+        skills_text = _skills_block()
+        if skills_text:
+            lines.append(
+                "\nAvailable skills (follow matching guidance; load full "
+                "instructions via skills.load when relevant):\n" + skills_text
+            )
         proj_ctx = self._project_context(project)
         if proj_ctx:
             lines.append(proj_ctx)
