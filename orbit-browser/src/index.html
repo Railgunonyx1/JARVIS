@@ -281,8 +281,14 @@
                 <div class="row"><div><div class="name">Accent</div><div class="sub">Monochrome with optional faint tint</div></div><span class="chip">Glyph</span></div>
               </div>
               <div class="group"><h2>AI</h2>
-                <div class="row"><div><div class="name">Primary model</div><div class="sub">Configured model router</div></div><span class="chip ok">Connected</span></div>
-                <div class="row"><div><div class="name">Fallback model</div><div class="sub">Used if the primary does not respond</div></div><span class="chip">Ready</span></div>
+                <div class="row"><div><div class="name">Model</div><div class="sub">Primary model for JARVIS</div></div><select id="settingsModelSelect" class="chip-select"></select></div>
+                <div class="row"><div><div class="name">Fallback model</div><div class="sub">Used if the primary does not respond</div></div><span class="chip" id="settingsFallbackChip">Ready</span></div>
+                <div class="row"><div><div class="name">Mode</div><div class="sub">Plan: JARVIS proposes, you approve. Build: JARVIS acts.</div></div><span class="chip" id="settingsModeChip">Build</span></div>
+              </div>
+              <div class="group"><h2>Builder Limits</h2>
+                <div class="row"><div><div class="name">Autonomous builds</div><div class="sub">Max concurrent companion tasks</div></div><div style="display:flex;gap:8px;align-items:center"><input id="settingsBuilderLimit" type="number" class="chip-num" min="1" max="50" value="9" style="width:72px;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;color:var(--jb-paper);font-size:12px;outline:none;font-family:inherit"><span class="meta">default 9</span></div></div>
+                <div class="row"><div><div class="name">Autonomous runs</div><div class="sub">Max tasks before cooldown</div></div><div style="display:flex;gap:8px;align-items:center"><input id="settingsRunLimit" type="number" class="chip-num" min="1" max="200" value="12" style="width:72px;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;color:var(--jb-paper);font-size:12px;outline:none;font-family:inherit"><span class="meta">default 12</span></div></div>
+                <div class="row"><div><div class="name">Build queue</div><div class="sub">Max queued builds</div></div><div style="display:flex;gap:8px;align-items:center"><input id="settingsQueueLimit" type="number" class="chip-num" min="1" max="100" value="15" style="width:72px;background:var(--jb-void);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;color:var(--jb-paper);font-size:12px;outline:none;font-family:inherit"><span class="meta">default 15</span></div></div>
               </div>
               <div class="group"><h2>Network</h2>
                 <div class="row"><div class="name">Public web</div><span class="chip ok">Allowed</span></div>
@@ -654,9 +660,9 @@
             </span>
           </div>
           <div class="sb-grow"></div>
-          <button class="sb-model-chip" id="sbModelChip" title="Model" style="display:none">
+          <button class="sb-model-chip" id="sbModelChip" title="Model">
+            <span class="sb-model-pulse"></span>
             <span class="sb-model-name" id="sbModelName">AUTO</span>
-            <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1.5 3l2.5 2.5L6.5 3" stroke="currentColor" stroke-width="1"/></svg>
           </button>
           <button class="sb-icon" id="sbClose" title="Close sidebar">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -916,11 +922,7 @@
   <script src="js/settings-ux.js"></script>
   <script src="js/data-pages.js"></script>
   <link rel="stylesheet" href="css/f1-nothing.css" />
-  <script src="js/workspace.js"></script>
   <script src="js/yt.js"></script>
-  <script src="js/goodeye.js"></script>
-  <script src="js/f1.js"></script>
-  <script src="js/worldmon.js"></script>
   <script src="js/needle-agent.js"></script>
   <script src="js/renderer.js"></script>
   <script>

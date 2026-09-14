@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -31,6 +32,31 @@ from engine import Budget, StreamEngine
 AgentLoop = Any  # real import happens inside factories (lazy)
 
 Factory = Callable[[], AgentLoop]
+
+# Agent turns are multi-step (several model calls + tool executions), so they
+# get a longer bound than the chat path's 30s, and their own dedicated loop.
+_AGENT_MSG_TIMEOUT_S = 180.0
+
+# Dedicated persistent event loop for agents. Each task runs on this loop so
+# the provider's async clients keep their connection pools warm across turns
+# (a throwaway asyncio.run() per turn re-paid TCP+TLS every time). It lives on
+# its own thread so long-running agent tasks never stall the chat stream.
+_agent_loop: asyncio.AbstractEventLoop | None = None
+_agent_loop_lock = threading.Lock()
+
+
+def _get_agent_loop() -> asyncio.AbstractEventLoop:
+    global _agent_loop
+    if _agent_loop is not None and not _agent_loop.is_closed():
+        return _agent_loop
+    with _agent_loop_lock:
+        if _agent_loop is None or _agent_loop.is_closed():
+            loop = asyncio.new_event_loop()
+            threading.Thread(
+                target=loop.run_forever, daemon=True, name="bridge-agent-loop"
+            ).start()
+            _agent_loop = loop
+    return _agent_loop
 
 
 def build_orbit_agent_loop(
@@ -133,9 +159,20 @@ class AgentEngine(StreamEngine):
             emit({"type": "delta", "text": chunk})
 
         try:
-            result = asyncio.run(
-                loop.run(goal, session_id=session_id, on_chunk=_on_chunk)
-            )
+            # Run the task on a dedicated persistent loop (never a fresh
+            # asyncio.run()): a per-turn throwaway loop destroyed the provider
+            # connection pools at the end of every turn, so each agent task
+            # re-paid a TCP+TLS handshake (~1s+). The persistent loop keeps the
+            # AsyncOpenAI/httpx pools warm across turns.
+            result = asyncio.run_coroutine_threadsafe(
+                loop.run(goal, session_id=session_id, on_chunk=_on_chunk),
+                _get_agent_loop(),
+            ).result(timeout=_AGENT_MSG_TIMEOUT_S)
+        except TimeoutError:
+            emit({"type": "error", "message": f"agent task timed out "
+                  f"after {_AGENT_MSG_TIMEOUT_S}s",
+                  "code": "agent_timeout"})
+            return ""
         except Exception as exc:  # noqa: BLE001 - the bridge must never crash
             emit({"type": "error", "message": str(exc)[:500], "code": "agent_error"})
             return ""

@@ -615,13 +615,48 @@ function showInternalPage(pageId) {
   if (pageId === "permissionsPage") renderPermissionsPage();
   if (pageId === "memoryPage") renderMemoryPage();
   if (pageId === "tasksPage") renderTasksPage();
-  if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
-  if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
-  if (pageId === "worldmonPage" && window.WorldMon) window.WorldMon.start();
-  // Workspaces poll in the background; stop them when their page hides.
-  if (pageId !== "goodeyePage" && window.GoodEye) window.GoodEye.stop();
-  if (pageId !== "f1Page" && window.OrbitF1) window.OrbitF1.stop();
-  if (pageId !== "worldmonPage" && window.WorldMon) window.WorldMon.stop();
+  if (pageId === "goodeyePage" || pageId === "f1Page" || pageId === "worldmonPage") {
+    ensureWorkspace(pageId, function () {
+      if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
+      if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
+      if (pageId === "worldmonPage" && window.WorldMon) window.WorldMon.start();
+    });
+  } else {
+    // Workspaces poll in the background; stop them when their page hides.
+    if (window.GoodEye) window.GoodEye.stop();
+    if (window.OrbitF1) window.OrbitF1.stop();
+    if (window.WorldMon) window.WorldMon.stop();
+  }
+}
+
+// ── Lazy workspace load ───────────────────────────────────────────
+// God's Eye / F1 / WorldMon are full page apps only shown from their own
+// orbit:// pages. Loading them on first open (instead of at boot) skips
+// their parse + top-level init on every browser start. They keep the global
+// lifecycle contract, so tabs.js loads the script ahead of the first start().
+const WORKSPACE_PAGES = {
+  goodeyePage: { script: "js/goodeye.js", global: "GoodEye" },
+  f1Page: { script: "js/f1.js", global: "OrbitF1" },
+  worldmonPage: { script: "js/worldmon.js", global: "WorldMon" },
+};
+const _scriptsLoaded = {};
+
+function loadOnce(src, cb) {
+  if (_scriptsLoaded[src]) { cb(); return; }
+  _scriptsLoaded[src] = true;
+  var s = document.createElement("script");
+  s.async = true;
+  s.src = src;
+  s.onload = cb;
+  s.onerror = function () { console.error("[LOAD] " + src + " failed"); cb(); };
+  document.head.appendChild(s);
+}
+
+function ensureWorkspace(pageId, cb) {
+  var wk = WORKSPACE_PAGES[pageId];
+  if (!wk) { cb(); return; }
+  if (window[wk.global]) { cb(); return; }
+  loadOnce("js/workspace.js", function () { loadOnce(wk.script, cb); });
 }
 
 function refreshDiagnostics() {

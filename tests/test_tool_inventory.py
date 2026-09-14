@@ -48,6 +48,8 @@ READ_ONLY_TOOLS = {
     "security.check_permissions",
     # Self-audit (read)
     "self.audit",
+    # Skills (read)
+    "skills.list", "skills.load",
     # World monitor (read)
     "world_monitor.get_event", "world_monitor.get_alerts",
     "world_monitor.get_region", "world_monitor.get_sources",
