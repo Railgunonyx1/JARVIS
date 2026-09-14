@@ -279,6 +279,19 @@ class MemoryStore:
                 return row["value"]
         return None
 
+    def get(self, key: str) -> dict | None:
+        """Fetch one memory row by key (used by the user-profile bootstrap).
+
+        Returns a dict with ``key``/``value``/``category``/``owner``; ``None``
+        when the key is absent. Never throws on a missing row.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT key, value, category, owner FROM memories WHERE key = ?",
+                (key,),
+            ).fetchone()
+        return dict(row) if row else None
+
     def delete_owned(self, key: str, owner: str) -> bool:
         """Delete a memory only when ``owner`` may write its key."""
         from memory.keyspace import can_write, parse_key
