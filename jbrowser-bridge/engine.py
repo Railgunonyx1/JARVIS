@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -159,6 +160,15 @@ def _make_think_filter():
 
 
 _sticky_winner: str | None = None
+_sticky_won_at: float = 0.0
+# Sticky lock-in horizon. A slow provider that reached the sticky slot through
+# the fallback walk (not by winning a race) would otherwise be probed ALONE
+# forever: with _RACE_MAX_PROBES=1 the chain is [_sticky] + 0, so a faster
+# provider higher in the chain is never re-probed (measured: openrouter pinned
+# at 2-5s TTFT for every turn while the fast groq chain head never got a
+# chance). After this horizon the sticky claim lapses and the next turn
+# re-probes the true chain head; winning re-arms the claim.
+_STICKY_TTL_S = 30.0
 
 
 def _race_providers(router, messages, system_prompt, max_tokens,
@@ -177,11 +187,18 @@ def _race_providers(router, messages, system_prompt, max_tokens,
     Sticky winner: the provider that won the last race leads the next one.
     A 429ing chain head no longer costs its losers' connections on every
     turn — the proven-fast provider gets retried first alone; only if it
-    fails does the full race re-form.
+    fails does the full race re-form. The claim carries a TTL
+    (_STICKY_TTL_S): a provider that reached the slot via the FALLBACK WALK
+    (never won a race) keeps the slot only temporarily, so a faster chain
+    head gets re-probed instead of being locked out forever.
     """
-    global _sticky_winner
+    global _sticky_winner, _sticky_won_at
     full_chain = router._get_available_chain()
-    if _sticky_winner and _sticky_winner in full_chain:
+    sticky_fresh = (
+        _sticky_winner is not None
+        and (time.monotonic() - _sticky_won_at) < _STICKY_TTL_S
+    )
+    if sticky_fresh and _sticky_winner in full_chain:
         chain = [_sticky_winner] + \
             [n for n in full_chain if n != _sticky_winner][:_RACE_MAX_PROBES - 1]
     else:
@@ -191,7 +208,7 @@ def _race_providers(router, messages, system_prompt, max_tokens,
 
     async def _stream():
         if len(chain) == 1:
-            global _sticky_winner
+            global _sticky_winner, _sticky_won_at
             feed, flush = _make_think_filter()
             winner_provider = router._providers[chain[0]]
             produced_any = False
@@ -214,6 +231,7 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                 # here instead of never.
                 if produced_any:
                     _sticky_winner = chain[0]
+                    _sticky_won_at = time.monotonic()
                 return
             except Exception:
                 if produced_any:
@@ -236,8 +254,12 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                     yield tail
                 # The fallback walk found a live provider: remember it so the
                 # next turn probes it first instead of re-paying the dead head.
+                # The TTL stamp applies — a walk-armed sticky must not block
+                # the faster chain head forever (that is the lock-in this
+                # whole mechanism exists to prevent).
                 if walked and router._last_provider:
                     _sticky_winner = router._last_provider
+                    _sticky_won_at = time.monotonic()
                 return
 
         queue: asyncio.Queue = asyncio.Queue()
@@ -292,6 +314,7 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                 if winner is None:
                     winner = name
                     _sticky_winner = name
+                    _sticky_won_at = time.monotonic()
                     # Cancel only the losers — the winner's own task must keep
                     # producing its remaining chunks.
                     for loser, t in task_by_name.items():

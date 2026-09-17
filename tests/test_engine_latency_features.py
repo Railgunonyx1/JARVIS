@@ -19,6 +19,19 @@ from engine import (  # noqa: E402
     _response_cache_key,
     _response_cache_put,
 )
+import engine as engine_mod  # noqa: E402
+
+
+def _arm_sticky(name):
+    """Arm the module-level sticky claim as a fresh winner.
+
+    The claim is time-bound (_STICKY_TTL_S): tests that preset the winner
+    must also stamp the clock or the engine treats the claim as stale and
+    re-probes the chain head.
+    """
+    import time as _time
+    engine_mod._sticky_winner = name
+    engine_mod._sticky_won_at = _time.monotonic()
 
 
 def run(coro):
@@ -148,7 +161,6 @@ class TestStickyRaceWinner:
     def test_single_probe_winner_is_remembered(self):
         """_RACE_MAX_PROBES=1 collapses races to one probe — sticky must
         still be armed there or the optimization is dead code."""
-        import engine as engine_mod
         engine_mod._sticky_winner = None
         router = FakeRouter(
             {"fast": Fp("fast", "f", ["hello"]), "slow": Fp("slow", "s", ["world"])},
@@ -165,9 +177,35 @@ class TestStickyRaceWinner:
         assert sink == ["hello"]
         assert engine_mod._sticky_winner == "fast"
 
+    def test_stale_walk_sticky_cannot_block_chain_head(self):
+        """Regression: a slow provider armed via the FALLBACK WALK locked the
+        sticky slot forever (_RACE_MAX_PROBES=1 probes it alone), so the fast
+        chain head was never re-probed (measured: 2-5s openrouter TTFT for
+        every turn while groq sat unpicked). A stale claim must lapse and
+        re-probe the chain head; the head's win re-arms the claim."""
+        engine_mod._sticky_winner = "slow"
+        engine_mod._sticky_won_at = 0.0  # ancient stamp -> claim expired
+        router = FakeRouter(
+            {"fast": Fp("fast", "f", ["head"]), "slow": Fp("slow", "s", ["alt"])},
+            chain=["fast", "slow"],
+        )
+        visited = []
+
+        async def collect4():
+            async for chunk in engine_mod._race_providers(
+                    router, [], "sys", 512):
+                visited.append(chunk)
+
+        run(collect4())
+        assert visited == ["head"]
+        assert engine_mod._sticky_winner == "fast"
+        # ...and the re-armed claim is fresh again
+        assert engine_mod._sticky_won_at > 0.0
+        engine_mod._sticky_winner = None
+        engine_mod._sticky_won_at = 0.0
+
     def test_sticky_leads_next_race(self):
-        import engine as engine_mod
-        engine_mod._sticky_winner = "fast"
+        _arm_sticky("fast")
         # Sticky re-arms the proven provider in a fresh single-probe chain.
         router = FakeRouter(
             {"fast": Fp("fast", "f", ["next"]), "slow": Fp("slow", "s", ["alt"])},
@@ -183,6 +221,7 @@ class TestStickyRaceWinner:
         run(collect2())
         assert visited == ["next"]
         engine_mod._sticky_winner = None
+        engine_mod._sticky_won_at = 0.0
 
     def test_sticky_head_failure_walks_full_chain_and_rearms(self):
         """Sticky winner that died re-forms the fallback via the router and
@@ -212,7 +251,7 @@ class TestStickyRaceWinner:
                     yield chunk
 
         router = RouterWalk({"fast": DeadWinner(), "slow": Fp("slow", "s", ["walk-reply"])})
-        engine_mod._sticky_winner = "fast"
+        _arm_sticky("fast")
         sink = []
 
         async def collect3():
@@ -223,3 +262,4 @@ class TestStickyRaceWinner:
         run(collect3())
         assert sink == ["walk-reply"]
         engine_mod._sticky_winner = None
+        engine_mod._sticky_won_at = 0.0

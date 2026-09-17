@@ -46,6 +46,7 @@ import logging
 import os
 import re
 import secrets
+import time
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -454,9 +455,21 @@ def main(argv=None) -> int:
                         except Exception:
                             pass
                     async def _ping_all() -> None:
-                        await asyncio.gather(
-                            *(_ping(n) for n in router._get_available_chain()[:2])
-                        )
+                        # Quota-aware keepalive target: ping ONE provider —
+                        # the highest-priority available one whose free-tier
+                        # quotas comfortably absorb a 2-token ping every 3
+                        # minutes (>=15 RPM and >=5,000 RPD). OpenRouter's
+                        # 200-req/day pool cannot absorb 480 pings/day; Groq's
+                        # 28,800/day barely notices. _ping drains the stream
+                        # fully so the connection actually returns to the pool.
+                        for name in router._get_available_chain():
+                            p = router._providers.get(name)
+                            cfg = getattr(p, "config", {}) or {}
+                            rpm = cfg.get("requests_per_minute", 0) or 0
+                            rpd = cfg.get("requests_per_day", 0) or 0
+                            if rpm >= 15 and rpd >= 5000:
+                                await _ping(name)
+                                return
                     # CRITICAL: pings must run on the engine's SHARED loop.
                     # asyncio.run() here would warm connections owned by a
                     # throwaway loop's HTTP clients — useless to the message
@@ -482,8 +495,19 @@ def main(argv=None) -> int:
                         import time as _time
                         import engine as _eng_ka
                         loop_ka = _eng_ka._get_shared_loop()
+                        # First cycle at ~t+45s: the boot prewarm's connection
+                        # (t~15s) decays before the steady 60s cadence would
+                        # fire — measured 2.1s first turn when the first cycle
+                        # waited the full interval.
+                        _time.sleep(30)
                         while True:
-                            _time.sleep(180)
+                            # 60s interval: measured 2026-09-17 — after a ~2min
+                            # idle the first turn still paid ~2.1s (fresh TLS
+                            # handshake), so groq's idle timeout lands INSIDE
+                            # the old 180s window. 60s keeps the pool warm
+                            # continuously; 1440 pings/day is ~5% of groq's
+                            # 28,800/day free quota.
+                            _time.sleep(60)
                             try:
                                 f = asyncio.run_coroutine_threadsafe(
                                     _ping_all(), loop_ka)

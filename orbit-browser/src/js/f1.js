@@ -34,6 +34,10 @@
   }
 
   // ------------------------------------------------------------ data
+  function sessionEnded(s) {
+    return s && s.date_end && new Date(s.date_end).getTime() < Date.now();
+  }
+
   function loadSession() {
     return fetchJSON('/sessions?session_key=latest').then(function (s) {
       state.session = s[0] || null;
@@ -43,6 +47,26 @@
       return fetchJSON('/drivers?session_key=' + state.session.session_key).then(function (ds) {
         state.drivers = {};
         ds.forEach(function (d) { state.drivers[d.driver_number] = d; });
+        if (sessionEnded(state.session)) {
+          // Finished session: OpenF1 only streams locations for ~live windows,
+          // so polling `date>=now` returns [] forever (and rate-limits us).
+          // Fetch the final 10 minutes of GPS once and replay it.
+          var since = new Date(new Date(state.session.date_end).getTime() - 10 * 60000)
+            .toISOString().replace(/\.\d+Z$/, '+00:00');
+          return fetchJSON('/location?session_key=' + state.session.session_key +
+              '&date>=' + encodeURIComponent(since))
+            .then(function (pts) {
+              state.points = pts.slice(-6000);
+              pts.forEach(function (p) {
+                var t = new Date(p.date).getTime();
+                if (t > state.lastPointDate) state.lastPointDate = t;
+              });
+              recomputeBounds();
+              draw();
+              ws.setBanner('Session ended ' + new Date(state.session.date_end).toLocaleString() +
+                ' — replaying the final 10 minutes.');
+            });
+        }
         return pollPositions();
       });
     });
@@ -54,6 +78,7 @@
 
   function pollLocations() {
     if (!state.session) return Promise.resolve();
+    if (sessionEnded(state.session)) return Promise.resolve(); // replay mode: no live polling
     var since = isoMinutesAgo(state.lastPointDate ? 0.2 : 3);
     return fetchJSON('/location?session_key=' + state.session.session_key +
         '&date>=' + encodeURIComponent(since))
@@ -73,6 +98,9 @@
 
   function pollPositions() {
     if (!state.session) return Promise.resolve();
+    if (sessionEnded(state.session) && state.positions.length) {
+      return Promise.resolve(); // replay mode: running order is final
+    }
     return fetchJSON('/position?session_key=' + state.session.session_key)
       .then(function (pos) {
         // Latest snapshot per driver = current running order.
@@ -140,7 +168,7 @@
   }
 
   function draw() {
-    if (!ctx || !bounds) return;
+    if (!ctx) return;
     ctx.fillStyle = '#050507';
     ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = '#1c1c1f';
@@ -148,6 +176,18 @@
     for (var g = 1; g < 10; g++) {
       ctx.beginPath(); ctx.moveTo(0, H / 10 * g); ctx.lineTo(W, H / 10 * g); ctx.stroke();
     }
+    if (!state.points.length) {
+      // Honest empty state instead of an opaque black rectangle.
+      ctx.fillStyle = '#7d7d85';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(state.session
+        ? 'Waiting for GPS data' + (sessionEnded(state.session) ? ' (replay loading…)' : '…')
+        : 'Loading session…', W / 2, H / 2);
+      ctx.textAlign = 'left';
+      return;
+    }
+    if (!bounds) return;
     // per-car trails from the GPS point stream
     var byCar = {};
     state.points.forEach(function (p) { (byCar[p.driver_number] = byCar[p.driver_number] || []).push(p); });
@@ -179,8 +219,10 @@
   // ------------------------------------------------------------ UI bits
   function renderInfo() {
     var s = state.session;
-    ws.setLive(s ? (s.session_name + ' · ' + (s.location || '') + ' · ' + (s.country_name || '') +
-      ' · key ' + s.session_key) : 'No session data.');
+    ws.setLive(s ? (s.session_name + ' · ' + (s.location || '') + ', ' + (s.country_name || '') +
+      ' · ' + new Date(s.date_start).toLocaleString([],
+        { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
+      : 'No session data.');
   }
 
   function renderLeaderboard() {
@@ -268,6 +310,7 @@
       });
     }
     ws.start();
+    draw(); // paint the honest "waiting" empty state before any data lands
     loadSession()
       .then(function () { pollLocations(); })
       .catch(function (e) { fail('session', e); });

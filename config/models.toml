@@ -1,20 +1,21 @@
 [router]
-default_provider = "gemini"
-# Order = race priority. Fast no-card providers first (groq/gemini heads),
-# then the free-LLM-API directory providers (freellm.net data) as a wide
-# middle tier, then slow/limited tails. Providers without API keys in
-# config/.env are skipped automatically at boot.
+default_provider = "groq"
+# Order = race priority = execution order (_RACE_MAX_PROBES=1 probes the
+# head first). Measured 2026-09-17, pinned per-provider TTFT with unique
+# prompts (see PERF.md): groq 67-93ms and deepseek 54-87ms are the only
+# consistently-sub-100ms providers; gemini-2.0 ~330ms; opencode_zen ~0.5-1s;
+# openrouter free models 2.7-4s. Only live-key providers are listed — each
+# remaining entry joins automatically the moment its key lands in
+# config/.env (github_models removed: service retired 2026-07-30).
 fallback_chain = [
     "groq",
-    "gemini",
-    "cerebras",
     "deepseek",
-    "openrouter",
+    "gemini",
     "opencode_zen",
+    "openrouter",
     "kilo_code",
     "agnes",
     "llm7",
-    "github_models",
     "cohere",
     "zai",
     "mistral",
@@ -22,6 +23,7 @@ fallback_chain = [
     "sambanova",
     "scaleway",
     "cloudflare_ai",
+    "cerebras",
     "huggingface",
     "omni_route",
     "ollama",
@@ -38,7 +40,12 @@ requests_per_day = 28800
 priority = 1
 
 [groq.fallback]
-model = "llama-3.1-8b-instant"
+# Groq retired llama-3.1-8b-instant (404 model_not_found, verified against
+# the live /models catalog). gpt-oss-120b measured 67-82ms TTFT pinned;
+# gpt-oss-20b measured 12-13s twice (provider-side queueing) and is retired
+# from this slot. GroqProvider._REASONING_MODELS disables reasoning for
+# "gpt-oss" ids so the fallback streams the answer, not thoughts.
+model = "openai/gpt-oss-120b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 30

@@ -89,7 +89,9 @@
     };
 
     // Ask-JARVIS: buildContext() supplies the workspace context; the reply
-    // streams into the sidebar via the standard dshNative pipeline.
+    // streams into the sidebar via the standard dshNative pipeline. The
+    // sidebar is opened on ask — a reply streaming into a hidden panel made
+    // every workspace "Ask" button look dead.
     function wireAsk() {
       var btn = opts.askBtnId && document.getElementById(opts.askBtnId);
       if (!btn || btn.dataset.wsWired) return;
@@ -104,6 +106,13 @@
         api.setBanner('');
         window.dshNative.chat(api.buildAsk(q), {});
         api.log('JARVIS analyzing: ' + (q || 'current picture'));
+        var sb = document.getElementById('sidebar');
+        var jb = document.getElementById('jarvisBtn');
+        if (sb && sb.classList.contains('hidden')) {
+          sb.classList.remove('hidden');
+          if (jb) jb.classList.add('active');
+          try { localStorage.setItem('orbit-sidebar-open', '1'); } catch (_) {}
+        }
       });
     }
 

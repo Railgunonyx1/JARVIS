@@ -48,10 +48,24 @@ class GroqProvider(OpenAICompatibleProvider):
     def _get_client(self):
         if self._client is None or self._client_key_index != self._key_index:
             import groq
+            # Shared HTTP client (see openai_compat._get_client): the Windows
+            # cert-store load in httpx.create_ssl_context() costs 400-1000ms
+            # per construction and dominated this SDK's 1-2.6s client cost.
+            from core.http_pool import get_shared_ssl_context
+            import httpx
             self._client = groq.AsyncGroq(
                 api_key=self.api_key,
                 max_retries=0,
                 timeout=self._timeout_seconds,
+                http_client=httpx.AsyncClient(
+                    verify=get_shared_ssl_context(),
+                    headers={"User-Agent": "JARVIS/1.0"},
+                    limits=httpx.Limits(
+                        max_connections=16,
+                        max_keepalive_connections=8,
+                        keepalive_expiry=300.0,
+                    ),
+                ),
             )
             self._client_key_index = self._key_index
             logger.info("Groq: using key index %d", self._key_index)

@@ -15,9 +15,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import orjson
-
 logger = logging.getLogger("jarvis.event_store")
+
+_json_dumps = json.dumps
+
+
+def _lazy_orjson_dumps(data: dict[str, Any]) -> str:
+    """orjson is ~500ms to import (native validation); defer it until the
+    first persisted write so boot/import of the agent stack stays fast."""
+    global _json_dumps
+    try:
+        import orjson
+    except Exception:
+        return json.dumps(data)
+    _json_dumps = lambda d: orjson.dumps(d).decode()
+    return _json_dumps(data)
 
 _EVENT_STORE_SIZE = 5000
 
@@ -108,7 +120,7 @@ class EventStore:
                 self._conn.execute(
                     "INSERT INTO events(name, data, source, trace_id, timestamp) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (event.name, orjson.dumps(event.data).decode(), event.source,
+                    (event.name, _lazy_orjson_dumps(event.data), event.source,
                      event.trace_id, event.timestamp)
                 )
                 self._writes_since_prune += 1

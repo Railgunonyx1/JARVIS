@@ -30,8 +30,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from websockets.sync.client import connect as ws_connect
-
 from core.locks import OWNER_SYSTEM, OWNER_USER, ResourceLockedError, get_resource_lock
 from jbrowser.backend.base import BrowserBackend, TabInfo
 from jbrowser.events import (
@@ -96,7 +94,8 @@ class CDPConnection:
     def __init__(self, ws_url: str, timeout: float = 20.0) -> None:
         self._ws_url = ws_url
         self._timeout = timeout
-        self._ws = ws_connect(ws_url, timeout=timeout)
+        from websockets.sync.client import connect
+        self._ws = connect(ws_url, timeout=timeout)
         self._op_lock = threading.RLock()
         self._events: list[dict] = []
         self._closed = False

@@ -18,61 +18,17 @@
 
   function el(id) { return document.getElementById(id); }
 
-  // Coarse continent outlines for the equirectangular canvas (tiny, offline).
-  var LAND = [
-    // North America
-    [[-168,66],[-140,70],[-125,72],[-95,74],[-80,73],[-70,62],[-55,52],[-65,45],[-75,40],[-80,32],[-82,25],[-90,18],[-95,15],[-105,20],[-115,30],[-125,40],[-130,52],[-145,60],[-168,66]],
-    // Eurasia
-    [[-10,36],[0,44],[10,45],[25,40],[28,36],[35,36],[45,40],[60,45],[90,48],[135,50],[145,60],[160,62],[170,66],[178,70],[160,70],[140,72],[110,74],[90,72],[70,70],[60,68],[45,66],[30,60],[20,55],[15,50],[5,48],[-5,44],[-10,36]],
-    // Africa
-    [[-8,44],[0,40],[8,38],[15,40],[22,38],[28,36],[32,31],[35,28],[40,20],[43,12],[51,12],[48,-2],[42,-12],[40,-20],[35,-25],[28,-33],[20,-35],[15,-28],[12,-18],[9,-6],[10,2],[0,4],[-8,4],[-8,44]],
-    // South Asia
-    [[72,20],[80,15],[88,22],[92,22],[95,16],[100,14],[104,10],[102,2],[110,2],[118,5],[122,12],[110,20],[100,22],[90,25],[80,22],[72,20]],
-    // Australia
-    [[115,-22],[125,-16],[135,-13],[142,-12],[148,-20],[153,-28],[150,-37],[145,-39],[138,-36],[130,-32],[122,-34],[115,-34],[113,-26],[115,-22]],
-    // Japan
-    [[130,32],[135,35],[140,40],[143,44],[140,43],[137,38],[132,34],[130,32]],
-    // South America
-    [[-84,10],[-76,8],[-70,12],[-62,10],[-55,5],[-52,0],[-60,-4],[-70,-8],[-76,-12],[-80,-6],[-82,0],[-84,10]],
-  ];
-
-  function project(lat, lon) {
-    return { x: (lon + 180) / 360 * W, y: (90 - lat) / 180 * H };
-  }
-
-  function drawWorld() {
-    wctx.fillStyle = '#050507';
-    wctx.fillRect(0, 0, W, H);
-    wctx.strokeStyle = '#1c1c1f';
-    wctx.lineWidth = 1;
-    for (var gx = 0; gx <= 360; gx += 30) {
-      var p = project(0, gx - 180);
-      wctx.beginPath(); wctx.moveTo(p.x, 0); wctx.lineTo(p.x, H); wctx.stroke();
-    }
-    for (var gy = 0; gy <= 180; gy += 30) {
-      var q = project(gy - 90, 0);
-      wctx.beginPath(); wctx.moveTo(0, q.y); wctx.lineTo(W, q.y); wctx.stroke();
-    }
-    wctx.fillStyle = '#2a2a2e';
-    LAND.forEach(function (poly) {
-      wctx.beginPath();
-      poly.forEach(function (pt, i) {
-        var r = project(pt[0], pt[1]);
-        if (i === 0) wctx.moveTo(r.x, r.y); else wctx.lineTo(r.x, r.y);
-      });
-      wctx.closePath();
-      wctx.fill();
-    });
-  }
-
   function draw() {
-    if (!wctx) return;
-    drawWorld();
-    // earthquakes: rings scaled by magnitude
+    if (!wctx || !window.WorldMap) return;
+    var Wm = window.WorldMap;
+    Wm.draw(wctx, W, H);
+    // earthquakes: rings scaled by magnitude — meaningful events only (M3+);
+    // plotting every M0.2 micro-quake was pure ring clutter.
     wctx.strokeStyle = '#d4d4d8';
     wctx.lineWidth = 1;
     state.quakes.forEach(function (q) {
-      var p = project(q.lat, q.lon);
+      if (q.mag < 3) return;
+      var p = Wm.project(q.lat, q.lon, W, H);
       wctx.beginPath();
       wctx.arc(p.x, p.y, Math.min(14, 2 + q.mag * 2), 0, Math.PI * 2);
       wctx.stroke();
@@ -81,12 +37,12 @@
     wctx.fillStyle = '#7d7d85';
     state.aircraft.forEach(function (a) {
       if (a.lat == null) return;
-      var p = project(a.lat, a.lon);
+      var p = Wm.project(a.lat, a.lon, W, H);
       wctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5);
     });
     // ISS: crosshair + label
     if (state.iss) {
-      var ip = project(state.iss.lat, state.iss.lon);
+      var ip = Wm.project(state.iss.lat, state.iss.lon, W, H);
       wctx.strokeStyle = '#ffffff';
       wctx.lineWidth = 1.5;
       wctx.beginPath(); wctx.arc(ip.x, ip.y, 6, 0, Math.PI * 2); wctx.stroke();
@@ -109,8 +65,8 @@
         state.iss = { lat: d.latitude, lon: d.longitude, alt: d.altitude, vel: d.velocity };
         TICKS.iss = Date.now();
         draw();
-      })
-      .catch(function (e) { ws.log('ISS feed failed: ' + e.message, true); });
+      });
+    // errors propagate to fail() — no internal swallow
   }
 
   function pollAircraft() {
@@ -122,8 +78,8 @@
         });
         TICKS.air = Date.now();
         draw();
-      })
-      .catch(function (e) { ws.log('Aircraft feed failed: ' + e.message, true); });
+      });
+    // errors propagate to fail()
   }
 
   function pollQuakes() {
@@ -132,11 +88,11 @@
         state.quakes = (d.features || []).map(function (f) {
           return { mag: f.properties.mag, place: f.properties.place,
                    lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
-        }).filter(function (q) { return q.mag != null; });
+        }).filter(function (q) { return q.mag != null && q.mag >= 2.5; });
         TICKS.quakes = Date.now();
         draw();
-      })
-      .catch(function (e) { ws.log('Quake feed failed: ' + e.message, true); });
+      });
+    // errors propagate to fail()
   }
 
   // What JARVIS sees when the user asks about the current picture.
@@ -148,14 +104,31 @@
     return s + '. User asks: ';
   }
 
+  // Per-feed adaptive backoff (F1's model): a 429ing feed doubles its next
+  // attempt up to 60s instead of re-hitting the provider every 15s — the
+  // OpenSky anonymous tier rate-limits fast and hammering it extends the ban.
+  var backoff = { iss: REFRESH.iss, air: REFRESH.air, quakes: REFRESH.quakes };
+
+  function good(kind) {
+    backoff[kind] = REFRESH[kind];
+    TICKS[kind] = Date.now();
+  }
+
+  function fail(kind, e) {
+    backoff[kind] = Math.min(60000, backoff[kind] * 2);
+    TICKS[kind] = Date.now();
+    ws.log(kind + ' feed failed: ' + e.message + ' — retrying in ' +
+      Math.round(backoff[kind] / 1000) + 's', true);
+  }
+
   function tick() {
     var now = Date.now();
     // A-11: advance the next-attempt time BEFORE issuing the request, so a
     // slow/down feed cannot start a new request every tick while the old one
     // is still hanging (retry storm).
-    if (now - TICKS.iss >= REFRESH.iss) { TICKS.iss = now; pollIss(); }
-    if (now - TICKS.air >= REFRESH.air) { TICKS.air = now; pollAircraft(); }
-    if (now - TICKS.quakes >= REFRESH.quakes) { TICKS.quakes = now; pollQuakes(); }
+    if (now - TICKS.iss >= backoff.iss) { TICKS.iss = now; pollIss().then(function(){ good('iss'); }, function(e){ fail('iss', e); }); }
+    if (now - TICKS.air >= backoff.air) { TICKS.air = now; pollAircraft().then(function(){ good('air'); }, function(e){ fail('air', e); }); }
+    if (now - TICKS.quakes >= backoff.quakes) { TICKS.quakes = now; pollQuakes().then(function(){ good('quakes'); }, function(e){ fail('quakes', e); }); }
   }
 
   function start() {
@@ -176,7 +149,7 @@
     var r = world.getBoundingClientRect();
     W = world.width = Math.max(600, Math.round(r.width || 1200));
     H = world.height = Math.max(300, Math.round(r.height || 520));
-    drawWorld();
+    if (window.WorldMap) window.WorldMap.draw(wctx, W, H);
     if (!start._resizeWired) {
       start._resizeWired = true;
       window.addEventListener('resize', function () {
@@ -185,7 +158,7 @@
         if (rr.width > 50 && rr.height > 50) {
           W = world.width = Math.round(rr.width);
           H = world.height = Math.round(rr.height);
-          drawWorld();
+          if (window.WorldMap) window.WorldMap.draw(wctx, W, H);
         }
       });
     }

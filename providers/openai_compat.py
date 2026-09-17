@@ -61,11 +61,27 @@ class OpenAICompatibleProvider(LLMProvider):
     def _get_client(self):
         if self._client is None or self._client_key_index != self._key_index:
             import openai
+            # Shared HTTP client: one process-wide TLS context (Windows cert
+            # store load is 400-1000ms per construction — the bulk of the
+            # 1-2.6s SDK client cost) plus one connection pool shared across
+            # providers. The SDK injects its own auth header per request, so
+            # key rotation stays correct with a shared transport.
+            from core.http_pool import get_shared_ssl_context
+            import httpx
             self._client = openai.AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
                 max_retries=0,
                 timeout=self._timeout_seconds,
+                http_client=httpx.AsyncClient(
+                    verify=get_shared_ssl_context(),
+                    headers={"User-Agent": "JARVIS/1.0"},
+                    limits=httpx.Limits(
+                        max_connections=16,
+                        max_keepalive_connections=8,
+                        keepalive_expiry=300.0,
+                    ),
+                ),
             )
             self._client_key_index = self._key_index
             logger.info("%s: using key index %d", self.name, self._key_index)

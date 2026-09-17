@@ -436,12 +436,34 @@ function showEmptyScreen(show) {
   }
 }
 
+// Human titles for internal pages — orbit:// guests never fire
+// page-title-updated, so without this every workspace tab reads "New tab".
+const INTERNAL_TITLES = {
+  "orbit://newtab": "New tab",
+  "orbit://settings": "Settings",
+  "orbit://history": "History",
+  "orbit://bookmarks": "Bookmarks",
+  "orbit://downloads": "Downloads",
+  "orbit://tasks": "Tasks",
+  "orbit://permissions": "Permissions",
+  "orbit://memory": "Memory",
+  "orbit://extensions": "Extensions",
+  "orbit://diagnostics": "Diagnostics",
+  "orbit://security": "Security",
+  "orbit://privacy": "Privacy",
+  "orbit://import": "Import",
+  "orbit://extension-store": "Extension Store",
+  "orbit://goodeye": "God's Eye",
+  "orbit://f1": "F1 Live",
+  "orbit://worldmon": "World Monitor",
+};
+
 function createTab(url) {
   url = url || "orbit://newtab";
   showEmptyScreen(false);
   const id = "tab-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
   const tab = {
-    id, url, title: "New tab", favicon: null,
+    id, url, title: INTERNAL_TITLES[url] || "New tab", favicon: null,
     loading: false, agentOwned: false, sleeping: false,
     webview: null, wcId: 0,
   };
@@ -661,7 +683,11 @@ function ensureWorkspace(pageId, cb) {
   var wk = WORKSPACE_PAGES[pageId];
   if (!wk) { cb(); return; }
   if (window[wk.global]) { cb(); return; }
-  loadOnce("js/workspace.js", function () { loadOnce(wk.script, cb); });
+  // worldmap.js first (goodeye/worldmon draw through it), then the shared
+  // workspace base, then the page module itself.
+  loadOnce("js/worldmap.js", function () {
+    loadOnce("js/workspace.js", function () { loadOnce(wk.script, cb); });
+  });
 }
 
 function refreshDiagnostics() {
@@ -799,6 +825,11 @@ function navigateTo(url) {
   const tab = tabs.get(activeTabId);
   if (!tab) return;
   tab.url = url;
+  if (url.startsWith("orbit://")) {
+    // Internal pages never emit page-title-updated — carry the title here.
+    const t = INTERNAL_TITLES[url];
+    if (t) { tab.title = t; renderTabs(); if (sbPageTitle) sbPageTitle.textContent = t; }
+  }
 
   if (url.startsWith("orbit://") && !isWebviewInternal(url)) {
     omniInput.value = "";
