@@ -209,6 +209,11 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                 tail = flush()
                 if tail:
                     yield tail
+                # Single-probe still remembers the winner: with _RACE_MAX_PROBES
+                # low, the race branch is rarely reached, so sticky is armed
+                # here instead of never.
+                if produced_any:
+                    _sticky_winner = chain[0]
                 return
             except Exception:
                 if produced_any:
@@ -217,15 +222,22 @@ def _race_providers(router, messages, system_prompt, max_tokens,
                 # unstick and walk the FULL router chain (remaining healthy
                 # providers) instead of failing the turn.
                 _sticky_winner = None
+                walked = False
                 async for chunk in router.complete_stream(
                     messages, system_prompt, max_tokens,
                 ):
                     visible = feed(chunk)
                     if visible:
+                        walked = True
                         yield visible
                 tail = flush()
                 if tail:
+                    walked = True
                     yield tail
+                # The fallback walk found a live provider: remember it so the
+                # next turn probes it first instead of re-paying the dead head.
+                if walked and router._last_provider:
+                    _sticky_winner = router._last_provider
                 return
 
         queue: asyncio.Queue = asyncio.Queue()
@@ -488,10 +500,12 @@ class ModelGatewayEngine(StreamEngine):
         self._streamer = streamer or self._default_streamer
         self.budget = budget or Budget()
         self.system_prompt = system_prompt or (
-            "You are the JARVIS Orbit browsing assistant embedded in a "
-            "Chromium-based browser. Answer concisely using the page context "
-            "provided. Never claim to have taken browser actions you did not "
-            "perform; browser control happens only through JARVIS tools."
+            "You are JARVIS, the assistant built into the Orbit browser. "
+            "Answer the user's question directly and conversationally in a "
+            "few sentences. Do NOT output plans, numbered steps, or task "
+            "breakdowns unless the user explicitly asks for a plan. Do not "
+            "claim to have taken browser actions you did not perform; "
+            "browser control happens only through JARVIS tools."
         )
         self.max_tokens = max_tokens
 

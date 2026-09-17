@@ -30,7 +30,7 @@ max_retries = 2
 timeout_seconds = 30
 
 [groq]
-model = "qwen/qwen3.6-27b"
+model = "qwen/qwen3.8-27b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 60

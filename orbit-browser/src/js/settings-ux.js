@@ -234,7 +234,7 @@ if (privatePinToggle) {
         oh += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">A PIN is currently set for private windows</p>';
         oh += '<div style="display:flex;gap:8px">';
         oh += '<button id="pinChange" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;cursor:pointer">Change PIN</button>';
-        oh += '<button id="pinRemove" style="flex:1;padding:8px;border-radius:6px;background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#f87171;font-size:12px;cursor:pointer">Remove PIN</button>';
+        oh += '<button id="pinRemove" style="flex:1;padding:8px;border-radius:6px;background:rgba(215,25,33,0.15);border:1px solid rgba(215,25,33,0.3);color:var(--jb-danger);font-size:12px;cursor:pointer">Remove PIN</button>';
         oh += '</div>';
         oh += '<button id="pinClose" style="margin-top:8px;padding:8px;border-radius:6px;background:none;border:none;color:var(--jb-mute);font-size:12px;cursor:pointer;width:100%">Cancel</button>';
         oh += '</div>';
@@ -271,7 +271,7 @@ function showPinSetup() {
   h += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">Require this PIN to open private windows</p>';
   h += '<input type="password" id="pinSetupInput" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:8px" placeholder="Enter PIN (4+ chars)" />';
   h += '<input type="password" id="pinSetupConfirm" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px" placeholder="Confirm PIN" />';
-  h += '<div id="pinSetupError" style="font-size:11px;color:#f87171;margin-bottom:12px;display:none"></div>';
+  h += '<div id="pinSetupError" style="font-size:11px;color:var(--jb-danger);margin-bottom:12px;display:none"></div>';
   h += '<div style="display:flex;gap:8px">';
   h += '<button id="pinSetupCancel" style="flex:1;padding:8px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--jb-mute);font-size:12px;cursor:pointer">Cancel</button>';
   h += '<button id="pinSetupSave" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Save PIN</button>';

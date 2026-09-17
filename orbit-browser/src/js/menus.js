@@ -12,8 +12,8 @@ function renderVisionPanel() {
   html += '<div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:12px">';
   html += '<div style="font-size:13px;color:var(--jb-paper);font-weight:500;margin-bottom:8px">Page Analysis</div>';
   html += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:10px">Capture screenshots and analyze page content with vision AI.</p>';
-  html += '<button onclick="window.visionAgent && window.visionAgent.describePage().then(r => { if(r.success) alert(r.answer.slice(0,500)); else alert(r.error); })" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer;margin-right:6px">Describe Page</button>';
-  html += '<button onclick="window.readingMode && window.readingMode.toggle()" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer">Reading Mode</button>';
+  html += '<button data-menu-action="describe-page" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer;margin-right:6px">Describe Page</button>';
+  html += '<button data-menu-action="reading-mode" style="padding:6px 12px;border:1px solid var(--jb-line-hard);border-radius:6px;background:var(--jb-surface);color:var(--jb-text);font-size:12px;cursor:pointer">Reading Mode</button>';
   html += '</div>';
   
   html += '<div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:12px">';
@@ -288,3 +288,17 @@ function renderExtPopup() {
     renderExtPopup(); renderExtensionsPage();
   }));
 }
+
+// Delegated actions for menus.js buttons (CSP: no inline handlers)
+document.addEventListener('click', function (e) {
+  const btn = e.target && e.target.closest ? e.target.closest('[data-menu-action]') : null;
+  if (!btn) return;
+  const action = btn.getAttribute('data-menu-action');
+  if (action === 'reading-mode') {
+    if (typeof openReaderMode === 'function') openReaderMode();
+  } else if (action === 'describe-page') {
+    // A-08: the old vision module targeted a nonexistent /v1/vision/analyze
+    // endpoint; surfaced honestly instead of a silent no-op.
+    if (typeof showToast === 'function') showToast('info', 'Vision', 'Page vision analysis is not available yet.');
+  }
+});

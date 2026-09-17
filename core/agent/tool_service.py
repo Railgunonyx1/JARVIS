@@ -100,6 +100,50 @@ class ToolExecutionService:
         has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 
+        # JSON-repair guard: unrepairable argument JSON flows here from the
+        # provider parse sites with __json_error set. Reject as MALFORMED_TOOL
+        # so the model retries — never execute a tool on guessed/empty args.
+        # The retry nudge includes the model's original raw JSON and the
+        # tool's real schema so the FIRST retry is usually correct.
+        from providers.json_repair import JSON_ERROR_KEY, JSON_RAW_KEY
+        if isinstance(call.arguments, dict) and call.arguments.get(JSON_ERROR_KEY):
+            parse_err = str(call.arguments[JSON_ERROR_KEY])
+            raw_snippet = str(call.arguments.get(JSON_RAW_KEY, ""))
+            schema_tool = self._registry.get(call.name)
+            error = f"Malformed tool arguments (unparseable JSON): {parse_err}"
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
+            if step is not None:
+                self._observer.step_finished(step, "error", 0.0, error)
+            if append_to_messages is not None:
+                lines = [
+                    f"ERROR: {error}",
+                    "",
+                    f"YOUR ORIGINAL ARGUMENTS (invalid JSON):",
+                    raw_snippet or "(not captured)",
+                    "",
+                    "Fix the JSON — close all quotes/brackets, escape newlines as \\n",
+                    "inside strings — and reissue the call with valid JSON arguments.",
+                ]
+                if schema_tool is not None:
+                    import json as _json
+                    try:
+                        lines += [
+                            "",
+                            f"EXPECTED SCHEMA for {call.name}:",
+                            _json.dumps(schema_tool.parameters)[:800],
+                        ]
+                    except (TypeError, ValueError):
+                        pass
+                append_to_messages.append({
+                    "role": "tool", "tool_call_id": call.id, "name": call.name,
+                    "content": "\n".join(lines),
+                })
+            return ToolExecutionResult(
+                tool_name=call.name, call_id=call.id, error=error,
+                failure_class=FailureClass.MALFORMED_TOOL,
+                duration_ms=(time.perf_counter() - start) * 1000,
+            )
+
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:

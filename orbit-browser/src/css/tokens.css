@@ -79,12 +79,14 @@
   --jb-space-8: 32px;
   --jb-space-10: 40px;
 
-  /* Shape — compact radius, almost no shadow in dark */
-  --jb-radius-xs: 6px;
-  --jb-radius-sm: 8px;
-  --jb-radius-md: 10px;
-  --jb-radius-lg: 12px;
-  --jb-radius-xl: 14px;
+  /* Shape — industrial brutalism: 90-degree corners only.
+     (Tactical Telemetry archetype: border-radius is prohibited; circle
+     indicators use 50% directly. Tokens kept at 0 for compatibility.) */
+  --jb-radius-xs: 0;
+  --jb-radius-sm: 0;
+  --jb-radius-md: 0;
+  --jb-radius-lg: 0;
+  --jb-radius-xl: 0;
   --jb-radius-full: 999px;
   --jb-shadow: none;
   --jb-ring: 0 0 0 2px var(--jb-paper);

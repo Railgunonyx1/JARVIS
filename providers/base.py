@@ -96,12 +96,11 @@ class LLMProvider(ABC):
         for idx in sorted(self._stream_tool_calls):
             slot = self._stream_tool_calls[idx]
             raw = "".join(slot.get("args", []))
-            try:
-                arguments = json.loads(raw) if raw.strip() else {}
-                if not isinstance(arguments, dict):
-                    arguments = {"value": arguments}
-            except (TypeError, ValueError):
-                arguments = {}
+            # Tolerant repair; unrepairable args carry JSON_ERROR_KEY so the
+            # tool service rejects the call as MALFORMED_TOOL instead of
+            # executing with silently-empty arguments.
+            from providers.json_repair import arguments_with_error_marker
+            arguments, ok = arguments_with_error_marker(raw)
             calls.append(ToolCall(name=slot.get("name", ""), arguments=arguments, id=slot.get("id", "")))
         return calls
 

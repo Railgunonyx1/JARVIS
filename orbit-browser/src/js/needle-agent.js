@@ -180,25 +180,13 @@
         return Promise.resolve({ success: false, result: 'Search unavailable' });
 
       case 'click':
-        return _evalGuest(
-          '(function(){ var el = document.querySelector(' + JSON.stringify(args.selector) + ');' +
-          ' if (!el) return "Not found: ' + args.selector + '";' +
-          ' el.scrollIntoView({behavior:"smooth",block:"center"}); el.click();' +
-          ' return "Clicked: ' + args.selector + '"; })()'
-        ).then(function(r) {
-          return { success: !!r && String(r).indexOf('Not found') === -1, result: r || 'No active page' };
-        });
-
       case 'type_text':
-        return _evalGuest(
-          '(function(){ var input = document.querySelector(' + JSON.stringify(args.selector) + ');' +
-          ' if (!input) return "Input not found";' +
-          ' input.focus(); input.value = ' + JSON.stringify(args.text) + ';' +
-          ' input.dispatchEvent(new Event("input",{bubbles:true}));' +
-          ' input.dispatchEvent(new Event("change",{bubbles:true}));' +
-          ' return "Typed: ' + String(args.text).substring(0, 50) + '"; })()'
-        ).then(function(r) {
-          return { success: !!r && r !== 'Input not found', result: r || 'No active page' };
+        // A-10: Needle no longer executes page mutations directly. Click/
+        // type are consent-gated high-risk actions — they must go through
+        // the kernel ToolExecutionService (permission engine + audit).
+        return Promise.resolve({
+          success: false,
+          result: 'Blocked: ' + toolCall.tool + ' needs approval. Use the JARVIS agent (kernel path) for page mutations.',
         });
 
       case 'read_page':

@@ -75,6 +75,19 @@
       } else {
         tabHistories = new Map(Object.entries(parsed));
       }
+      // One-time purge: model provenance used to be appended as a chat
+      // message per reply ("⚡ served by …"); it lives in the header chip
+      // now. Drop the old noise so it doesn't replay forever.
+      let purged = false;
+      for (const [tab, msgs] of tabHistories) {
+        const filtered = msgs.filter(m =>
+          !(m.role === "system" && /\u26A1 served by /.test(m.content || "")));
+        if (filtered.length !== msgs.length) {
+          tabHistories.set(tab, filtered);
+          purged = true;
+        }
+      }
+      if (purged) persistAll();
     } catch (_) {
       tabHistories = new Map();
     }

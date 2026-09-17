@@ -49,6 +49,28 @@ if (sbInput) {
   });
 }
 
+// A-13: single consent-aware page-context collector. Every chat surface
+// uses this one path: bounded innerText, source URL, freshness timestamp,
+// and scheme-based exclusions (no page text is ever taken from internal
+// or file origins — only http(s) guest pages).
+async function collectPageContext(maxChars) {
+  const tab = tabs.get(activeTabId);
+  if (!tab) return null;
+  const url = tab.url || "";
+  const base = { url: url, title: tab.title || "" };
+  if (!/^https?:/i.test(url)) return base; // internal/sensitive origins: metadata only
+  const wv = activeWebview();
+  if (!wv) return base;
+  try {
+    const text = await wv.executeJavaScript(
+      '(document.body ? document.body.innerText.substring(0,' + (maxChars || 2000) + ') : "")', false);
+    if (!text) return base;
+    return { url: url, title: tab.title || "", text: String(text), capturedAt: Date.now() };
+  } catch (_) {
+    return base;
+  }
+}
+
 // ── Plan / Build mode toggle (Freebuff-style) ─────────────────
 // Plan: JARVIS proposes and explains before acting (tools are announced,
 // not executed). Build: JARVIS acts — tool calls run immediately.
@@ -89,8 +111,7 @@ async function sendToJarvis() {
   // (start/delta/done handled in the wiring block below).
   if (window.dshNative && window.dshNative.status.connected) {
     setMatrix("thinking");
-    const tab = tabs.get(activeTabId);
-    const page = tab ? { url: tab.url, title: tab.title } : null;
+        var page = await collectPageContext();
 
     // Plan mode: JARVIS proposes, never acts. Skip the Needle fast-path
     // (which executes tools immediately) and ask the model for a plan.
@@ -195,7 +216,7 @@ function handleDshCommand(text) {
       takeScreenshot();
       break;
     case "/yt":
-      if (window.YT) window.YT.command(args);
+      runYTCommand(args);
       break;
     case "/status":
       showDshStatus();
@@ -232,8 +253,7 @@ async function runAgentTask(task) {
   }
   setMatrix("running");
   Chat.append("system", "Starting agent task: " + task);
-  const tab = tabs.get(activeTabId);
-  const page = tab ? { url: tab.url, title: tab.title } : null;
+  const page = await collectPageContext();
   const result = await window.dshNative.runAgent(task, { page });
   if (result.streamId) {
   } else if (result.success === false) {
@@ -261,6 +281,27 @@ async function readPage() {
   }
 }
 
+// /yt users the Piped front-end — deferred from boot; load on first use.
+let _ytScriptLoading = false;
+function runYTCommand(args) {
+  if (window.YT) { window.YT.command(args); return; }
+  if (_ytScriptLoading) return; // a queued load is already in flight
+  _ytScriptLoading = true;
+  Chat.append("system", "Loading private YouTube module...");
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = "js/yt.js";
+  s.onload = function () {
+    _ytScriptLoading = false;
+    if (window.YT) window.YT.command(args);
+    else Chat.append("error", "Private YouTube module failed to initialize.");
+  };
+  s.onerror = function () {
+    _ytScriptLoading = false;
+    Chat.append("error", "Failed to load the private YouTube module.");
+  };
+  document.head.appendChild(s);
+}
 function showDshStatus() {
   if (!window.dshNative) {
     Chat.append("error", "JARVIS module not loaded.");
@@ -329,7 +370,15 @@ function wireDshNative() {
         break;
       case 'meta':
         // Which provider/model actually served this reply (post-fallback).
-        if (event.model) Chat.append('system', '\u26A1 served by ' + event.model);
+        // Displayed in the persistent header chip — not as a chat message
+        // after every reply.
+        if (event.model) {
+          const chip = document.getElementById('sbModelName');
+          if (chip) {
+            chip.textContent = event.model.split('/').pop().slice(0, 18);
+            chip.title = 'Served by ' + event.model;
+          }
+        }
         break;
       case 'done':
         finalizeStreamingMessage(event.text || '(no response)');
@@ -382,68 +431,90 @@ function updateModelChipLabel() {
   name.textContent = sel ? (sel.split('/').pop() || sel).slice(0, 18) : 'AUTO';
 }
 
+// ── Model selector (UI.Popup primitive — Escape/focus/ARIA handled) ──
+let modelPopupHandle = null;
+
+function _applyModelSelection(id) {
+  if (window.dshNative) window.dshNative.selectedModel = id || null;
+  updateModelChipLabel();
+  Chat.append('system', id ? 'Model set to ' + id + '. New chats will use it.' : 'Model reset to router default.');
+}
+
+function _modelItemBtn(label, sub, id, sel, disabled) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ui-menu-item';
+  b.setAttribute('role', 'menuitemradio');
+  b.setAttribute('aria-checked', String(sel === id));
+  if (disabled) b.disabled = true;
+  const lab = document.createElement('span');
+  lab.className = 'ui-menu-item-label';
+  lab.textContent = label;
+  if (sub) {
+    const s = document.createElement('span');
+    s.className = 'ui-menu-item-sub';
+    s.textContent = sub;
+    lab.appendChild(s);
+  }
+  b.appendChild(lab);
+  if (sel === id) {
+    const chk = document.createElement('span');
+    chk.className = 'ui-menu-item-check';
+    chk.textContent = '\u2713';
+    b.appendChild(chk);
+  }
+  b.addEventListener('click', function () {
+    if (modelPopupHandle) modelPopupHandle.close();
+    _applyModelSelection(id);
+  });
+  return b;
+}
+
 async function toggleModelPopup() {
-  let popup = document.getElementById('modelPopup');
-  if (popup && popup.classList.contains('open')) {
-    popup.classList.remove('open');
+  if (modelPopupHandle) { modelPopupHandle.close(); return; }
+  const chip = document.getElementById('sbModelChip');
+  const sel = window.dshNative?.selectedModel || null;
+  const listWrap = document.createElement('div');
+  listWrap.className = 'ui-menu';
+  listWrap.appendChild(_modelItemBtn('Auto (router default)', 'fallback chain', '', sel, false));
+  const loading = document.createElement('div');
+  loading.className = 'ui-popup-hint';
+  loading.style.padding = '10px 8px';
+  loading.textContent = 'Loading models\u2026';
+  listWrap.appendChild(loading);
+  modelPopupHandle = UI.Popup.open({
+    anchor: chip || null,
+    title: 'Model',
+    hint: sel ? 'custom' : 'router default',
+    width: 264,
+    items: [{ type: 'custom', el: listWrap }],
+    onClose: function () { modelPopupHandle = null; },
+  });
+  let models = [];
+  try {
+    models = (window.dshNative ? await window.dshNative.listModels() : []) || [];
+  } catch (_) { models = []; }
+  if (!modelPopupHandle) return; // closed while loading
+  loading.remove();
+  if (!models.length) {
+    loading.textContent = 'No models reported. The kernel may be offline.';
+    loading.style.padding = '10px 8px';
+    listWrap.appendChild(loading);
     return;
   }
-  if (!popup) {
-    popup = document.createElement('div');
-    popup.id = 'modelPopup';
-    popup.className = 'model-popup';
-    document.body.appendChild(popup);
-  }
-  const chip = document.getElementById('sbModelChip');
-  if (chip) {
-    const r = chip.getBoundingClientRect();
-    popup.style.top = Math.round(r.bottom + 6) + 'px';
-    popup.style.right = Math.round(window.innerWidth - r.right) + 'px';
-    popup.style.left = 'auto';
-  }
-  popup.innerHTML = '<div class="model-popup-header"><span class="model-popup-title">Model</span>' +
-    '<span class="model-popup-hint">' + (window.dshNative?.selectedModel ? 'custom' : 'router default') + '</span></div>' +
-    '<div class="model-popup-list"><div class="model-popup-hint" style="padding:12px">Loading models…</div></div>';
-  popup.classList.add('open');
-  const models = (window.dshNative ? await window.dshNative.listModels() : []) || [];
-  if (!popup.classList.contains('open')) return; // closed while loading
-  const sel = window.dshNative?.selectedModel || null;
-  const list = models.length ? models.map(function (m) {
+  const current = window.dshNative?.selectedModel || null;
+  models.forEach(function (m) {
     const id = m.id || (m.provider + '/' + m.model);
-    const active = sel ? sel === id : false;
-    return '<button class="model-item' + (active ? ' active' : '') + (m.available ? '' : ' unavailable') + '" data-mid="' + escapeHtml(id) + '">' +
-      '<span class="mi-main"><span class="mi-model">' + escapeHtml(m.model || id) + '</span>' +
-      '<span class="mi-provider">' + escapeHtml(m.provider || '') + '</span></span>' +
-      (m.kind ? '<span class="mi-kind ' + escapeHtml(m.kind) + '">' + escapeHtml(m.kind) + '</span>' : '') +
-      (active ? '<span class="mi-check">\u2713</span>' : '') +
-      '</button>';
-  }).join('') : '<div class="model-popup-hint" style="padding:12px">No models reported. The kernel may be offline.</div>';
-  const auto = '<button class="model-item' + (sel ? '' : ' active') + '" data-mid="">' +
-    '<span class="mi-main"><span class="mi-model">Auto (router default)</span>' +
-    '<span class="mi-provider">fallback chain</span></span>' +
-    (sel ? '' : '<span class="mi-check">\u2713</span>') + '</button>';
-  popup.innerHTML = '<div class="model-popup-header"><span class="model-popup-title">Model</span>' +
-    '<span class="model-popup-hint">' + (sel ? 'custom' : 'router default') + '</span></div>' +
-    auto + '<div class="model-popup-list">' + list + '</div>';
-  popup.querySelectorAll('.model-item').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      const id = btn.getAttribute('data-mid') || '';
-      if (window.dshNative) window.dshNative.selectedModel = id || null;
-      updateModelChipLabel();
-      popup.classList.remove('open');
-      Chat.append('system', id ? 'Model set to ' + id + '. New chats will use it.' : 'Model reset to router default.');
-    });
+    listWrap.appendChild(_modelItemBtn(m.model || id, m.provider || '', id, current, !m.available));
   });
 }
 
-// Chip + outside-click dismissal (chip may be re-created by page reloads;
-// delegated listener survives that)
+// Chip toggles the popup (chip may be re-created by page reloads;
+// delegated listener survives that). Outside-click + Escape are owned
+// by UI.Popup itself.
 document.addEventListener('click', function (e) {
   const chip = e.target.closest ? e.target.closest('#sbModelChip') : null;
-  if (chip) { e.stopPropagation(); toggleModelPopup(); return; }
-  const inside = e.target.closest ? e.target.closest('#modelPopup') : null;
-  const popup = document.getElementById('modelPopup');
-  if (popup && popup.classList.contains('open') && !inside) popup.classList.remove('open');
+  if (chip) { e.stopPropagation(); toggleModelPopup(); }
 });
 
 async function showModelsCommand() {
@@ -576,14 +647,32 @@ if (window.orbit?.jarvis && !window.dshNative?.status.connected) {
     if (sbDot) sbDot.className = "rail-status-dot " + (jarvisOnline ? "online" : "offline");
     setMatrix(jarvisOnline ? "idle" : "offline");
     updatePerfHud();
-  });
+  });  var _streamBuf = ""; // accumulated deltas for the in-flight reply
   window.orbit.jarvis.onChat((payload) => {
-    if (payload.kind === "delta") { /* Stream response */ }
+    if (payload.kind === "delta") {
+      // Live token streaming: paint text as it arrives instead of a silent
+      // spinner until done. First delta opens the streaming bubble.
+      _streamBuf += payload.text;
+      if (!Chat.isStreaming()) Chat.beginStream();
+      Chat.updateStream(_streamBuf);
+      setMatrix("running");
+    }
+    else if (payload.kind === "ack") {
+      // Instant pickup signal while the model thinks — the next real delta
+      // replaces it in the same bubble (updateStream swaps the full text).
+      if (!Chat.isStreaming()) Chat.beginStream();
+      Chat.updateStream(payload.text || "On it — working on that now…");
+      setMatrix("running");
+    }
     else if (payload.kind === "done") {
-      Chat.append("jarvis", payload.text || "(no response)");
+      Chat.endStream(payload.text || _streamBuf || "(no response)");
+      _streamBuf = "";
       setMatrix("done");
       setTimeout(() => setMatrix("idle"), 2000);
-    } else if (payload.kind === "error") {
+    }
+    else if (payload.kind === "error") {
+      Chat.endStream("");
+      _streamBuf = "";
       Chat.append("error", payload.error?.message || "JARVIS error");
       setMatrix("fail");
       setTimeout(() => setMatrix("idle"), 2000);

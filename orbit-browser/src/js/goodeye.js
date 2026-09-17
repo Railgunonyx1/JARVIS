@@ -150,9 +150,12 @@
 
   function tick() {
     var now = Date.now();
-    if (now - TICKS.iss >= REFRESH.iss) pollIss();
-    if (now - TICKS.air >= REFRESH.air) pollAircraft();
-    if (now - TICKS.quakes >= REFRESH.quakes) pollQuakes();
+    // A-11: advance the next-attempt time BEFORE issuing the request, so a
+    // slow/down feed cannot start a new request every tick while the old one
+    // is still hanging (retry storm).
+    if (now - TICKS.iss >= REFRESH.iss) { TICKS.iss = now; pollIss(); }
+    if (now - TICKS.air >= REFRESH.air) { TICKS.air = now; pollAircraft(); }
+    if (now - TICKS.quakes >= REFRESH.quakes) { TICKS.quakes = now; pollQuakes(); }
   }
 
   function start() {

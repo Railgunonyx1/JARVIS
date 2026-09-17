@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script defer src="js/boot.js"></script>
   <title>JARVIS Orbit</title>
   <link rel="stylesheet" href="css/orbit.css" />
+  <link rel="stylesheet" href="css/ui.css" />
 </head>
 <body>
   <div class="browser">
@@ -154,7 +156,16 @@
 
     <!-- ── Body ──────────────────────────────────────────────── -->
     <div class="body" id="body">
-      <div class="tab-strip-vertical" id="tabStripVertical"></div>
+      <div class="tab-strip-vertical" id="tabStripVertical">
+        <div class="vtab-head">
+          <span class="vtab-label">TABS</span>
+          <button class="vtab-new" id="vtabNewBtn" title="New tab (Ctrl+T)">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <!-- Web content area -->
       <div class="content-area" id="contentArea">
@@ -997,52 +1008,21 @@
   </div><!-- end .browser -->
 
   <!-- ── Scripts ─────────────────────────────────────────────── -->
-  <script src="js/chat.js"></script>
-  <script src="js/core.js"></script>
-  <script src="js/tabs.js"></script>
-  <script src="js/sidebar.js"></script>
-  <script src="js/jarvis.js"></script>
-  <script src="js/nav-tools.js"></script>
-  <script src="js/menus.js"></script>
-  <script src="js/pages.js"></script>
-  <script src="js/settings-ux.js"></script>
-  <script src="js/data-pages.js"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/chat.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/tabs.js"></script>
+  <script defer src="js/sidebar.js"></script>
+  <script defer src="js/jarvis.js"></script>
+  <script defer src="js/nav-tools.js"></script>
+  <script defer src="js/menus.js"></script>
+  <script defer src="js/pages.js"></script>
+  <script defer src="js/settings-ux.js"></script>
+  <script defer src="js/data-pages.js"></script>
   <link rel="stylesheet" href="css/f1-nothing.css" />
-  <script src="js/yt.js"></script>
-  <script src="js/needle-agent.js"></script>
-  <script src="js/renderer.js"></script>
-  <script>
-    // Load optional modules with error isolation — one failing module
-    // must never prevent the core renderer from working.
-    (function() {
-      // Critical: load immediately | Deferred: load during idle time
-      const critical = ['enhanced-security.js', 'dsh-native.js'];
-      const deferred = [
-        'enhanced-performance.js', 'tab-management.js', 'jarvis-integration.js',
-        'page-cache.js', 'webview-pool.js', 'accessibility.js',
-        'download-manager.js', 'advanced-optimizations.js', 'security-tester.js',
-        'vision-agent.js', 'multi-agent-planner.js', 'reading-mode.js',
-        'spaces-ui.js', 'tiling-ui.js',
-      ];
-      function loadMod(m) {
-        const s = document.createElement('script');
-        s.src = m;
-        s.onerror = function() { console.warn('[ORBIT] Module failed:', m); };
-        document.body.appendChild(s);
-      }
-      critical.forEach(loadMod);
-      function loadBatch() {
-        if (!deferred.length) return;
-        const batch = deferred.splice(0, 3);
-        batch.forEach(loadMod);
-        if (deferred.length) {
-          const fn = function() { setTimeout(loadBatch, 80); };
-          window.requestIdleCallback ? requestIdleCallback(fn, {timeout:2000}) : fn();
-        }
-      }
-      window.requestIdleCallback ? requestIdleCallback(loadBatch, {timeout:1000}) : setTimeout(loadBatch, 50);
-    })();
-  </script>
+  <script defer src="js/needle-agent.js"></script>
+  <script defer src="js/renderer.js"></script>
+  <script defer src="js/module-loader.js"></script>
 
   <!-- ── Reader Mode Overlay ────────────────────────────────── -->
   <div class="reader-overlay" id="readerOverlay">

@@ -190,15 +190,57 @@ async function floatSend() {
   try {
     // Same brain as the sidebar: bridge first, Needle fallback
     if (window.dshNative && window.dshNative.status.connected) {
-      var tab = tabs.get(activeTabId);
-      var page = tab ? { url: tab.url, title: tab.title } : null;
-      var res = await window.dshNative.chat(text, { page });
+      // A-13: same consent-aware page-context collector as the sidebar
+      var page = (typeof collectPageContext === 'function') ? await collectPageContext(1200) : null;
+      // dshNative.chat() streams by default: it returns {streamId} at once
+      // and the reply arrives on 'message' (done) / 'error' events. The old
+      // code only inspected the return value, so successful replies were
+      // silently dropped. Subscribe BEFORE sending, keyed by streamId so
+      // concurrent sidebar replies never land in the float.
+      var streamRef = null;
+      var floatTimer = null;
+      var resetMatrix = function() { setMatrix('idle'); };
+      var cleanup = function() {
+        window.dshNative.off('message', onMsg);
+        window.dshNative.off('error', onErr);
+        if (floatTimer) { clearTimeout(floatTimer); floatTimer = null; }
+        resetMatrix();
+      };
+      var onMsg = function(ev) {
+        if (streamRef && ev.streamId !== streamRef.streamId) return;
+        if (ev.type === 'done') {
+          floatAppend('jarvis', ev.text || '(no response)');
+          cleanup();
+        }
+        // 'delta'/'start'/'meta' are handled by the sidebar pipeline.
+      };
+      var onErr = function(ev) {
+        if (streamRef && ev.streamId !== streamRef.streamId) return;
+        floatAppend('error', (ev && ev.message) || 'Chat error');
+        cleanup();
+      };
+      floatTimer = setTimeout(function() {
+        floatAppend('error', 'JARVIS did not respond in time.');
+        cleanup();
+      }, 45000);
+      window.dshNative.on('message', onMsg);
+      window.dshNative.on('error', onErr);
+      var res = await window.dshNative.chat(text, { page: page });
       if (res && res.success === false) {
+        // The request never started (HTTP/auth error) — no stream events.
+        cleanup();
         floatAppend('error', res.error || 'Connection failed');
+      } else if (res && res.streamId) {
+        streamRef = res;
+      } else if (res && res.success === true && typeof res.text === 'string') {
+        // Non-streaming reply
+        floatAppend('jarvis', res.text || '(empty reply)');
+        cleanup();
       }
+      return; // matrix reset happens in cleanup() when the reply lands
     } else if (window.orbit?.jarvis && !jarvisOnline) {
       window.orbit.jarvis.chat(text, "orbit-tab-" + (activeTabId || "float"));
-      floatAppend('system', 'Sent to JARVIS bridge \u2014 waiting for reply.');
+      floatAppend('system', 'Sent to JARVIS bridge \u2014 the reply will appear in the JARVIS sidebar.');
     } else {
       // Needle parallel agent (fast path)
       var nr = window.needleAgent.route(text);
@@ -209,9 +251,8 @@ async function floatSend() {
     }
   } catch (err) {
     floatAppend('error', err.message || 'Something went wrong.');
-  } finally {
-    setMatrix('idle');
   }
+  setMatrix('idle');
 }
 
 if (jarvisFloatHead) {

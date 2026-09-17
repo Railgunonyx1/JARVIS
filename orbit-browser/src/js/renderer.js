@@ -9,34 +9,64 @@
  * Regenerate: python scripts/split_renderer.py
  */
 // ---------------------------------------------------------------------
-// ── Reader Mode (Safari/Brave-style) ─────────────────────────
+// ── Reader Mode (Safari/Brave-style) ────────────────────────
+// A-07: guest HTML is NEVER parsed/inserted in this privileged renderer.
+// The guest returns structured JSON (tag + text), and we rebuild the DOM
+// here with createElement/textContent only — no innerHTML path exists for
+// untrusted content, so event-handler injection is structurally impossible.
 const readerOverlay = document.getElementById('readerOverlay');
 const readerContent = document.getElementById('readerContent');
 const readerClose = document.getElementById('readerClose');
+
+const _READER_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'P', 'LI', 'BLOCKQUOTE', 'PRE']);
 
 function openReaderMode() {
   const wv = activeWebview();
   if (!wv) return;
   try {
-    // Extract main content via JS injection
     wv.executeJavaScript(`
       (function() {
-        // Try to find main content
-        const article = document.querySelector('article') || 
-                       document.querySelector('[role="main"]') ||
-                       document.querySelector('.post-content') ||
-                       document.querySelector('.article-body') ||
-                       document.querySelector('main');
-        if (article) return article.innerHTML;
-        // Fallback: get all paragraphs
-        const paras = Array.from(document.querySelectorAll('p')).map(p => p.outerHTML).join('\n');
-        return paras || document.body.innerHTML;
+        var root = document.querySelector('article') ||
+                   document.querySelector('[role="main"]') ||
+                   document.querySelector('.post-content') ||
+                   document.querySelector('.article-body') ||
+                   document.querySelector('main') || document.body;
+        var blocks = [];
+        var nodes = root.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,pre');
+        for (var i = 0; i < nodes.length && blocks.length < 400; i++) {
+          var el = nodes[i];
+          var txt = (el.innerText || el.textContent || '').trim();
+          if (!txt || txt.length < 2) continue;
+          if (blocks.length && blocks[blocks.length-1].t === txt) continue;
+          blocks.push({ tag: el.tagName, t: txt.substring(0, 2000) });
+        }
+        return JSON.stringify({ title: (document.title || '').substring(0, 200), blocks: blocks });
       })()
-    `).then(html => {
-      if (html && readerContent) {
-        readerContent.innerHTML = html;
-        if (readerOverlay) readerOverlay.classList.add('active');
+    `).then(raw => {
+      if (!raw || !readerContent) return;
+      let data;
+      try { data = JSON.parse(raw); } catch (_) { return; }
+      // Rebuild from scratch — textContent only, no markup from the guest
+      while (readerContent.firstChild) readerContent.removeChild(readerContent.firstChild);
+      if (data.title) {
+        const h = document.createElement('h1');
+        h.textContent = data.title;
+        readerContent.appendChild(h);
       }
+      let count = 0;
+      for (const b of (data.blocks || [])) {
+        const tag = _READER_TAGS.has(b.tag) ? b.tag : 'P';
+        const el = document.createElement(tag.toLowerCase());
+        el.textContent = b.t;
+        readerContent.appendChild(el);
+        count++;
+      }
+      if (!count) {
+        const p = document.createElement('p');
+        p.textContent = 'No readable content found on this page.';
+        readerContent.appendChild(p);
+      }
+      if (readerOverlay) readerOverlay.classList.add('active');
     }).catch(() => {});
   } catch (e) {}
 }
@@ -46,6 +76,15 @@ function closeReaderMode() {
 }
 
 if (readerClose) readerClose.addEventListener('click', closeReaderMode);
+
+// Delegated close for the shortcuts overlays (CSP: no inline handlers)
+document.addEventListener('click', function (e) {
+  const t = e.target && e.target.closest ? e.target.closest('[data-shclose]') : null;
+  if (t) {
+    const ov = t.closest('.shortcuts-overlay');
+    if (ov) ov.classList.remove('active');
+  }
+});
 
 // ── Keyboard Shortcuts Overlay (Ctrl+/) ──────────────────────
 let shortcutsOverlay = null;
@@ -65,7 +104,7 @@ function toggleTabSearch() {
       <div class="shortcuts-card" style="max-width:500px">
         <div class="shortcuts-header">
           <h2>Search Tabs</h2>
-          <button class="shortcuts-close" onclick="this.closest('.shortcuts-overlay').classList.remove('active')">\u2715</button>
+          <button class="shortcuts-close" data-shclose="1">\u2715</button>
         </div>
         <input type="text" id="tabSearchInput" placeholder="Search open tabs..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#fff;font-size:13px;outline:none;margin-bottom:12px" />
         <div id="tabSearchResults" style="max-height:300px;overflow-y:auto"></div>
@@ -144,7 +183,7 @@ function toggleShortcutsOverlay() {
       <div class="shortcuts-card">
         <div class="shortcuts-header">
           <h2>Keyboard Shortcuts</h2>
-          <button class="shortcuts-close" onclick="this.closest('.shortcuts-overlay').classList.remove('active')">✕</button>
+          <button class="shortcuts-close" data-shclose="1">✕</button>
         </div>
         <div class="shortcuts-grid">
           <div class="shortcuts-group">
@@ -466,3 +505,6 @@ if (window.orbit?.downloads?.onUpdated) {
     if (dlPage && dlPage.classList.contains('on')) renderDownloadsPage();
   });
 }
+
+// All feature modules have booted — panel/page swaps may animate now.
+window.__orbitBooted = true;

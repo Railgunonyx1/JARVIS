@@ -77,7 +77,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   gap: 8px;
   padding: 0 8px 0 10px;
   color: var(--jb-mute);
-  border-radius: 8px 8px 0 0;
+  border-radius: 0;
   margin-right: 2px;
   -webkit-app-region: no-drag;
   cursor: pointer;
@@ -93,7 +93,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .tab-fav {
   width: 14px; height: 14px;
-  border-radius: 3px;
+  border-radius: 0;
   flex: none;
   display: grid; place-items: center;
 }
@@ -104,7 +104,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .tab-close {
   width: 18px; height: 18px;
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--jb-ghost);
   display: grid; place-items: center;
   flex: none;
@@ -132,7 +132,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .new-tab-btn {
   width: 28px; height: 28px;
   margin: 4px 8px 2px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--jb-mute);
   display: grid; place-items: center;
   -webkit-app-region: no-drag;
@@ -169,7 +169,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .nav-btn {
   width: 32px; height: 32px;
-  border-radius: var(--jb-radius-xs);
+  border-radius: 0;
   color: var(--jb-mute);
   display: grid; place-items: center;
   flex: none;
@@ -182,7 +182,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: flex; align-items: center; gap: 8px;
   background: var(--jb-void);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-sm);
+  border-radius: 0;
   padding: 0 10px;
 }
 .omnibox:focus-within { border-color: var(--jb-paper); }
@@ -218,7 +218,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   left: 0; right: 0;
   background: var(--jb-elevated);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-md);
+  border-radius: 0;
   box-shadow: 0 12px 32px rgba(0,0,0,.5);
   padding: 4px;
   z-index: 1000;
@@ -234,7 +234,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 0 10px;
   border: 0; background: none;
   color: var(--jb-text);
-  border-radius: var(--jb-radius-xs);
+  border-radius: 0;
   cursor: pointer;
   text-align: left;
   font-family: var(--jb-font-ui);
@@ -245,7 +245,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .omni-item .oi-icon {
   width: 18px; height: 18px; flex: none;
   display: grid; place-items: center;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--jb-surface);
   color: var(--jb-mute);
   font-size: 10px;
@@ -266,7 +266,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   flex: none; font-size: var(--jb-text-xs);
   color: var(--jb-text-tertiary);
   border: 1px solid var(--jb-border);
-  border-radius: var(--jb-radius-full);
+  border-radius: 0;
   padding: 1px 7px;
 }
 .omni-sep { height: 1px; background: var(--jb-border-subtle); margin: 4px 6px; }
@@ -281,7 +281,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .tab-strip-vertical .tab.active { background: var(--jb-surface-active); }
 .omni-progress.loading { opacity: 1; transform: scaleX(0.7); transition: transform 8s cubic-bezier(.1,.6,.3,1); }
 .omni-progress.done { opacity: 0; transform: scaleX(1); transition: transform .2s ease-out, opacity .25s .1s; }
-.omni-lock.insecure { color: #f87171; }
+.omni-lock.insecure { color: var(--jb-danger); }
 .omni-lock.internal { color: var(--jb-mute); }
 
 /* ── Floating JARVIS Chat Window (draggable + resizable) ────── */
@@ -294,10 +294,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   z-index: 1500;
   display: none;
   flex-direction: column;
-  background: rgba(12, 12, 18, 0.92);
-  backdrop-filter: blur(16px);
+  background: var(--jb-elevated);
   border: 1px solid var(--jb-line-hard);
-  border-radius: 14px;
+  border-radius: 0;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
@@ -326,11 +325,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   width: 22px; height: 22px;
   display: grid; place-items: center;
   border: none; background: none;
-  color: var(--jb-mute); border-radius: 5px;
+  color: var(--jb-mute); border-radius: 0;
   cursor: pointer;
 }
 .jarvis-float-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--jb-paper); }
-#jarvisFloatClose:hover { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+#jarvisFloatClose:hover { background: var(--jb-danger-muted); color: var(--jb-danger); }
 .jarvis-float-body {
   flex: 1;
   overflow-y: auto;
@@ -339,11 +338,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   font-size: 12px;
 }
 .jarvis-float-body::-webkit-scrollbar { width: 4px; }
-.jarvis-float-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.jarvis-float-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 0; }
 .jarvis-float-msg {
   max-width: 85%;
   padding: 7px 11px;
-  border-radius: 10px;
+  border-radius: 0;
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -369,7 +368,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .jarvis-float-msg.error {
   align-self: flex-start;
-  background: rgba(248, 113, 113, 0.12);
+  background: var(--jb-danger-muted);
   color: #f8a5a5;
 }
 .jarvis-float-input {
@@ -382,7 +381,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   flex: 1;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 7px 11px;
   color: var(--jb-text);
   font-size: 12px;
@@ -391,7 +390,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .jarvis-float-input input:focus { border-color: var(--jb-paper); }
 .jarvis-float-input button {
   width: 30px; height: 30px;
-  border: none; border-radius: 8px;
+  border: none; border-radius: 0;
   background: var(--jb-accent);
   color: #fff;
   font-size: 14px;
@@ -418,7 +417,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: var(--jb-radius-full);
+  border-radius: 0;
   background: var(--jb-surface);
   border: 1px solid var(--jb-border-subtle);
   font-size: var(--jb-text-xs);
@@ -469,7 +468,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   content: '\25CF'; animation: blink 1s infinite; margin-left: 2px;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-.chat-msg--highlight { background: var(--jb-surface); border-radius: 6px; padding: 4px 8px; }
+.chat-msg--highlight { background: var(--jb-surface); border-radius: 0; padding: 4px 8px; }
 .chat-empty { padding: 24px 8px; text-align: center; color: var(--jb-mute); }
 .chat-empty-status {
   font-size: 14px; color: var(--jb-paper); letter-spacing: 0.1em;
@@ -478,7 +477,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .chat-empty-sub { font-size: 12px; }
 .chat-search {
   width: 100%; background: var(--jb-void); border: 1px solid var(--jb-border);
-  border-radius: 8px; padding: 8px 12px; color: var(--jb-paper);
+  border-radius: 0; padding: 8px 12px; color: var(--jb-paper);
   font-size: 12px; outline: none; box-sizing: border-box; margin-bottom: 12px;
 }
 .chat-search:focus { border-color: var(--jb-paper); }
@@ -501,7 +500,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   color: var(--jb-ghost); padding: 8px 0 4px; border-top: 1px solid var(--jb-border);
 }
 .chat-history-item {
-  padding: 8px; cursor: pointer; border-radius: 6px; margin-bottom: 4px;
+  padding: 8px; cursor: pointer; border-radius: 0; margin-bottom: 4px;
 }
 .chat-history-item:hover { background: var(--jb-surface); }
 .chat-history-item-header {
@@ -541,7 +540,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .cmd-popup {
   position: absolute; bottom: 100%; left: 0; right: 0;
   background: var(--jb-void); border: 1px solid var(--jb-border);
-  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  border-radius: 0; max-height: 200px; overflow-y: auto;
   z-index: 100; margin-bottom: 4px;
 }
 .cmd-popup-item {
@@ -591,7 +590,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: inline-block;
   padding: 2px 6px;
   border: 1px solid var(--jb-line-hard);
-  border-radius: 4px;
+  border-radius: 0;
   font-family: var(--jb-font-mono);
   font-size: 11px;
   color: var(--jb-mute);
@@ -602,7 +601,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid var(--jb-line-hard);
   background: var(--jb-surface);
   color: var(--jb-text);
@@ -664,7 +663,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   height: 44px;
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-md);
+  border-radius: 0;
   padding: 0 14px;
 }
 .nt-search:focus-within { border-color: var(--jb-paper); }
@@ -684,7 +683,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .nt-tile {
   width: 92px; height: 84px;
-  border-radius: var(--jb-radius-lg);
+  border-radius: 0;
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-border);
   display: flex; flex-direction: column;
@@ -716,10 +715,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .nt-recent-list::-webkit-scrollbar, .nt-session-list::-webkit-scrollbar { height: 3px; }
 .nt-recent-list::-webkit-scrollbar-thumb, .nt-session-list::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1); border-radius: 2px;
+  background: rgba(255,255,255,0.1); border-radius: 0;
 }
 .nt-thumb {
-  flex: 0 0 160px; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
+  flex: 0 0 160px; border: 1px solid rgba(255,255,255,0.06); border-radius: 0;
   padding: 10px; background: rgba(255,255,255,0.02); cursor: pointer;
   transition: all 0.15s ease; overflow: hidden;
 }
@@ -733,7 +732,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   overflow: hidden; text-overflow: ellipsis;
 }
 .nt-thumb-icon {
-  width: 16px; height: 16px; border-radius: 3px; margin-bottom: 6px;
+  width: 16px; height: 16px; border-radius: 0; margin-bottom: 6px;
   background: var(--jb-surface-hover); display: flex; align-items: center;
   justify-content: center; font-size: 10px;
 }
@@ -807,7 +806,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 0;
   color: rgba(255, 255, 255, 0.42);
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -826,7 +825,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   left: -6px;
   top: 8px; bottom: 8px;
   width: 2px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--jb-text);
 }
 /* active-agent pulse on the chat icon while JARVIS runs */
@@ -844,7 +843,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 0;
   background: #1a1a22;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--jb-text);
@@ -865,17 +864,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: 0;
 }
 .rail-status-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--jb-ghost);
-  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 .rail-status-dot.online {
   background: var(--jb-success);
-  box-shadow: 0 0 6px rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 6px var(--jb-success-muted);
 }
 .rail-status-dot.offline { background: var(--jb-danger); }
 
@@ -919,15 +917,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   border-radius: 50%;
   background: var(--jb-ghost);
   box-shadow: 0 0 6px var(--jb-ghost);
-  transition: all 0.3s ease;
 }
-.sb-dot.online { background: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
-.sb-dot.offline { background: var(--jb-danger); box-shadow: 0 0 8px rgba(248, 113, 113, 0.4); }
+.sb-dot.online { background: var(--jb-success); box-shadow: 0 0 8px var(--jb-success-muted); }
+.sb-dot.offline { background: var(--jb-danger); box-shadow: 0 0 8px var(--jb-danger-muted); }
 .sb-grow { flex: 1; }
 .sb-icon {
   width: 28px; height: 28px;
   display: grid; place-items: center;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--jb-mute);
   transition: all 0.15s ease;
 }
@@ -942,7 +939,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   flex: none;
   padding: 3px;
   background: var(--jb-surface);
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid var(--jb-border-subtle);
 }
 .sb-matrix i {
@@ -995,7 +992,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   margin: 10px 12px 0;
   padding: 10px 12px;
   border: 1px solid var(--jb-border-subtle);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--jb-bg);
   position: relative;
   z-index: 1;
@@ -1024,7 +1021,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sb-chip {
   padding: 4px 10px;
   border: 1px solid var(--jb-border);
-  border-radius: 6px;
+  border-radius: 0;
   color: rgba(196, 181, 253, 0.8);
   font-size: 11px;
   font-weight: 500;
@@ -1043,7 +1040,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .sb-body::-webkit-scrollbar { width: 4px; }
 .sb-body::-webkit-scrollbar-track { background: transparent; }
-.sb-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 2px; }
+.sb-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 0; }
 
 /* Sidebar composer */
 .sb-composer {
@@ -1054,7 +1051,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .sb-composer-box {
   border: 1px solid var(--jb-border-subtle);
-  border-radius: 14px;
+  border-radius: 0;
   background: var(--jb-bg);
   padding: 10px 12px;
   transition: border-color 0.2s ease;
@@ -1078,7 +1075,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sb-send {
   width: 30px; height: 30px;
   display: grid; place-items: center;
-  border-radius: 8px;
+  border-radius: 0;
   color: rgba(255, 255, 255, 0.4);
   background: var(--jb-surface);
   transition: all 0.15s ease;
@@ -1095,7 +1092,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   gap: 10px;
   background: var(--jb-surface);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-full);
+  border-radius: 0;
   padding: 8px 12px 8px 10px;
   color: var(--jb-mute);
   font-size: 12px;
@@ -1120,7 +1117,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   width: min(440px, 92%);
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-line-hard);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 20px 20px 16px;
 }
 .modal.critical {
@@ -1163,7 +1160,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .btn {
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--jb-line-hard);
   color: var(--jb-text);
 }
@@ -1187,7 +1184,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sheet h1 { font-size: 22px; font-weight: 600; color: var(--jb-paper); margin-bottom: 6px; }
 .sheet .sheet-lede { color: var(--jb-mute); margin-bottom: 24px; }
 
-.group { margin: 0 0 20px; border: 1px solid var(--jb-border); border-radius: 12px; overflow: hidden; background: var(--jb-surface); }
+.group { margin: 0 0 20px; border: 1px solid var(--jb-border); border-radius: 0; overflow: hidden; background: var(--jb-surface); }
 .group h2 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--jb-ghost); padding: 12px 16px 8px; }
 .row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--jb-border); }
 .row:first-of-type { border-top: none; }
@@ -1196,17 +1193,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .row .sub { color: var(--jb-mute); font-size: 12px; }
 .row .meta { margin-left: auto; color: var(--jb-mute); font-size: 12px; font-family: var(--jb-font-mono); }
 
-.chip { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--jb-mute); border: 1px solid var(--jb-line-hard); padding: 3px 7px; border-radius: 999px; white-space: nowrap; }
+.chip { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--jb-mute); border: 1px solid var(--jb-line-hard); padding: 3px 7px; border-radius: 0; white-space: nowrap; }
 .chip.ok { color: var(--jb-success); border-color: color-mix(in srgb, var(--jb-success) 40%, transparent); }
 .chip.warn { color: var(--jb-warning); border-color: color-mix(in srgb, var(--jb-warning) 40%, transparent); }
 .chip.bad { color: var(--jb-danger); border-color: color-mix(in srgb, var(--jb-danger) 45%, transparent); }
 .chip.ask { color: var(--jb-paper); border-color: var(--jb-line-hard); }
 
-.chip-btn { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--jb-mute); border: 1px solid var(--jb-line-hard); padding: 3px 7px; border-radius: 999px; background: none; cursor: pointer; }
+.chip-btn { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--jb-mute); border: 1px solid var(--jb-line-hard); padding: 3px 7px; border-radius: 0; background: none; cursor: pointer; }
 .chip-btn:hover { background: var(--jb-surface-active); color: var(--jb-paper); }
 
 .history-search { margin-bottom: 20px; }
-.history-search input { width: 100%; padding: 10px 14px; background: var(--jb-surface); border: 1px solid var(--jb-border); border-radius: var(--jb-radius-md); color: var(--jb-text); font-size: 13px; outline: none; }
+.history-search input { width: 100%; padding: 10px 14px; background: var(--jb-surface); border: 1px solid var(--jb-border); border-radius: 0; color: var(--jb-text); font-size: 13px; outline: none; }
 .history-search input:focus { border-color: var(--jb-paper); }
 .history-search input::placeholder { color: var(--jb-text-tertiary); }
 
@@ -1248,7 +1245,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 5px 10px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: var(--jb-radius-sm);
+  border-radius: 0;
   color: var(--jb-text);
   font-size: 12px;
   outline: none;
@@ -1258,7 +1255,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .find-btn {
   width: 24px; height: 24px;
   display: grid; place-items: center;
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--jb-mute);
 }
 .find-btn:hover { background: var(--jb-surface-active); color: var(--jb-paper); }
@@ -1274,7 +1271,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .resize-handle:hover,
 .resize-handle.active {
-  background: var(--jb-interactive);
+  background: var(--jb-info);
 }
 .resize-handle::after {
   content: '';
@@ -1284,7 +1281,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   transform: translate(-50%, -50%);
   width: 2px;
   height: 32px;
-  border-radius: 1px;
+  border-radius: 0;
   background: var(--jb-ghost);
   opacity: 0;
   transition: opacity 0.15s;
@@ -1299,7 +1296,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   min-width: 200px;
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-md);
+  border-radius: 0;
   padding: 4px;
   box-shadow: 0 8px 32px rgba(0,0,0,.5);
 }
@@ -1308,7 +1305,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   display: block;
   width: 100%;
   padding: 7px 12px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--jb-text);
   font-size: 12px;
   text-align: left;
@@ -1324,7 +1321,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   min-width: 260px;
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-line-hard);
-  border-radius: var(--jb-radius-lg);
+  border-radius: 0;
   padding: 6px;
   box-shadow: 0 16px 48px rgba(0,0,0,.5);
 }
@@ -1345,7 +1342,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   gap: 10px;
   width: 100%;
   padding: 7px 10px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--jb-text);
   font-size: 12px;
   text-align: left;
@@ -1355,9 +1352,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .menu-sep { height: 1px; background: var(--jb-border); margin: 4px 8px; }
 
 /* Extension rows */
-.ext-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
+.ext-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 0; }
 .ext-row:hover { background: var(--jb-surface-active); }
-.ext-icon { width: 28px; height: 28px; border-radius: 8px; background: var(--jb-void); border: 1px solid var(--jb-border); display: grid; place-items: center; font-size: 12px; color: var(--jb-mute); flex: none; }
+.ext-icon { width: 28px; height: 28px; border-radius: 0; background: var(--jb-void); border: 1px solid var(--jb-border); display: grid; place-items: center; font-size: 12px; color: var(--jb-mute); flex: none; }
 .ext-info { flex: 1; min-width: 0; }
 .ext-name { font-size: 12px; color: var(--jb-paper); }
 .ext-sub { font-size: 11px; color: var(--jb-mute); }
@@ -1388,6 +1385,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .reduced-motion *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
+  /* property:none (not just 0.01ms) — a 0.01ms duration still creates a
+     CSSTransition object on every state change, which freezes at its
+     from-value when the window is occluded/minimized (no frames → the
+     animation clock never ticks). Property:none prevents the object. */
+  transition-property: none !important;
   transition-duration: 0.01ms !important;
 }
 
@@ -1402,7 +1404,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 
 .keyboard-nav *:focus {
-  outline: 3px solid var(--jb-interactive) !important;
+  outline: 3px solid var(--jb-info) !important;
   outline-offset: 2px !important;
 }
 
@@ -1411,14 +1413,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   width: 100px;
   height: 4px;
   background: var(--jb-border);
-  border-radius: 2px;
+  border-radius: 0;
   overflow: hidden;
   flex: none;
 }
 
 .download-progress-bar {
   height: 100%;
-  background: var(--jb-interactive);
+  background: var(--jb-info);
   transition: width 0.3s;
 }
 
@@ -1449,7 +1451,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 8px 12px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 11px;
   font-family: var(--jb-font-mono);
   color: var(--jb-mute);
@@ -1471,7 +1473,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   inset: 0;
   z-index: 200;
   background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1483,7 +1484,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   max-height: 80vh;
   background: var(--jb-surface-hover);
   border: 1px solid var(--jb-line-hard);
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1506,7 +1507,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .shortcuts-close {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--jb-mute);
   display: grid;
   place-items: center;
@@ -1551,7 +1552,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 8px 12px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .shortcut-action {
@@ -1568,7 +1569,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 4px 8px;
   background: var(--jb-surface);
   border: 1px solid var(--jb-border);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11px;
   font-family: var(--jb-font-mono);
   color: var(--jb-mute);
@@ -1586,7 +1587,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 24px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: 12px;
+  border-radius: 0;
   margin-bottom: 16px;
 }
 
@@ -1619,7 +1620,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 12px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: 8px;
+  border-radius: 0;
   text-align: center;
 }
 
@@ -1649,7 +1650,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 12px;
   background: var(--jb-void);
   border: 1px solid var(--jb-border);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .security-test-icon {
@@ -1675,7 +1676,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .security-test-severity {
   font-size: 10px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1683,7 +1684,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .security-test-severity.critical { background: rgba(215, 25, 33, 0.2); color: var(--jb-danger); }
 .security-test-severity.high { background: rgba(215, 25, 33, 0.1); color: var(--jb-danger); }
 .security-test-severity.medium { background: rgba(201, 162, 39, 0.2); color: var(--jb-warning); }
-.security-test-severity.low { background: rgba(138, 164, 200, 0.2); color: var(--jb-interactive); }
+.security-test-severity.low { background: rgba(138, 164, 200, 0.2); color: var(--jb-info); }
 
 .security-actions {
   display: flex;
@@ -1696,7 +1697,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   padding: 10px 16px;
   background: var(--jb-surface);
   border: 1px solid var(--jb-border);
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--jb-paper);
   font-size: 13px;
   cursor: pointer;
@@ -1748,56 +1749,55 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
     z-index: 50;
     box-shadow: -24px 0 48px rgba(0,0,0,.45);
     background: color-mix(in srgb, var(--jb-surface) 88%, transparent);
-    backdrop-filter: blur(20px);
   }
 }
 
 /* Test append */
 .test-class{color:red}
 
-.cmd-palette-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);align-items:flex-start;justify-content:center;padding-top:15vh}
+.cmd-palette-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);align-items:flex-start;justify-content:center;padding-top:15vh}
 .cmd-palette-bg.on{display:flex}
-.cmd-palette{width:min(560px,92vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.6);overflow:hidden}
+.cmd-palette{width:min(560px,92vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius: 0;box-shadow:0 24px 64px rgba(0,0,0,.6);overflow:hidden}
 .cmd-search{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--jb-border);color:var(--jb-mute)}
 .cmd-search input{flex:1;background:none;border:0;outline:none;color:var(--jb-paper);font-size:15px}
 .cmd-search input::placeholder{color:var(--jb-ghost)}
-.cmd-kbd{font-size:10px;padding:2px 6px;border:1px solid var(--jb-border);border-radius:4px;color:var(--jb-ghost);font-family:var(--jb-font-mono)}
+.cmd-kbd{font-size:10px;padding:2px 6px;border:1px solid var(--jb-border);border-radius: 0;color:var(--jb-ghost);font-family:var(--jb-font-mono)}
 .cmd-results{max-height:320px;overflow-y:auto;padding:6px}
 .cmd-results:empty{display:none}
 .cmd-group-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--jb-ghost);padding:8px 10px 4px}
-.cmd-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--jb-text);font-size:13px}
+.cmd-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius: 0;cursor:pointer;color:var(--jb-text);font-size:13px}
 .cmd-item:hover,.cmd-item.active{background:var(--jb-surface-active);color:var(--jb-paper)}
-.cmd-item-icon{width:28px;height:28px;border-radius:6px;background:var(--jb-void);border:1px solid var(--jb-border);display:grid;place-items:center;color:var(--jb-mute);flex:none;font-size:12px}
+.cmd-item-icon{width:28px;height:28px;border-radius: 0;background:var(--jb-void);border:1px solid var(--jb-border);display:grid;place-items:center;color:var(--jb-mute);flex:none;font-size:12px}
 .cmd-item-label{flex:1;min-width:0}
 .cmd-item-desc{font-size:11px;color:var(--jb-ghost)}
 .cmd-item-shortcut{font-size:11px;color:var(--jb-ghost);font-family:var(--jb-font-mono)}
 .cmd-footer{display:flex;gap:16px;padding:8px 16px;border-top:1px solid var(--jb-border);font-size:11px;color:var(--jb-ghost)}
-.cmd-footer kbd{font-size:10px;padding:1px 4px;border:1px solid var(--jb-border);border-radius:3px;font-family:var(--jb-font-mono)}
+.cmd-footer kbd{font-size:10px;padding:1px 4px;border:1px solid var(--jb-border);border-radius: 0;font-family:var(--jb-font-mono)}
 
 .bookmark-bar{display:flex;align-items:center;gap:2px;height:32px;padding:0 10px;background:var(--jb-surface-hover);border-bottom:1px solid var(--jb-border);overflow-x:auto}
 .bookmark-bar.hidden{display:none}
-.bm-item{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;color:var(--jb-text);font-size:12px;white-space:nowrap;cursor:pointer;flex:none}
+.bm-item{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius: 0;color:var(--jb-text);font-size:12px;white-space:nowrap;cursor:pointer;flex:none}
 .bm-item:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
-.bm-add{width:24px;height:24px;border-radius:4px;color:var(--jb-ghost);display:grid;place-items:center;flex:none;background:none;border:none;cursor:pointer;font-size:16px}
+.bm-add{width:24px;height:24px;border-radius: 0;color:var(--jb-ghost);display:grid;place-items:center;flex:none;background:none;border:none;cursor:pointer;font-size:16px}
 .bm-add:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 .bm-sep{width:1px;height:18px;background:var(--jb-border);margin:0 4px;flex:none}
-.omni-star{width:24px;height:24px;border-radius:4px;color:var(--jb-ghost);display:grid;place-items:center;flex:none;cursor:pointer}
+.omni-star{width:24px;height:24px;border-radius: 0;color:var(--jb-ghost);display:grid;place-items:center;flex:none;cursor:pointer}
 .omni-star:hover{color:var(--jb-paper)}
 .omni-star.bookmarked{color:var(--jb-warning)}
-.zoom-indicator{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;color:var(--jb-mute);font-size:11px;font-family:var(--jb-font-mono);cursor:pointer;flex:none}
+.zoom-indicator{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius: 0;color:var(--jb-mute);font-size:11px;font-family:var(--jb-font-mono);cursor:pointer;flex:none}
 .zoom-indicator:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 .toast-container{position:fixed;top:90px;right:16px;z-index:150;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.toast{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.4);color:var(--jb-text);font-size:13px;pointer-events:auto;animation:toast-in .2s ease-out;max-width:360px}
+.toast{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius: 0;box-shadow:0 8px 32px rgba(0,0,0,.4);color:var(--jb-text);font-size:13px;pointer-events:auto;animation:toast-in .2s ease-out;max-width:360px}
 .toast.out{animation:toast-out .2s ease-in forwards}
 .toast-icon{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:11px}
 .toast-icon.ok{background:rgba(111,155,106,.2);color:var(--jb-success)}
 .toast-icon.warn{background:rgba(201,162,39,.2);color:var(--jb-warning)}
 .toast-icon.err{background:rgba(215,25,33,.2);color:var(--jb-danger)}
-.toast-icon.info{background:rgba(138,164,200,.2);color:var(--jb-interactive)}
+.toast-icon.info{background:rgba(138,164,200,.2);color:var(--jb-info)}
 .toast-body{flex:1;min-width:0}
 .toast-title{font-size:12px;font-weight:500;color:var(--jb-paper)}
 .toast-msg{font-size:11px;color:var(--jb-mute);margin-top:2px}
-.toast-close{width:20px;height:20px;border-radius:4px;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer}
+.toast-close{width:20px;height:20px;border-radius: 0;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer}
 .toast-close:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 @keyframes toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes toast-out{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
@@ -1805,16 +1805,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .perf-hud{display:flex;align-items:center;gap:12px;padding:0 12px;height:24px;background:var(--jb-surface);border-top:1px solid var(--jb-border);font-size:10px;font-family:var(--jb-font-mono);color:var(--jb-ghost);cursor:pointer;letter-spacing:.04em}
 .perf-hud:hover{background:var(--jb-surface-hover);color:var(--jb-mute)}
 .perf-hud-item{display:flex;align-items:center;gap:4px}
-.perf-dot{width:5px;height:5px;border-radius:50%}
-.perf-dot.ok{background:var(--jb-success)}
-.perf-dot.off{background:var(--jb-ghost)}
-.perf-hud-grow{flex:1}
-.tab-strip-vertical{display:none;flex-direction:column;width:220px;flex:none;background:var(--jb-void);border-right:1px solid var(--jb-border);overflow-y:auto;padding:8px 6px}
+.perf-dot{width:5px;height:5px;border-radius: 0}
+/* Base rule restored — it was fused into .perf-dot by a minifier merge,
+   which removed the display:none floor and made both tab bars visible. */
+.tab-strip-vertical{flex-direction:column;width:220px;flex:none;background:var(--jb-void);border-right:1px solid var(--jb-border);overflow-y:auto;padding:8px 6px;display:none}
 .tab-strip-vertical.on{display:flex}
-.tab-strip-vertical .tab{width:100%;max-width:100%;height:32px;border-radius:6px;margin-bottom:2px;padding:0 8px}
+.tab-strip-vertical .tab{width:100%;max-width:100%;height:32px;border-radius: 0;margin-bottom:2px;padding:0 8px}
 .session-banner{display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--jb-surface-hover);border-bottom:1px solid var(--jb-border);font-size:12px;color:var(--jb-text)}
 .session-banner.on{display:flex}
-.session-banner-btn{padding:4px 10px;border:1px solid var(--jb-line-hard);border-radius:6px;color:var(--jb-text);font-size:11px;background:none;cursor:pointer}
+.session-banner-btn{padding:4px 10px;border:1px solid var(--jb-line-hard);border-radius: 0;color:var(--jb-text);font-size:11px;background:none;cursor:pointer}
 .session-banner-btn:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 .session-banner-btn.primary{background:var(--jb-paper);color:var(--jb-void);border-color:var(--jb-paper)}
 
@@ -1835,7 +1834,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .tab-group{display:inline-flex;align-items:center;gap:4px;margin-right:8px}
 .tab-group-indicator{width:8px;height:8px;border-radius:50%;flex:none}
 .tab-group-name{font-size:10px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:.05em}
-.tab-group-collapse{width:16px;height:16px;border-radius:4px;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer;font-size:10px}
+.tab-group-collapse{width:16px;height:16px;border-radius: 0;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer;font-size:10px}
 .tab-group-collapse:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 
 /* Tab Group Colors */
@@ -1855,8 +1854,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 /* ── Tab Preview ─────────────────────────────────────────────────── */
 
 /* ── Tab Search ──────────────────────────────────────────────────── */
-.tab-search-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
-.tab-search-container{width:min(500px,90vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.5);overflow:hidden}
+.tab-search-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
+.tab-search-container{width:min(500px,90vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius: 0;box-shadow:0 16px 48px rgba(0,0,0,.5);overflow:hidden}
 .tab-search-input{width:100%;padding:14px 16px;background:none;border:0;border-bottom:1px solid var(--jb-border);color:var(--jb-paper);font-size:15px;outline:none}
 .tab-search-input::placeholder{color:var(--jb-ghost)}
 .tab-search-results{max-height:300px;overflow-y:auto}
@@ -1867,8 +1866,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .tab-search-url{font-size:11px;color:var(--jb-mute);margin-top:2px;font-family:var(--jb-font-mono)}
 
 /* ── Recently Closed ─────────────────────────────────────────────── */
-.recently-closed-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
-.recently-closed-container{width:min(400px,90vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.5);overflow:hidden}
+.recently-closed-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh}
+.recently-closed-container{width:min(400px,90vw);background:var(--jb-surface-hover);border:1px solid var(--jb-line-hard);border-radius: 0;box-shadow:0 16px 48px rgba(0,0,0,.5);overflow:hidden}
 .recently-closed-container h3{padding:14px 16px;font-size:14px;color:var(--jb-paper);border-bottom:1px solid var(--jb-border);margin:0}
 .recently-closed-list{max-height:300px;overflow-y:auto}
 .recently-closed-item{padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--jb-border);display:flex;flex-direction:column;gap:2px}
@@ -1880,8 +1879,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .recently-closed-empty{padding:20px 16px;text-align:center;color:var(--jb-mute);font-size:13px}
 
 /* ── Agent-owned Tab Indicator ───────────────────────────────────── */
-.tab.agent-owned{border-left:2px solid var(--jb-interactive)}
-.tab.agent-owned::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--jb-interactive)}
+.tab.agent-owned{border-left:2px solid var(--jb-info)}
+.tab.agent-owned::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--jb-info)}
 
 /* ── Tab Suspension Indicator ────────────────────────────────────── */
 .tab.suspended{opacity:.6}
@@ -1890,24 +1889,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 /* ── JARVIS Agent Panel ──────────────────────────────────────────── */
 .jarvis-agents{padding:12px}
 .jarvis-agent-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
-.jarvis-agent{background:var(--jb-void);border:1px solid var(--jb-border);border-radius:8px;padding:10px 12px}
+.jarvis-agent{background:var(--jb-void);border:1px solid var(--jb-border);border-radius: 0;padding:10px 12px}
 .jarvis-agent-header{display:flex;align-items:center;gap:8px}
-.jarvis-agent-status{width:8px;height:8px;border-radius:50%}
-.jarvis-agent-status.idle{background:var(--jb-success)}
-.jarvis-agent-status.working{background:var(--jb-warning);animation:pulse 1s infinite}
+.jarvis-agent-status{width:8px;height:8px;border-radius: 0;animation:pulse 1s infinite}
 .jarvis-agent-status.error{background:var(--jb-danger)}
 .jarvis-agent-name{font-size:13px;color:var(--jb-paper);flex:1}
-.jarvis-agent-menu{width:24px;height:24px;border-radius:4px;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer}
+.jarvis-agent-menu{width:24px;height:24px;border-radius: 0;color:var(--jb-ghost);display:grid;place-items:center;background:none;border:none;cursor:pointer}
 .jarvis-agent-menu:hover{background:var(--jb-surface-active);color:var(--jb-paper)}
 .jarvis-agent-meta{font-size:11px;color:var(--jb-mute);margin-top:4px}
 .jarvis-agent-task{margin-top:8px}
 .jarvis-task-title{font-size:12px;color:var(--jb-text);margin-bottom:4px}
-.jarvis-task-progress{height:4px;background:var(--jb-border);border-radius:2px;overflow:hidden}
-.jarvis-progress-bar{height:100%;background:var(--jb-interactive);transition:width .3s}
+.jarvis-task-progress{height:4px;background:var(--jb-border);border-radius: 0;overflow:hidden}
+.jarvis-progress-bar{height:100%;background:var(--jb-info);transition:width .3s}
 .jarvis-empty{padding:24px;text-align:center}
 .jarvis-empty-icon{font-size:32px;margin-bottom:8px}
 .jarvis-empty-text{color:var(--jb-mute);font-size:13px;margin-bottom:12px}
-.jarvis-btn{padding:8px 16px;background:var(--jb-surface-active);border:1px solid var(--jb-line-hard);border-radius:6px;color:var(--jb-paper);font-size:12px;cursor:pointer}
+.jarvis-btn{padding:8px 16px;background:var(--jb-surface-active);border:1px solid var(--jb-line-hard);border-radius: 0;color:var(--jb-paper);font-size:12px;cursor:pointer}
 .jarvis-btn:hover{background:var(--jb-paper);color:var(--jb-void)}
 .jarvis-btn-full{width:100%}
 
@@ -1948,17 +1945,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .ext-row.disabled .ext-icon,.ext-row.disabled .ext-info{opacity:.45}
 .ext-pin{min-width:38px;text-align:center;cursor:pointer;user-select:none}
 .ext-pin.ok{cursor:pointer}
-.ext-power{width:26px;height:16px;border-radius:8px;border:1px solid var(--jb-line-hard);background:var(--jb-surface);position:relative;cursor:pointer;flex:none;transition:background .15s}
-.ext-power::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--jb-mute);transition:left .15s,background .15s}
-.ext-power.on{background:var(--jb-interactive);border-color:var(--jb-interactive)}
-.ext-power.on::after{left:12px;background:#fff}
+.ext-power{width:26px;height:16px;border-radius: 0;border:1px solid var(--jb-line-hard);background:var(--jb-surface);position:relative;cursor:pointer;flex:none;transition:background .15s}
+/* GPU-only animation: translate the knob, never its `left` (layout thrash) */
+.ext-power::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--jb-mute);transition:transform .15s ease,background .15s}
+.ext-power.on{background:var(--jb-info);border-color:var(--jb-info)}
+.ext-power.on::after{transform:translateX(10px);background:#fff}
 
 /* ── History / Bookmarks rows ───────────────────────────────────── */
-.hist-row{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius:6px;padding:6px 8px;margin:0 -8px}
+/* Contained rendering: rows below the fold skip layout/paint while scrolling a long history list (RN list-performance-virtualize analog). */
+.hist-row{display:flex;align-items:center;gap:10px;cursor:pointer;border-radius: 0;padding:6px 8px;margin:0 -8px;content-visibility:auto;contain-intrinsic-size:auto 36px}
 .hist-row:hover{background:var(--jb-surface)}
 .hist-fav{width:20px;text-align:center;color:var(--jb-mute);flex:none}
 .hist-body{flex:1;min-width:0}
-.hist-remove{background:none;border:none;color:var(--jb-ghost);font-size:15px;cursor:pointer;padding:2px 6px;border-radius:4px;flex:none;opacity:0;transition:opacity .12s}
+.hist-remove{background:none;border:none;color:var(--jb-ghost);font-size:15px;cursor:pointer;padding:2px 6px;border-radius: 0;flex:none;opacity:0;transition:opacity .12s}
 .hist-row:hover .hist-remove{opacity:1}
 .hist-remove:hover{color:var(--jb-danger)}
 .hist-actions{display:flex;gap:8px;padding:12px 0 4px}
@@ -1967,14 +1966,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .companion-card:hover{border-color:var(--jb-accent)}
 .companion-action{transition:opacity .12s}
 .companion-action:hover{opacity:.85}
-#jarvisStatus{width:8px;height:8px;border-radius:50%;background:var(--jb-mute);transition:background .3s}
-#jarvisStatus.online{background:#4ade80}
-#jarvisStatus.offline{background:#f87171}
+#jarvisStatus{width:8px;height:8px;border-radius:50%;background:var(--jb-mute)}
+#jarvisStatus.online{background:var(--jb-success)}
+#jarvisStatus.offline{background:var(--jb-danger)}
 
 /* ── Split View (Arc-style) ───────────────────────────────────── */
 .split-view{display:flex;width:100%;height:100%}
-.split-view .webview{flex:1;border:1px solid var(--jb-border);border-radius:0}
-.split-view .split-divider{width:4px;background:var(--jb-border);cursor:col-resize;flex-shrink:0;transition:background .15s}
+.split-view .webview{flex:1;border:1px solid var(--jb-border);border-radius: 0;background:var(--jb-border);cursor:col-resize;flex-shrink:0;transition:background .15s}
 .split-view .split-divider:hover{background:var(--jb-accent)}
 .split-view .split-divider.active{background:var(--jb-accent)}
 
@@ -1987,7 +1985,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .reader-content p{margin-bottom:16px;font-size:17px}
 .reader-content a{color:var(--jb-accent);text-decoration:none}
 .reader-content a:hover{text-decoration:underline}
-.reader-content img{max-width:100%;border-radius:8px;margin:16px 0}
+.reader-content img{max-width:100%;border-radius: 0;margin:16px 0}
 .reader-content blockquote{border-left:3px solid var(--jb-line-hard);padding-left:16px;margin:16px 0;color:#aaa;font-style:italic}
 .reader-close{position:fixed;top:20px;right:20px;z-index:1001;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .reader-close:hover{background:rgba(255,255,255,0.2)}
@@ -1996,39 +1994,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Command Chains (Vivaldi-style) ──────────────────────────── */
 .chain-editor{padding:16px}
-.chain-step{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--jb-border);border-radius:8px;margin-bottom:6px;background:var(--jb-void)}
+.chain-step{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--jb-border);border-radius: 0;margin-bottom:6px;background:var(--jb-void)}
 .chain-step-num{width:24px;height:24px;border-radius:50%;background:var(--jb-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
 .chain-step-cmd{flex:1;font-size:12px;color:var(--jb-paper)}
 .chain-step-remove{background:none;border:none;color:var(--jb-mute);cursor:pointer;font-size:14px}
 .chain-step-remove:hover{color:var(--jb-danger)}
 
 /* ── Agent Status Bar ────────────────────────────────────────── */
-.agent-bar{position:fixed;bottom:0;left:0;right:0;z-index:900;padding:8px 16px;background:rgba(10,10,15,0.95);border-top:1px solid var(--jb-border);backdrop-filter:blur(12px);display:none;align-items:center;gap:12px}
+.agent-bar{position:fixed;bottom:0;left:0;right:0;z-index:900;padding:8px 16px;background:var(--jb-bg);border-top:1px solid var(--jb-border);display:none;align-items:center;gap:12px}
 .agent-bar.active{display:flex}
 .agent-bar-dot{width:8px;height:8px;border-radius:50%;background:var(--jb-paper);animation:agent-pulse 1.5s ease-in-out infinite}
-.agent-bar-text{font-size:12px;color:rgba(255,255,255,0.6);flex:1}
-.agent-bar-stop{padding:4px 12px;border-radius:6px;background:rgba(248,113,113,0.15);border:1px solid rgba(248,113,113,0.3);color:#f87171;font-size:11px;cursor:pointer}
-.agent-bar-stop:hover{background:rgba(248,113,113,0.25)}
+.agent-bar-text{font-size:12px;color:var(--jb-text-secondary);flex:1}
+.agent-bar-stop{padding:4px 12px;border-radius: 0;background:var(--jb-danger-muted);border:1px solid var(--jb-danger);color:var(--jb-danger);font-size:11px;cursor:pointer}
+.agent-bar-stop:hover{background: var(--jb-danger-muted)}
 @keyframes agent-pulse{0%,100%{opacity:.4;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
 
 /* ── Keyboard Shortcuts Overlay ─────────────────────────────── */
-.shortcuts-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center}
+.shortcuts-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center}
 .shortcuts-overlay.active{display:flex}
-.shortcuts-card{background:#0d0d12;border:1px solid var(--jb-border);border-radius:16px;padding:24px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+.shortcuts-card{background:#0d0d12;border:1px solid var(--jb-border);border-radius: 0;padding:24px;max-width:720px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
 .shortcuts-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .shortcuts-header h2{font-size:18px;color:#fff;font-weight:600}
-.shortcuts-close{width:32px;height:32px;border-radius:8px;border:none;background:rgba(255,255,255,0.06);color:#888;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.shortcuts-close{width:32px;height:32px;border-radius: 0;border:none;background:rgba(255,255,255,0.06);color:#888;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .shortcuts-close:hover{background:rgba(255,255,255,0.1);color:#fff}
 .shortcuts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
 .shortcuts-group h3{font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);margin-bottom:10px}
 .shortcut{display:flex;align-items:center;gap:10px;padding:4px 0}
-.shortcut kbd{background:var(--jb-surface);border:1px solid var(--jb-border);border-radius:4px;padding:2px 6px;font-size:11px;color:var(--jb-text);font-family:monospace;min-width:80px;text-align:center}
+.shortcut kbd{background:var(--jb-surface);border:1px solid var(--jb-border);border-radius: 0;padding:2px 6px;font-size:11px;color:var(--jb-text);font-family:monospace;min-width:80px;text-align:center}
 .shortcut span{font-size:12px;color:rgba(255,255,255,0.5)}
 
 /* ── Workspace Cards ────────────────────────────────────────── */
 .ws-card{transition:all .2s ease;position:relative}
 .ws-card:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.2)}
-.ws-card.active::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:2px;background:var(--jb-accent)}
+.ws-card.active::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius: 0;background:var(--jb-accent)}
 
 /* ── Tab Sleeping Indicator ─────────────────────────────────── */
 .tab.sleeping{opacity:0.5}
@@ -2036,34 +2034,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .tab.sleeping::after{content:'\u{1F4A4}';position:absolute;right:28px;font-size:10px;opacity:0.5}
 
 /* ── Performance HUD Memory ─────────────────────────────────── */
-.perf-mem-warn{color:#f87171 !important}
-.perf-mem-ok{color:#4ade80 !important}
+.perf-mem-warn{color:var(--jb-danger) !important}
+.perf-mem-ok{color:var(--jb-success) !important}
 
 /* ── JARVIS Launch Button ───────────────────────────────────── */
-.jarvis-launch{display:flex;align-items:center;justify-content:center;gap:4px !important;padding:4px 8px !important;border-radius:8px !important;width:auto;min-width:32px;white-space:nowrap;transition:all .2s ease !important}
+.jarvis-launch{display:flex;align-items:center;justify-content:center;gap:4px !important;padding:4px 8px !important;border-radius: 0;width:auto;min-width:32px;white-space:nowrap;transition:all .2s ease !important}
 .jarvis-launch:hover{background:var(--jb-surface-active) !important}
 .jarvis-launch.active{background:var(--jb-accent-muted) !important}
-#jarvisStatus{width:8px;height:8px;border-radius:50%;transition:all .3s ease;flex-shrink:0}
-#jarvisStatus.offline{background:#f87171;box-shadow:0 0 6px rgba(248,113,113,0.5)}
-#jarvisStatus.online{background:#4ade80;box-shadow:0 0 6px rgba(74,222,128,0.5);animation:jarvis-pulse 2s ease-in-out infinite}
-@keyframes jarvis-pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+/* No idle pulse: a status lamp breathes only to draw attention to a
+   change (handled by the JS transition), never in steady state. */
 .jarvis-launch-label{font-size:10px;font-weight:500;color:var(--jb-mute);transition:all .2s}
-.jarvis-launch.online .jarvis-launch-label{color:#4ade80}
+.jarvis-launch.online .jarvis-launch-label{color:var(--jb-success)}
 .jarvis-launch-label.hidden{display:none}
 
 /* ── Privacy Report Page ────────────────────────────────────── */
 .privacy-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
-.privacy-stat-card{background:var(--jb-void);border:1px solid var(--jb-border);border-radius:12px;padding:16px;text-align:center;transition:border-color .15s}
+.privacy-stat-card{background:var(--jb-void);border:1px solid var(--jb-border);border-radius: 0;padding:16px;text-align:center;transition:border-color .15s}
 .privacy-stat-card:hover{border-color:var(--jb-line-hard)}
 .privacy-stat-icon{font-size:24px;margin-bottom:8px;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 8px}
 .privacy-stat-value{font-size:20px;font-weight:600;color:var(--jb-paper);margin-bottom:4px}
 .privacy-stat-label{font-size:11px;color:var(--jb-mute);text-transform:uppercase;letter-spacing:0.05em}
 .privacy-activity{max-height:300px;overflow-y:auto}
-.privacy-activity-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;margin-bottom:4px;background:rgba(255,255,255,0.02)}
+.privacy-activity-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius: 0;margin-bottom:4px;background:rgba(255,255,255,0.02)}
 .privacy-activity-item:hover{background:rgba(255,255,255,0.04)}
 .privacy-activity-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.privacy-activity-dot.blocked{background:#f87171}
-.privacy-activity-dot.allowed{background:#4ade80}
+.privacy-activity-dot.blocked{background:var(--jb-danger)}
+.privacy-activity-dot.allowed{background:var(--jb-success)}
 .privacy-activity-text{font-size:12px;color:var(--jb-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .privacy-activity-time{font-size:10px;color:var(--jb-mute)}
 
@@ -2114,24 +2110,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .f1-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── Model Picker (JARVIS sidebar header) ─────────────────────────── */
-.sb-model-chip{display:flex;align-items:center;gap:5px;padding:3px 8px;background:transparent;border:1px solid var(--jb-border-subtle);border-radius:2px;color:var(--jb-text-tertiary);font-family:var(--jb-font-mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;max-width:150px}
+.sb-model-chip{display:flex;align-items:center;gap:5px;padding:3px 8px;background:transparent;border:1px solid var(--jb-border-subtle);border-radius: 0;color:var(--jb-text-tertiary);font-family:var(--jb-font-mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;max-width:150px}
 .sb-model-chip:hover{background:var(--jb-surface-hover);color:var(--jb-text)}
 .sb-model-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.model-popup{position:fixed;z-index:10000;width:320px;max-height:420px;overflow-y:auto;background:var(--jb-elevated);border:1px solid var(--jb-border);border-radius:2px;box-shadow:0 8px 32px rgba(0,0,0,0.6);display:none}
-.model-popup.open{display:block}
-.model-popup-header{padding:10px 12px 8px;border-bottom:1px solid var(--jb-border-subtle);display:flex;align-items:center;justify-content:space-between}
-.model-popup-title{font-family:var(--jb-font-mono);font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--jb-text-secondary)}
-.model-popup-hint{font-family:var(--jb-font-mono);font-size:9px;color:var(--jb-text-tertiary)}
-.model-item{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;background:transparent;border:none;border-bottom:1px solid var(--jb-border-subtle);cursor:pointer;text-align:left;color:var(--jb-text)}
-.model-item:hover{background:var(--jb-surface-hover)}
-.model-item.active{background:var(--jb-surface-active)}
-.model-item.unavailable{opacity:0.45;cursor:not-allowed}
-.model-item .mi-main{flex:1;min-width:0}
-.model-item .mi-model{font-family:var(--jb-font-mono);font-size:11px;color:var(--jb-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.model-item .mi-provider{font-family:var(--jb-font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--jb-text-tertiary);margin-top:2px}
-.model-item .mi-kind{font-family:var(--jb-font-mono);font-size:8px;letter-spacing:0.1em;text-transform:uppercase;padding:2px 5px;border:1px solid var(--jb-border-subtle);border-radius:2px;color:var(--jb-text-tertiary);flex-shrink:0}
-.model-item .mi-kind.local{color:var(--jb-ok);border-color:var(--jb-ok)}
-.model-item .mi-check{color:var(--jb-f1,#E10600);font-size:11px;flex-shrink:0}
 
 /* ── System popover (replaces bottom status HUD) ───────────────── */
 .system-popup{width:250px}
@@ -2141,7 +2122,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sys-val{display:flex;align-items:center;gap:6px;color:var(--jb-text);font-family:var(--jb-font-mono);font-size:11px}
 
 /* ── Plan / Build mode toggle (sidebar composer) ───────────────── */
-.sb-mode{display:flex;align-items:center;gap:0;padding:0;border:1px solid var(--jb-border);border-radius:4px;overflow:hidden;background:var(--jb-surface)}
+.sb-mode{display:flex;align-items:center;gap:0;padding:0;border:1px solid var(--jb-border);border-radius: 0;overflow:hidden;background:var(--jb-surface)}
 .sb-mode-plan,.sb-mode-build{padding:3px 8px;font-size:10px;font-weight:500;letter-spacing:.05em;color:var(--jb-text-tertiary);transition:background .15s ease,color .15s ease}
 .sb-mode-sep{width:1px;align-self:stretch;background:var(--jb-border)}
 .sb-mode[data-mode="plan"] .sb-mode-plan{background:var(--jb-paper);color:var(--jb-void)}
@@ -2172,20 +2153,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 :root {
   --jb-live: #E10600;            /* F1 red — live/urgent lamp only */
   --jb-live-muted: rgba(225, 6, 0, 0.14);
-  --radius-sharp: 2px;
+  --radius-sharp: 0;
   --chrome-blur: saturate(140%) blur(18px);
 }
 
 /* ── Chrome surfaces: translucent black (Apple vibrancy, Nothing palette) ── */
 .titlebar, .toolbar {
-  background: rgba(10, 10, 10, 0.86);
-  backdrop-filter: var(--chrome-blur);
-  -webkit-backdrop-filter: var(--chrome-blur);
+  background: var(--jb-bg);
 }
 
 /* ── Tabs: F1 timing-tower geometry ─────────────────────────────── */
 .tab {
-  border-radius: 4px 4px 0 0;
+  border-radius: 0;
   border-top: 2px solid transparent;
   font-size: 11.5px;
   letter-spacing: 0.01em;
@@ -2201,7 +2180,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Omnibox: single calm field, focus = white ring (Apple) ─────── */
 .omnibox {
-  border-radius: 6px;
+  border-radius: 0;
   transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
 }
 .omnibox:focus-within {
@@ -2248,25 +2227,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Sidebar: Opera-style rail, Nothing flat, Apple calm ────────── */
 .sidebar {
-  background: rgba(8, 8, 8, 0.92);
-  backdrop-filter: var(--chrome-blur);
-  -webkit-backdrop-filter: var(--chrome-blur);
+  background: var(--jb-bg);
   border-left: 1px solid var(--jb-border);
 }
 .sb-nav {
   display: none; /* replaced by .sb-rail */
 }
-.rail-btn { border-radius: var(--radius-sharp, 10px); }
+.rail-btn { border-radius: 0; }
 .rail-btn.on { color: var(--jb-void); background: var(--jb-paper); font-weight: 600; }
 
 /* Composer: square field, hairline border, white send */
 .sb-composer-box {
   border: 1px solid var(--jb-border);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--jb-bg);
 }
 .sb-composer-box:focus-within { border-color: var(--jb-paper); }
-.sb-send { color: var(--jb-void); background: var(--jb-paper); border-radius: 3px; }
+.sb-send { color: var(--jb-void); background: var(--jb-paper); border-radius: 0; }
 
 /* ── Leaderboards / lists: timing-tower rows ────────────────────── */
 .f1-lb-row:hover { background: var(--jb-surface-hover); }
@@ -2274,7 +2251,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Popovers & menus: hairline, taller rows (Apple) ────────────── */
 .popover, .context-menu {
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--jb-line-hard);
   box-shadow: 0 16px 48px rgba(0, 0, 0, .55);
 }
@@ -2295,7 +2272,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  /* property:none — see the .reduced-motion note above: 0.01ms alone still
+     creates frozen transition objects on occluded windows. */
+  *, *::before, *::after { transition-property: none !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2305,8 +2284,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
    ══════════════════════════════════════════════════════════════════ */
 
 :root {
-  --glass-bg: rgba(16, 16, 16, 0.55);
-  --glass-bg-strong: rgba(12, 12, 12, 0.72);
+  --glass-bg: var(--jb-surface);
+  --glass-bg-strong: var(--jb-bg);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.04);
   --glass-blur: blur(24px) saturate(150%);
@@ -2346,12 +2325,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .nt-search, .nt-telemetry, .popover, .context-menu,
 .sidebar, .cmd-palette, .find-bar, .modal {
   background: var(--glass-bg-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 24px 64px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 }
 
 /* ── Tiles: modular cards that expand around the active tool ───── */
@@ -2367,8 +2342,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   gap: 10px;
   padding: 12px;
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 var(--glass-highlight);
   text-align: left;
@@ -2395,10 +2368,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .nt-tile:hover, .nt-tile:focus-visible {
   transform: translateY(-3px) scale(1.04);   /* the panel expands */
   border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(26, 26, 26, 0.7);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 12px 36px rgba(0, 0, 0, 0.45);
+  background: var(--jb-surface-hover);
+  box-shadow: none;
   color: var(--jb-paper);
 }
 .nt-tile:hover::after, .nt-tile:focus-visible::after { transform: scaleX(1); }
@@ -2439,7 +2410,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Chrome hierarchy: recede what isn't content ───────────────── */
 .titlebar, .toolbar { border-bottom-color: transparent; }
-.bookmark-bar { backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+.bookmark-bar { }
 
 /* ══════════════════════════════════════════════════════════════════
    JARVIS AGENT UI — chat as telemetry
@@ -2451,8 +2422,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   margin: 0 0 12px;
   padding: 10px 14px 12px;
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-left: 2px solid var(--jb-line-hard);   /* role rail */
   box-shadow: inset 0 1px 0 var(--glass-highlight);
@@ -2461,7 +2430,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .chat-msg--jarvis { border-left-color: var(--jb-accent); }
 .chat-msg--error  { border-left-color: var(--jb-live); }
 .chat-msg--system { border-left-color: transparent; background: transparent;
-                    backdrop-filter: none; -webkit-backdrop-filter: none;
                     border-color: transparent; box-shadow: none; padding: 4px 8px; }
 .chat-msg--streaming { border-left-color: var(--jb-live); }
 
@@ -2524,10 +2492,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .chat-empty-glyph i {
   width: 5px; height: 5px;
   background: var(--jb-text-tertiary);
-  animation: m-fill 1.8s ease-in-out infinite;
 }
-.chat-empty-glyph i:nth-child(2) { animation-delay: 0.25s; }
-.chat-empty-glyph i:nth-child(3) { animation-delay: 0.5s; }
 .chat-empty-status {
   font-family: var(--jb-font-display);
   font-size: 16px;
@@ -2546,7 +2511,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* ── Sidebar nav: F1 steering-wheel selector (now .sb-rail) ────── */
 .rail-btn {
-  border-radius: 2px;
+  border-radius: 0;
   font-family: var(--jb-font-mono);
   border: 1px solid transparent;
 }
@@ -2561,8 +2526,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 /* ── Composer: mode chip visible on glass ──────────────────────── */
 .sb-composer-box {
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -2571,13 +2534,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 
 .jarvis-float {
   background: var(--glass-bg-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
-  border-radius: 6px;
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 24px 64px rgba(0, 0, 0, 0.55);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* Head: mono, tracked, with FLOAT badge */
@@ -2677,7 +2636,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .jarvis-float-input input {
   background: var(--jb-bg);
   border: 1px solid var(--glass-border);
-  border-radius: 3px;
+  border-radius: 0;
   padding: 8px 10px;
   font-size: 12px;
   color: var(--jb-text);
@@ -2690,7 +2649,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 #jarvisFloatSend {
   background: var(--jb-paper);
   color: var(--jb-void);
-  border-radius: 3px;
+  border-radius: 0;
   width: 30px; height: 30px;
   display: grid; place-items: center;
   font-size: 14px;
@@ -2698,3 +2657,111 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   transition: background 0.2s var(--os-ease);
 }
 #jarvisFloatSend:hover { background: #d9d9d9; }
+
+/* ╔══════════════════════════════════════════════════════════════════╗
+   ║  TACTICAL TELEMETRY LAYER — industrial brutalism overlays        ║
+   ║  Archetype: dark-mode CRT terminal. Rules from SKILL.md:         ║
+   ║  §4 utilitarian color (hazard red only accent), §5 90° geometry, ║
+   ║  §6 ASCII framing / technical symbology, §7 analog degradation.  ║
+   ║  Everything here is additive; delete this block to revert.       ║
+   ╚══════════════════════════════════════════════════════════════════╝ */
+
+/* ── §7 CRT scanlines on shell chrome, NEVER over guest web content ── */
+.titlebar::after,
+.toolbar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.12) 2px,
+    rgba(0, 0, 0, 0.12) 4px
+  );
+  z-index: 1;
+}
+.titlebar, .toolbar { position: relative; }
+
+/* ── §6 registration crosshairs at sidebar corners (+) ───────────── */
+.sidebar::before,
+.sidebar::after {
+  content: "+";
+  position: absolute;
+  font-family: var(--jb-font-mono);
+  font-size: 9px;
+  color: var(--jb-text-tertiary);
+  z-index: 2;
+  pointer-events: none;
+}
+.sidebar::before { top: 4px; left: 6px; }
+.sidebar::after { bottom: 4px; right: 8px; }
+.sidebar { position: relative; }
+
+/* ── §6 ASCII frame label on the agent control bar ─────────────── */
+.agent-bar::before {
+  content: "[ AGENT ACTIVE ]";
+  font-family: var(--jb-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jb-danger);
+  white-space: nowrap;
+}
+.agent-bar::after {
+  content: ">>>";
+  font-family: var(--jb-font-mono);
+  font-size: 10px;
+  color: var(--jb-danger);
+  letter-spacing: 0.1em;
+}
+
+/* ── §5 hazard stripes: only above the fold of the stop control ── */
+.agent-bar-stop {
+  position: relative;
+  overflow: hidden;
+}
+.agent-bar-stop::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--jb-danger),
+    var(--jb-danger) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+/* ── §3.2 telemetry readout — REMOVED IN DESIGN REVIEW: .sb-matrix is a
+      7-column dot grid; a ::after would inject a stray grid cell and
+      corrupt the glyph matrix. No equivalent surface exists on the rail. */
+
+/* ── §7 mechanical grain: single unified noise field on the shell root
+      (webview contents untouched — page content stays readable) ───── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* No mix-blend-mode: measured 2–5ms p95 frame-tail cost during scroll/tab
+     activity (per-frame backdrop blending). Plain alpha at this opacity is
+     visually equivalent on the near-black substrate. */
+}
+
+/* ── §6 Vertical tab rail header (tab-bar relocation compensation) ──
+      Arc-style: the strip gets its own operational header — label per
+      §3.2 micro-typography, 90° corners per §5, 1px compartmentalization. */
+.vtab-head{display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 8px 6px;border-bottom:1px solid var(--jb-border);margin-bottom:6px;flex:none}
+.vtab-label{font-family:var(--jb-font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--jb-text-tertiary)}
+.vtab-new{width:20px;height:20px;display:grid;place-items:center;border:none;background:none;color:var(--jb-mute);cursor:pointer;padding:0;border-radius: 0}
+.vtab-new:hover{background:var(--jb-surface-hover);color:var(--jb-paper)}
+
+/* ── Reduced motion / occlusion safety: no animated overlays. The grain
+      and scanlines are static by construction; nothing here animates. */

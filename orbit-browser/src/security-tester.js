@@ -517,12 +517,15 @@ class SecurityTester {
   }
 
   testWebSocketOrigin() {
-    // This would need actual WebSocket testing
+    // A-09: an unexecuted check must never report passing. This check
+    // requires a live handshake probe; until it runs, the result is
+    // explicitly not_tested so the summary cannot show a false green.
     return {
       name: 'WebSocket origin validation',
-      passed: true,
+      passed: false,
+      not_tested: true,
       results: {
-        note: 'Requires actual WebSocket connection test',
+        note: 'Not verified in this run - requires a live WebSocket handshake probe',
       },
     };
   }

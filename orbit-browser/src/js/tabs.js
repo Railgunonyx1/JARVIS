@@ -596,37 +596,42 @@ function isWebviewInternal(url) {
 }
 
 function showInternalPage(pageId) {
-  $$(".page", internalPages).forEach(p => p.classList.remove("on"));
-  const target = document.getElementById(pageId);
-  if (target) target.classList.add("on");
-  if (pageId === "diagnosticsPage") refreshDiagnostics();
-  if (pageId === "historyPage") renderHistoryPage();
-  if (pageId === "bookmarksPage") renderBookmarksPage();
-  if (pageId === "extensionsPage") renderExtensionsPage();
-  if (pageId === "newtabPage") {
-    renderSessionThumbnails();
-    // Fresh New Tab pages open with an empty search box; revisiting an
-    // existing tab restores its own draft (the input is shared DOM).
-    const ntp = document.getElementById("ntpSearch");
-    if (ntp) ntp.value = ntpDrafts.get(activeTabId) || "";
-  }
-  if (pageId === "privacyPage") renderPrivacyPage();
-  if (pageId === "downloadsPage") renderDownloadsPage();
-  if (pageId === "permissionsPage") renderPermissionsPage();
-  if (pageId === "memoryPage") renderMemoryPage();
-  if (pageId === "tasksPage") renderTasksPage();
-  if (pageId === "goodeyePage" || pageId === "f1Page" || pageId === "worldmonPage") {
-    ensureWorkspace(pageId, function () {
-      if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
-      if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
-      if (pageId === "worldmonPage" && window.WorldMon) window.WorldMon.start();
-    });
-  } else {
-    // Workspaces poll in the background; stop them when their page hides.
-    if (window.GoodEye) window.GoodEye.stop();
-    if (window.OrbitF1) window.OrbitF1.stop();
-    if (window.WorldMon) window.WorldMon.stop();
-  }
+  // Cross-fade just the content region (chrome stays static — lateral
+  // navigation communicates no depth, so no directional slide). Instant
+  // swap without the View Transition API or under reduced-motion.
+  UI.viewTransition(function () {
+    $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+    const target = document.getElementById(pageId);
+    if (target) target.classList.add("on");
+    if (pageId === "diagnosticsPage") refreshDiagnostics();
+    if (pageId === "historyPage") renderHistoryPage();
+    if (pageId === "bookmarksPage") renderBookmarksPage();
+    if (pageId === "extensionsPage") renderExtensionsPage();
+    if (pageId === "newtabPage") {
+      renderSessionThumbnails();
+      // Fresh New Tab pages open with an empty search box; revisiting an
+      // existing tab restores its own draft (the input is shared DOM).
+      const ntp = document.getElementById("ntpSearch");
+      if (ntp) ntp.value = ntpDrafts.get(activeTabId) || "";
+    }
+    if (pageId === "privacyPage") renderPrivacyPage();
+    if (pageId === "downloadsPage") renderDownloadsPage();
+    if (pageId === "permissionsPage") renderPermissionsPage();
+    if (pageId === "memoryPage") renderMemoryPage();
+    if (pageId === "tasksPage") renderTasksPage();
+    if (pageId === "goodeyePage" || pageId === "f1Page" || pageId === "worldmonPage") {
+      ensureWorkspace(pageId, function () {
+        if (pageId === "goodeyePage" && window.GoodEye) window.GoodEye.start();
+        if (pageId === "f1Page" && window.OrbitF1) window.OrbitF1.start();
+        if (pageId === "worldmonPage" && window.WorldMon) window.WorldMon.start();
+      });
+    } else {
+      // Workspaces poll in the background; stop them when their page hides.
+      if (window.GoodEye) window.GoodEye.stop();
+      if (window.OrbitF1) window.OrbitF1.stop();
+      if (window.WorldMon) window.WorldMon.stop();
+    }
+  });
 }
 
 // ── Lazy workspace load ───────────────────────────────────────────
@@ -778,7 +783,7 @@ function renderErrorLog(container) {
   errors.sort(function(a, b) { return b.timestamp - a.timestamp; });
   var html = '';
   errors.slice(0, 60).forEach(function(e) {
-    var color = e.level === 'error' ? '#f87171' : e.level === 'warn' ? '#fbbf24' : '#4ade80';
+    var color = e.level === 'error' ? 'var(--jb-danger)' : e.level === 'warn' ? 'var(--jb-warning)' : 'var(--jb-success)';
     var icon = e.level === 'error' ? '\u2717' : e.level === 'warn' ? '\u26A0' : '\u2139';
     var time = new Date(e.timestamp).toLocaleTimeString();
     html += '<div class="privacy-activity-item">';

@@ -8,6 +8,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("orbit", {
+  // A-01: per-launch bridge token (set by the launcher's env). One-time
+  // sync read at boot; the value never leaves the preload boundary.
+  getBridgeToken: () => ipcRenderer.sendSync("orbit:get-bridge-token"),
   // ── Tab Management ──────────────────────────────────────────────
   tabs: {
     create: (url) => ipcRenderer.invoke("tab:create", url),

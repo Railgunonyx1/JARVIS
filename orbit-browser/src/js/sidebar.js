@@ -48,7 +48,7 @@ function showPrivatePinPrompt() {
   h += '<h2 style="font-size:16px;color:var(--jb-paper);margin-bottom:4px">Private Window Locked</h2>';
   h += '<p style="font-size:12px;color:var(--jb-mute);margin-bottom:16px">Enter your PIN to open a private window</p>';
   h += '<input type="password" id="privatePinInput" maxlength="128" style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:14px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px" placeholder="Enter PIN" />';
-  h += '<div id="privatePinError" style="font-size:11px;color:#f87171;margin-bottom:12px;display:none"></div>';
+  h += '<div id="privatePinError" style="font-size:11px;color:var(--jb-danger);margin-bottom:12px;display:none"></div>';
   h += '<div style="display:flex;gap:8px">';
   h += '<button id="privatePinCancel" style="flex:1;padding:8px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--jb-mute);font-size:12px;cursor:pointer">Cancel</button>';
   h += '<button id="privatePinSubmit" style="flex:1;padding:8px;border-radius:6px;background:var(--jb-accent);border:none;color:#fff;font-size:12px;font-weight:500;cursor:pointer">Unlock</button>';
@@ -143,17 +143,49 @@ sbClose.addEventListener("click", () => {
 
 // ── Jarvis Status Indicator ───────────────────────────────────
 var jarvisStatusEl = document.getElementById('jarvisStatus');
+// Status visuals change ONLY on a real state transition: identical pushes
+// are no-ops, and a single offline push within 2s of online (a blip during
+// reconnect) is held so the dot/label never strobe.
+var _lastVisualOnline = null;
+var _offlineHoldTimer = null;
+function _applyJarvisVisual(isOnline) {
+  if (_lastVisualOnline === isOnline) return;
+  _lastVisualOnline = isOnline;
+  if (jarvisStatusEl) {
+    jarvisStatusEl.className = isOnline ? 'online' : 'offline';
+    jarvisStatusEl.title = isOnline ? 'JARVIS online' : 'JARVIS offline';
+  }
+  updateJarvisStatusUI(isOnline);
+  if (isOnline) setMatrix('idle');
+}
 if (window.orbit && window.orbit.jarvis && window.orbit.jarvis.onStatus) {
   window.orbit.jarvis.onStatus(function(status) {
     var isOnline = !!(status && status.ok);
-    jarvisOnline = isOnline;
-    if (jarvisStatusEl) {
-      jarvisStatusEl.className = isOnline ? 'online' : 'offline';
-      jarvisStatusEl.title = isOnline ? 'JARVIS online' : 'JARVIS offline';
+    jarvisOnline = isOnline; // logic uses real state; only the visual is held
+    if (!isOnline && _lastVisualOnline === true && !_offlineHoldTimer) {
+      _offlineHoldTimer = setTimeout(function () {
+        _offlineHoldTimer = null;
+        _applyJarvisVisual(false);
+      }, 2000);
+      return;
     }
-    updateJarvisStatusUI(isOnline);
-    if (isOnline) setMatrix('idle');
+    if (isOnline && _offlineHoldTimer) {
+      clearTimeout(_offlineHoldTimer);
+      _offlineHoldTimer = null;
+    }
+    _applyJarvisVisual(isOnline);
   });
+}
+// Defer-safe initial sync: the main process may have connected (and pushed
+// its online status) before this deferred script registered its listener.
+// Fetch the current status once so the dot never sticks on stale offline.
+if (window.orbit && window.orbit.jarvis && window.orbit.jarvis.status) {
+  window.orbit.jarvis.status().then(function (s) {
+    if (s && typeof s.ok === "boolean") {
+      jarvisOnline = !!s.ok;
+      _applyJarvisVisual(!!s.ok);
+    }
+  }).catch(function () {});
 }
 
 if (floatGlyph) floatGlyph.addEventListener("click", () => {
@@ -170,8 +202,11 @@ const PANEL_TITLES = {
   "companions": "Companions", "workspaces": "Spaces", "vision": "Vision",
   "activity": "Activity", "memory": "Memory", "tools": "Tools",
 };
-const sbRail = document.getElementById("sbRail");
-const sbPanelTitle = document.getElementById("sbPanelTitle");
+// `sbRail` is already a const global in core.js (#sbRail — the Opera-GX
+// icon rail, loaded before this file). Declaring it here in ANY form
+// (const/let/var — var included, hoisted to script instantiation) throws
+// and kills this whole module. Use the global directly; core.js owns it.
+// `sbPanelTitle` likewise: core.js owns the global const — never redeclare.
 if (sbRail) sbRail.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (btn?.dataset.panel) {
@@ -188,25 +223,32 @@ function _syncPanelTitle(name) {
 }
 
 function renderPanel(name) {
-  _syncPanelTitle(name);
-  // Delegate chat panels to Chat module
-  if (name === "jarvis" || name === "chat-history" || name === "activity") {
-    Chat.renderPanel(name);
-    return;
-  }
-  if (name === "vision") { renderVisionPanel(); return; }
-  if (name === "agents") {
-    sbBody.innerHTML = '<div class="panel-pad"><div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><div class="sb-matrix" data-state="idle"></div><h3 style="font-size:13px;color:var(--jb-paper);font-weight:500">Main agent</h3></div><p style="color:var(--jb-mute);font-size:12px;margin-top:6px">No active task</p></div></div>';
-    sbBody.querySelectorAll(".sb-matrix").forEach(initMatrix);
-  } else if (name === "workspaces") {
-    renderWorkspacesPanel();
-  } else if (name === "companions") {
-    renderCompanionsPanel();
-  } else if (name === "tools") {
-    renderToolsPanel();
-  } else if (name === "memory") {
-    sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
-  }
+  // Panel swaps cross-fade via the View Transition API (lateral nav —
+  // fade, never a directional slide). The initial boot render stays
+  // instant: no transition before renderer.js finishes booting.
+  var swap = function () {
+    _syncPanelTitle(name);
+    // Delegate chat panels to Chat module
+    if (name === "jarvis" || name === "chat-history" || name === "activity") {
+      Chat.renderPanel(name);
+      return;
+    }
+    if (name === "vision") { renderVisionPanel(); return; }
+    if (name === "agents") {
+      sbBody.innerHTML = '<div class="panel-pad"><div style="border:1px solid var(--jb-border);border-radius:12px;padding:12px;background:var(--jb-void);margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><div class="sb-matrix" data-state="idle"></div><h3 style="font-size:13px;color:var(--jb-paper);font-weight:500">Main agent</h3></div><p style="color:var(--jb-mute);font-size:12px;margin-top:6px">No active task</p></div></div>';
+      sbBody.querySelectorAll(".sb-matrix").forEach(initMatrix);
+    } else if (name === "workspaces") {
+      renderWorkspacesPanel();
+    } else if (name === "companions") {
+      renderCompanionsPanel();
+    } else if (name === "tools") {
+      renderToolsPanel();
+    } else if (name === "memory") {
+      sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
+    }
+  };
+  if (window.__orbitBooted && window.UI) UI.viewTransition(swap);
+  else swap();
 }
 
 // ── AI Companions (Strawberry-style autonomous agents) ─────────
@@ -399,7 +441,7 @@ function renderCompanionsPanel() {
     html.push('</div>');
   } else {
     _companions.forEach(function(c) {
-      var statusColor = c.status === 'running' ? 'var(--jb-accent)' : c.status === 'done' ? '#4ade80' : c.status === 'error' ? '#f87171' : 'var(--jb-mute)';
+      var statusColor = c.status === 'running' ? 'var(--jb-accent)' : c.status === 'done' ? 'var(--jb-success)' : c.status === 'error' ? 'var(--jb-danger)' : 'var(--jb-mute)';
       var statusLabel = c.status === 'running' ? 'Running' : c.status === 'done' ? 'Completed' : c.status === 'error' ? 'Failed' : 'Idle';
       html.push('<div class="companion-card" data-cid="' + c.id + '" style="border:1px solid var(--jb-border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--jb-void)">');
       html.push('<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">');
@@ -420,7 +462,7 @@ function renderCompanionsPanel() {
         html.push('<button class="companion-action" data-action="resume" data-cid="' + c.id + '" style="flex:1;background:var(--jb-accent);color:#fff;border:none;border-radius:6px;padding:4px 0;font-size:10px;cursor:pointer">Resume</button>');
       }
       html.push('<button class="companion-action" data-action="stop" data-cid="' + c.id + '" style="background:none;color:var(--jb-mute);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">Stop</button>');
-      html.push('<button class="companion-action" data-action="remove" data-cid="' + c.id + '" style="background:none;color:#f87171;border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">\u2715</button>');
+      html.push('<button class="companion-action" data-action="remove" data-cid="' + c.id + '" style="background:none;color:var(--jb-danger);border:1px solid var(--jb-border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer">\u2715</button>');
       html.push('</div>');
       html.push('</div>');
     });

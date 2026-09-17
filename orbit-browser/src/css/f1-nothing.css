@@ -24,7 +24,7 @@
   --f1-purple: #B94BFF;           /* fastest overall */
   --f1-yellow: #F5D000;           /* sector yellow / caution */
 
-  --radius-sharp: 2px;
+  --radius-sharp: 0;
   /* Kerb stripe — the one decorative motif, used sparingly */
   --kerb: repeating-linear-gradient(
     -45deg,

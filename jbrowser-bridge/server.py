@@ -62,6 +62,25 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8170
 TOKEN_ENV = "J_BROWSER_BRIDGE_TOKEN"
 
+# Canonical per-installation token: env override, else the launcher's token
+# file (same resolution as the WS bridge and Electron main — one secret).
+_TOKEN_FILE = os.path.join(
+    os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+    "JARVIS", "bridge-token",
+)
+
+
+def _resolve_token() -> str | None:
+    tok = (os.environ.get(TOKEN_ENV) or "").strip()
+    if tok:
+        return tok
+    try:
+        with open(_TOKEN_FILE, encoding="utf-8") as fh:
+            tok = fh.read().strip()
+        return tok or None
+    except OSError:
+        return None
+
 _SAFE_ORIGINS = re.compile(r"^chrome-extension://[a-p]{32}$")
 _SAFE_ORIGIN = "chrome-extension://"
 
@@ -73,8 +92,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     # ── CORS / plumbing ────────────────────────────────────────────────────
     def _cors(self, origin: str | None) -> None:
-        """Restrict CORS to JARVIS Orbit chrome-extension origins."""
+        """Restrict CORS to JARVIS Orbit chrome-extension origins.
+
+        The renderer itself is file:// (Origin: null) and dsh-native fetches
+        the kernel from there; with mandatory bearer auth on every route,
+        CORS is defense-in-depth only — the token is the real boundary.
+        """
         safe = origin if (origin and _SAFE_ORIGINS.match(origin)) else None
+        if safe is None and origin == "null":
+            safe = origin
         if safe:
             self.send_header("Access-Control-Allow-Origin", safe)
             self.send_header("Vary", "Origin")
@@ -90,6 +116,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return True
         expected = f"Bearer {self.auth_token}"
         return self.headers.get("Authorization") == expected
+
+    def _host_ok(self) -> bool:
+        """Reject requests whose Host header is not loopback.
+
+        DNS-rebinding defense: a rebound hostname (attacker.com -> 127.0.0.1)
+        arrives with a non-loopback Host header. Everything legitimate binds
+        to 127.0.0.1/localhost. Applied to every state-changing and read
+        route, including GETs (models list leaks provider configuration).
+        """
+        host = (self.headers.get("Host") or "").split(":")[0].strip().lower()
+        return host in ("127.0.0.1", "localhost")
 
     def _json(self, code: int, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
@@ -123,6 +160,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._host_ok():
+            self._json(403, {"ok": False, "error": "forbidden host"})
+            return
+        if not self._authorized():
+            self._json(401, {"ok": False, "error": "unauthorized", "code": "unauthorized"})
+            return
         if self.path == "/status":
             self._json(200, self.backend.status())
             return
@@ -132,6 +175,9 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False, "error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._host_ok():
+            self._json(403, {"ok": False, "error": "forbidden host"})
+            return
         if not self._authorized():
             self._json(401, {"ok": False, "error": "unauthorized", "code": "unauthorized"})
             return
@@ -210,7 +256,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 try:
                     self.wfile.write(b"data: " + json.dumps(ev).encode("utf-8") + b"\n\n")
                     self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
+                except (BrokenPipeError, ConnectionResetError,
+                        ConnectionAbortedError, TimeoutError, OSError):
+                    # ConnectionAbortedError is a Windows-specific abort
+                    # (WinError 10053) — a sibling of, not a subclass of,
+                    # the reset/broken errors. Any of these means the
+                    # client is gone; stop draining. OSError is the
+                    # umbrella for exotic socket teardowns.
                     break
 
         drain_thread = threading.Thread(
@@ -321,7 +373,7 @@ def serve(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
     backend = make_backend(backend_kind, engine=engine)
     token = None
     if require_auth:
-        token = auth_token or os.environ.get(TOKEN_ENV) or secrets.token_hex(16)
+        token = auth_token or _resolve_token() or secrets.token_hex(16)
     handler = type(
         "JBridgeHandler", (BridgeHandler,),
         {"backend": backend, "auth_token": token},
@@ -338,8 +390,10 @@ def main(argv=None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--backend", default="echo",
                         choices=["echo", "kernel"])
-    parser.add_argument("--auth", action="store_true",
-                        help="require bearer-token auth (J_BROWSER_BRIDGE_TOKEN or generated)")
+    parser.add_argument("--auth", action="store_true", default=True,
+                        help="require bearer-token auth (J_BROWSER_BRIDGE_TOKEN or generated); ON by default")
+    parser.add_argument("--no-auth", action="store_false", dest="auth",
+                        help="explicitly disable bearer auth (development only)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -387,22 +441,58 @@ def main(argv=None) -> int:
                             provider = router._providers.get(name)
                             if provider is None:
                                 return
+                            # Consume the FULL (2-token) stream: breaking after
+                            # the first chunk abandons the SSE response mid-
+                            # flight, the HTTP connection cannot return to the
+                            # pool, and the "prewarm" warms nothing (measured:
+                            # first real message still paid a 2.2s reconnect).
                             async for _ in provider.complete_stream(
                                 [{"role": "user", "content": "1"}],
                                 "reply with the single character: 1", 2,
                             ):
-                                break
+                                pass
                         except Exception:
                             pass
                     async def _ping_all() -> None:
                         await asyncio.gather(
-                            *(_ping(n) for n in router._get_available_chain()[:3])
+                            *(_ping(n) for n in router._get_available_chain()[:2])
                         )
+                    # CRITICAL: pings must run on the engine's SHARED loop.
+                    # asyncio.run() here would warm connections owned by a
+                    # throwaway loop's HTTP clients — useless to the message
+                    # path, which runs on _get_shared_loop() (measured: first
+                    # turn after idle still paid a 2.1s reconnect with the
+                    # old throwaway-loop prewarm).
                     try:
-                        asyncio.run(_ping_all())
-                        logger.info("TTFT prewarm complete (connections open)")
+                        import engine as _eng_warm
+                        loop = _eng_warm._get_shared_loop()
+                        futures = asyncio.run_coroutine_threadsafe(
+                            _ping_all(), loop)
+                        futures.result(timeout=90)
+                        logger.info("TTFT prewarm complete (shared-loop connections open)")
                     except Exception as exc:  # noqa: BLE001
                         logger.debug("TTFT prewarm skipped: %s", exc)
+
+                    # Keepalive: provider idle timeouts close pooled TLS
+                    # connections after a few minutes; the next real message
+                    # then pays a fresh handshake (measured 600-2100ms). Re-ping
+                    # the top chain providers well inside that window.
+                    import threading as _th
+                    def _keepalive() -> None:
+                        import time as _time
+                        import engine as _eng_ka
+                        loop_ka = _eng_ka._get_shared_loop()
+                        while True:
+                            _time.sleep(180)
+                            try:
+                                f = asyncio.run_coroutine_threadsafe(
+                                    _ping_all(), loop_ka)
+                                f.result(timeout=60)
+                                logger.debug("provider keepalive ping ok")
+                            except Exception:  # noqa: BLE001
+                                pass
+                    _th.Thread(target=_keepalive, daemon=True,
+                               name="bridge-provider-keepalive").start()
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("provider warmup failed: %s", exc)
             threading.Thread(target=_warm, daemon=True, name="bridge-warmup").start()

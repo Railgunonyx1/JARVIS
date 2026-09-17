@@ -199,10 +199,11 @@
 
   function tick() {
     var now = Date.now();
-    if (now - TICKS.quakes >= REFRESH.quakes) pollQuakes();
-    if (now - TICKS.iss >= REFRESH.iss) pollIss();
-    if (now - TICKS.wx >= REFRESH.wx) pollWeather();
-    if (now - TICKS.mkt >= REFRESH.mkt) pollMarket();
+    // A-11: advance next-attempt time before issuing (retry-storm guard).
+    if (now - TICKS.quakes >= REFRESH.quakes) { TICKS.quakes = now; pollQuakes(); }
+    if (now - TICKS.iss >= REFRESH.iss) { TICKS.iss = now; pollIss(); }
+    if (now - TICKS.wx >= REFRESH.wx) { TICKS.wx = now; pollWeather(); }
+    if (now - TICKS.mkt >= REFRESH.mkt) { TICKS.mkt = now; pollMarket(); }
   }
 
   function start() {

@@ -44,7 +44,7 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
     }
 
     # Exclude directories that should not be scanned
-    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "_quarantine", "node_modules"}
+    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "_quarantine", "node_modules", ".kilo", ".kilocode"}
 
     # Use os.walk to avoid broken symlinks in node_modules
     import os
@@ -329,7 +329,7 @@ def _find_quarantine_imports() -> list[tuple[str, int, str]]:
         "import workflows",
         "from workflows",
     )
-    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "node_modules"}
+    EXCLUDE_DIRS = {"migration", "dsh", "venv", "__pycache__", "node_modules", ".kilo", ".kilocode"}
     imports: list[tuple[str, int, str]] = []
 
     for dirpath, dirnames, filenames in os.walk(project_root):

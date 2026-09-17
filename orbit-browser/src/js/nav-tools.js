@@ -99,7 +99,8 @@ function updatePerfHud() {
 // ── Vertical Tabs ─────────────────────────────────────────────
 function renderVerticalTabs() {
   if (!tabStripVertical) return;
-  tabStripVertical.innerHTML = "";
+  // Clear only tab rows — the vtab-head (label + new-tab button) persists.
+  tabStripVertical.querySelectorAll(".tab").forEach(function(n) { n.remove(); });
   tabs.forEach(function(tab, id) {
     const el = document.createElement("button");
     el.className = "tab" + (id === activeTabId ? " active" : "") + (tab.agentOwned ? " agent-owned" : "");
@@ -120,6 +121,15 @@ function setVerticalTabs(on) {
   if (!tabStripVertical) return;
   tabStripVertical.classList.toggle("on", !!on);
   if (vtToggleBtn) vtToggleBtn.classList.toggle("on", !!on);
+  // Duplicate navigation: when the vertical strip owns tab display, hide
+  // the horizontal tabs. visibility (not display) keeps the strip's flex:1
+  // space intact — it IS the titlebar's drag region and the spacer that
+  // holds the window controls to the right edge.
+  if (tabStrip) tabStrip.style.visibility = on ? "hidden" : "";
+  // The vertical strip header now owns new-tab; the titlebar + would be a
+  // second stranded control.
+  const ntb = document.getElementById("newTabBtn");
+  if (ntb) ntb.style.display = on ? "none" : "";
   try { localStorage.setItem("orbit-vtabs", on ? "1" : "0"); } catch (e) {}
   renderVerticalTabs();
 }
@@ -128,6 +138,10 @@ if (vtToggleBtn) {
     setVerticalTabs(!tabStripVertical.classList.contains("on"));
   });
 }
+// New-tab button in the vertical strip header (compensation for the moved
+// tab bar; same handler as the titlebar's +).
+const vtabNewBtn = $("#vtabNewBtn");
+if (vtabNewBtn) vtabNewBtn.addEventListener("click", function() { createTab(); });
 (function() {
   let vOn = false;
   try { vOn = localStorage.getItem("orbit-vtabs") === "1"; } catch (e) {}
@@ -193,15 +207,15 @@ const CMD_ITEMS = [
   { l: "Search Tabs", d: "Find an open tab", s: "Ctrl+Shift+F", i: "\u{1F50D}", a: function() { toggleTabSearch(); } },
   { l: "Floating JARVIS Chat", d: "Small movable JARVIS window", s: "Ctrl+Shift+K", i: "\u{1F4AC}", a: function() { toggleJarvisFloat(); } },
   { l: "Pop out Video", d: "Float the active tab's video (PiP)", s: "Ctrl+Shift+P", i: "\u25b6", a: function() { popoutVideo(); } },
-  { l: "Run Agent Task", d: "Headless agent execution", i: "\u{1F916}", a: function() {
+  { l: "Run Agent Task", d: "Headless agent execution (kernel path)", i: "\u{1F916}", a: function() {
     var task = prompt('Agent task:');
-    if (task && window.orbit && window.orbit.agent) {
+    if (task && typeof runAgentTask === 'function') {
+      // A-04: routed through the JARVIS kernel (permission engine + audit),
+      // not the quarantined local loop.
       showAgentBar('Starting...');
-      window.orbit.agent.start(task).then(function(r) {
-        if (r && r.ok) showToast('ok', 'Agent done', r.result ? r.result.substring(0, 100) : 'Complete');
-        else showToast('err', 'Agent failed', r ? r.error : 'Unknown error');
-        hideAgentBar();
-      });
+      runAgentTask(task).then(function() { hideAgentBar(); });
+    } else if (task) {
+      showToast('err', 'Agent unavailable', 'JARVIS kernel path not loaded');
     }
   }},
 ];

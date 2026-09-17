@@ -27,6 +27,12 @@ class DSHNative {
       retryDelay: config.retryDelay || 1000,
       ...config,
     };
+    // A-01: the launcher generates a per-launch token and exports it to the
+    // main process; the renderer reads it once via the preload boundary and
+    // every request (all via getHeaders()) carries it.
+    if (!this.config.authToken && typeof window !== 'undefined' && window.orbit && typeof window.orbit.getBridgeToken === 'function') {
+      try { this.config.authToken = window.orbit.getBridgeToken() || null; } catch (_) {}
+    }
     
     this.status = {
       connected: false,
