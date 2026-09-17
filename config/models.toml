@@ -32,7 +32,12 @@ max_retries = 2
 timeout_seconds = 30
 
 [groq]
-model = "qwen/qwen3.8-27b"
+# Head model: gpt-oss-120b measured 72-157ms TTFT on EVERY request including
+# its first-ever (cold) one; qwen/qwen3.8-27b measured 67-93ms warm but paid
+# a consistent ~2.1-2.6s on the FIRST request after every boot/idle gap
+# (provider-side model cold-start, verified across 4 boots). Same reasoning
+# off handling applies to both (see _REASONING_MODELS).
+model = "openai/gpt-oss-120b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 60
@@ -40,12 +45,11 @@ requests_per_day = 28800
 priority = 1
 
 [groq.fallback]
-# Groq retired llama-3.1-8b-instant (404 model_not_found, verified against
-# the live /models catalog). gpt-oss-120b measured 67-82ms TTFT pinned;
-# gpt-oss-20b measured 12-13s twice (provider-side queueing) and is retired
-# from this slot. GroqProvider._REASONING_MODELS disables reasoning for
-# "gpt-oss" ids so the fallback streams the answer, not thoughts.
-model = "openai/gpt-oss-120b"
+# qwen3.8-27b is warm-fast (67-93ms) but cold-starts (~2.1-2.6s) after idle;
+# fine as fallback where a fresh request implies a dead connection anyway.
+# (Groq retired llama-3.1-8b-instant — 404 verified; gpt-oss-20b measured
+# 12-13s twice — both removed.)
+model = "qwen/qwen3.8-27b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 30
