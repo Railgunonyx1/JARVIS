@@ -1030,6 +1030,28 @@ function setupIPC() {
 
   // Security (Shields)
   ipcMain.handle("security:status", () => security.getStatus());
+  ipcMain.handle("browsing-data:clear", async (_e, opts) => {
+    // Chrome-parity clear-browsing-data. Accepts the standard checkboxes:
+    // { history, cookies, cache, siteData } (booleans, all default true).
+    if (!browserSession) return { ok: false, error: "session not ready" };
+    const o = opts && typeof opts === "object" ? opts : {};
+    try {
+      if (o.history !== false) {
+        // Session history lives in the renderer layer (orbit-history key);
+        // main-side: nothing persisted.
+      }
+      await browserSession.clearCache();
+      await browserSession.clearStorageData({
+        storages: [
+          ...(o.cookies !== false ? ["cookies"] : []),
+          ...(o.siteData !== false ? ["localstorage", "indexdb", "serviceworkers", "cachestorage"] : []),
+        ],
+      });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    }
+  });
   ipcMain.handle("security:shields", (_e, enabled) => {
     security.toggleShields(!!enabled);
     store?.set("shields", { ...security.config });
@@ -1259,8 +1281,17 @@ function createWindow(incognito = false) {
 
   // Show when ready
   mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show();
   });
+  // Safety net: ready-to-show is suppressed on some GPU/driver combos, which
+  // used to leave an invisible window with no way to recover. If the event
+  // never fires, surface the window anyway.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn("[ORBIT] ready-to-show did not fire - forcing show");
+      mainWindow.show();
+    }
+  }, 4000);
 
   // Connect to JARVIS
   connectJarvis();

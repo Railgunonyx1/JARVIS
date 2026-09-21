@@ -58,8 +58,13 @@ class DSHNative {
   }
 
   init() {
-    // Start status polling
-    this.startStatusPolling();
+    // Status updates: PRIMARY channel is the WS push (bridge watchdog pushes
+    // online/offline transitions; main forwards them via onStatus — see
+    // jarvis.js wireDshNative). This poll is only a 30s SAFETY NET for the
+    // case where the bridge process itself is dead (no pushes can arrive).
+    // Was a fixed 5s poll (~12 fetches/min forever) — spec rule: "Renderer
+    // does not poll JARVIS. Events only."
+    this.startStatusPolling(30000);
     
     // Setup reconnection
     this.setupReconnection();
@@ -69,16 +74,47 @@ class DSHNative {
 
   // ── Status Management ───────────────────────────────────────────
   
-  startStatusPolling(intervalMs = 5000) {
-    this.statusInterval = setInterval(() => {
-      this.checkStatus();
-    }, intervalMs);
-    
-    // Initial check
-    this.checkStatus();
+  startStatusPolling(intervalMs = 30000) {
+    // Single self-scheduling loop (was: setInterval + a separate reconnect
+    // timer that double-fired). When the bridge is DOWN the delay grows
+    // exponentially to a 30s cap instead of hammering a dead port every
+    // ~1s forever (measured 2026-09-17: 16 failed connects in 20s while
+    // services were down — connection-attempt storm, console noise, and
+    // renderer network churn). Healthy state: 30s safety-net cadence —
+    // live status arrives via WS push, not this loop.
+    this._pollBaseMs = intervalMs;
+    this._pollDelayMs = intervalMs;
+    this._polling = true;
+    this._checking = false;
+    this._scheduleNextCheck(0); // immediate first check
+  }
+
+  _scheduleNextCheck(delayMs) {
+    if (!this._polling) return;
+    if (this._pollTimer) clearTimeout(this._pollTimer);
+    this._pollTimer = setTimeout(async () => {
+      if (this._checking) { this._scheduleNextCheck(500); return; }
+      this._checking = true;
+      try {
+        const st = await this.checkStatus();
+        this._pollDelayMs = st.connected
+          ? this._pollBaseMs
+          : Math.min((this._pollDelayMs || this._pollBaseMs) * 2, 30000);
+      } catch (e) {
+        this._pollDelayMs = Math.min((this._pollDelayMs || this._pollBaseMs) * 2, 30000);
+      } finally {
+        this._checking = false;
+      }
+      this._scheduleNextCheck(this._pollDelayMs);
+    }, delayMs);
   }
 
   stopStatusPolling() {
+    this._polling = false;
+    if (this._pollTimer) {
+      clearTimeout(this._pollTimer);
+      this._pollTimer = null;
+    }
     if (this.statusInterval) {
       clearInterval(this.statusInterval);
       this.statusInterval = null;
@@ -124,7 +160,7 @@ class DSHNative {
   
   async chat(message, options = {}) {
     const {
-      sessionId = this.generateSessionId(),
+      sessionId = this.stableSessionId(),
       page = null,
       stream = true,
       model = this.selectedModel || null,
@@ -135,6 +171,12 @@ class DSHNative {
       session_id: sessionId,
       page,
     };
+    // Conversation continuity: when the caller supplies prior messages
+    // (options.messages), send them so the model sees the thread. The
+    // bridge merges messages + text server-side.
+    if (Array.isArray(options.messages) && options.messages.length) {
+      payload.messages = this.conversationFrom(options.messages, message);
+    }
     // Per-chat model selection: "provider/model" id from /v1/models. The
     // bridge resolves which provider owns it; unset -> router default chain.
     if (model) payload.model = model;
@@ -694,20 +736,11 @@ class DSHNative {
   // ── Reconnection ────────────────────────────────────────────────
   
   setupReconnection() {
-    let reconnectTimer = null;
-    
-    this.on('status', (status) => {
-      if (!status.connected && !reconnectTimer) {
-        reconnectTimer = setTimeout(() => {
-          console.log('[DSH] Attempting reconnection...');
-          this.checkStatus();
-          reconnectTimer = null;
-        }, this.config.retryDelay);
-      } else if (status.connected && reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-    });
+    // Superseded: reconnection is owned by the single status-poll loop
+    // (_scheduleNextCheck backs off exponentially while disconnected and
+    // snaps back to the base cadence on first success). The old listener
+    // scheduled a SECOND overlapping check per failure, producing a ~1s
+    // retry storm against a dead bridge.
   }
 
   // ── Helpers ─────────────────────────────────────────────────────
@@ -724,6 +757,64 @@ class DSHNative {
 
   generateSessionId() {
     return `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * One stable session per browser session (regenerated on relaunch).
+   * The old chat() default minted a NEW random id per message, so the
+   * bridge never correlated turns — the model was permanently amnesiac.
+   * Anything needing an isolated conversation still passes sessionId
+   * explicitly (agents, one-shot tools), which is unchanged.
+   */
+  stableSessionId() {
+    if (!this._stableSession) {
+      this._stableSession = this.generateSessionId();
+    }
+    return this._stableSession;
+  }
+
+  /** Start a fresh conversation: the next chat() call gets a new session id
+   * (the old thread's context is gone from the model's perspective). */
+  rotateSession() {
+    this._stableSession = this.generateSessionId();
+    return this._stableSession;
+  }
+
+  /**
+   * Per-tab sessions: each browser tab keeps its own conversation thread so
+   * tabs don't bleed context into each other. Falls back to the stable
+   * global session when no tabId is given (one-shot tools, agent tasks).
+   */
+  sessionForTab(tabId) {
+    if (!tabId) return this.stableSessionId();
+    if (!this._tabSessions) this._tabSessions = new Map();
+    if (!this._tabSessions.has(tabId)) {
+      this._tabSessions.set(tabId, this.generateSessionId());
+      // Bound the map: 200 tabs is beyond any real session.
+      if (this._tabSessions.size > 200) {
+        const first = this._tabSessions.keys().next().value;
+        this._tabSessions.delete(first);
+      }
+    }
+    return this._tabSessions.get(tabId);
+  }
+
+  /** Forget one tab's thread (tab closed / /new in that tab). */
+  forgetTabSession(tabId) {
+    if (this._tabSessions) this._tabSessions.delete(tabId);
+  }
+
+  /** Full OpenAI-shaped message list for a chat call. Callers that have a
+   * Chat module pass Chat.historyFor(); the just-sent text must NOT be
+   * duplicated in messages (it goes as `text`), so drop a trailing user
+   * entry equal to it. */
+  conversationFrom(history, currentText) {
+    const msgs = (history || []).filter(m => m && m.role && m.content);
+    while (msgs.length && msgs[msgs.length - 1].role === "user" &&
+           msgs[msgs.length - 1].content === currentText) {
+      msgs.pop();
+    }
+    return msgs;
   }
 
   // ── Status ──────────────────────────────────────────────────────

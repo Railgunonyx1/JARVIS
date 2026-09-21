@@ -121,10 +121,25 @@ def orbit_navigate(args: dict[str, Any]) -> ToolResult:
         raise
     except Exception as e:
         return ToolResult(success=False, error=f"Failed to open {url}: {e}")
+    # Post-navigation observation (bounded). The OrbitRuntime used to call
+    # controller.read() itself for "browse" commands — a browser operation
+    # outside the tool boundary. Observation belongs to the tool result.
+    observation: dict[str, Any] = {}
+    try:
+        ctx = get_orbit_controller().read(result.get("tab_id") or tab_id)
+        observation = {
+            "tab_id": result.get("tab_id") or tab_id or "",
+            "url": ctx.url,
+            "title": ctx.title,
+            "interactives": len(ctx.interactives),
+            "text_preview": (ctx.text or "")[:500],
+        }
+    except Exception:  # noqa: BLE001 — observation is best-effort enrichment
+        observation = {}
     return ToolResult(
         success=True,
         output=f"Title: {result.get('title', '')}\nURL: {result.get('url', url)}",
-        metadata=result,
+        metadata={**result, "page": observation},
     )
 
 
@@ -149,6 +164,13 @@ def orbit_read(args: dict[str, Any]) -> ToolResult:
             "link_count": len(ctx.links),
             "form_count": len(ctx.forms),
             "text_len": len(ctx.text or ""),
+            "page": {
+                "tab_id": tab_id or "",
+                "url": ctx.url,
+                "title": ctx.title,
+                "interactives": len(ctx.interactives),
+                "text_preview": (ctx.text or "")[:500],
+            },
         },
     )
 

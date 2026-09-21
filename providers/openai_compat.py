@@ -79,7 +79,16 @@ class OpenAICompatibleProvider(LLMProvider):
                     limits=httpx.Limits(
                         max_connections=16,
                         max_keepalive_connections=8,
-                        keepalive_expiry=300.0,
+                        # 30s (was 300s): home-router NAT silently drops idle
+                        # connections well before 300s. A turn handed a
+                        # half-dead pooled connection stalls ~2.1s (OS
+                        # retransmit window) before failing — measured
+                        # 2026-09-17 on first turn after idle, while a FRESH
+                        # connection to the same provider costs only 130-470ms
+                        # (direct probe, no pooling). Evicting at 30s means a
+                        # turn either finds a connection idle <30s (alive) or
+                        # pays one fresh handshake.
+                        keepalive_expiry=30.0,
                     ),
                 ),
             )

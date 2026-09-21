@@ -126,6 +126,33 @@ function renderPrivacyPage() {
       showToast('ok', 'Shield Updated', shield + ' ' + (shields[shield] ? 'enabled' : 'disabled'));
     };
   });
+  // Clear browsing data (Chrome parity; Ctrl+Shift+Del lands here)
+  var clearBtn = document.getElementById('clearBrowsingData');
+  if (clearBtn && !clearBtn.dataset.wired) {
+    clearBtn.dataset.wired = '1';
+    clearBtn.onclick = function() {
+      var api = window.orbit && window.orbit.system && window.orbit.system.security && window.orbit.system.security.clearBrowsingData;
+      if (!api) { showToast('err', 'Unavailable', 'Bridge not ready'); return; }
+      var doClear = function() {
+        api({ history: false, cookies: true, cache: true, siteData: true }).then(function(r) {
+          if (r && r.ok) showToast('ok', 'Browsing data cleared', 'Cookies, cache and site data removed');
+          else showToast('err', 'Clear failed', (r && r.error) || 'Unknown error');
+        }).catch(function(e) { showToast('err', 'Clear failed', String(e)); });
+      };
+      if (window.UI && window.UI.Modal) {
+        window.UI.Modal.open({
+          title: 'Clear browsing data',
+          description: 'Clear cookies, cache and site data for this profile? History is kept.',
+          actions: [
+            { label: 'Cancel', onClick: function() {} },
+            { label: 'Clear', variant: 'danger', onClick: doClear }
+          ]
+        });
+      } else if (window.confirm('Clear cookies, cache and site data for this profile?')) {
+        doClear();
+      }
+    };
+  }
 }
 
 function trackPrivacyEvent(url, type, blocked) {

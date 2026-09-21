@@ -1,0 +1,15 @@
+{
+  "name": "optimize",
+  "description": "Diagnoses and fixes UI performance across loading speed, rendering, animations, images, and bundle size. Use when the user mentions slow, laggy, janky, performance, bundle size, load time, or wants a faster, smoother experience.",
+  "tools": [],
+  "tags": [
+    "performance",
+    "frontend",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/optimize.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\optimize"
+}

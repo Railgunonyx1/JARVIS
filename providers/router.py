@@ -46,6 +46,7 @@ _PROVIDER_CLASSES: dict[str, tuple[str, str]] = {
     "agnes": ("providers.free_llm_providers", "AgnesProvider"),
     "kilo_code": ("providers.free_llm_providers", "KiloCodeProvider"),
     "scaleway": ("providers.free_llm_providers", "ScalewayProvider"),
+    "sakana": ("providers.sakana_provider", "SakanaProvider"),
 }
 
 
@@ -156,8 +157,10 @@ class ProviderRouter:
             if name == "router":
                 continue
             provider_key = api_keys.get(name)
-            # Ollama and omni_route don't need API keys
-            if name not in ("ollama", "omni_route") and not provider_key:
+            # Ollama, omni_route and llm7 don't need API keys — llm7 serves a
+            # subset of its menu with the literal anonymous token "unused"
+            # (verified 2026-09-20: GLM-5.3-Flash + codestral-latest work).
+            if name not in ("ollama", "omni_route", "llm7") and not provider_key:
                 continue
             if name not in _PROVIDER_CLASSES:
                 continue

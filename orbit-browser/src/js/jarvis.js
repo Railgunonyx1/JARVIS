@@ -86,6 +86,7 @@ if (sbModeToggle) sbModeToggle.addEventListener("click", function (e) {
   e.stopPropagation();
   window.orbitMode = window.orbitMode === "plan" ? "build" : "plan";
   try { localStorage.setItem("orbit-mode", window.orbitMode); } catch (_) {}
+  window.__pendingPlan = null; // a mode switch voids any open proposal
   applyOrbitMode();
   Chat.append("system", window.orbitMode === "plan"
     ? "Plan mode — JARVIS proposes before acting."
@@ -115,9 +116,48 @@ async function sendToJarvis() {
 
     // Plan mode: JARVIS proposes, never acts. Skip the Needle fast-path
     // (which executes tools immediately) and ask the model for a plan.
+    // The scaffold applies ONLY to actionable requests (imperatives:
+    // "build X", "open Y", "clean Z"). Greetings are not requests, and
+    // questions ("what is my name?") are answered, not planned — wrapping
+    // either in the scaffold produced absurdities like "a plan for
+    // responding to your hello" and "a plan to answer what your name is".
     const planMode = window.orbitMode === "plan";
-    const prompt = planMode
-      ? "[PLAN MODE] Do not execute any tools. Instead, propose a short step-by-step plan for this request and wait for my confirmation: " + text
+    const trimmedText = text.trim();
+
+    // ── Plan-confirmation lifecycle ──────────────────────────────────
+    // Plan contract: propose → user confirms → EXECUTE. The confirm step
+    // used to be impossible: nothing remembered the proposal, so "proceed"
+    // was sent as ordinary text — got wrapped in the plan scaffold AGAIN
+    // (it's short, not casual, not a question) — and the model proposed
+    // the same plan a second time instead of acting.
+    if (window.__pendingPlan) {
+      const CONFIRM_RE = /^(proceed|go ahead|go ahead and (do|execute|run) it|do it( now)?|execute( it)?|run it|continue( with the plan)?|(yes|yep|yeah|sure|ok(ay)?)( please| pls)?|confirm(ed)?|approved?|sounds good|looks good|go)\b[!., ]*$/i;
+      if (CONFIRM_RE.test(trimmedText)) {
+        const task = window.__pendingPlan.task;
+        window.__pendingPlan = null;
+        Chat.append("system", "Plan approved — executing: " + task);
+        setMatrix("running");
+        runAgentTask(task); // real tool-execution path (/v1/agent stream)
+        return;
+      }
+      // Any other message replaces the pending proposal (new intent wins).
+      window.__pendingPlan = null;
+    }
+
+    const isCasual = /^(hi|hey|hello|yo|sup|thanks|thank you|thx|good (morning|afternoon|evening|night)|ok|okay|cool|nice|lol|bye|gn)\b[!., ]*$/i.test(trimmedText) || trimmedText.length <= 3;
+    const isQuestion = trimmedText.endsWith("?") || /^(what|whats|what's|who|whos|who's|when|whens|where|why|how|which|is|are|was|were|do|does|did|can|could|should|would|will|am|may)\b/i.test(trimmedText);
+    const isConfirmation = /^(proceed|go ahead|do it( now)?|execute( it)?|run it|continue( with the plan)?|yes( please| pls)?|yep|yeah|sure|ok(ay)?( please| pls)?|confirm(ed)?|approved?|sounds good|looks good|go)\b[!., ]*$/i.test(trimmedText);
+    // A bare confirmation with no pending proposal is still never a task —
+    // scaffolding it produced "a plan for proceeding".
+    const neverScaffold = isCasual || isQuestion || (isConfirmation && !window.__pendingPlan);
+    const wantsPlan = planMode && !neverScaffold;
+    if (wantsPlan) {
+      // Remember the task this proposal belongs to, so the next message
+      // can confirm it into real execution (see __pendingPlan above).
+      window.__pendingPlan = { task: text, at: Date.now() };
+    }
+    const prompt = wantsPlan
+      ? "[PLAN MODE] Do not execute any tools. Propose a short step-by-step plan for this request and wait for my confirmation: " + text
       : text;
 
     // Needle parallel tool calling: when the local 14MB model recognizes a
@@ -144,7 +184,17 @@ async function sendToJarvis() {
         })
       : { parallel: false };
 
-    const streamResult = await window.dshNative.chat(prompt, { page });
+    const streamResult = await window.dshNative.chat(prompt, {
+      page,
+      // Per-tab conversation threads: this tab's session + this tab's
+      // history, so tabs don't bleed context into each other.
+      sessionId: window.dshNative.sessionForTab
+        ? window.dshNative.sessionForTab(activeTabId)
+        : undefined,
+      messages: (window.Chat && window.Chat.historyFor)
+        ? window.Chat.historyFor(activeTabId, 12)
+        : [],
+    });
     if (streamResult && streamResult.success === false) {
       Chat.append("error", streamResult.error || "Connection failed");
       setMatrix("fail");
@@ -217,6 +267,17 @@ function handleDshCommand(text) {
       break;
     case "/yt":
       runYTCommand(args);
+      break;
+    case "/new":
+      // Fresh conversation: clear this tab's thread + rotate ITS session
+      // (other tabs keep their threads).
+      if (window.Chat && Chat.clearActive) Chat.clearActive();
+      if (window.dshNative && typeof window.dshNative.forgetTabSession === "function") {
+        window.dshNative.forgetTabSession(activeTabId);
+      } else if (window.dshNative && typeof window.dshNative.rotateSession === "function") {
+        window.dshNative.rotateSession();
+      }
+      send("system", "New conversation started. This tab's context is clear.");
       break;
     case "/status":
       showDshStatus();
@@ -817,8 +878,12 @@ function updateNtpTelemetry() {
     } catch (_) {}
   }
 }
+let _ntpPageEl = null;
 setInterval(function () {
-  if (document.getElementById('newtabPage') && document.getElementById('newtabPage').classList.contains("on")) updateNtpTelemetry();
+  // Cache the element; gate on visibility BEFORE any per-second work.
+  // Hidden NTP (webview active) = zero DOM writes, zero layout.
+  if (!_ntpPageEl) _ntpPageEl = document.getElementById('newtabPage');
+  if (_ntpPageEl && _ntpPageEl.classList.contains("on") && _ntpPageEl.offsetParent !== null) updateNtpTelemetry();
 }, 1000);
 
 function renderSessionThumbnails() {

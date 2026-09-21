@@ -131,6 +131,23 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def _json(self, code: int, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
+        # Protocol hygiene: a POST that is rejected BEFORE its body is read
+        # (401/403 on the auth/host gate) leaves bytes unread on a keep-alive
+        # socket. Closing with unread data makes Windows abort the connection
+        # (RST, WinError 10053): the client dies on the read instead of
+        # receiving the 401/403 it is owed (measured: test_posts_require_token
+        # failed with ConnectionAbortedError). Draining the body first lets
+        # the rejection be delivered cleanly.
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if length > 0 and not getattr(self, "_body_consumed", False):
+            try:
+                self.rfile.read(min(length, 1 << 20))  # 1MB drain cap
+                self._body_consumed = True
+            except OSError:
+                pass
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -146,6 +163,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if length <= 0:
             return {}
         raw = self.rfile.read(length)
+        self._body_consumed = True
         try:
             return json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
@@ -308,8 +326,14 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "error": "invalid json body"})
             return
         messages = data.get("messages") or []
-        if not messages and data.get("text"):
-            messages = [{"role": "user", "content": data.get("text")}]
+        text = str(data.get("text") or "").strip()
+        if text:
+            # Append the current turn to the prior thread (if the client sent
+            # one) instead of REPLACING it — this is what gives the model
+            # conversation continuity across calls.
+            messages = list(messages) + [{"role": "user", "content": text}]
+        if not messages:
+            messages = [{"role": "user", "content": "(empty request)"}]
         session_id = str(data.get("session_id") or "anon")
         page = data.get("page")
         model = data.get("model") or None
@@ -470,6 +494,23 @@ def main(argv=None) -> int:
                             if rpm >= 15 and rpd >= 5000:
                                 await _ping(name)
                                 return
+
+                    async def _warm_engine_path() -> None:
+                        # Drain ONE stream through the engine's REAL dispatch
+                        # path (_race_providers -> router.complete_stream ->
+                        # sticky bookkeeping) — the provider pings above warm
+                        # sockets but skip the router/race machinery entirely,
+                        # so the first real message paid that machinery's
+                        # first-run cost (measured: boot-edge turn ~2-3s even
+                        # after connection prewarm). Runs at boot only; the
+                        # keepalive below needs sockets, not machinery.
+                        import engine as _e
+                        stream = _e._race_providers(
+                            router,
+                            [{"role": "user", "content": "1"}],
+                            "reply with the single character: 1", 2, None)
+                        async for _ in stream:
+                            pass
                     # CRITICAL: pings must run on the engine's SHARED loop.
                     # asyncio.run() here would warm connections owned by a
                     # throwaway loop's HTTP clients — useless to the message
@@ -486,6 +527,18 @@ def main(argv=None) -> int:
                     except Exception as exc:  # noqa: BLE001
                         logger.debug("TTFT prewarm skipped: %s", exc)
 
+                    # Engine-path warmup: same shared loop, runs the race
+                    # machinery once so turn 1 skips its first-run cost.
+                    try:
+                        import engine as _eng_warm2
+                        loop2 = _eng_warm2._get_shared_loop()
+                        fut2 = asyncio.run_coroutine_threadsafe(
+                            _warm_engine_path(), loop2)
+                        fut2.result(timeout=90)
+                        logger.info("engine-path warmup complete (race machinery exercised)")
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("engine-path warmup skipped: %s", exc)
+
                     # Keepalive: provider idle timeouts close pooled TLS
                     # connections after a few minutes; the next real message
                     # then pays a fresh handshake (measured 600-2100ms). Re-ping
@@ -495,19 +548,15 @@ def main(argv=None) -> int:
                         import time as _time
                         import engine as _eng_ka
                         loop_ka = _eng_ka._get_shared_loop()
-                        # First cycle at ~t+45s: the boot prewarm's connection
-                        # (t~15s) decays before the steady 60s cadence would
-                        # fire — measured 2.1s first turn when the first cycle
-                        # waited the full interval.
-                        _time.sleep(30)
+                        # Ping-FIRST cadence: first ping at ~t+10s lands well
+                        # inside the boot prewarm connection's 30s
+                        # keepalive_expiry, refreshing it before eviction. The
+                        # old sleep(30)+sleep(25)-then-ping order left a dead
+                        # zone (~t+50..55s) where the prewarm connection had
+                        # expired but no ping had run yet — a turn there paid
+                        # the full ~2.1-3s reconnect (re-measured at t+45s).
+                        _time.sleep(10)
                         while True:
-                            # 60s interval: measured 2026-09-17 — after a ~2min
-                            # idle the first turn still paid ~2.1s (fresh TLS
-                            # handshake), so groq's idle timeout lands INSIDE
-                            # the old 180s window. 60s keeps the pool warm
-                            # continuously; 1440 pings/day is ~5% of groq's
-                            # 28,800/day free quota.
-                            _time.sleep(60)
                             try:
                                 f = asyncio.run_coroutine_threadsafe(
                                     _ping_all(), loop_ka)
@@ -515,6 +564,13 @@ def main(argv=None) -> int:
                                 logger.debug("provider keepalive ping ok")
                             except Exception:  # noqa: BLE001
                                 pass
+                            # 25s interval: pairs with the provider SDK pools'
+                            # 30s keepalive_expiry — each ping refreshes a
+                            # connection that is never older than ~25s, so a
+                            # real turn NEVER finds a connection in the
+                            # 30s-eviction zone. 2880 pings/day ≈ 10% of
+                            # groq's 28,800/day free quota.
+                            _time.sleep(25)
                     _th.Thread(target=_keepalive, daemon=True,
                                name="bridge-provider-keepalive").start()
                 except Exception as exc:  # noqa: BLE001

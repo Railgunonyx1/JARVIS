@@ -369,8 +369,11 @@ class TestOrbitRuntimeSlice:
 
         payload = asyncio.run(run())
         assert payload["success"] is True
-        assert payload["readback"]["page"]["title"] == "Fake"
-        assert "dashboard" in payload["readback"]["page"]["text_preview"]
+        # Observation now travels in the tool metadata ("page"), not a
+        # runtime-driven second browser operation ("readback") — the runtime
+        # must never perform browser ops outside the tool boundary.
+        assert payload["observation"]["title"] == "Fake"
+        assert "dashboard" in payload["observation"]["text_preview"]
 
     def test_command_requires_tool(self):
         from orbit.runtime import OrbitRuntime
@@ -411,3 +414,36 @@ class TestOrbitRuntimeSlice:
 
         res = asyncio.run(run())
         assert res["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Runtime boundary regression: the runtime must never perform browser ops
+# itself — observation rides in the tool's metadata ("page").
+# ---------------------------------------------------------------------------
+
+def test_runtime_browse_carries_observation_from_tool_metadata(monkeypatch):
+    from orbit import tools as orbit_tools_mod
+    from orbit.runtime import OrbitRuntime
+
+    page = FakePage()
+    page.url = "https://example.com/app"
+    page.body = "welcome to the orbit dashboard"
+    backend = make_backend(page)
+    ctl = BrowserController(backend=backend, profile_root=Path("."))
+    monkeypatch.setattr(orbit_tools_mod, "get_orbit_controller", lambda *a, **k: ctl)
+
+    runtime = OrbitRuntime()
+
+    async def run():
+        return await runtime.handle_command(
+            {"action": "browse", "tool": "orbit.navigate",
+             "arguments": {"url": "https://example.com/app"}},
+            trace_id="tr-1", session_id="sess-1",
+        )
+
+    payload = asyncio.run(run())
+    assert payload["success"] is True
+    assert payload["observation"]["title"] == "Fake"
+    assert "dashboard" in payload["observation"]["text_preview"]
+    # The bypassed second browser operation must be gone:
+    assert "readback" not in payload

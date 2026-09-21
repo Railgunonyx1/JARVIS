@@ -28,6 +28,16 @@ READ_ONLY_TOOLS = {
     "memory.retrieve", "memory.stats",
     # Web
     "web.search",
+    # PDF (read-only extraction)
+    "pdf.extract_text", "pdf.extract_tables",
+    # Page watch (observe remote pages; state file is bookkeeping, not repo mutation)
+    "page.watch",
+    # Watch rules — run fires actions, but read-only listing/evaluation is observe
+    "watch.run",
+    # Secret refs — resolve returns masked handles only; never values (Infisical-style)
+    "secret.ref", "secret.status",
+    # Browser wait (observe-only condition polling)
+    "browser.wait",
     # Browser (read)
     "browser.open", "browser.extract", "browser.screenshot", "browser.status",
     # Browser (J-Browser platform: observe / navigate / tab & session management)
@@ -74,6 +84,14 @@ MUTATING_TOOLS = {
     "test.run", "test.run_target", "test.coverage",
     # Security (write)
     "security.scan_secrets", "security.scan_code",
+    # Documents (write outputs under project root)
+    "pdf.split", "pdf.merge", "docs.to_markdown",
+    # Notifications (sends outbound messages on task completion)
+    "notify.send",
+    # Task pulse — writes ping state + can push alerts (healthchecks semantics)
+    "task.ping", "task.alert",
+    # Watch rules — creating/removing rules persists state under memory/
+    "watch.rule",
 }
 
 DANGEROUS_TOOLS = {

@@ -85,15 +85,22 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key.toLowerCase() === "n" && !shift) { e.preventDefault(); window.orbit?.window?.create?.(); return; }
   if (ctrl && shift && e.key.toLowerCase() === "n") { e.preventDefault(); openPrivateWindow(); return; }
   if (e.key === "F11") { e.preventDefault(); window.orbit?.window?.fullscreen?.(); return; }
-  // Ctrl+W: Close tab
-  if (ctrl && e.key.toLowerCase() === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
+  // Ctrl+W: Close tab; with no tabs left, close the browser window
+  if (ctrl && e.key.toLowerCase() === "w") {
+    e.preventDefault();
+    if (activeTabId) { closeTab(activeTabId); return; }
+    // Chrome-parity: last tab gone → close the window (all tabs closed)
+    try { window.orbit?.window?.close?.(); } catch (err) {}
+    return;
+  }
   // Ctrl+L: Focus omnibox
   if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); omniInput.focus(); omniInput.select(); return; }
   // Ctrl+Shift+J: Toggle sidebar
   if (ctrl && shift && e.key.toLowerCase() === "j") { e.preventDefault(); jarvisBtn.click(); return; }
   // Ctrl+Shift+K: Floating JARVIS chat window
   if (ctrl && shift && e.key.toLowerCase() === "k") { e.preventDefault(); toggleJarvisFloat(); return; }
-  if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); toggleSplitView(); return; }
+  if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); takeScreenshot(); return; }
+  // (split view moved to Ctrl+Shift+\ — Ctrl+Shift+S was double-bound)
   if (ctrl && shift && e.key.toLowerCase() === "r") { e.preventDefault(); openReaderMode(); return; }
   // Ctrl+Shift+F: Tab search
   if (ctrl && shift && e.key.toLowerCase() === "f") { e.preventDefault(); toggleTabSearch(); return; }
@@ -117,6 +124,18 @@ document.addEventListener("keydown", (e) => {
     if (window.readingMode) window.readingMode.toggle();
     return;
   }
+  // Ctrl+1..8: switch to tab N; Ctrl+9: jump to last tab (Chrome)
+  if (ctrl && !shift && /^[1-9]$/.test(e.key)) {
+    e.preventDefault();
+    const ids = Array.from(tabs.keys());
+    if (!ids.length) return;
+    const n = parseInt(e.key, 10);
+    const target = n === 9 ? ids[ids.length - 1] : ids[n - 1];
+    if (target) activateTab(target);
+    return;
+  }
+  // Ctrl+Shift+\\: Toggle split-view workspace
+  if (ctrl && shift && e.key === "\\") { e.preventDefault(); toggleSplitView(); return; }
   // Ctrl+Shift+V: Vision analysis
   if (ctrl && shift && e.key.toLowerCase() === "v") {
     e.preventDefault();
@@ -154,8 +173,6 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && !shift && e.key.toLowerCase() === "p") { e.preventDefault(); printPage(); return; }
   // Ctrl+Shift+P: Pop out video (PiP)
   if (ctrl && shift && e.key.toLowerCase() === "p") { e.preventDefault(); popoutVideo(); return; }
-  // Ctrl+Shift+S: Screenshot
-  if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); takeScreenshot(); return; }
   // Ctrl+D: Bookmark
   if (ctrl && e.key.toLowerCase() === "d") { e.preventDefault(); addBookmark(); return; }
   // Ctrl+H: History
@@ -182,6 +199,24 @@ document.addEventListener("keydown", (e) => {
     reopenClosedTab();
     return;
   }
+  // Shift+Escape: Task manager (Chrome)
+  if (e.shiftKey && e.key === "Escape") {
+    e.preventDefault();
+    navigateTo("orbit://diagnostics");
+    return;
+  }
+  // Ctrl+Shift+Delete: Clear browsing data (Chrome)
+  if (ctrl && e.shiftKey && (e.key === "Delete" || e.key === "Backspace")) {
+    e.preventDefault();
+    navigateTo("orbit://privacy");
+    return;
+  }
+  // Alt+Home: Home page (Chrome)
+  if (e.altKey && e.key === "Home") {
+    e.preventDefault();
+    navigateTo("orbit://newtab");
+    return;
+  }
   // Ctrl+/: Keyboard shortcuts overlay
   if (ctrl && e.key === "/") { e.preventDefault(); toggleShortcutsOverlay(); return; }
   // Escape: Close things
@@ -205,17 +240,51 @@ document.addEventListener("click", (e) => {
   if (tile) navigateTo(tile.dataset.url);
 });
 
-// ── Theme Toggle ──────────────────────────────────────────────
+// ── Theme Toggle (dark → light → minimal, persisted) ─────────
+const THEMES = ["dark", "light", "minimal"];
 const themeToggle = $("#themeToggle");
 if (themeToggle) {
   themeToggle.addEventListener("click", () => {
     const html = document.documentElement;
     const current = html.dataset.theme || "dark";
-    html.dataset.theme = current === "dark" ? "light" : "dark";
-    themeToggle.textContent = current === "dark" ? "Toggle dark" : "Toggle light";
-    showToast("info", "Theme Changed", "Switched to " + html.dataset.theme + " mode");
+    const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+    html.dataset.theme = next;
+    try { localStorage.setItem("orbit-theme", next); } catch (_) {}
+    themeToggle.textContent = "Theme: " + next;
+    showToast("info", "Theme Changed", "Switched to " + next + " theme");
   });
+  // Reflect persisted theme on load
+  try {
+    const saved = localStorage.getItem("orbit-theme");
+    if (saved && THEMES.includes(saved)) {
+      document.documentElement.dataset.theme = saved;
+      themeToggle.textContent = "Theme: " + saved;
+    }
+  } catch (_) {}
 }
+
+// ── Minimal theme: scroll-entry reveals ───────────────────────
+// Elements tagged .mn-reveal fade up as they enter the viewport.
+// IntersectionObserver only (never scroll listeners); transform/opacity only.
+try {
+  const revealables = document.querySelectorAll(".mn-reveal");
+  if (revealables.length && "IntersectionObserver" in window) {
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          en.target.classList.add("mn-in");
+          io.unobserve(en.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -40px 0px" });
+    revealables.forEach(function (el, i) {
+      el.style.setProperty("--mn-i", Math.min(i % 9, 8));
+      io.observe(el);
+    });
+  } else {
+    revealables.forEach(function (el) { el.classList.add("mn-in"); });
+  }
+} catch (_) {}
 
 // ── Private Window PIN Configuration ─────────────────────────
 const privatePinToggle = $("#privatePinToggle");

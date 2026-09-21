@@ -104,28 +104,19 @@ class OrbitRuntime:
             "metadata": result.metadata or {},
         }
         if command.get("action") == "browse":
-            payload["readback"] = self._readback(session_id)
+            # Observation via orbit.read metadata when the tool already
+            # produced it. The old path called controller.read() here — a
+            # SECOND browser operation outside the ToolExecutionService
+            # boundary (bypassed permissions/ownership for every "browse"
+            # command). The runtime performs no browser operations itself.
+            payload["observation"] = (result.metadata or {}).get("page") or {}
         return payload
 
-    def _readback(self, session_id: str = "") -> dict[str, Any]:
-        """Post-navigation page snapshot (bounded observation, no screenshots)."""
-        try:
-            from orbit.tools import get_orbit_controller
-            controller = get_orbit_controller()
-            tabs = controller.list_tabs()
-            if not tabs:
-                return {"tabs": [], "page": ""}
-            active = next((t for t in tabs if t.get("active")), tabs[-1])
-            ctx = controller.read(active["tab_id"])
-            return {
-                "tabs": tabs,
-                "active_tab": active["tab_id"],
-                "page": {
-                    "url": ctx.url,
-                    "title": ctx.title,
-                    "interactives": len(ctx.interactives),
-                    "text_preview": (ctx.text or "")[:500],
-                },
-            }
-        except Exception as e:
-            return {"readback_error": str(e)}
+    def _readback_removed(self) -> None:
+        """Placeholder kept so historical references fail loudly in review.
+
+        The old ``_readback()`` called ``controller.read()`` from the runtime,
+        executing a browser operation outside the canonical tool boundary.
+        Observation now belongs to ``orbit.read`` (the tool), whose metadata
+        is surfaced as ``payload["observation"]``.
+        """

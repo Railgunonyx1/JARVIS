@@ -112,6 +112,23 @@ def test_chat_text_only_message(bridge):
     assert "plain text prompt" in joined
 
 
+def test_chat_merges_history_with_text(bridge):
+    """Conversation continuity: messages + text must MERGE (text appended as
+    the new user turn), not replace — the model otherwise never sees prior
+    turns and answers as if amnesiac."""
+    events, joined = _chat_events(bridge, {
+        "session_id": "t4",
+        "messages": [
+            {"role": "user", "content": "earlier question about audits"},
+            {"role": "assistant", "content": "earlier answer"},
+        ],
+        "text": "follow-up question",
+        "page": {},
+    })
+    assert "earlier question about audits" in joined
+    assert "follow-up question" in joined
+
+
 def test_invalid_json_returns_400(bridge):
     with pytest.raises(urllib.error.HTTPError) as exc:
         urllib.request.urlopen(

@@ -1,0 +1,15 @@
+{
+  "name": "vercel_react_native_skills",
+  "description": "React Native and Expo best practices for building performant mobile apps. Use when building React Native components, optimizing list performance, implementing animations, or working with native modules. Triggers on tasks involving React Native, Expo, mobile performance, or native platform APIs.",
+  "tools": [],
+  "tags": [
+    "react-native",
+    "mobile",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/vercel_react_native_skills.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\vercel-react-native-skills"
+}

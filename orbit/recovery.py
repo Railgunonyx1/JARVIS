@@ -90,14 +90,37 @@ class BrowserRecovery(RecoveryProvider):
         launch()
 
     def _probe(self) -> bool:
-        """Return True when the backend reports a healthy, launched browser."""
+        """Real health check, not just status flags.
+
+        A Chromium process can exist while CDP is dead, targets are stale, or
+        the renderer is hung. Health means: an actual round trip through the
+        backend returns an expected result.
+        """
         controller = self._controller_getter()
         backend = getattr(controller, "backend", None)
         status = getattr(backend, "status", None)
         if not callable(status):
             return False
         st = status() or {}
-        return bool(st.get("launched") or st.get("available"))
+        if not (st.get("launched") or st.get("available")):
+            return False
+        # Probe 1: live target enumeration (registry<->Chromium agreement).
+        list_tabs = getattr(backend, "list_tabs", None)
+        if callable(list_tabs):
+            try:
+                list_tabs()
+            except Exception:  # noqa: BLE001 - unresponsive backend is unhealthy
+                return False
+        # Probe 2: an actual CDP round trip (browser-level, cheap, no page).
+        # Unhealthy = the call RAISES (dead connection / not launched). Any
+        # successful return, even an empty dict, proves the transport is up.
+        browser_call = getattr(backend, "browser_call", None)
+        if callable(browser_call):
+            try:
+                browser_call("Browser.getVersion")
+            except Exception:  # noqa: BLE001
+                return False
+        return True
 
     def _sync_recover(self) -> RecoveryOutcome:
         last_error = "probe failed"

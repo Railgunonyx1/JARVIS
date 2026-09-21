@@ -19,9 +19,9 @@ MAX_INTERACTIVES = 60
 # single read never walks the whole tree; handles are stable within the scan.
 MAX_SCAN_ELEMENTS = 200
 
-# Global generation counter: incremented on every full page context build.
-# Element handles include this generation so stale handles from a previous
-# DOM state can be detected and rejected.
+# Global generation counter: one component of the per-page snapshot identity
+# (``<id(page):x>.<counter>``). Element handles embed this identity so handles
+# from a previous DOM scan — on any tab — can be detected and rejected.
 _generation: int = 0
 
 
@@ -37,7 +37,7 @@ class PageContext:
     forms: list[dict[str, Any]] = field(default_factory=list)
     viewport: dict[str, Any] = field(default_factory=dict)
 
-    generation: int = 0
+    generation: str = "0"
 
     def to_prompt_block(self) -> str:
         """Render a compact representation suitable for model context."""
@@ -65,20 +65,32 @@ def build_page_context(page: Any) -> PageContext:
         - ``.url``, ``.title()``, ``.evaluate(js, arg)``
         - ``.query_selector_all(sel)`` returning elements with
           ``.get_attribute(name)``, ``.inner_text()``
+
+    Each build stamps a fresh snapshot identity on the page object
+    (``page._orbit_snapshot_id``). Handles carry this identity so the backend
+    can reject handles from an older DOM scan (``STALE_HANDLE``) instead of
+    resolving an index against a reordered page — the identity is per page
+    object, so scans of different tabs never invalidate each other (the old
+    module-global counter did exactly that).
     """
     global _generation
     _generation += 1
+    snapshot_id = f"{id(page):x}.{_generation}"
+    try:
+        page._orbit_snapshot_id = snapshot_id
+    except Exception:
+        snapshot_id = str(_generation)  # frozen/slotted fakes: counter only
     ctx = PageContext(
         url=str(getattr(page, "url", "") or ""),
         title=_safe_title(page),
-        generation=_generation,
+        generation=snapshot_id,
     )
     try:
         ctx.text = (page.evaluate("() => document.body.innerText") or "")[:20000]
     except Exception:
         ctx.text = ""
     ctx.links = _extract_links(page)
-    ctx.interactives = _extract_interactives(page, generation=_generation)
+    ctx.interactives = _extract_interactives(page, snapshot_id=snapshot_id)
     ctx.viewport = _extract_viewport(page)
     ctx.forms = _extract_forms(page)
     return ctx
@@ -100,37 +112,40 @@ _SELECTOR = (
 _INTERESTING = ("a", "button", "input", "select", "textarea")
 
 
-def parse_handle(handle: str) -> tuple[int, int] | None:
+def parse_handle(handle: str) -> tuple[int, str] | None:
     """Parse an element handle string and return (index, generation) or None.
 
-    Handles are formatted as ``el<idx>_g<generation>``.  Returns None if the
-    handle is malformed.
+    Handles are formatted as ``el<idx>_g<generation>`` where the generation is
+    a snapshot identity string (see :func:`build_page_context`). Numeric
+    generations (legacy handles) parse as their decimal string. Returns None
+    if the handle is malformed.
     """
     if not handle.startswith("el"):
         return None
     try:
-        parts = handle.split("_g")
+        parts = handle.split("_g", 1)
         idx = int(parts[0][2:])
-        gen = int(parts[1]) if len(parts) > 1 else 0
+        gen = parts[1] if len(parts) > 1 else "0"
         return (idx, gen)
     except (ValueError, IndexError):
         return None
 
 
-def is_handle_stale(handle: str, current_generation: int) -> bool:
+def is_handle_stale(handle: str, current_generation: str | int) -> bool:
     """Return True if the handle's generation doesn't match the current one."""
     parsed = parse_handle(handle)
     if parsed is None:
         return True
-    return parsed[1] != current_generation
+    return parsed[1] != str(current_generation)
 
 
-def _extract_interactives(page: Any, generation: int = 0) -> list[dict[str, Any]]:
-    """Map DOM elements to generation-bound handles.
+def _extract_interactives(page: Any, snapshot_id: str = "0") -> list[dict[str, Any]]:
+    """Map DOM elements to snapshot-bound handles.
 
-    Handles are formatted as ``el_<idx>_g<generation>`` so stale handles from
-    a previous DOM scan can be detected.  The generation is included in the
-    prompt block so the model knows when handles are outdated.
+    Handles are formatted as ``el<idx>_g<snapshot_id>`` so stale handles from
+    a previous DOM scan can be detected — and rejected — by the backend.
+    The generation is included in the prompt block so the model knows when
+    handles are outdated.
     """
     out: list[dict[str, Any]] = []
     try:
@@ -138,7 +153,7 @@ def _extract_interactives(page: Any, generation: int = 0) -> list[dict[str, Any]
     except Exception:
         return out
     for idx, el in enumerate(elements[:MAX_SCAN_ELEMENTS]):
-        handle = f"el{idx}_g{generation}"
+        handle = f"el{idx}_g{snapshot_id}"
         try:
             tag = (el.evaluate("e => e.tagName") or "").lower()
         except Exception:
@@ -163,7 +178,7 @@ def _extract_interactives(page: Any, generation: int = 0) -> list[dict[str, Any]
             "text": _attr(el, "inner_text"),
             "href": _attr(el, "href"),
             "selector": selector[:200],
-            "generation": generation,
+            "generation": snapshot_id,
         })
     return out[:MAX_INTERACTIVES]
 

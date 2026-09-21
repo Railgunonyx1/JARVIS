@@ -1,0 +1,23 @@
+{
+  "name": "improve_codebase_architecture",
+  "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+  "tools": [
+    "search.code",
+    "code.ast",
+    "code.references",
+    "code.imports",
+    "code.definition",
+    "filesystem.read"
+  ],
+  "tags": [
+    "architecture",
+    "refactoring",
+    "review",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/improve_codebase_architecture.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\improve-codebase-architecture"
+}

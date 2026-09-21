@@ -68,13 +68,24 @@ class EchoBackend(Backend):
                     model: str | None = None) -> None:
         last = messages[-1]["content"] if messages else ""
         page_summary = self._page_summary(page)
+        # Echo the whole received thread so tests (and curious humans) can
+        # verify conversation continuity end-to-end: prior turns must be
+        # present when the client sent a history + text merge.
+        thread_note = ""
+        if len(messages) > 1:
+            seen = " | ".join(
+                f"{m.get('role', '?')}: {str(m.get('content', ''))[:80]}"
+                for m in messages[:-1]
+            )
+            thread_note = f"\n\nThread so far:\n  {seen}\n"
 
         reply = (
             "Hello — this is the JARVIS browser preview, running with the "
             "offline stub backend. The live JARVIS kernel is not attached yet, "
             "so I can't reason for real.\n\n"
-            f'You asked: “{last.strip()[:400]}”\n\n'
-            f"Page context I received:\n  {page_summary}\n\n"
+            f'You asked: “{last.strip()[:400]}”\n'
+            f"{thread_note}"
+            f"\nPage context I received:\n  {page_summary}\n\n"
             "To turn on live intelligence, start the JARVIS bridge with a real "
             "kernel backend (see docs/jbrowser/)."
         )

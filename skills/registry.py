@@ -119,7 +119,9 @@ class SkillRegistry:
             data = self._read_manifest(path)
             if data is None:
                 continue
+            self._current_manifest = path.name
             self._register(data)
+        self._current_manifest = None
         return self.skills
 
     def _read_manifest(self, path: Path) -> dict[str, Any] | None:
@@ -156,9 +158,20 @@ class SkillRegistry:
         )
 
         skill = self.skills.get(name)
-        if skill is None:
-            skill = Skill(name=name, description=metadata.description)
-            self.skills[name] = skill
+        if skill is not None:
+            # Two manifests declaring the same skill name is a packaging
+            # error (e.g. a native git_workflow.json and a pack copy
+            # soc_git_workflow.json): the later file used to silently
+            # replace the earlier contract. Keep the first (sorted order =
+            # native packs before prefixed packs) and say so.
+            logger.warning(
+                "Duplicate skill name %r in %s; keeping earlier registration",
+                name,
+                getattr(self, "_current_manifest", "?"),
+            )
+            return
+        skill = Skill(name=name, description=metadata.description)
+        self.skills[name] = skill
         skill.contracts["default"] = contract
         if data.get("instructions"):
             skill.instructions_path = str(data["instructions"])

@@ -86,6 +86,13 @@ class JarvisBridge:
 
     _all_clients: set = set()  # class-level: connection cap spans instances
 
+    # Polling cadence for the shared watchdog. Long enough to stay invisible
+    # (2s x ~1 HTTP call ≈ 43k/day for 8 clients — bounded by _MAX_CLIENTS=8),
+    # short enough that a kernel death is pushed to clients in seconds. The
+    # RENDERER never polls at a fixed rate; it receives these pushes (spec
+    # rule: "Renderer does not poll JARVIS. Events only.").
+    _WATCHDOG_INTERVAL_S = 2.0
+
     def __init__(self, bridge_url: str):
         self.bridge_url = bridge_url
         self.clients: set = set()
@@ -103,6 +110,49 @@ class JarvisBridge:
         except Exception:
             self._bridge_ok = False
             return False
+
+    async def _broadcast_status(self, ok: bool) -> None:
+        """Push a status transition to every connected client.
+
+        The watchdog owns kernel-death detection; the renderer receives
+        events instead of polling. Send failures drop the payload — the
+        dead socket's own close path handles cleanup.
+        """
+        dead: list = []
+        msg = json.dumps({
+            "type": "status",
+            "payload": {
+                "ok": ok,
+                "kernel": "online" if ok else "offline",
+                "session": self.session_id,
+                "bridge": self.bridge_url,
+            },
+        })
+        for ws in list(JarvisBridge._all_clients):
+            try:
+                await ws.send(msg)
+            except Exception:  # noqa: BLE001 - dead socket, close path handles it
+                dead.append(ws)
+        for ws in dead:
+            JarvisBridge._all_clients.discard(ws)
+
+    async def _status_watchdog(self) -> None:
+        """One shared watchdog: pushes transitions only (edge-triggered).
+
+        Replaces per-renderer 5s HTTP polling: previously only the initial
+        connect message caught kernel death, so the renderer kept its own
+        poll. One poller per BRIDGE process, transitions pushed to all —
+        ~0 cost when the kernel state is stable.
+        """
+        while True:
+            await asyncio.sleep(self._WATCHDOG_INTERVAL_S)
+            if not JarvisBridge._all_clients:
+                continue  # nobody listening; skip the probe entirely
+            ok = await asyncio.get_event_loop().run_in_executor(
+                None, self._check_bridge)
+            if ok != self._bridge_ok:
+                print(f"[BRIDGE] Kernel {'online' if ok else 'offline'} - pushing transition")
+                await self._broadcast_status(ok)
 
     async def register(self, websocket):
         JarvisBridge._all_clients.add(websocket)
@@ -506,6 +556,14 @@ async def main(ws_host: str, ws_port: int, bridge_host: str, bridge_port: int):
     print(f"[BRIDGE] JARVIS Backend: http://{bridge_host}:{bridge_port}")
     print("[BRIDGE] Waiting for Electron browser to connect...")
 
+    # Single process-wide status watchdog (NOT one per connection): polls the
+    # kernel every _WATCHDOG_INTERVAL_S, pushes online/offline TRANSITIONS to
+    # all clients. The renderer never polls at a fixed rate for kernel state
+    # (spec rule: "Renderer does not poll JARVIS. Events only."). Skips the
+    # probe entirely when no clients are connected.
+    _watchdog = JarvisBridge(f"http://{BRIDGE_HOST}:{BRIDGE_PORT}")
+    asyncio.ensure_future(_watchdog._status_watchdog())
+
     # The Electron WS client sends the auth token as its ONLY offered
     # subprotocol; the server must SELECT it in the response or the client
     # (correctly, per RFC 6455) fails the handshake with "Server sent no
@@ -513,7 +571,6 @@ async def main(ws_host: str, ws_port: int, bridge_host: str, bridge_port: int):
     _token = _resolve_token() or ""
     async with serve(handler, ws_host, ws_port, subprotocols=[_token] if _token else []):
         await asyncio.Future()  # Run forever
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="JARVIS Orbit WebSocket Bridge")

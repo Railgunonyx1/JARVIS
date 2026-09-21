@@ -173,6 +173,7 @@ contextBridge.exposeInMainWorld("orbit", {
       shields: (enabled) => ipcRenderer.invoke("security:shields", !!enabled),
       config: (cfg) => ipcRenderer.invoke("security:config", cfg),
       network: (cfg) => ipcRenderer.invoke("security:network", cfg),
+      clearBrowsingData: (opts) => ipcRenderer.invoke("browsing-data:clear", opts || {}),
     },
     permissions: {
       allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),

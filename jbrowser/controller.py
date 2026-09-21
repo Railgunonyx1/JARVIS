@@ -27,6 +27,7 @@ from jbrowser.events import (
     TAB_CREATED,
     emit_browser_event,
 )
+from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError
 from jbrowser.page_context import PageContext
 from jbrowser.sessions import SessionManager, new_session_id
 
@@ -35,10 +36,14 @@ class BrowserController:
     """Session-aware facade over a :class:`BrowserBackend`."""
 
     def __init__(self, backend: BrowserBackend | None = None,
-                 profile_root: Path | None = None) -> None:
+                 profile_root: Path | None = None,
+                 scraper=None) -> None:
         self.backend = backend or PlaywrightBackend(profile_root=profile_root)
         self.sessions = SessionManager()
         self.profile_root = profile_root or Path(".")
+        # Static-HTTP fallback for open/extract when the engine cannot launch
+        # (Playwright/Chromium missing). Optional so tests can stub it.
+        self._scraper = scraper
         # RLock so public methods that call each other can re-enter while still
         # serializing concurrent tool-thread access to the (non-thread-safe)
         # Playwright engine.
@@ -122,12 +127,51 @@ class BrowserController:
                 return getattr(tab, "session_id", "")
         return self._default_session
 
+    # ------------------------------------------------------------ fallback
+    def _policy(self):
+        """Network policy of the engine backend (shared with the fallback)."""
+        return getattr(self.backend, "_network", None) or BrowserNetworkPolicy.default()
+
+    def _get_scraper(self):
+        if self._scraper is None:
+            from external.web_scraper import get_web_scraper
+            self._scraper = get_web_scraper()
+        return self._scraper
+
+    def _scrape(self, url: str) -> dict:
+        """Static fallback fetch: same SSRF policy as engine navigation.
+
+        Returns a plain dict {url,title,text,links,status_code,fallback} or
+        raises (NetworkPolicyError propagates untouched).
+        """
+        validated = self._policy().validate(url)
+        page = self._get_scraper().scrape(validated)
+        if page.status_code and page.status_code >= 400 or (
+                not page.text and not page.title):
+            # Drop the failed entry so the scraper's 300s cache cannot serve
+            # the failure (or the stale body of a previous fetch) later.
+            self._get_scraper()._cache.pop(validated, None)
+            if page.status_code and page.status_code >= 400:
+                raise RuntimeError(
+                    f"fallback fetch returned HTTP {page.status_code} for {url}")
+        return {
+            "url": page.url or validated,
+            "title": page.title,
+            "text": page.text,
+            "links": page.links,
+            "status_code": page.status_code,
+            "fallback": "web_scraper",
+        }
+
     # ---------------------------------------------------------- navigation
     def navigate(self, url: str, tab_id: str | None = None, *,
                  trace_id: str | None = None) -> dict:
         with self._lock:
             tid = trace_id or self._trace_id
-            sid = self._default_session
+            # Session identity must come from the TAB, not the default
+            # session: a navigate against session_B/tab_B attributed its
+            # events to the default session otherwise.
+            sid = self._session_of(tab_id) if tab_id else ""
             if tab_id is None:
                 ensure = self.ensure_session()
                 sid = ensure
@@ -138,11 +182,38 @@ class BrowserController:
                                session_id=sid, trace_id=tid)
             try:
                 info = self.backend.navigate(url, tab_id=tab_id)
-            except Exception:
+            except NetworkPolicyError as exc:
+                # Policy denial is a definitive answer, not an engine failure:
+                # do not silently retry via the static scraper.
                 emit_browser_event(NAVIGATION_COMPLETED,
                                    {"tab_id": "", "url": url, "error": True},
                                    session_id=sid, trace_id=tid)
-                raise
+                return {"url": url, "title": "", "error": str(exc),
+                        "fallback": "network_policy"}
+            except Exception:
+                # Engine cannot navigate (Playwright/Chromium missing or
+                # launch failed): static fallback for this read-only action.
+                try:
+                    scraped = self._scrape(url)
+                except NetworkPolicyError as exc:
+                    emit_browser_event(NAVIGATION_COMPLETED,
+                                       {"tab_id": "", "url": url, "error": True},
+                                       session_id=sid, trace_id=tid)
+                    return {"url": url, "title": "", "error": str(exc),
+                            "fallback": "network_policy"}
+                except Exception as exc2:
+                    emit_browser_event(NAVIGATION_COMPLETED,
+                                       {"tab_id": "", "url": url, "error": True},
+                                       session_id=sid, trace_id=tid)
+                    raise RuntimeError(
+                        f"browser engine unavailable and static fallback failed: {exc2}") from exc
+                emit_browser_event(NAVIGATION_COMPLETED,
+                                   {"tab_id": "", "url": scraped["url"],
+                                    "fallback": True},
+                                   session_id=sid, trace_id=tid)
+                return {"url": scraped["url"], "title": scraped["title"],
+                        "text": scraped["text"], "links": scraped["links"],
+                        "fallback": "web_scraper"}
             info_tab = getattr(info, "tab_id", "")
             info_url = getattr(info, "url", url)
             emit_browser_event(NAVIGATION_COMPLETED,
@@ -197,7 +268,24 @@ class BrowserController:
                      tab_id: str | None = None) -> str:
         with self._lock:
             self.ensure_session()
-            return self.backend.get_selector_text(selector, tab_id=tab_id)
+            try:
+                return self.backend.get_selector_text(selector, tab_id=tab_id)
+            except NetworkPolicyError:
+                raise
+            except Exception:
+                # Engine unavailable: fall back to a static fetch of the
+                # current page when its URL is known.
+                url = ""
+                try:
+                    url = self.backend.get_url(tab_id)
+                except Exception:
+                    url = ""
+                if not url:
+                    raise RuntimeError(
+                        "browser engine unavailable and no page is open to "
+                        "fall back on; open a URL first") from None
+                scraped = self._scrape(url)
+                return scraped["text"]
 
     def current_url(self, tab_id: str | None = None) -> str:
         with self._lock:
@@ -214,6 +302,12 @@ class BrowserController:
     def status(self) -> dict:
         with self._lock:
             base = self.backend.status()
+            # Truthful labeling: when the engine is not available the tools
+            # fall back to the static scraper for open/extract only.
+            if not base.get("available") and base.get("backend") != "web_scraper":
+                base["backend"] = "web_scraper (fallback)"
+                base["fallback"] = "web_scraper"
+                base["fallback_actions"] = ["open", "extract"]
             base["sessions"] = [s.describe() for s in self.sessions.list()]
             return base
 

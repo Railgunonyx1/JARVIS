@@ -64,6 +64,22 @@
     return out;
   }
 
+  /**
+   * Recent conversation for the model: the active tab's last messages as
+   * OpenAI-shaped {role, content} entries. System/needle status lines are
+   * excluded (they're UI chatter, not conversation), user+jarvis+error
+   * turn pairs are what the model needs to stay coherent. Capped so a long
+   * tab never blows the bridge's own trim window.
+   */
+  function historyFor(tabId, maxTurns) {
+    var cap = Math.max(2, maxTurns || 12);
+    var hist = tabHistories.get(tabId || activeTabId) || [];
+    return hist
+      .filter(function (m) { return m.role === "user" || m.role === "jarvis"; })
+      .slice(-cap)
+      .map(function (m) { return { role: m.role === "jarvis" ? "assistant" : "user", content: m.content }; });
+  }
+
   // ── Persistence ──────────────────────────────────────────────
   function loadHistory() {
     try {
@@ -113,16 +129,66 @@
   // ── Message Rendering ────────────────────────────────────────
   const LABELS = { user: "You", jarvis: "JARVIS", error: "Error", system: "System" };
 
+  // Minimal, XSS-safe markdown renderer: escape FIRST, then transform.
+  // Supports what models actually emit in a chat pane: **bold**, *italic*,
+  // `code`, fenced blocks, links, and bullet/numbered lists. Anything else
+  // stays literal text — never trust raw HTML from a model.
+  function mdToHtml(src) {
+    var text = escapeHtml(src == null ? "" : String(src));
+    var out = [];
+    var lines = text.split("\n");
+    var inCode = false, inList = false, listTag = "ul";
+    function closeList() { if (inList) { out.push("</" + listTag +">"); inList = false; } }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var fence = line.match(/^\s*```/);
+      if (fence) {
+        closeList();
+        out.push(inCode ? "</code></pre>" : "<pre><code>");
+        inCode = !inCode;
+        continue;
+      }
+      if (inCode) { out.push(line + "\n"); continue; }
+      var ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+      var ul = line.match(/^\s*[-*•]\s+(.*)$/);
+      if (ol || ul) {
+        var want = ol ? "ol" : "ul";
+        if (!inList || listTag !== want) {
+          closeList();
+          out.push("<" + want +">");
+          inList = true; listTag = want;
+        }
+        line = "<li>" + inline((ol || ul)[1]) + "</li>";
+        out.push(line);
+        continue;
+      }
+      closeList();
+      out.push(inline(line) + "<br>");
+    }
+    closeList();
+    if (inCode) out.push("</code></pre>");
+    return out.join("").replace(/(<br>)+$/g, "");
+    function inline(s) {
+      return s
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+        .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>")
+        .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    }
+  }
+
   function messageHTML(role, content) {
     const label = LABELS[role] || role;
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Model replies (and errors) render markdown; user input stays plain.
+    const body = role === "user" ? escapeHtml(content) : mdToHtml(content);
     return (
       '<div class="chat-msg-head">' +
         '<span class="chat-role" data-role="' + role + '"></span>' +
         '<span class="chat-label">' + label + "</span>" +
         '<span class="chat-time">' + time + "</span>" +
       "</div>" +
-      '<div class="chat-content">' + escapeHtml(content) + "</div>"
+      '<div class="chat-content">' + body + "</div>"
     );
   }
 
@@ -277,6 +343,7 @@
     { cmd: "/screenshot",desc: "Capture the page" },
     { cmd: "/status",   desc: "Show JARVIS/DSH status" },
     { cmd: "/model",    desc: "List or switch models (/model <provider/model>)" },
+    { cmd: "/new",      desc: "Start a fresh conversation (clears context)" },
     { cmd: "/yt",       desc: "Private YouTube search (no tracking)" },
     { cmd: "/help",     desc: "Show available commands" },
   ];
@@ -451,6 +518,7 @@
   window.Chat = {
     init: init,
     append: appendMessage,
+    historyFor: historyFor,
     beginStream: beginStream,
     updateStream: updateStream,
     endStream: endStream,

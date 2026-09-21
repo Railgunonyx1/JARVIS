@@ -691,3 +691,258 @@ class TestControllerPersistentWiring:
         assert ctl.session_info(sid) == {}
 
 
+
+
+# ---------------------------------------------------------------------------
+# Playwright availability caching + WebScraper fallback (regression: the old
+# availability check cached a broken verdict and the fallback was cosmetic)
+# ---------------------------------------------------------------------------
+
+class TestAvailabilityCaching:
+    def _backend(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        return PlaywrightBackend(headless=True)
+
+    def test_failed_probe_caches_false_not_true(self):
+        """A first probe with no Chromium must cache False; `available` may not
+        flip back to True on later calls (the old `_checked` bug)."""
+        b = self._backend()
+        b._checked = True          # simulate a completed probe
+        b._playwright_ok = False   # ... which failed
+        b._pw = object()           # legacy bug: driver still running -> lied True
+        assert b.available is False
+
+    def test_successful_probe_caches_true(self):
+        b = self._backend()
+        b._checked = True
+        b._playwright_ok = True
+        assert b.available is True
+
+    def test_failed_probe_does_not_leak_driver(self, monkeypatch):
+        """The probe must stop its driver process when the binary is missing."""
+        import types
+
+        calls = {"stopped": 0}
+
+        class _FakePw:
+            def stop(self):
+                calls["stopped"] += 1
+
+        class _FakeChromium:
+            executable_path = "Z:/definitely/missing/chromium.exe"
+
+        fake = _FakePw()
+        fake.chromium = _FakeChromium()
+        monkeypatch.setattr(b := self._backend(), "_pw", None)
+        import sys
+
+        mod = types.ModuleType("playwright.sync_api")
+        mod.sync_playwright = lambda: type("H", (), {
+            "start": staticmethod(lambda: fake),
+        })()
+        monkeypatch.setitem(sys.modules, "playwright.sync_api", mod)
+        assert b._check_playwright() is False
+        assert calls["stopped"] == 1
+        assert b._pw is None
+
+
+class TestWebScraperFallback:
+    def _controller(self, backend):
+        from jbrowser.controller import BrowserController
+        return BrowserController(backend=backend)
+
+    def test_fallback_backend(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise RuntimeError("Playwright browser not available")
+
+            def status(self):
+                st = super().status()
+                st["available"] = False
+                return st
+
+        ctl = BrowserController(backend=_DeadBackend())
+        out = ctl.navigate("https://example.com/")
+        assert out.get("fallback") == "web_scraper"
+        assert "Example Domain" in out.get("text", "")
+
+    def test_fallback_enforces_network_policy(self):
+        """The static fallback must NOT become an SSRF side door."""
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        out = ctl.navigate("http://127.0.0.1:8080/admin")
+        # the fallback's policy gate must reject loopback explicitly
+        assert out.get("fallback") == "network_policy"
+        assert out.get("error"), out
+
+    def test_policy_denial_is_not_fallback_path(self):
+        """A policy denial returns an explicit error dict, no scraper retry."""
+        from jbrowser.controller import BrowserController
+        from jbrowser.network import NetworkPolicyError
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise NetworkPolicyError("denied by policy")
+
+        called = {"n": 0}
+
+        def _boom(self_):
+            called["n"] += 1
+            raise AssertionError("scraper must not be invoked for policy denials")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        ctl._get_scraper = _boom.__get__(ctl)
+        out = ctl.navigate("http://127.0.0.1:9/x")
+        assert out.get("fallback") == "network_policy"
+        assert called["n"] == 0
+
+    def test_status_reports_fallback_truthfully(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def status(self):
+                st = super().status()
+                st["backend"] = "playwright"
+                st["available"] = False
+                return st
+
+        st = BrowserController(backend=_DeadBackend()).status()
+        assert "fallback" in st["backend"]
+        assert st["fallback"] == "web_scraper"
+        assert st["fallback_actions"] == ["open", "extract"]
+
+    def test_extract_text_falls_back_to_page_url(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def get_selector_text(self, selector=None, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        sid = ctl.ensure_session()
+        ctl.new_tab("https://example.com/", session_id=sid)
+        ctl._scrape = lambda url: {"text": "fallback body", "url": url}
+        assert ctl.extract_text() == "fallback body"
+
+    def test_extract_text_without_page_raises_helpfully(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def get_selector_text(self, selector=None, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        with pytest.raises(RuntimeError) as ei:
+            ctl.extract_text()
+        assert "open a URL first" in str(ei.value)
+
+
+# ---------------------------------------------------------------------------
+# Element handle contract (regression: backend parsed "el0_g12" as int("0_g12")
+# -> ValueError, so read->click/type was dead; generation was also global)
+# ---------------------------------------------------------------------------
+
+class TestElementHandleContract:
+    def _fake_page(self):
+        """Fake page with the _FakeEl surface used by TestPageContext."""
+        return _FakePage()
+
+    def test_handle_roundtrip_through_parse(self):
+        from jbrowser.page_context import parse_handle, is_handle_stale
+        parsed = parse_handle("el7_gdeadbeef.42")
+        assert parsed == (7, "deadbeef.42")
+        assert is_handle_stale("el7_gdeadbeef.42", "deadbeef.42") is False
+        assert is_handle_stale("el7_gdeadbeef.42", "other.43") is True
+        assert parse_handle("el7") == (7, "0")          # legacy numeric
+        assert parse_handle("garbage") is None
+        assert parse_handle("elx_g1") is None
+
+    def test_backend_resolves_fresh_handle(self):
+        """The exact flow that was broken: read -> click on a fresh handle."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        ctx = build_page_context(page)
+        handle = ctx.interactives[0]["handle"]          # el0_g<snapshot>
+        el = b._el(handle, page)
+        assert el is not None
+        assert el.tag.lower() == "a"   # index 0 in the fake page is the link
+
+    def test_backend_rejects_stale_handle(self):
+        """A handle from an older snapshot must raise, not mis-resolve."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        old = build_page_context(page)
+        stale_handle = old.interactives[0]["handle"]
+        build_page_context(page)                        # page changed; rescan
+        with pytest.raises(RuntimeError) as ei:
+            b._el(stale_handle, page)
+        assert "STALE_HANDLE" in str(ei.value)
+
+    def test_backend_rejects_handle_without_snapshot(self):
+        """click/type without a prior read must fail loudly (no blind index)."""
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        with pytest.raises(RuntimeError) as ei:
+            b._el("el0_g0", page)
+        assert "browser.read" in str(ei.value)
+
+    def test_snapshots_are_per_page_not_global(self):
+        """Reading tab B must not invalidate tab A's handles (old global gen)."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page_a, page_b = self._fake_page(), self._fake_page()
+        ctx_a = build_page_context(page_a)
+        build_page_context(page_b)                      # other tab scanned
+        assert b._el(ctx_a.interactives[0]["handle"], page_a) is not None
+
+    def test_create_tab_returns_post_navigation_state(self, monkeypatch):
+        """new_tab(url) must report the navigated URL/title, not (blank).
+
+        Hermetic on purpose: the real _ensure_session_context would start the
+        sync Playwright driver (and launch Chromium) on the MAIN thread, which
+        parks a running event loop there and poisons every later asyncio.run()
+        in the process (asyncio.run -> RuntimeError). Tool handlers run the
+        backend in worker threads via asyncio.to_thread in production; this
+        test only verifies tab-registry bookkeeping, so stub the context.
+        """
+        import jbrowser.backend.playwright as pw_mod
+        from jbrowser.backend.base import TabInfo
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+
+        class _NavOnlyPage:
+            def set_default_timeout(self, ms):  # noqa: ARG002
+                pass
+
+        b._ensure_session_context = lambda session_id: type(
+            "FakeCtx", (), {"new_page": staticmethod(lambda: _NavOnlyPage())}
+        )()
+        monkeypatch.setattr(pw_mod, "new_tab_id", lambda: "tb_nav1")
+        captured = {}
+
+        def fake_navigate(url, tab_id=None):
+            captured["url"] = url
+            from jbrowser.backend.base import TabInfo
+            return TabInfo(tab_id=tab_id, session_id="s_nav",
+                           url=url, title="Nav Title", active=True)
+
+        b.navigate = fake_navigate
+        info = b.create_tab("s_nav", "https://example.com/")
+        assert info.url == "https://example.com/"
+        assert info.title == "Nav Title"
+        assert captured["url"] == "https://example.com/"
+        # Hermetic teardown: nothing native was launched, but be explicit.
+        b.shutdown()

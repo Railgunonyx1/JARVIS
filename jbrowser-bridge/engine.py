@@ -103,14 +103,14 @@ def _run_on_shared_loop(coro):
 
 
 # ── First-token race (latency) ───────────────────────────────────
-# Reduced from 3 to 1: when the router's availability check says a provider
-# is healthy, don't race it against 2 others on every short request. The
-# availability check already filtered out the down providers; racing healthy
-# ones in parallel is what burned rate limits on hello-scale requests. A
-# single first-healthy probe keeps the fallback safety (the router still
-# falls back on transient errors) without paying 3x connect/timeout on each
-# turn.
-_RACE_MAX_PROBES = 1
+# 2 (was 3, then 1). With 1, a post-idle groq hard-fail walked the chain
+# down to openrouter: 10.8-22.1s TTFT measured 2026-09-17 (the exact tail
+# this engine exists to prevent). Racing the top-2 (groq + deepseek) caps
+# the first-token tail at deepseek's ~60-90ms whenever groq cold-starts
+# (~2.1s first request after idle) or flakes entirely. Groq's free tier
+# (28.8k RPD, 60 RPM config) absorbs the doubled probe volume; deepseek's
+# losing probes are cancelled mid-flight and cost fractions of a cent.
+_RACE_MAX_PROBES = 2
 
 
 def _make_think_filter():
@@ -523,12 +523,44 @@ class ModelGatewayEngine(StreamEngine):
         self._streamer = streamer or self._default_streamer
         self.budget = budget or Budget()
         self.system_prompt = system_prompt or (
-            "You are JARVIS, the assistant built into the Orbit browser. "
-            "Answer the user's question directly and conversationally in a "
-            "few sentences. Do NOT output plans, numbered steps, or task "
-            "breakdowns unless the user explicitly asks for a plan. Do not "
-            "claim to have taken browser actions you did not perform; "
-            "browser control happens only through JARVIS tools."
+            "You are JARVIS, the user's personal AI built into their Orbit "
+            "browser. Speak like a sharp, friendly colleague: direct, warm, "
+            "concise.\n\n"
+            "Match the reply to the message:\n"
+            "- Greetings and small talk (\"hey\", \"good morning\", "
+            "\"thanks\", \"what's up\"): answer in ONE casual sentence. "
+            "Do not analyze the message, do not describe what you could do, "
+            "do not offer options. Example — user: \"hey\" → you: \"Hey. "
+            "What are we getting into?\"\n"
+            "- Questions: answer immediately from your knowledge or the "
+            "conversation history. History is provided — use it before "
+            "claiming anything is missing.\n"
+            "- Requests: for browser tasks say what you're doing in one "
+            "line, then do it via tools. If truly ambiguous, ask ONE short "
+            "question — never a numbered clarify-checklist.\n"
+            "- If the message starts with [PLAN MODE]: the user wants a "
+            "short plan for a real TASK — an instruction like \"build X\" "
+            "or \"open Y\". A question is still a question and a greeting is "
+            "still a greeting even in plan mode: answer them directly and "
+            "naturally, never wrap an answer in a plan.\n"
+            "- Plan contract: after you propose a plan, the user's next "
+            "message may simply confirm it (\"proceed\", \"go ahead\", "
+            "\"do it\"). A confirmation is NOT a new request: reply in one "
+            "short line (e.g. \"On it.\") and treat the approved plan as "
+            "your instruction to execute — do not propose the same plan "
+            "again.\n"
+            "- RESPONSE POLICY: planning, task decomposition and tool "
+            "selection are internal. Output only user-facing content. "
+            "Simple questions get simple answers (\"What is my name?\" → "
+            "\"Aayan.\"). Never print a step list unless the user asked for "
+            "a plan or explicitly asked for steps.\n\n"
+            "Never narrate your reasoning about the message (\"since this "
+            "is just a greeting…\", \"there's nothing to execute…\") — just "
+            "respond naturally. Never introduce yourself, never restate the "
+            "question, never produce step lists or plans unless the user "
+            "explicitly asks for steps. Markdown (**bold**, bullets, "
+            "`code`) is fine and is rendered by the UI. Do not claim to have "
+            "taken browser actions you did not perform."
         )
         self.max_tokens = max_tokens
 

@@ -2,11 +2,16 @@
 default_provider = "groq"
 # Order = race priority = execution order (_RACE_MAX_PROBES=1 probes the
 # head first). Measured 2026-09-17, pinned per-provider TTFT with unique
-# prompts (see PERF.md): groq 67-93ms and deepseek 54-87ms are the only
-# consistently-sub-100ms providers; gemini-2.0 ~330ms; opencode_zen ~0.5-1s;
-# openrouter free models 2.7-4s. Only live-key providers are listed — each
-# remaining entry joins automatically the moment its key lands in
-# config/.env (github_models removed: service retired 2026-07-30).
+# prompts (see PERF.md): groq 67-93ms is the consistently-sub-100ms head;
+# gemini-2.0 ~330ms; opencode_zen ~0.5-1s; openrouter free models 2.7-4s.
+# Only live-key providers are listed — each remaining entry joins
+# automatically the moment its key lands in config/.env.
+#   - github_models removed: service retired 2026-07-30.
+#   - deepseek is RESERVED, not live: the DEEPSEEK_API_KEY in config/.env is
+#     an OpenRouter key (sk-or-v1-...), so the router's vendor-mismatch guard
+#     skips it until a real key from platform.deepseek.com replaces it.
+#       (Its historical 54-87ms TTFT made it the ideal racer — re-promote it
+#       in the race as soon as the key is real.)
 fallback_chain = [
     "groq",
     "deepseek",
@@ -32,12 +37,15 @@ max_retries = 2
 timeout_seconds = 30
 
 [groq]
-# Head model: gpt-oss-120b measured 72-157ms TTFT on EVERY request including
-# its first-ever (cold) one; qwen/qwen3.8-27b measured 67-93ms warm but paid
-# a consistent ~2.1-2.6s on the FIRST request after every boot/idle gap
-# (provider-side model cold-start, verified across 4 boots). Same reasoning
-# off handling applies to both (see _REASONING_MODELS).
-model = "openai/gpt-oss-120b"
+# Head model: qwen/qwen3.8-27b — clean on the engine's full request path
+# (tools attached): 8/8 unpinned turns served by groq at 57-76ms warm.
+# NOTE: gpt-oss-120b measured 67-157ms pinned with bare prompts BUT FAILED
+# the unpinned engine path (no first token; chain walked to openrouter —
+# 2026-09-17, reverted). Do not promote it without testing the full engine
+# request shape first. Warm cost: qwen3.8-27b pays ~2.1-2.6s on the FIRST
+# request after boot/idle (provider-side model cold-start; accepted, logged
+# in PERF.md).
+model = "qwen/qwen3.8-27b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 60
@@ -45,11 +53,9 @@ requests_per_day = 28800
 priority = 1
 
 [groq.fallback]
-# qwen3.8-27b is warm-fast (67-93ms) but cold-starts (~2.1-2.6s) after idle;
-# fine as fallback where a fresh request implies a dead connection anyway.
-# (Groq retired llama-3.1-8b-instant — 404 verified; gpt-oss-20b measured
-# 12-13s twice — both removed.)
-model = "qwen/qwen3.8-27b"
+# gpt-oss-20b measured 12-13s twice (provider-side queueing) — removed.
+# (Groq retired llama-3.1-8b-instant — 404 verified.)
+model = "openai/gpt-oss-20b"
 max_tokens = 2048
 temperature = 0.7
 requests_per_minute = 30
@@ -178,7 +184,10 @@ priority = 5
 # its API key appears in config/.env (see SETUP-FREE-LLM-APIS.md for links).
 
 [llm7]
-model = "gpt-oss-20b"
+# Anonymous-access model, verified live 2026-09-20 with the "unused" token.
+# (gpt-oss-20b and the big-name models now 401 anonymously; codestral-latest
+# also works keyless but GLM-5.3-Flash is the stronger general chat model.)
+model = "GLM-5.3-Flash"
 max_tokens = 4096
 temperature = 0.7
 base_url = "https://api.llm7.io/v1"
@@ -300,3 +309,25 @@ reformulate_timeout = 3.0      # Max seconds for query reformulation
 rerank_timeout = 2.0           # Max seconds for reranking
 condense_timeout = 3.0         # Max seconds for condensation
 top_k = 3                      # Max memories to return after reranking
+
+[sakana]
+# Sakana AI Fugu — multi-agent orchestration behind one OpenAI-compatible
+# API (api.sakana.ai/v1). Fugu Ultra v2 (2026-09-11): peak multi-step
+# capability; Fugu Max: cost-performance Pareto frontier. PAID ($5/$30 per
+# 1M tokens, 1M context) — activates automatically when SAKANA_API_KEY
+# lands in config/.env. Not in fallback_chain until a key exists and
+# latency is pinned (see PERF.md). Exact dated alias (e.g.
+# fugu-ultra-20260615 for v1) is listed at console.sakana.ai — verify
+# before promoting into the race.
+model = "fugu-ultra-v2"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://api.sakana.ai/v1"
+requests_per_minute = 30
+requests_per_day = 500
+priority = 12
+
+[sakana.fallback]
+model = "fugu-max"
+max_tokens = 4096
+temperature = 0.7

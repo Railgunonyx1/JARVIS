@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script defer src="js/boot.js"></script>
+  <link rel="preload" href="fonts/Doto-Medium.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/Geist-Regular.woff2" as="font" type="font/woff2" crossorigin />
   <title>JARVIS Orbit</title>
   <link rel="stylesheet" href="css/orbit.css" />
   <link rel="stylesheet" href="css/ui.css" />
@@ -195,10 +197,10 @@
         <div class="internal-pages" id="internalPages">
           <!-- New Tab -->
           <div class="page newtab-page" id="newtabPage">
-            <div class="nt-wordmark">ORBIT</div>
-            <div class="nt-osline"><span class="nt-os-dot" id="ntOsDot"></span>JARVIS OS · <span id="ntOsState">OFFLINE</span></div>
-            <div class="nt-sub">Search with Google or ask JARVIS</div>
-            <label class="nt-search">
+            <div class="nt-wordmark mn-reveal">ORBIT</div>
+            <div class="nt-osline"><span class="nt-os-dot" id="ntOsDot"></span>JARVIS OS · <span id="ntOsState">OFFLINE</span><span class="nt-os-sep">·</span><span class="nt-clock" id="ntClock">--:--:-- UTC</span></div>
+            <div class="nt-greeting" id="ntGreeting">Good evening, Commander.</div>
+            <label class="nt-search mn-reveal">
               <svg width="16" height="16" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -207,7 +209,7 @@
               </svg>
               <input type="text" id="ntpSearch" placeholder="Search Google or enter URL" autofocus />
             </label>
-            <div class="nt-tiles">
+            <div class="nt-tiles mn-reveal">
               <button class="nt-tile" data-url="orbit://goodeye">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                   <circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.2"/>
@@ -257,7 +259,7 @@
               </button>
             </div>
             <!-- Live telemetry strip: F1-style readouts of real browser state -->
-            <div class="nt-telemetry" id="ntTelemetry">
+            <div class="nt-telemetry mn-reveal" id="ntTelemetry">
               <div class="nt-tel-cell"><span class="nt-tel-label">UPTIME</span><span class="nt-tel-value" id="telUptime">0:00</span></div>
               <div class="nt-tel-cell"><span class="nt-tel-label">TABS</span><span class="nt-tel-value" id="telTabs">0</span></div>
               <div class="nt-tel-cell"><span class="nt-tel-label">MEM</span><span class="nt-tel-value" id="telMem">--</span></div>
@@ -265,6 +267,21 @@
               <div class="nt-tel-cell"><span class="nt-tel-label">SLEEPING</span><span class="nt-tel-value" id="telSleep">0</span></div>
               <div class="nt-tel-cell"><span class="nt-tel-label">JARVIS</span><span class="nt-tel-value" id="telJarvis">OFF</span></div>
             </div>
+            <!-- Contextual engine: resume the previous session (v2) -->
+            <div class="nt-context-card" id="ntContextCard" role="button" tabindex="0">
+              <div class="nt-ctx-ico">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M10 6.5V10l2.5 1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div>
+                <div class="nt-ctx-title">Continue where you left off</div>
+                <div class="nt-ctx-sub">Your previous session is ready to restore.</div>
+              </div>
+              <button class="nt-ctx-cta" id="ntContextResume">Resume</button>
+            </div>
+
             <!-- Recently Closed Tabs -->
             <div class="nt-recent" id="ntRecent" style="display:none">
               <div class="nt-recent-title">Recently Closed</div>
@@ -275,7 +292,6 @@
               <div class="nt-session-title">Previous Session</div>
               <div class="nt-session-list" id="ntSessionList"></div>
             </div>
-            <div class="nt-footer">Personal · JARVIS ready</div>
           </div>
 
           <!-- Settings -->
@@ -289,7 +305,26 @@
               </div>
               <div class="group"><h2>Appearance</h2>
                 <div class="row"><div><div class="name">Theme</div><div class="sub">Dark is the primary direction</div></div><button class="chip-btn" id="themeToggle">Toggle light</button></div>
-                <div class="row"><div><div class="name">Accent</div><div class="sub">Monochrome with optional faint tint</div></div><span class="chip">Glyph</span></div>
+                <div class="row"><div><div class="name">Accent</div><div class="sub">System signal color</div></div>
+                  <div class="accent-picker">
+                    <button data-v2-accent="cyan" title="Cyan (default)"></button>
+                    <button data-v2-accent="signal-red" title="Signal Red"></button>
+                    <button data-v2-accent="vapor" title="Vapor"></button>
+                    <button data-v2-accent="mono" title="Mono"></button>
+                  </div>
+                </div>
+                <div class="row"><div><div class="name">Density</div><div class="sub">Chrome spacing</div></div>
+                  <div class="density-picker">
+                    <button data-v2-density="compact">Compact</button>
+                    <button data-v2-density="default">Default</button>
+                  </div>
+                </div>
+                <div class="row"><div><div class="name">Motion</div><div class="sub">Agent orbs and transitions</div></div>
+                  <div class="motion-picker">
+                    <button data-v2-motion="full">Full</button>
+                    <button data-v2-motion="off">Off</button>
+                  </div>
+                </div>
               </div>
               <div class="group"><h2>AI</h2>
                 <div class="row"><div><div class="name">Model</div><div class="sub">Primary model for JARVIS</div></div><select id="settingsModelSelect" class="chip-select"></select></div>
@@ -503,6 +538,80 @@
             </div>
           </div>
 
+          <!-- Page Watch (changedetection.io inspired, v2) -->
+          <div class="page tools-page" id="watchPage">
+            <div class="sheet">
+              <h1>Page Watch</h1>
+              <p class="sheet-lede">Watches the agent has armed on web pages. Changes are diffed line-by-line and surfaced to JARVIS.</p>
+              <div class="watch-controls">
+                <input type="text" id="watchNewUrl" placeholder="https://example.com/pricing to watch" />
+                <button class="tool-btn primary" id="watchArmBtn">Watch</button>
+                <button class="tool-btn" id="watchRefreshBtn">Refresh</button>
+              </div>
+              <div class="tool-out" id="watchEmpty" style="display:none">No watches armed. Add a URL above, or ask JARVIS: "watch this page for changes".</div>
+              <div id="watchList"></div>
+            </div>
+          </div>
+
+          <!-- Tools (it-tools / CyberChef inspired, v2) -->
+          <div class="page tools-page" id="toolsPage">
+            <div class="sheet">
+              <h1>Tools</h1>
+              <p class="sheet-lede">Local-first utilities. Everything runs on this page — no network, no tracking.</p>
+              <div class="tools-grid">
+                <div class="tool-card">
+                  <h3><span class="tool-ico">{ }</span>JSON Toolkit</h3>
+                  <textarea id="toolJsonIn" rows="4" placeholder='{"paste": "json here"}'></textarea>
+                  <input type="text" id="toolJsonQ" placeholder="dot-path query e.g. items[0].name" />
+                  <div class="tool-row">
+                    <button class="tool-btn primary" id="toolJsonFmt">Format</button>
+                    <button class="tool-btn" id="toolJsonMin">Minify</button>
+                    <button class="tool-btn" id="toolJsonQuery">Query</button>
+                  </div>
+                  <div class="tool-out" id="toolJsonOut">—</div>
+                </div>
+                <div class="tool-card">
+                  <h3><span class="tool-ico">64</span>Base64</h3>
+                  <textarea id="toolB64In" rows="3" placeholder="text or base64"></textarea>
+                  <div class="tool-row">
+                    <button class="tool-btn primary" id="toolB64Enc">Encode</button>
+                    <button class="tool-btn" id="toolB64Dec">Decode</button>
+                  </div>
+                  <div class="tool-out" id="toolB64Out">—</div>
+                </div>
+                <div class="tool-card">
+                  <h3><span class="tool-ico">%</span>URL Codec</h3>
+                  <textarea id="toolUrlIn" rows="3" placeholder="text or percent-encoded"></textarea>
+                  <div class="tool-row">
+                    <button class="tool-btn primary" id="toolUrlEnc">Encode</button>
+                    <button class="tool-btn" id="toolUrlDec">Decode</button>
+                  </div>
+                  <div class="tool-out" id="toolUrlOut">—</div>
+                </div>
+                <div class="tool-card">
+                  <h3><span class="tool-ico">#</span>Hash &amp; UUID</h3>
+                  <textarea id="toolShaIn" rows="2" placeholder="text to hash (SHA-256)"></textarea>
+                  <div class="tool-row">
+                    <button class="tool-btn primary" id="toolSha">SHA-256</button>
+                    <button class="tool-btn" id="toolUuid">UUID v4</button>
+                  </div>
+                  <div class="tool-out" id="toolShaOut">—</div>
+                  <div class="tool-out" id="toolUuidOut">—</div>
+                </div>
+                <div class="tool-card">
+                  <h3><span class="tool-ico">⏱</span>Timestamps</h3>
+                  <div class="tool-out" id="toolTsNow">—</div>
+                  <input type="text" id="toolTsIn" placeholder="unix timestamp (s or ms)" />
+                  <div class="tool-row">
+                    <button class="tool-btn primary" id="toolTsToDate">To date</button>
+                    <button class="tool-btn" id="toolTsNowBtn">Refresh now</button>
+                  </div>
+                  <div class="tool-out" id="toolTsOut">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Diagnostics -->
           <div class="page diagnostics-page" id="diagnosticsPage">
             <div class="sheet">
@@ -638,6 +747,12 @@
                 </div>
               </div>
 
+              <div class="section-title" style="margin-top:24px">Browsing Data</div>
+              <div class="import-row" style="align-items:center">
+                <div><span class="label">Clear browsing data</span><div style="font-size:11px;color:var(--jb-mute);margin-top:2px">History, cookies, cache and site data for this profile</div></div>
+                <button class="chip-btn" id="clearBrowsingData">Clear…</button>
+              </div>
+
               <div class="section-title" style="margin-top:24px">Recent Activity</div>
               <div id="privacyActivity" class="privacy-activity">
                 <div class="empty-state">No tracker activity yet. Browsing will populate this list.</div>
@@ -663,6 +778,13 @@
       <aside class="sidebar" id="sidebar">
         <nav class="sb-rail" id="sbRail" title="JARVIS sections">
           <div class="sb-rail-top">
+            <div class="rail-brand" title="JARVIS Orbit" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+                <circle cx="9" cy="9" r="2.2" fill="currentColor"/>
+                <circle cx="14.4" cy="4.4" r="1.3" fill="currentColor"/>
+              </svg>
+            </div>
             <button class="rail-btn" data-panel="jarvis" title="Chat" aria-label="Chat">
               <span class="rail-ico" aria-hidden="true">
                 <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
@@ -718,6 +840,51 @@
           </div>
           <div class="sb-rail-sep"></div>
           <div class="sb-rail-mid">
+            <button class="rail-btn" data-panel="flow" title="Flow — clock, notes, system" aria-label="Flow">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                  <circle cx="8" cy="8" r="2.4" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Flow</span>
+            </button>
+            <button class="rail-btn" data-panel="bookmarks" title="Bookmarks" aria-label="Bookmarks">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 2.5h8a.8.8 0 01.8.8V14l-4.8-2.8L3.2 14V3.3a.8.8 0 01.8-.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Bookmarks</span>
+            </button>
+            <button class="rail-btn" data-panel="browser-history" title="Browsing history" aria-label="History">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M8 4.8V8l2.4 1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">History</span>
+            </button>
+            <button class="rail-btn" data-panel="downloads" title="Downloads" aria-label="Downloads">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2.5v7M4.8 6.5L8 9.7l3.2-3.2M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="rail-tip">Downloads</span>
+            </button>
+            <button class="rail-btn" data-panel="watches" title="Page watches" aria-label="Watches">
+              <span class="rail-ico" aria-hidden="true">
+                <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
+                  <path d="M1.8 8s2.3-3.8 6.2-3.8S14.2 8 14.2 8 11.9 11.8 8 11.8 1.8 8 1.8 8z" stroke="currentColor" stroke-width="1.2"/>
+                  <circle cx="8" cy="8" r="1.7" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <span class="rail-badge" id="railWatchBadge" hidden>0</span>
+              <span class="rail-tip">Watches</span>
+            </button>
+            <div class="sb-rail-sep"></div>
             <button class="rail-btn" data-panel="vision" title="Vision" aria-label="Vision">
               <span class="rail-ico" aria-hidden="true">
                 <svg width="17" height="17" viewBox="0 0 16 16" fill="none">
@@ -848,6 +1015,7 @@
       <button class="menu-item" data-nav="orbit://downloads">Downloads</button>
       <button class="menu-item" data-nav="orbit://bookmarks">Bookmarks</button>
       <div class="menu-sep"></div>
+      <button class="menu-item" data-nav="orbit://tools">Tools</button>
       <button class="menu-item" data-nav="orbit://tasks">Tasks</button>                <button class="menu-item" data-nav="orbit://goodeye">God's Eye</button>
                 <button class="menu-item" data-nav="orbit://f1">F1 Monitor</button>
                 <button class="menu-item" data-nav="orbit://worldmon">World Monitor</button>
@@ -1020,6 +1188,13 @@
   <script defer src="js/settings-ux.js"></script>
   <script defer src="js/data-pages.js"></script>
   <link rel="stylesheet" href="css/f1-nothing.css" />
+  <link rel="stylesheet" href="css/orbit-v2.css" />
+  <link rel="stylesheet" href="css/orbit-v2-sidebar.css" />
+  <link rel="stylesheet" href="css/orbit-v2-polish.css" />
+  <link rel="stylesheet" href="css/minimal.css" />
+  <script defer src="js/v2.js"></script>
+  <script defer src="js/v2-watch.js"></script>
+  <script defer src="js/v2-sidebar.js"></script>
   <script defer src="js/needle-agent.js"></script>
   <script defer src="js/renderer.js"></script>
   <script defer src="js/module-loader.js"></script>

@@ -33,6 +33,8 @@ def build_default_registry() -> ToolRegistry:
         browser_status,
         browser_type,
     )
+    from tools.browser_wait import browser_wait
+    from tools.doc_export import doc_to_markdown
     from tools.code_intelligence import (
         code_ast,
         code_callees,
@@ -77,6 +79,14 @@ def build_default_registry() -> ToolRegistry:
         git_worktree,
     )
     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
+    from tools.notify import send_notification
+    from tools.page_watch import page_watch
+    from tools.pdf_tools import (
+        pdf_extract_tables,
+        pdf_extract_text,
+        pdf_merge,
+        pdf_split,
+    )
     from tools.patch import patch_delete, patch_insert, patch_replace
     from tools.runtime_tools import (
         runtime_errors,
@@ -91,11 +101,14 @@ def build_default_registry() -> ToolRegistry:
         security_scan_code,
         security_scan_secrets,
     )
+    from tools.secret_ref import secret_ref, secret_status
     from tools.session_tools import session_undo
     from tools.shell import shell_execute
     from tools.skills_tools import skills_list, skills_load
     from tools.system_monitor import system_status
+    from tools.task_pulse import task_alert, task_ping
     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+    from tools.watch_rules import watch_rule, watch_run
     from tools.web_search import web_search
     from tools.world_monitor import (
         world_monitor_get_alerts,
@@ -108,6 +121,298 @@ def build_default_registry() -> ToolRegistry:
 
     registry = ToolRegistry()
     registry.register_many([classify_tool(t) for t in [
+        # -- document & data tools (repo-mine: pypdf/pdfplumber/markitdown) --
+        Tool(
+            name="pdf.extract_text",
+            description=(
+                "Extract text from a PDF file (all pages or a 1-based page "
+                "range like '2-4' or '1,3,5'). Use for reading PDFs the agent "
+                " downloaded or that the user references."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "PDF file path (relative to project root)."},
+                    "pages": {"type": "string", "description": "Optional 1-based range, e.g. '2-4' or '1,3'."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=pdf_extract_text,
+            category="documents",
+        ),
+        Tool(
+            name="pdf.extract_tables",
+            description=(
+                "Extract tables from a PDF as markdown rows (pdfplumber). "
+                "Best for invoices, reports and financial documents."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "PDF file path."},
+                    "pages": {"type": "string", "description": "Optional 1-based range."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=pdf_extract_tables,
+            category="documents",
+        ),
+        Tool(
+            name="pdf.split",
+            description=(
+                "Split a PDF into chunks of N pages, written under the "
+                "project root. Default 1 page per file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "PDF file path."},
+                    "every": {"type": "integer", "description": "Pages per output file. Default 1."},
+                    "dest": {"type": "string", "description": "Output directory (inside project root)."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.write",
+            handler=pdf_split,
+            category="documents",
+        ),
+        Tool(
+            name="pdf.merge",
+            description="Merge two or more PDFs into one file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "paths": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "PDF paths in merge order (2+).",
+                    },
+                    "dest": {"type": "string", "description": "Output path (default merged.pdf at root)."},
+                },
+                "required": ["paths"],
+            },
+            permission="filesystem.write",
+            handler=pdf_merge,
+            category="documents",
+        ),
+        Tool(
+            name="docs.to_markdown",
+            description=(
+                "Convert a document to Markdown and save it as <name>.md. "
+                "Supports .docx, .html, .pdf, .ipynb, .xlsx, .csv, .json, "
+                ".txt. Use before quoting long documents in research."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Document path (relative to project root)."},
+                    "dest": {"type": "string", "description": "Optional output .md path."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.write",
+            handler=doc_to_markdown,
+            category="documents",
+        ),
+        # -- watch & notify (repo-mine: changedetection.io, ntfy, gotify) --
+        Tool(
+            name="page.watch",
+            description=(
+                "Watch a URL for content changes. First call records a "
+                "baseline; later calls return a line-level diff when the "
+                "page changes ('CHANGED ...') or report 'unchanged'. Also "
+                "supports action='list' and action='remove'."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "http(s) URL to watch."},
+                    "action": {
+                        "type": "string", "enum": ["check", "arm", "list", "remove"],
+                        "description": "Default 'check' (auto-arms on first call).",
+                    },
+                    "timeout": {"type": "number", "description": "Fetch timeout seconds. Default 15."},
+                },
+                "required": ["url"],
+            },
+            permission="web.search",
+            handler=page_watch,
+            category="web",
+        ),
+        Tool(
+            name="notify.send",
+            description=(
+                "Send a push notification (ntfy.sh topic or self-hosted "
+                "Gotify) when a long task finishes or fails. Requires "
+                "JARVIS_NTFY_URL or JARVIS_GOTIFY_URL+JARVIS_GOTIFY_TOKEN."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Notification body."},
+                    "title": {"type": "string", "description": "Title. Default 'JARVIS'."},
+                    "priority": {
+                        "type": "string", "enum": ["min", "low", "default", "high", "urgent"],
+                        "description": "Urgency. Default 'default'.",
+                    },
+                    "tags": {"type": "string", "description": "Comma-separated emoji/keyword tags."},
+                },
+                "required": ["message"],
+            },
+            permission="web.search",
+            handler=send_notification,
+            category="system",
+        ),
+        Tool(
+            name="browser.wait",
+            description=(
+                "Wait for a condition on the active browser page instead of "
+                "blind sleeps: condition='selector' (CSS appears), 'text' "
+                "(substring visible), 'gone' (selector removed), or 'delay'. "
+                "Use after clicks and SPA navigations before reading."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "condition": {
+                        "type": "string", "enum": ["selector", "text", "gone", "delay"],
+                        "description": "What to wait for.",
+                    },
+                    "value": {"type": "string", "description": "CSS selector, text substring, or seconds for delay."},
+                    "timeout": {"type": "number", "description": "Max seconds to wait. Default 10, cap 30."},
+                },
+                "required": ["condition"],
+            },
+            permission="browser.read",
+            handler=browser_wait,
+            category="browser",
+        ),
+        # -- task pulse (repo-mine: healthchecks.io dead-man's switch) --
+        Tool(
+            name="task.ping",
+            description=(
+                "Record a successful check-in for a named recurring task "
+                "(healthchecks-style). Call at the END of every run of a "
+                "cron/scheduled job. expect_minutes sets the silence "
+                "threshold for task.alert."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Task name, e.g. 'nightly-backup'."},
+                    "expect_minutes": {
+                        "type": "number",
+                        "description": "Alert when silent longer than this. Default 60.",
+                    },
+                },
+                "required": ["name"],
+            },
+            permission="system.status",
+            handler=task_ping,
+            category="system",
+        ),
+        Tool(
+            name="task.alert",
+            description=(
+                "Sweep all pinged tasks and report (optionally push via ntfy/ "
+                "Gotify) any that stopped checking in. Run it periodically or "
+                "when the user asks whether background jobs are healthy."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "notify": {
+                        "type": "boolean",
+                        "description": "Push an alert (once per silence episode). Default true.",
+                    },
+                },
+                "required": [],
+            },
+            permission="system.status",
+            handler=task_alert,
+            category="system",
+        ),
+        # -- watch rules (repo-mine: huginn agents x changedetection.io) --
+        Tool(
+            name="watch.rule",
+            description=(
+                "Bind a watched URL to an action: when the page is 'changed'/ "
+                "'unchanged'/seen at all ('any'), then 'notify' (push) or "
+                "'agent_note' (record for the next turn). Rules persist."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "http(s) URL to watch."},
+                    "trigger": {
+                        "type": "string", "enum": ["changed", "unchanged", "any"],
+                        "description": "Condition. Default 'changed'.",
+                    },
+                    "then": {
+                        "type": "string", "enum": ["notify", "agent_note"],
+                        "description": "Action when triggered. Default 'notify'.",
+                    },
+                    "message": {"type": "string", "description": "Optional note sent with the action."},
+                    "action": {
+                        "type": "string", "enum": ["add", "list", "remove"],
+                        "description": "Default 'add'.",
+                    },
+                    "rule_id": {"type": "string", "description": "For action='remove'."},
+                },
+                "required": [],
+            },
+            permission="web.search",
+            handler=watch_rule,
+            category="web",
+        ),
+        Tool(
+            name="watch.run",
+            description=(
+                "Evaluate every watch rule now: re-check each watched URL and "
+                "fire the bound action when its condition matches. Returns a "
+                "FIRED/ERRORS summary."
+            ),
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="web.search",
+            handler=watch_run,
+            category="web",
+        ),
+        # -- secret refs (repo-mine: Infisical-style indirection) --
+        Tool(
+            name="secret.ref",
+            description=(
+                "Resolve or register a credential REFERENCE (env var) without "
+                "ever reading the value into context. action='register' indexes "
+                "an existing env var; default action resolves NAME to a scoped "
+                "handle with the value masked."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "UPPER_SNAKE_CASE env var name, e.g. GROQ_API_KEY."},
+                    "action": {
+                        "type": "string", "enum": ["resolve", "register", "forget"],
+                        "description": "Default 'resolve'.",
+                    },
+                },
+                "required": [],
+            },
+            permission="system.status",
+            handler=secret_ref,
+            category="system",
+        ),
+        Tool(
+            name="secret.status",
+            description=(
+                "List registered secret references with masked fingerprints "
+                "(never values) so the user can audit what the agent can use."
+            ),
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="system.status",
+            handler=secret_status,
+            category="system",
+        ),
         Tool(
             name="filesystem.write",
             description=(

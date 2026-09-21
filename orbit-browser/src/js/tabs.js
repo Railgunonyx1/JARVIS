@@ -184,6 +184,15 @@ function attachWebviewEvents(wv) {
     const t = tabOwnedBy(wv);
     const reason = e && e.details ? e.details.reason : "unknown";
     ErrorLogger.error(new Error("Tab crashed: " + reason + (t ? " (" + t.url + ")" : "")), "tab-crash");
+
+    // CRITICAL: a crashed guest keeps OS-level keyboard focus, so every
+    // host input (omnibox, NTP search, chat) shows a caret but silently
+    // swallows keystrokes — the "can't type anywhere" report. Hand focus
+    // back to the host UI before anything else.
+    try { wv.blur(); } catch (_) {}
+    try { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); } catch (_) {}
+    try { window.focus(); } catch (_) {}
+
     if (t && !t._lastCrashTs) t._lastCrashTs = 0;
     const now = Date.now();
     if (t && now - t._lastCrashTs > 30000) {
@@ -191,7 +200,14 @@ function attachWebviewEvents(wv) {
       showToast("warn", "Tab crashed — reloading", t.title || t.url || "");
       setTimeout(() => { try { wv.reload(); } catch (_) {} }, 400);
     } else {
-      showToast("err", "Tab keeps crashing", reason);
+      // Crash loop (e.g. GPU-process crashes on WebGL-heavy sites):
+      // retire the dead guest instead of leaving a zombie webview that
+      // holds focus and breaks the whole browser. The internal page
+      // overlay keeps the webview attached (per pool design) while the
+      // host UI becomes immediately usable again.
+      showToast("err", "Tab keeps crashing — sent to New Tab", (t && (t.title || t.url)) || reason);
+      try { wv.stop(); } catch (_) {}
+      if (t && t.id === activeTabId) navigateTo("orbit://newtab");
     }
   });
   wv.addEventListener("dom-ready", () => flushPendingLoad(wv));
@@ -609,6 +625,8 @@ const INTERNAL_PAGES = {
   "orbit://goodeye": "goodeyePage",
   "orbit://f1": "f1Page",
   "orbit://worldmon": "worldmonPage",
+  "orbit://tools": "toolsPage",
+  "orbit://watch": "watchPage",
 };
 
 function isWebviewInternal(url) {
@@ -877,6 +895,18 @@ function omniUrlFor(value) {
   if (!value) return null;
   if (/^https?:\/\//.test(value)) return value;
   if (value.startsWith("orbit://")) return value;
+  // Chrome site-search parity: "!g cats", "!ddg cats", "!b cats", "!w cats",
+  // "!yt cats" route to the named engine (DuckDuckGo bangs, honored subset).
+  const bang = value.match(/^!(g|ddg|b|w|yt)\s+(.+)/i);
+  if (bang) {
+    const q = encodeURIComponent(bang[2].trim());
+    const engine = bang[1].toLowerCase();
+    if (engine === "g") return "https://www.google.com/search?q=" + q;
+    if (engine === "ddg") return "https://duckduckgo.com/?q=" + q;
+    if (engine === "b") return "https://www.bing.com/search?q=" + q;
+    if (engine === "w") return "https://en.wikipedia.org/wiki/Special:Search?search=" + q;
+    if (engine === "yt") return "https://www.youtube.com/results?search_query=" + q;
+  }
   if (/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(value)) return "https://" + value;
   return "https://www.google.com/search?q=" + encodeURIComponent(value);
 }

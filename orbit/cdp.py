@@ -395,7 +395,10 @@ class CDPBackend(BrowserBackend):
             target_ids = [t for t in target_ids if self._session_of.get(t) == session_id]
         for tab_id in target_ids:
             self.close_tab(tab_id)
-        self._session_of.pop(session_id, None)
+        self._session_of = {
+            tid: sid for tid, sid in self._session_of.items()
+            if sid != session_id
+        }
 
     def shutdown(self) -> None:
         """Release native resources (process + connections)."""
@@ -449,7 +452,10 @@ class CDPBackend(BrowserBackend):
             "headless": self._headless,
             "tabs": len(self._registry),
             "active_tab": self._registry.active().tab_id if self._registry.active() else None,
-            "sessions": len(self._session_of),
+            # Distinct tab/session counts: _session_of maps tab_id -> session_id,
+            # so len() alone reported TABS as sessions (a 2-session/4-tab browser
+            # claimed "sessions: 4", corrupting diagnostics and health gates).
+            "sessions": len(set(self._session_of.values())),
             "network_policy": "default-deny-private",
             "owns": self._registry.status().get("owners", {}),
         }

@@ -23,13 +23,25 @@ from providers.openai_compat import OpenAICompatibleProvider
 
 
 class LLM7Provider(OpenAICompatibleProvider):
-    """llm7.io — free tier, no credit card, anonymous tokens supported."""
+    """llm7.io — free tier, no credit card, anonymous access supported.
 
-    def __init__(self, config: dict, api_key: str):
+    Verified 2026-09-20: the endpoint accepts the literal token "unused"
+    for a subset of models (GLM-5.3-Flash, codestral-latest — the big-name
+    entries now 401 anonymously). The dead default "gpt-oss-20b" is gone
+    from the live menu; default follows config/models.toml instead.
+    """
+
+    ANON_TOKEN = "unused"
+
+    def __init__(self, config: dict, api_key: str | None = None,
+                 extra_keys: list[str] | None = None,
+                 base_url: str | None = None,
+                 default_model: str | None = None):
         super().__init__(
-            "llm7", config, api_key,
-            base_url=config.get("base_url", "https://api.llm7.io/v1"),
-            default_model="gpt-oss-20b",
+            "llm7", config, api_key or self.ANON_TOKEN,
+            extra_keys=extra_keys,
+            base_url=base_url or config.get("base_url", "https://api.llm7.io/v1"),
+            default_model=default_model or config.get("model", "GLM-5.3-Flash"),
         )
 
 

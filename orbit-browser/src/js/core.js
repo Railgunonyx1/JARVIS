@@ -234,6 +234,9 @@ function initMatrix(el) {
 function setMatrix(state) {
   agentState = state;
   if (sbMatrix) sbMatrix.dataset.state = state;
+  // Orb loop revive: v2's canvas loop parks itself when every orb is static
+  // (offline/fail). A new animated state must spin it back up.
+  if (typeof window.kickOrbLoop === "function") window.kickOrbLoop();
   const label = {
     idle: "IDLE", thinking: "THINK", planning: "PLAN",
     running: "RUN", ask: "ASK", done: "DONE", fail: "FAIL",

@@ -1,0 +1,18 @@
+{
+  "name": "writing_plans",
+  "description": "Use when you have a spec or requirements for a multi-step task, before touching code",
+  "tools": [
+    "filesystem.write",
+    "filesystem.read"
+  ],
+  "tags": [
+    "planning",
+    "docs",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/writing_plans.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\writing-plans"
+}

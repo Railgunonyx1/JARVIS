@@ -104,6 +104,9 @@ class CrashyBackend(CDPBackend):
         self._started = True
         self._launched = True
         self._base = "http://127.0.0.1:0"
+        # Real invariant: launch() re-establishes the browser-level CDP
+        # connection (shutdown() tears it down; launch must restore it).
+        self._browser_conn = FakeConn(self.page)
 
     def shutdown(self) -> None:
         self.healthy = False

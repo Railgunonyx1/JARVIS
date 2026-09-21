@@ -76,6 +76,7 @@ class PlaywrightBackend(BrowserBackend):
         self._pw = None
         self._browser = None
         self._checked = False
+        self._playwright_ok = False
         self._pages: dict[str, Any] = {}
         self._session_of: dict[str, str] = {}
         self._contexts: dict[str, Any] = {}
@@ -93,8 +94,17 @@ class PlaywrightBackend(BrowserBackend):
 
     # ---------------------------------------------------------- lifecycle
     def _check_playwright(self) -> bool:
+        """Probe Playwright importability + the Chromium binary; cache the VERDICT.
+
+        Regression note: this used to cache ``_checked`` and then answer
+        ``self._browser is not None or self._pw is not None``. A failed first
+        probe (Chromium missing) left the driver process running, so every
+        later call answered True — ``available`` lied, the engine raised a
+        cryptic launch error, and the WebScraper fallback (keyed on
+        ``available == False``) could never fire.
+        """
         if self._checked:
-            return self._browser is not None or self._pw is not None
+            return self._playwright_ok
         self._checked = True
         try:
             import playwright.sync_api as _p
@@ -107,11 +117,22 @@ class PlaywrightBackend(BrowserBackend):
             path = self._chromium.executable_path
             if path and os.path.exists(path):
                 self._playwright_module = _p.sync_playwright
+                self._playwright_ok = True
                 return True
             logger.warning("Chromium not installed (run: playwright install chromium)")
         except Exception as exc:
             logger.warning("Playwright unavailable: %s", exc)
         self._playwright_module = None
+        self._playwright_ok = False
+        # Do not leak the probe driver process on a failed probe; a later
+        # successful probe (or launch) simply starts a fresh one.
+        if self._pw is not None:
+            try:
+                self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
+        self._chromium = None
         return False
 
     @property
@@ -156,6 +177,11 @@ class PlaywrightBackend(BrowserBackend):
             ctx.route(self._blocking["pattern"], self._blocking["handler"])
         self._contexts[session_id] = ctx
         return ctx
+
+    def validate_url(self, url: str) -> str:
+        """Public policy gate so non-engine paths (WebScraper fallback) enforce
+        exactly the same SSRF posture as engine navigation."""
+        return self._validate_target(url)
 
     def _validate_target(self, url: str) -> str:
         """Normalize + enforce the network policy before navigation."""
@@ -233,6 +259,7 @@ class PlaywrightBackend(BrowserBackend):
                 pass
             self._pw = None
             self._checked = False
+            self._playwright_ok = False
 
     def status(self) -> dict:
         return {
@@ -270,9 +297,14 @@ class PlaywrightBackend(BrowserBackend):
         ))
         self.switch_tab(tab_id)
         if url:
-            self.navigate(url, tab_id=tab_id)
+            nav = self.navigate(url, tab_id=tab_id)
+            info.url, info.title = nav.url, nav.title
         self._enforce_cap()
-        return self.tabs.get(tab_id) if False else info
+        # Sync the registry TabContext too so list_tabs reflects reality.
+        registered = self.tabs.get(tab_id)
+        if registered and url:
+            registered.url, registered.title = info.url, info.title
+        return info
 
     def _enforce_cap(self) -> int:
         """Close the least-recently-active tabs beyond the memory cap.
@@ -370,22 +402,16 @@ class PlaywrightBackend(BrowserBackend):
                        url=page.url, title=_title(page), active=True)
 
     def go_back(self, tab_id: str | None = None) -> None:
-        try:
-            self._page_of(tab_id).go_back()
-        except Exception as exc:
-            logger.debug("go_back failed: %s", exc)
+        """Navigate back; failures propagate (never launder into success)."""
+        self._page_of(tab_id).go_back()
 
     def go_forward(self, tab_id: str | None = None) -> None:
-        try:
-            self._page_of(tab_id).go_forward()
-        except Exception as exc:
-            logger.debug("go_forward failed: %s", exc)
+        """Navigate forward; failures propagate (never launder into success)."""
+        self._page_of(tab_id).go_forward()
 
     def reload(self, tab_id: str | None = None) -> None:
-        try:
-            self._page_of(tab_id).reload()
-        except Exception as exc:
-            logger.debug("reload failed: %s", exc)
+        """Reload the page; failures propagate (never launder into success)."""
+        self._page_of(tab_id).reload()
 
     # -------------------------------------------------------- read/observe
     def get_url(self, tab_id: str | None = None) -> str:
@@ -437,12 +463,35 @@ class PlaywrightBackend(BrowserBackend):
 
     # ---------------------------------------------------------------- act
     def _el(self, handle: str, page: Any) -> Any:
-        idx = int(handle[len("el"):]) if handle.startswith("el") else -1
+        """Resolve a generation-bound handle to a live element.
+
+        Regression note: this used to be ``int(handle[2:])``, which raises
+        ValueError on the ``el0_g<gen>`` handles that page_context actually
+        produces — every read→click/type flow was dead. Now it parses via
+        ``parse_handle``, verifies the snapshot identity against the page's
+        current snapshot stamp, and re-queries with the EXACT producer
+        selector (it previously omitted ``[contenteditable='true']``, so
+        indexes could misalign even with a correct parse). A handle from an
+        older snapshot raises RuntimeError("STALE_HANDLE ...") — the agent
+        must re-read the page rather than risk clicking the wrong element.
+        """
+        from jbrowser.page_context import parse_handle, _SELECTOR
+        parsed = parse_handle(handle)
+        if parsed is None:
+            raise RuntimeError(f"invalid element handle: {handle}")
+        idx, generation = parsed
+        current = getattr(page, "_orbit_snapshot_id", None)
+        if current is None:
+            # No snapshot stamp: the caller never read the page. Re-reading
+            # is required for handle semantics to mean anything.
+            raise RuntimeError(
+                "STALE_HANDLE: no current page snapshot; call browser.read first")
+        if generation != str(current):
+            raise RuntimeError(
+                f"STALE_HANDLE: {handle} belongs to an older page snapshot "
+                f"(current {current}); re-read the page")
         try:
-            elements = page.query_selector_all(
-                "a[href], button, input, select, textarea, [role='button'], "
-                "[role='link'], [role='textbox']"
-            )
+            elements = page.query_selector_all(_SELECTOR)
             return elements[idx] if 0 <= idx < len(elements) else None
         except Exception:
             return None

@@ -42,6 +42,10 @@ class OrbitTarget:
     owner: str
     ws_url: str = ""
     created_at: float = field(default_factory=time.time)
+    # Last-activity clock (LRU signal). Distinct from created_at: using the
+    # creation timestamp as a liveness stamp made eviction evict the OLDEST
+    # tab instead of the least-recently-USED one.
+    last_active_at: float = field(default_factory=time.time)
     url: str = ""
     title: str = ""
     active: bool = False
@@ -106,7 +110,8 @@ class TargetRegistry:
                 return False
             self._by_target.pop(t.target_id, None)
             if self._active == tab_id:
-                remaining = sorted(self._targets.values(), key=lambda x: x.created_at)
+                remaining = sorted(self._targets.values(),
+                                   key=lambda x: x.last_active_at)
                 if remaining:
                     self._active = remaining[-1].tab_id
                     remaining[-1].active = True
@@ -130,10 +135,10 @@ class TargetRegistry:
             return t
 
     def touch(self, tab_id: str) -> None:
+        """Stamp last activity (LRU signal); creation time is immutable."""
         t = self.lookup(tab_id)
         if t:
-            t.url = t.url
-            t.created_at = time.time()
+            t.last_active_at = time.time()
 
     # ------------------------------------------------------------- ownership
     def own(self, tab_id: str, owner: str):

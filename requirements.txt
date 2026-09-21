@@ -33,7 +33,15 @@ textual==8.2.8
 
 # === Optional (lazy, guarded imports) ===
 # playwright==1.48.0            # J-Browser Chromium engine (then: playwright install chromium)
+# cactus-needle                 # 26M-param local tool-call/extract/embed model, 8-29MB (validated 2026-09-20:
+#                               #   tool loop + extract + embed run on Windows CPU, ~100MB RAM, 128 tok/s decode;
+#                               #   no tree import yet — candidate for the tiny intent/router lane)
 # sentence-transformers==5.6.1   # memory embeddings (~2GB torch)
 # aiosqlite>=0.19.0              # runtime.telemetry persistence
 # sounddevice==0.5.5             # audio health check
 # pynvml>=11.0.0                 # GPU monitoring (core/resource_manager)
+
+# Repo-mine pass 2: PDF + doc export tools
+pypdf
+pdfplumber
+markdownify

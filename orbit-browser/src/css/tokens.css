@@ -10,9 +10,9 @@
 @font-face{font-family:Geist;src:url("../fonts/Geist-SemiBold.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url("../fonts/GeistMono-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url("../fonts/GeistMono-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:Doto;src:url("../fonts/Doto-Regular.ttf") format("truetype");font-weight:400;font-style:normal;font-display:swap}
-@font-face{font-family:Doto;src:url("../fonts/Doto-Medium.ttf") format("truetype");font-weight:500;font-style:normal;font-display:swap}
-@font-face{font-family:Doto;src:url("../fonts/Doto-Bold.ttf") format("truetype");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Bold.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 
 :root {
   color-scheme: dark;
@@ -118,6 +118,79 @@ html[data-theme="light"],
   --jb-shadow: 0 12px 32px rgba(0,0,0,.08);
   --jb-ring: 0 0 0 2px var(--jb-paper);
 }
+
+/* ── Minimal theme — Premium Utilitarian Minimalism / editorial document ─
+   Warm monochrome canvas, charcoal ink, hairline borders, muted pastels as
+   the only color. Geist stays for UI (spec-compliant geometric sans); an
+   editorial serif takes display duty; Geist Mono stays for meta. Flat:
+   shadows effectively non-existent. */
+html[data-theme="minimal"],
+[data-theme="minimal"] {
+  color-scheme: light;
+
+  /* Surfaces — warm bone canvas, white cards */
+  --jb-void: #F7F6F3;
+  --jb-bg: #FBFBFA;
+  --jb-surface: #FFFFFF;
+  --jb-surface-hover: #F9F9F8;
+  --jb-surface-active: #F1F0ED;
+  --jb-elevated: #FFFFFF;
+  --jb-border: #EAEAEA;
+  --jb-border-subtle: rgba(0, 0, 0, 0.06);
+  --jb-line-hard: #EAEAEA;
+
+  /* Text — charcoal ink, never black */
+  --jb-text: #2F3437;
+  --jb-text-secondary: #787774;
+  --jb-text-tertiary: #9B9A97;
+  --jb-text-disabled: #C4C3C0;
+  --jb-paper: #111111;
+  --jb-ghost: #9B9A97;
+  --jb-mute: #787774;
+
+  /* Signal — muted pastels as the only color (spot use only) */
+  --jb-accent: #1F6C9F;          /* pale-blue ink for links/focus */
+  --jb-accent-hover: #17547C;
+  --jb-accent-active: #114262;
+  --jb-accent-muted: #E1F3FE;
+  --jb-accent-text: #1F6C9F;
+
+  --jb-success: #346538;
+  --jb-success-muted: #EDF3EC;
+  --jb-warning: #956400;
+  --jb-warning-muted: #FBF3DB;
+  --jb-danger: #9F2F2D;
+  --jb-danger-muted: #FDEBEC;
+  --jb-info: #1F6C9F;
+  --jb-info-muted: #E1F3FE;
+  --jb-glyph: #111111;
+
+  /* Type — editorial serif takes display duty (spec: tight tracking) */
+  --jb-font-display: Newsreader, 'Instrument Serif', Georgia, serif;
+
+  /* Shape — crisp 8px, not industrial 0 */
+  --jb-radius-xs: 4px;
+  --jb-radius-sm: 6px;
+  --jb-radius-md: 8px;
+  --jb-radius-lg: 8px;
+  --jb-radius-xl: 12px;
+
+  /* Shadows — ultra-diffuse, < 0.05 opacity only */
+  --jb-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --jb-ring: 0 0 0 2px #E1F3FE;
+}
+
+/* Minimal: hairline everywhere beats filled surfaces — invert the hover
+   logic so 'paper' buttons (ink-filled) read as primary actions. */
+[data-theme="minimal"] .nt-search,
+[data-theme="minimal"] .omnibox {
+  background: #FFFFFF;
+  border: 1px solid #EAEAEA;
+}
+[data-theme="minimal"] ::selection { background: #E1F3FE; color: #111; }
+[data-theme="minimal"] ::-webkit-scrollbar { width: 10px; }
+[data-theme="minimal"] ::-webkit-scrollbar-thumb { background: #EAEAEA; border-radius: 5px; }
+[data-theme="minimal"] ::-webkit-scrollbar-thumb:hover { background: #DDD; }
 
 /* ── Shared primitives ───────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

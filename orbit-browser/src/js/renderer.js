@@ -189,11 +189,12 @@ function toggleShortcutsOverlay() {
           <div class="shortcuts-group">
             <h3>Tabs</h3>
             <div class="shortcut"><kbd>Ctrl+T</kbd><span>New tab</span></div>
-            <div class="shortcut"><kbd>Ctrl+W</kbd><span>Close tab</span></div>
+            <div class="shortcut"><kbd>Ctrl+W</kbd><span>Close tab (closes window when none left)</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+T</kbd><span>Reopen closed tab</span></div>
             <div class="shortcut"><kbd>Ctrl+Tab</kbd><span>Next tab</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+Tab</kbd><span>Previous tab</span></div>
-            <div class="shortcut"><kbd>Ctrl+1-9</kbd><span>Switch to tab N</span></div>
+            <div class="shortcut"><kbd>Ctrl+1-8</kbd><span>Switch to tab N</span></div>
+            <div class="shortcut"><kbd>Ctrl+9</kbd><span>Jump to last tab</span></div>
           </div>
           <div class="shortcuts-group">
             <h3>Navigation</h3>
@@ -201,6 +202,7 @@ function toggleShortcutsOverlay() {
             <div class="shortcut"><kbd>Alt+Right</kbd><span>Go forward</span></div>
             <div class="shortcut"><kbd>Ctrl+R</kbd><span>Reload</span></div>
             <div class="shortcut"><kbd>Ctrl+L</kbd><span>Focus address bar</span></div>
+            <div class="shortcut"><kbd>Alt+Home</kbd><span>Home page</span></div>
             <div class="shortcut"><kbd>Ctrl+Home</kbd><span>New tab page</span></div>
           </div>
           <div class="shortcuts-group">
@@ -218,7 +220,8 @@ function toggleShortcutsOverlay() {
             <div class="shortcut"><kbd>Ctrl+Shift+K</kbd><span>Floating JARVIS chat</span></div>
             <div class="shortcut"><kbd>Ctrl+K</kbd><span>Command palette</span></div>
             <div class="shortcut"><kbd>Ctrl+/</kbd><span>This overlay</span></div>
-            <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Split view</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+\\</kbd><span>Split view</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Screenshot</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+R</kbd><span>Reader mode</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+P</kbd><span>Pop out video (PiP)</span></div>
           </div>
@@ -228,6 +231,8 @@ function toggleShortcutsOverlay() {
             <div class="shortcut"><kbd>Ctrl+Shift+B</kbd><span>Toggle bookmark bar</span></div>
             <div class="shortcut"><kbd>Ctrl+H</kbd><span>History</span></div>
             <div class="shortcut"><kbd>Ctrl+J</kbd><span>Downloads</span></div>
+            <div class="shortcut"><kbd>Shift+Esc</kbd><span>Task manager</span></div>
+            <div class="shortcut"><kbd>Ctrl+Shift+Del</kbd><span>Clear browsing data</span></div>
             <div class="shortcut"><kbd>Ctrl+P</kbd><span>Print</span></div>
             <div class="shortcut"><kbd>Ctrl+Shift+S</kbd><span>Screenshot</span></div>
           </div>
