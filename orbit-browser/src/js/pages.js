@@ -435,8 +435,8 @@ function renderSitePopup() {
   const connEl = document.getElementById("siteConn");
   if (connEl) connEl.textContent = host === "—" ? "Not on a web page" : (origin.startsWith("https") ? "Secure connection" : "Not secure — HTTP");
   const permEl = document.getElementById("sitePerms");
-  if (permEl && window.orbit?.system?.permissions?.list) {
-    window.orbit.system.permissions.list().then((list) => {
+  if (permEl && window.orbit?.permissions?.list) {
+    window.orbit.permissions.list().then((list) => {
       if (!permEl) return;
       const mine = (Array.isArray(list) ? list : []).filter((p) => p.origin === origin);
       if (!mine.length) {

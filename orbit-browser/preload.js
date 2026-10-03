@@ -80,10 +80,15 @@ contextBridge.exposeInMainWorld("orbit", {
   })(),
 
   // ── Navigation ──────────────────────────────────────────────────
-  navigate: (url) => ipcRenderer.invoke("navigate", url),
+  navigation: {
+    to: (url) => ipcRenderer.invoke("navigate", url),
+  },
 
-  // ── Browser Info ────────────────────────────────────────────────
-  info: () => ipcRenderer.invoke("browser:info"),
+  // ── Browser Info / window-level browser actions ────────────────
+  browser: {
+    info: () => ipcRenderer.invoke("browser:info"),
+    popoutVideo: () => ipcRenderer.invoke("tab:popout"),
+  },
 
   // ── Window Events ───────────────────────────────────────────────
   on: {
@@ -140,12 +145,18 @@ contextBridge.exposeInMainWorld("orbit", {
     markInstalled: (extensionId) => ipcRenderer.invoke("extensions:mark-installed", extensionId),
   },
 
-  // ── Permissions / Downloads (top-level convenience aliases) ───
+  // ── Permissions ────────────────────────────────────────────────
+  // Canonical location. It used to also be reachable as system.permissions;
+  // two names for one capability means the renderer, the security review and
+  // the permission engine can silently drift apart. One name, one path.
   permissions: {
     allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),
     revoke: (origin, permission) => ipcRenderer.invoke("permissions:revoke", origin, permission),
     list: () => ipcRenderer.invoke("permissions:list"),
   },
+
+  // ── Downloads ──────────────────────────────────────────────────
+  // Canonical location (was also exposed as system.downloads).
   downloads: {
     list: () => ipcRenderer.invoke("downloads:list"),
     clear: () => ipcRenderer.invoke("downloads:clear"),
@@ -154,7 +165,18 @@ contextBridge.exposeInMainWorld("orbit", {
     onUpdated: (cb) => ipcRenderer.on("downloads-updated", (_e, list) => cb(list)),
   },
 
-  // ── System (Shields / Permissions / Performance / Spaces) ───────
+  // ── Spaces ─────────────────────────────────────────────────────
+  spaces: {
+    list: () => ipcRenderer.invoke("spaces:list"),
+    switch: (id) => ipcRenderer.invoke("spaces:switch", id),
+  },
+
+  // ── Session ────────────────────────────────────────────────────
+  session: {
+    clearSiteData: (origin) => ipcRenderer.invoke("session:clear-site-data", origin),
+  },
+
+  // ── System (Shields / Performance) ─────────────────────────────
   system: {
     security: {
       status: () => ipcRenderer.invoke("security:status"),
@@ -163,31 +185,9 @@ contextBridge.exposeInMainWorld("orbit", {
       network: (cfg) => ipcRenderer.invoke("security:network", cfg),
       clearBrowsingData: (opts) => ipcRenderer.invoke("browsing-data:clear", opts || {}),
     },
-    permissions: {
-      allow: (origin, permission) => ipcRenderer.invoke("permissions:allow", origin, permission),
-      revoke: (origin, permission) => ipcRenderer.invoke("permissions:revoke", origin, permission),
-      list: () => ipcRenderer.invoke("permissions:list"),
-    },
-    downloads: {
-      list: () => ipcRenderer.invoke("downloads:list"),
-      clear: () => ipcRenderer.invoke("downloads:clear"),
-      cancel: (id) => ipcRenderer.invoke("downloads:cancel", id),
-      show: (id) => ipcRenderer.invoke("downloads:show", id),
-      onUpdated: (cb) => ipcRenderer.on("downloads-updated", (_e, list) => cb(list)),
-    },
     performance: {
       status: () => ipcRenderer.invoke("performance:status"),
       efficiency: (enabled) => ipcRenderer.invoke("performance:efficiency", !!enabled),
-    },
-    spaces: {
-      list: () => ipcRenderer.invoke("spaces:list"),
-      switch: (id) => ipcRenderer.invoke("spaces:switch", id),
-    },
-    ui: {
-      popoutVideo: () => ipcRenderer.invoke("tab:popout"),
-    },
-    session: {
-      clearSiteData: (origin) => ipcRenderer.invoke("session:clear-site-data", origin),
     },
   },
 });

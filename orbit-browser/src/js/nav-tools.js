@@ -153,7 +153,7 @@ function printPage() {
   try { const wv = activeWebview(); if (wv) wv.print(); } catch (e) { showToast("err", "Print Failed", e.message); }
 }
 function popoutVideo() {
-  const real = window.orbit && window.orbit.system && window.orbit.system.ui && window.orbit.system.ui.popoutVideo;
+  const real = window.orbit && window.orbit.browser && window.orbit.browser.popoutVideo;
   if (!real) { showToast("err", "PiP", "Surfaces unavailable"); return; }
   real().then(function(r) {
     if (r && r.ok) showToast("ok", "Picture-in-Picture", r.result === "OK" || r.result === "requesting" ? "Video popped out" : String(r.result));

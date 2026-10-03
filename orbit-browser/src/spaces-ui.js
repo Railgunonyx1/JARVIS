@@ -83,7 +83,7 @@ class SpacesUi {
   async switchTo(id) {
     this.close();
     try {
-      await window.orbit.system.spaces.switch(id);
+      await window.orbit.spaces.switch(id);
     } catch (e) {
       console.error("[Spaces] switch failed:", e);
     }
