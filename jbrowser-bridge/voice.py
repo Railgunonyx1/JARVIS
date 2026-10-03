@@ -190,6 +190,10 @@ def _strip_markdown(text: str) -> str:
     t = re.sub(r"^\s*>\s?", "", t, flags=re.M)
     t = re.sub(r"\|", " ", t)
     t = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]", "", t)  # emoji
+    # Control characters: local engines tolerate BEL/NUL, but cloud vendors
+    # reject the request outright, so the same text would speak locally and
+    # 400 remotely. Strip C0/C1 (keeping \n and \t, which the line rules use).
+    t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", t)
     t = re.sub(r"\n{2,}", ". ", t)
     t = re.sub(r"\s+", " ", t)
     return t.strip()
@@ -245,6 +249,16 @@ def _select_tts_engine(name: str | None) -> object:
         fn = _tts_engine.get(name)
         if fn is not None:
             return fn
+    # Lazy fallback for the cloud engines when voice_engines was the import
+    # entry point and registration had to be skipped as circular.
+    try:
+        import voice_engines as _ve
+
+        fn = (getattr(_ve, "TTS_FUNCTIONS", None) or {}).get(name)
+    except ImportError:
+        fn = None
+    if fn is not None:
+        return fn
     logger.debug("voice: unknown tts engine %r; using default chain", name)
     return _resolve_tts_engine()
 
@@ -273,19 +287,83 @@ def _call_engine(engine_fn: object, text: str, speed: float, voice: str) -> tupl
 
 def _tts_one(text: str, speed: float = 1.0, engine_name: str | None = None,
              voice: str = "") -> tuple[bytes, str, str]:
-    """Render text with the configured engine.
+    """Render text, reporting (bytes, mime, engine_actually_used).
 
-    Returns (bytes, mime, engine_used). The default production behavior is
-    unchanged for every tester that never assigns _tts_engine/_tts_engines.
-    ``voice`` selects a Kokoro voice id; engines without a voice parameter
-    ignore it.
+    ``engine_name`` pins one engine: only that engine runs, so an explicit
+    choice surfaces its real error instead of silently answering from a
+    different provider. ``None``/``"auto"`` walks :func:`_tts_chain` --
+    every AVAILABLE engine, best-first -- and returns the first success.
+
+    The fallback matters: before this, ``auto`` resolved to whichever engine
+    happened to be registered first and had no second chance, so one flaky
+    network engine meant no audio at all. SAPI closes the chain, so a
+    keyless machine always gets a voice.
     """
-    engine_fn = _select_tts_engine(engine_name)
-    # Report the engine that ACTUALLY ran, not the one that was requested:
-    # an unknown pin falls back to the default chain and must say so.
-    key = getattr(engine_fn, "__name__", repr(engine_fn))
-    data, mime = _call_engine(engine_fn, text, speed, voice)
-    return data, mime, key
+    if engine_name and engine_name != "auto":
+        engine_fn = _select_tts_engine(engine_name)
+        key = getattr(engine_fn, "__name__", repr(engine_fn))
+        data, mime = _call_engine(engine_fn, text, speed, voice)
+        return data, mime, key
+
+    chain = _auto_chain()
+    last_error: Exception | None = None
+    for name, engine_fn in chain:
+        try:
+            data, mime = _call_engine(engine_fn, text, speed, voice)
+            return data, mime, name
+        except Exception as exc:  # noqa: BLE001 - try the next engine
+            logger.warning("voice: tts engine %s failed (%s); falling back", name, exc)
+            last_error = exc
+    raise RuntimeError("every TTS engine failed") from last_error
+
+
+def _auto_chain() -> list[tuple[str, object]]:
+    """Engines ``auto`` walks, honouring the injection seam.
+
+    An explicit ``_tts_engine`` is a programmatic override (server.py's
+    test seam, and anything else that pins engines deliberately), so it wins
+    and its order is respected -- as a single callable or as a dict.
+    Otherwise the availability-derived chain runs, which is what filters out
+    unconfigured cloud engines.
+    """
+    if isinstance(_tts_engine, dict):
+        if _tts_engine:
+            return list(_tts_engine.items())
+    elif callable(_tts_engine):
+        return [(getattr(_tts_engine, "__name__", repr(_tts_engine)), _tts_engine)]
+    return _tts_chain()
+
+
+def _tts_chain() -> list[tuple[str, object]]:
+    """Available TTS engines, best quality first, SAPI last.
+
+    Order encodes preference: a keyed neural cloud voice beats Edge Neural
+    beats local Kokoro beats Windows SAPI, which only ever runs when nothing
+    else can.
+    """
+    import voice_engines as _ve
+
+    functions: dict[str, object] = {
+        "elevenlabs": tts_elevenlabs,
+        "kokoro": tts_kokoro,
+        "sapi": tts_sapi,
+    }
+    functions.update(_ve.TTS_FUNCTIONS)
+
+    chain: list[tuple[str, object]] = []
+    for info in _ve.tts_engines():
+        fn = functions.get(info.id)
+        if fn is None:
+            continue
+        if info.available:
+            chain.append((info.id, fn))
+        elif info.id == "sapi":
+            # Windows-only host where SAPI is itself unavailable: still worth
+            # naming so the error the user sees is the engine's, not a 404.
+            chain.append((info.id, fn))
+    if not chain:
+        chain.append(("sapi", tts_sapi))
+    return chain
 
 def tts_sapi(text: str, speed: float = 1.0) -> tuple[bytes, str]:
     """Windows SAPI narration (keyless path). Returns (bytes, mime)."""
@@ -620,8 +698,73 @@ def tts(text: str, voice: str = "", speed: float = 1.0) -> tuple[bytes, str, str
 # ── STT ───────────────────────────────────────────────────────────────────
 
 
-def stt_bytes(data: bytes, filename: str = "audio.webm") -> str:
-    """Transcribe audio bytes via ElevenLabs Scribe v2. Key-gated."""
+def stt_bytes(data: bytes, filename: str = "audio.webm",
+              engine_name: str | None = None) -> str:
+    """Transcribe audio bytes. Key-gated, with a server-side default.
+
+    ``engine_name`` pins a provider (``groq``, ``deepgram``, ``elevenlabs``).
+    When unset the first AVAILABLE engine wins, so a machine with only
+    ``GROQ_API_KEY`` set gets working push-to-talk with no configuration.
+    Every candidate raises ``RuntimeError`` with an actionable message when
+    it cannot run, which the HTTP layer surfaces verbatim.
+    """
+    chosen, fn = _select_stt_engine(engine_name)
+    if fn is None:
+        raise RuntimeError(_STT_UNCONFIGURED)
+    t0 = time.monotonic()
+    try:
+        text = fn(data, filename=filename)
+    except TypeError:
+        # Engines that do not take a filename still get called correctly.
+        text = fn(data)
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    text = (text or "").strip()
+    logger.info("voice: stt %s %.1fms (engine=%s, audio_bytes=%d)",
+                "ok" if text else "empty", duration_ms, chosen, len(data))
+    return text
+
+
+_STT_UNCONFIGURED = (
+    "no STT engine configured - set GROQ_API_KEY (free, fastest), "
+    "DEEPGRAM_API_KEY, or ELEVENLABS_API_KEY - see docs/VOICE-ENGINES.md"
+)
+
+
+def _select_stt_engine(engine_name: str | None) -> tuple[str, object | None]:
+    """Resolve an STT engine name to (id, callable).
+
+    An explicit name wins even when its key is missing -- the engine then
+    raises with the precise missing-variable message instead of silently
+    answering from a different provider. Unknown names and ``None``/``auto``
+    fall back to the first available engine, or ``("none", None)`` when no
+    STT provider is configured at all.
+    """
+    import voice_engines as _ve
+
+    if engine_name and engine_name != "auto":
+        if engine_name == "elevenlabs":
+            return "elevenlabs", _stt_elevenlabs
+        fn = _ve.STT_FUNCTIONS.get(engine_name)
+        if fn is not None:
+            return engine_name, fn
+        logger.debug("voice: unknown stt engine %r; using default chain", engine_name)
+
+    for info in _ve.stt_engines():
+        if not info.available:
+            continue
+        if info.id == "elevenlabs":
+            return "elevenlabs", _stt_elevenlabs
+        fn = _ve.STT_FUNCTIONS.get(info.id)
+        if fn is not None:
+            return info.id, fn
+    # Nothing configured at all. Signal it explicitly so the caller raises the
+    # message that names EVERY option, instead of falling into ElevenLabs and
+    # telling a Groq user to set an ElevenLabs key.
+    return "none", None
+
+
+def _stt_elevenlabs(data: bytes, filename: str = "audio.webm") -> str:
+    """ElevenLabs Scribe v2 — the original, key-gated STT path."""
     key = _api_key()
     if not key:
         raise RuntimeError(
@@ -630,18 +773,11 @@ def stt_bytes(data: bytes, filename: str = "audio.webm") -> str:
     client = _el_client() or _force_client(key)
     if client is None:
         raise RuntimeError("ElevenLabs SDK unavailable (pip install elevenlabs)")
-    t0 = time.monotonic()
-    try:
-        result = client.speech_to_text.convert(
-            file=(filename, data),
-            model_id=EL_STT_MODEL,
-        )
-    finally:
-        duration_ms = int((time.monotonic() - t0) * 1000)
-    text = (getattr(result, "text", "") or "").strip()
-    logger.info("voice: stt %s %.1fms (model=%s, audio_bytes=%d)",
-                "ok" if text else "empty", duration_ms, EL_STT_MODEL, len(data))
-    return text
+    result = client.speech_to_text.convert(
+        file=(filename, data),
+        model_id=EL_STT_MODEL,
+    )
+    return (getattr(result, "text", "") or "").strip()
 
 
 def _force_client(key: str):
@@ -680,7 +816,12 @@ def ack_for(text: str) -> str:
 
 
 def voice_status() -> dict:
+    import voice_engines as _ve
+
     kokoro_ready = _kokoro_cache["inst"] is not None
+    tts_all = _ve.tts_engines()
+    stt_all = _ve.stt_engines()
+    stt_default = _ve.first_available_stt()
     return {
         "ok": True,
         "tts": ("elevenlabs" if _api_key() else "kokoro" if kokoro_ready else "sapi"),
@@ -691,7 +832,11 @@ def voice_status() -> dict:
                 ("sapi", True),
             ) if on
         ],
-        "stt": "elevenlabs" if _api_key() else None,
+        # Full inventory for the picker: every engine JARVIS can name, with
+        # the reason it cannot run so the UI can dim it and explain why.
+        "tts_engines": [e.to_dict() for e in tts_all],
+        "stt_engines": [e.to_dict() for e in stt_all],
+        "stt": stt_default.id if stt_default else None,
         "voice_id": EL_VOICE_ID,
         "tts_model": EL_TTS_MODEL,
         "stt_model": EL_STT_MODEL,
@@ -706,3 +851,29 @@ def voice_status() -> dict:
         },
         "speed_range": [SPEED_MIN, SPEED_MAX],
     }
+
+
+# ── Cloud engine registration ───────────────────────────────────────────
+# Registered at import time so ``voice_model=edge`` (or a click on the picker)
+# resolves through the same ``_select_tts_engine`` path as every other engine.
+# Registration must not fail when the cloud modules are missing: the engines
+# raise a precise RuntimeError at call time instead, and the picker greys them
+# out via voice_status().
+def _register_cloud_tts_engines() -> None:
+    try:
+        import voice_engines as _ve
+    except ImportError as exc:  # pragma: no cover - module is in-tree
+        logger.warning("voice: cloud TTS engines unavailable (%s)", exc)
+        return
+    # voice_engines imports THIS module, so when it is the entry point it is
+    # only half-executed here and TTS_FUNCTIONS does not exist yet. Skipping
+    # is safe: _select_tts_engine resolves those names lazily on first use.
+    functions = getattr(_ve, "TTS_FUNCTIONS", None)
+    if not functions:
+        logger.debug("voice: cloud engines deferred to lazy registration")
+        return
+    for name, fn in functions.items():
+        register_tts_engine(name, fn)
+
+
+_register_cloud_tts_engines()

@@ -534,7 +534,11 @@
     auto: 'Auto',
     sapi: 'SAPI (Windows)',
     kokoro: 'Kokoro (local)',
-    elevenlabs: 'ElevenLabs'
+    elevenlabs: 'ElevenLabs',
+    edge: 'Edge Neural (free)',
+    google: 'Google Cloud TTS',
+    azure: 'Azure Speech',
+    polly: 'Amazon Polly'
   };
 
   function wireMainComposerVoice() {
@@ -544,6 +548,8 @@
     var engName = document.getElementById('voiceModelName');
     if (!voiceBtn || !engBtn || !engMenu || engMenu.__wired) return;
     engMenu.__wired = true;
+    engBtn.setAttribute('aria-haspopup', 'menu');
+    engBtn.setAttribute('aria-expanded', 'false');
 
     function label(engine) {
       return ENGINE_LABELS[engine] || engine;
@@ -551,31 +557,85 @@
 
     function paint() {
       engName.textContent = label(state.ttsEngine);
+      engBtn.title = state.ttsEngine === 'auto'
+        ? 'Voice engine: auto (best available)'
+        : 'Voice engine: ' + label(state.ttsEngine);
       var opts = engMenu.querySelectorAll('.model-option[data-voice]');
       for (var i = 0; i < opts.length; i++) {
         var key = opts[i].getAttribute('data-voice');
         var on = key === state.ttsEngine;
         opts[i].classList.toggle('active', on);
-        opts[i].setAttribute('aria-selected', on ? 'true' : 'false');
+        opts[i].setAttribute('aria-checked', String(on));
         var dot = opts[i].querySelector('.dot');
-        if (!dot) {
-          dot = document.createElement('span');
-          dot.className = 'dot';
-          opts[i].insertBefore(dot, opts[i].firstChild);
-        }
-        dot.classList.toggle('on', on);
+        if (dot) dot.classList.toggle('on', on);
       }
     }
 
     function closeMenu() {
       engMenu.classList.remove('open');
       engMenu.removeAttribute('data-open');
+      engMenu.hidden = true;
+      engBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function openMenu() {
+      engMenu.classList.add('open');
+      engMenu.setAttribute('data-open', 'true');
+      engMenu.hidden = false;
+      engBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    function optionRow(engine) {
+      var on = engine.id === state.ttsEngine;
+      var opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = 'model-option' + (on ? ' active' : '');
+      opt.setAttribute('data-voice', engine.id);
+      opt.setAttribute('role', 'menuitemradio');
+      opt.setAttribute('aria-checked', String(on));
+      // Grey out, don't hide: the user can SEE that Google Cloud exists and
+      // exactly which env var would switch it on.
+      opt.disabled = engine.available === false;
+      var title = engine.available
+        ? (engine.note || '')
+        : (engine.reason || 'Not available on this machine');
+      if (title) opt.title = title;
+
+      var dot = document.createElement('span');
+      dot.className = 'dot' + (on ? ' on' : '');
+      opt.appendChild(dot);
+
+      var lab = document.createElement('span');
+      lab.className = 'model-option-label';
+      lab.textContent = label(engine.id);
+      opt.appendChild(lab);
+
+      if (!engine.available || engine.note) {
+        var sub = document.createElement('span');
+        sub.className = 'model-option-sub';
+        sub.textContent = engine.available ? (engine.needs_key ? 'key' : '') : 'off';
+        if (!engine.available) sub.title = engine.reason || '';
+        opt.appendChild(sub);
+      }
+      return opt;
+    }
+
+    // Rebuild the menu from the server's inventory: Auto + every engine
+    // JARVIS can name, available or not. This is the single source of truth,
+    // so a new backend engine appears without touching the markup.
+    function populate(inventory) {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(optionRow({ id: 'auto', label: 'Auto', available: true,
+                                   note: 'best available engine' }));
+      (inventory || []).forEach(function (e) { frag.appendChild(optionRow(e)); });
+      engMenu.textContent = '';
+      engMenu.appendChild(frag);
+      paint();
     }
 
     engBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      var open = engMenu.classList.toggle('open');
-      engMenu.setAttribute('data-open', open ? 'true' : 'false');
+      if (engMenu.classList.contains('open')) closeMenu(); else openMenu();
     });
 
     // Outside click closes the menu. Deferred by one tick so it never
@@ -584,6 +644,12 @@
       document.addEventListener('click', function (e) {
         if (!engBtn.contains(e.target) && !engMenu.contains(e.target)) closeMenu();
       });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && engMenu.classList.contains('open')) {
+          closeMenu();
+          engBtn.focus();
+        }
+      });
     }, 0);
 
     engMenu.addEventListener('click', function (e) {
@@ -591,7 +657,6 @@
       if (!opt || opt.disabled) return;
       state.ttsEngine = opt.getAttribute('data-voice') || 'auto';
       persistPrefs();
-      paint();
       closeMenu();
       // Stop in-flight audio: it was rendered by the previous engine.
       stopSpeaking();
@@ -616,24 +681,31 @@
     voiceBtn.classList.toggle('active', state.handsFree);
     paint();
 
-    // Reconcile the menu against the live engine chain from the bridge.
+    // Reconcile the menu against the bridge's live engine inventory.
     fetch(_bridge + '/v1/voice/status', { method: 'POST', headers: headers() })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d || !d.ok) return;
-        var live = (d.voice_menu && d.voice_menu.engines) || d.tts_chain || [];
-        var opts = engMenu.querySelectorAll('.model-option[data-voice]');
-        for (var i = 0; i < opts.length; i++) {
-          var key = opts[i].getAttribute('data-voice');
-          if (key === 'auto') continue;
-          var available = live.indexOf(key) !== -1;
-          opts[i].disabled = !available;
-          opts[i].title = available ? '' : 'Not available on this machine';
-          opts[i].style.opacity = available ? '' : '0.4';
+        var menu = d.voice_menu || d;
+        var inventory = menu.tts_engines || [];
+        if (inventory.length) {
+          populate(inventory);
+          return;
         }
-        paint();
+        // Older bridge without the inventory: fall back to the chain and dim
+        // whatever it does not contain.
+        var live = menu.engines || d.tts_chain || [];
+        populate((inventory.length ? inventory : [
+          { id: 'sapi', available: live.indexOf('sapi') !== -1 },
+          { id: 'kokoro', available: live.indexOf('kokoro') !== -1 },
+          { id: 'elevenlabs', available: live.indexOf('elevenlabs') !== -1 }
+        ]));
       })
-      .catch(function () { /* menu stays usable with the static labels */ });
+      .catch(function () {
+        // Bridge unreachable: still offer something clickable rather than an
+        // empty menu, and mark everything unavailable so a pin cannot lie.
+        populate([{ id: 'sapi', available: false, reason: 'bridge unreachable' }]);
+      });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

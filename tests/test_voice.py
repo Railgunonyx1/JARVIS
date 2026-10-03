@@ -255,7 +255,11 @@ def test_http_tts_engine_failure_500(bridge, monkeypatch):
     monkeypatch.setattr(voice_mod, "_kokoro_instance", lambda: None)
     monkeypatch.setattr(voice_mod, "_tts_engine", _boom)
     status, d = _post(bridge, "/v1/tts", {"text": "hello"})
-    assert status == 500 and "tts failed" in d["error"]
+    assert status == 500
+    # The error names the real cause rather than a bare "tts failed", so the
+    # UI can tell the user which engine broke instead of guessing.
+    assert "engine failed" in d["error"].lower(), d["error"]
+    assert d.get("engine"), "response must name the engine that was pinned"
 
 
 def test_http_stt_too_short_400(bridge):

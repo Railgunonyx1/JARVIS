@@ -182,8 +182,11 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def _tts(self) -> None:
         """POST /v1/tts — render speech audio from text.
 
-        Request body: {"text": str, "speed": float} (speed clamped to
-        ``SPEED_MIN..SPEED_MAX``, default 1.0).
+        Request body: {"text": str, "speed": float, "voice_model": str,
+        "voice": str}. ``speed`` is clamped to ``SPEED_MIN..SPEED_MAX``
+        (default 1.0). ``voice_model`` pins a TTS engine (``auto``, ``edge``,
+        ``google``, ``azure``, ``polly``, ``kokoro``, ``elevenlabs``,
+        ``sapi``); ``auto`` walks every available engine, best first.
 
         Response: 200 JSON {"ok": True, "engine": str, "audio_b64": str};
         400 invalid body; 401 unauth; 500 when TTS fails.
@@ -212,9 +215,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
         try:
             data_b, mime, engine_used = _tts_one(
                 text, speed=speed, engine_name=voice_model, voice=voice_name)
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             logger.exception("tts failed")
-            self._json(500, {"ok": False, "error": "tts failed", "code": "tts_failed", "engine": "sapi"})
+            # Report the engine the caller pinned and the real reason. The old
+            # hardcoded "sapi" sent people looking at the wrong engine when the
+            # failure was a missing cloud key or an empty text.
+            self._json(500, {
+                "ok": False,
+                "error": str(exc) or "tts failed",
+                "code": "tts_failed",
+                "engine": voice_model,
+            })
             return
         format_raw = str(data.get("format", "json")).lower() == "raw"
         if format_raw:
@@ -235,11 +246,15 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def _stt(self) -> None:
         """POST /v1/stt — transcribe audio bytes to text.
 
-        Request body: JSON {"audio_b64": str, "filename": str} (audio_b64 is
-        base64-encoded audio). The filename defaults to ``audio.webm``.
+        Request body: JSON {"audio_b64": str, "filename": str, "engine": str}
+        (audio_b64 is base64-encoded audio). The filename defaults to
+        ``audio.webm``; ``engine`` pins a provider (``groq``, ``deepgram``,
+        ``elevenlabs``) and defaults to the first available one.
 
-        Response: 200 JSON {"ok": True, "text": str}; 400 invalid body;
-        401 unauth; 503 when STT cannot run (no API key / unavailable engine).
+        Response: 200 JSON {"ok": True, "text": str, "engine": str}; 400
+        invalid body; 401 unauth; 503 when STT cannot run (no API key /
+        unavailable engine) -- the body carries the reason so the UI can show
+        which env var to set.
         """
         if not self._host_ok():
             self._json(403, {"ok": False, "error": "forbidden host"})
@@ -256,6 +271,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "error": "audio_b64 is required"})
             return
         filename = data.get("filename", "audio.webm")
+        engine = data.get("engine") or None
         try:
             import base64 as _b64
             raw = _b64.b64decode(audio_b64)
@@ -267,12 +283,22 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "error": "audio too short"})
             return
         try:
-            text = stt_bytes(raw, filename=filename)
-        except Exception:  # noqa: BLE001
+            from voice import _select_stt_engine
+            _chosen, _fn = _select_stt_engine(engine)
+            text = stt_bytes(raw, filename=filename, engine_name=engine)
+        except Exception as exc:  # noqa: BLE001
             logger.exception("stt failed")
-            self._json(503, {"ok": False, "error": "ELEVENLABS_API_KEY not configured", "code": "stt_unavailable"})
+            # Surface the engine's own message: it names the exact env var to
+            # set, which "ELEVENLABS_API_KEY not configured" never did when the
+            # user had configured a different provider.
+            self._json(503, {
+                "ok": False,
+                "error": str(exc) or "STT engine unavailable",
+                "code": "stt_unavailable",
+                "engine": engine or None,
+            })
             return
-        self._json(200, {"ok": True, "text": text})
+        self._json(200, {"ok": True, "text": text, "engine": _chosen})
 
     def _voice_status(self) -> None:
         """GET /v1/voice/status — bridge voice subsystem status.
@@ -284,14 +310,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self._json(403, {"ok": False, "error": "forbidden host"})
             return
         status = voice_status()
-        # ``voice_status()`` already reports the live engine chain and the
-        # clamped speed range; the renderer only needs it under a stable
-        # ``voice_menu`` key. Deriving the engine list from
-        # ``_resolve_tts_engine()`` would be wrong anyway: that returns a
-        # single callable, not an iterable of engines.
+        # ``voice_status()`` reports the live engine INVENTORY (every engine
+        # JARVIS can name, with available/reason) plus the clamped speed
+        # range; the renderer only needs it under a stable ``voice_menu`` key.
+        # Deriving the engine list from ``_resolve_tts_engine()`` would be
+        # wrong anyway: that returns a single callable, not an iterable.
         chain = status.get("tts_chain") or ["sapi"]
         status["voice_menu"] = {
             "engines": list(chain),
+            "tts_engines": status.get("tts_engines", []),
+            "stt_engines": status.get("stt_engines", []),
+            "stt": status.get("stt"),
             "default": "auto",
             "speed_range": status.get("speed_range", [0.5, 2.0]),
         }

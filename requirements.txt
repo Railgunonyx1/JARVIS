@@ -48,3 +48,4 @@ markdownify
 
 # Voice: local neural TTS (ElevenLabs SDK optional, install when keyed)
 kokoro-onnx>=0.4
+edge-tts>=7.2          # keyless neural TTS (unofficial Microsoft endpoint)
