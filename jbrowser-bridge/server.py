@@ -207,8 +207,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
         # Optional engine pin from the voice menu ("auto" keeps the default
         # chain). Unknown names fall back inside ``_select_tts_engine``.
         voice_model = str(data.get("voice_model") or "auto").strip().lower() or "auto"
+        # Kokoro voice id ("af_sarah", "bm_george", ...). Empty means the
+        # engine default; engines without a voice parameter ignore it.
+        voice_name = str(data.get("voice") or "").strip()
         try:
-            data_b, mime, engine_used = _tts_one(text, speed=speed, engine_name=voice_model)
+            data_b, mime, engine_used = _tts_one(
+                text, speed=speed, engine_name=voice_model, voice=voice_name)
         except Exception as exc:  # noqa: BLE001
             logger.exception("tts failed")
             self._json(500, {"ok": False, "error": "tts failed", "code": "tts_failed", "engine": "sapi"})

@@ -30,6 +30,7 @@ Design (per the text-to-speech / speech-to-text skills):
 from __future__ import annotations
 
 import io
+import inspect
 import logging
 import os
 import re
@@ -222,17 +223,42 @@ def _select_tts_engine(name: str | None) -> object:
     return _resolve_tts_engine()
 
 
-def _tts_one(text: str, speed: float = 1.0, engine_name: str | None = None) -> tuple[bytes, str, str]:
+def _call_engine(engine_fn: object, text: str, speed: float, voice: str) -> tuple[bytes, str]:
+    """Invoke an engine, forwarding ``voice`` only when it accepts one.
+
+    Engines disagree on the voice kwarg (``tts_kokoro`` takes ``voice``,
+    ``tts_elevenlabs`` takes ``voice_id``, ``tts_sapi`` takes neither), so the
+    keyword is passed only when the callable actually declares it. Probing
+    the signature avoids swallowing a genuine TypeError raised *inside* the
+    engine, which a try/except around the call would do.
+    """
+    kwargs: dict[str, object] = {"speed": speed}
+    if voice:
+        try:
+            params = inspect.signature(engine_fn).parameters
+        except (TypeError, ValueError):
+            params = {}  # builtins / C callables: probe blindly
+        if "voice" in params:
+            kwargs["voice"] = voice
+        elif "voice_id" in params:
+            kwargs["voice_id"] = voice
+    return engine_fn(text, **kwargs)  # type: ignore[operator, no-any-return]
+
+
+def _tts_one(text: str, speed: float = 1.0, engine_name: str | None = None,
+             voice: str = "") -> tuple[bytes, str, str]:
     """Render text with the configured engine.
 
     Returns (bytes, mime, engine_used). The default production behavior is
     unchanged for every tester that never assigns _tts_engine/_tts_engines.
+    ``voice`` selects a Kokoro voice id; engines without a voice parameter
+    ignore it.
     """
     engine_fn = _select_tts_engine(engine_name)
     # Report the engine that ACTUALLY ran, not the one that was requested:
     # an unknown pin falls back to the default chain and must say so.
     key = getattr(engine_fn, "__name__", repr(engine_fn))
-    data, mime = engine_fn(text, speed=speed)
+    data, mime = _call_engine(engine_fn, text, speed, voice)
     return data, mime, key
 
 def tts_sapi(text: str, speed: float = 1.0) -> tuple[bytes, str]:
