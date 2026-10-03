@@ -99,15 +99,10 @@ contextBridge.exposeInMainWorld("orbit", {
     navigateTo: (callback) => {
       ipcRenderer.on("navigate-to", (_, url) => callback(url));
     },
-    agentRead: (callback) => {
-      ipcRenderer.on("agent-read", () => callback());
-    },
-    agentClick: (callback) => {
-      ipcRenderer.on("agent-click", (_, args) => callback(args));
-    },
-    agentType: (callback) => {
-      ipcRenderer.on("agent-type", (_, args) => callback(args));
-    },
+    // REMOVED: agent-read / agent-click / agent-type. These answered tool
+    // round-trips from the quarantined Electron agent loop. Browser actions
+    // now execute in the JARVIS kernel, which drives Chromium over CDP
+    // (jbrowser/BrowserController) instead of driving the renderer.
     tabSleep: (callback) => {
       ipcRenderer.on("tab-sleep", (_, id) => callback(id));
     },
@@ -120,18 +115,11 @@ contextBridge.exposeInMainWorld("orbit", {
   },
 
   // ── Headless Agent Loop ────────────────────────────────────────
-  agent: {
-    start: (message, options) => ipcRenderer.invoke('agent:start', message, options),
-    stop: () => ipcRenderer.invoke('agent:stop'),
-    status: () => ipcRenderer.invoke('agent:status'),
-    onState: (callback) => ipcRenderer.on('agent-state', (_, state) => callback(state)),
-    onTool: (callback) => ipcRenderer.on('agent-tool', (_, info) => callback(info)),
-    onToolResult: (callback) => ipcRenderer.on('agent-tool-result', (_, info) => callback(info)),
-    // Send tool results back to main process
-    sendReadResult: (result) => ipcRenderer.send('agent-read-result', result),
-    sendClickResult: (result) => ipcRenderer.send('agent-click-result', result),
-    sendTypeResult: (result) => ipcRenderer.send('agent-type-result', result),
-  },
+  // REMOVED: the legacy `agent` surface. main.js answers agent:start with
+  // "disabled" and registers no agent-state / agent-tool / agent-*-result
+  // senders, so this advertised a second execution authority that could not
+  // run. Agent work goes through the JARVIS kernel via orbit.jarvis.*
+  // (dshNative -> POST /v1/agent -> ToolExecutionService).
 
   // ── Chrome Import ──────────────────────────────────────────────
   chrome: {

@@ -49,12 +49,23 @@ class TestOptimizationProfile:
         joined = " ".join(as_chromium_args())
         for flag in ("mute-audio", "disable-extensions", "no-first-run",
                      "disable-background-networking", "hide-scrollbars",
-                     "disable-background-timer-throttling"):
+                     "freeze-background-tabs"):
             assert f"--{flag}" in joined, flag
 
-    def test_occlusion_flags_present(self):
+    def test_no_contradictory_never_throttle_flags(self):
+        # The never-throttle trio fights freeze-background-tabs and, on a
+        # memory-constrained daily driver, the never-throttle side wins and the
+        # RAM budget is lost. Chromium's own throttling is the policy.
+        joined = " ".join(as_chromium_args())
+        for flag in ("disable-background-timer-throttling",
+                     "disable-backgrounding-occluded-windows",
+                     "disable-renderer-backgrounding"):
+            assert f"--{flag}" not in joined, flag
+
+    def test_occlusion_detection_disabled(self):
         args = as_chromium_args()
-        assert "--disable-backgrounding-occluded-windows" in args
+        # Keep CalculateNativeWinOcclusion: Orbit still *detects* occlusion, it
+        # just no longer overrides Chromium's throttling because of it.
         assert "CalculateNativeWinOcclusion" in " ".join(args)
 
     def test_screenshot_kinds_keep_layout(self):

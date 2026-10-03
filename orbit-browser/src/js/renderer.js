@@ -268,22 +268,20 @@ function hideAgentBar() {
 }
 
 if (agentBarStop) agentBarStop.addEventListener('click', () => {
-  if (window.orbit && window.orbit.agent) {
-    window.orbit.agent.stop();
+  // Stopping runs through the JARVIS bridge (dshNative abort), not a local
+  // Electron agent -- that loop is quarantined. See main.js A-04.
+  try {
+    if (window.dshNative && typeof window.dshNative.abort === 'function') {
+      window.dshNative.abort();
+    }
+  } catch (err) {
+    console.warn('[ORBIT] agent abort failed', err);
   }
   hideAgentBar();
 });
 
-// Listen for agent state changes
-if (window.orbit && window.orbit.agent) {
-  window.orbit.agent.onState((state) => {
-    if (state === 'completed' || state === 'failed' || state === 'idle') {
-      hideAgentBar();
-    } else {
-      showAgentBar(state.charAt(0).toUpperCase() + state.slice(1) + '...');
-    }
-  });
-}
+// Agent state now arrives on the JARVIS channel (dsh.on('agent'/'status')),
+// which jarvis.js owns. There is no local agent to subscribe to.
 
 // ── Split View (Arc-style) ────────────────────────────────────
 let splitMode = false;

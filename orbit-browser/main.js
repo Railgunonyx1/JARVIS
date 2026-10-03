@@ -25,9 +25,17 @@ const chromeImport = require("./src/chrome-import.js");
 // ── Chromium performance flags ────────────────────────────────────
 // Mirrors the researched, evidence-backed launch profile codified in
 // jbrowser/optimization.py, restricted to the flags that help a user-facing
-// daily-driver browser (rendering/GPU offload, QUIC, lean background waste,
-// live active tab). Browser-hostile switches (mute-audio, hide-scrollbars)
-// and agent-only switches (disable-extensions/...) are intentionally omitted.
+// daily-driver browser (rendering/GPU offload, QUIC, lean background waste).
+// Browser-hostile switches (mute-audio, hide-scrollbars) and agent-only
+// switches (disable-extensions/...) are intentionally omitted.
+//
+// The never-throttle trio (--disable-background-timer-throttling,
+// --disable-backgrounding-occluded-windows, --disable-renderer-backgrounding)
+// is deliberately absent: it contradicts freeze-background-tabs below and, on
+// a memory-constrained daily driver, the "keep every background tab live"
+// direction is the one that actually wins. Chromium's built-in throttling is
+// the resource policy; the sleep loop in performance.js + main.js is the
+// active-tab guarantee. Re-add one only with a measured win.
 function applyChromiumFlags() {
   const flags = {
     "enable-gpu-rasterization": "",
@@ -35,9 +43,6 @@ function applyChromiumFlags() {
     "enable-quic": "",
     "disable-features":
       "PreloadMediaEngagementData,MediaEngagementBypassAutoplayPolicies",
-    "disable-background-timer-throttling": "",
-    "disable-backgrounding-occluded-windows": "",
-    "disable-renderer-backgrounding": "",
     "no-first-run": "",
     "no-default-browser-check": "",
     "disable-default-apps": "",
@@ -839,35 +844,76 @@ function flushOfflineQueue() {
 
 // ── IPC Handlers ──────────────────────────────────────────────────
 function setupIPC() {
+  // ── Trust boundary + containment for ALL IPC handlers ────────────
+  // Two concerns, both applied centrally so no handler can forget either:
+  //
+  // 1. SENDER VALIDATION. Every channel below reaches past the renderer
+  //    (filesystem, shell, downloads, permissions, sessions, windows).
+  //    Validating arguments is not sufficient: any webContents that can
+  //    reach ipcRenderer can invoke any channel. Orbit has one window, so
+  //    the allow-list is the chrome renderer, its DevTools, and registered
+  //    tab guests. Everything else is rejected and logged.
+  //    See ipc-guard.js (unit-tested under plain node).
+  //
+  // 2. CONTAINMENT. handle(): an exception is logged and re-thrown so the
+  //    renderer's .catch() contract still works. on(): an exception is
+  //    contained rather than reaching uncaughtException.
+  //
+  // This block must stay ABOVE the first ipcMain.handle/on call: the wrappers
+  // replace ipcMain.handle/on, so a channel registered earlier would escape
+  // the guard entirely.
+  const { guardHandler, guardListener, BOOTSTRAP_CHANNELS } = require('./ipc-guard');
+  const guardContext = () => ({
+    mainWebContents: mainWindow ? mainWindow.webContents : null,
+    guestIds: webContentsIds.values(),
+    isDevTools: true,
+  });
+  // The renderer's first synchronous handshake must never be gated on window
+  // readiness: if it is, the renderer gets `undefined` as its bridge token
+  // and fails auth instead of failing loudly here.
+  const guardContextFor = (channel) =>
+    BOOTSTRAP_CHANNELS.has(channel) ? { ...guardContext(), allowBootstrap: true }
+                                     : guardContext();
+  const rejectSender = (channel, reason) => {
+    logMainError('warn', 'ipc:rejected:' + channel, `untrusted sender — ${reason}`);
+    console.warn('[IPC] rejected', channel, reason);
+  };
+
+  const _ipcHandle = ipcMain.handle.bind(ipcMain);
+  ipcMain.handle = (channel, fn) => _ipcHandle(channel, guardHandler(
+    async (...args) => {
+      try {
+        return await fn(...args);
+      } catch (err) {
+        const msg = (err && err.message) || String(err);
+        logMainError('error', 'ipc:' + channel, msg);
+        console.error('[IPC]', channel, err);
+        throw err; // preserve the renderer's .catch()/try-catch failure contract
+      }
+    },
+    guardContextFor(channel),
+    (reason) => rejectSender(channel, reason),
+  ));
+  const _ipcOn = ipcMain.on.bind(ipcMain);
+  ipcMain.on = (channel, fn) => _ipcOn(channel, guardListener(
+    (...args) => {
+      try { fn(...args); }
+      catch (err) {
+        logMainError('error', 'ipc-on:' + channel, (err && err.message) || String(err));
+        console.error('[IPC:on]', channel, err);
+      }
+    },
+    guardContextFor(channel),
+    (reason) => rejectSender(channel, reason),
+  ));
+
   // A-01: one-time sync token read for the renderer (preload getBridgeToken).
+  // Registered through the guard like everything else: this hands out the
+  // bridge token, so an untrusted sender must get `undefined` back, not the
+  // secret that authenticates every JARVIS browser call. BOOTSTRAP_CHANNELS
+  // lets this one land before the window reference is stored.
   ipcMain.on("orbit:get-bridge-token", (event) => {
     event.returnValue = resolveBridgeToken();
-  });
-
-  // ── Containment shim for ALL IPC handlers ────────────────────────
-  // handle(): an exception becomes a structured { ok:false, error } reply
-  // (the codebase's existing failure convention) plus a main-error-log
-  // entry — instead of an unhandled rejection in the renderer.
-  // on(): an exception is contained and logged instead of reaching the
-  // process-level uncaughtException handler.
-  const _ipcHandle = ipcMain.handle.bind(ipcMain);
-  ipcMain.handle = (channel, fn) => _ipcHandle(channel, async (...args) => {
-    try {
-      return await fn(...args);
-    } catch (err) {
-      const msg = (err && err.message) || String(err);
-      logMainError('error', 'ipc:' + channel, msg);
-      console.error('[IPC]', channel, err);
-      throw err; // preserve the renderer's .catch()/try-catch failure contract
-    }
-  });
-  const _ipcOn = ipcMain.on.bind(ipcMain);
-  ipcMain.on = (channel, fn) => _ipcOn(channel, (...args) => {
-    try { fn(...args); }
-    catch (err) {
-      logMainError('error', 'ipc-on:' + channel, (err && err.message) || String(err));
-      console.error('[IPC:on]', channel, err);
-    }
   });
 
   // Tab management
@@ -1173,6 +1219,9 @@ function setupIPC() {
   // The local Electron agent loop is quarantined; agent work goes
   // through the kernel via dshNative.runAgent (POST /v1/agent),
   // which enforces the permission engine and audit trail.
+  // preload.js no longer exposes window.orbit.agent, so nothing can reach
+  // these; they stay as unreachable tombstones so that any path that ever
+  // re-introduces the call gets "disabled", not a working agent loop.
   ipcMain.handle("agent:start", async () => ({
     ok: false,
     error: "agent:start is disabled - agent tasks run through JARVIS (kernel) only",

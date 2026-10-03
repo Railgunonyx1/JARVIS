@@ -616,56 +616,13 @@ if (window.orbit?.on?.navigateTo) {
     if (url && /^https?:/i.test(url)) createTab(url);
   });
 }
-if (window.orbit?.agent) {
-  window.orbit.agent.onState(function(state) {
-    if (state === 'thinking' || state === 'executing') setMatrix('thinking');
-    else if (state === 'completed') { setMatrix('done'); setTimeout(function() { setMatrix('idle'); }, 2000); }
-    else if (state === 'failed') { setMatrix('fail'); setTimeout(function() { setMatrix('idle'); }, 2000); }
-  });
-  window.orbit.agent.onTool(function(info) {
-    Chat.append('system', '\u2699 ' + (info && info.name ? info.name : 'tool'));
-  });
-}
-if (window.orbit?.agent?.sendReadResult) {
-  window.orbit.on && window.orbit.on.agentRead && window.orbit.on.agentRead(async function() {
-    try {
-      const wv = activeWebview();
-      if (!wv) { window.orbit.agent.sendReadResult('No active page'); return; }
-      const text = await wv.executeJavaScript('document.body ? document.body.innerText.substring(0, 8000) : ""', false);
-      window.orbit.agent.sendReadResult(text || '(empty page)');
-    } catch (e) {
-      window.orbit.agent.sendReadResult('Read error: ' + e.message);
-    }
-  });
-  window.orbit.on && window.orbit.on.agentClick && window.orbit.on.agentClick(async function(args) {
-    try {
-      const wv = activeWebview();
-      if (!wv) { window.orbit.agent.sendClickResult('No active page'); return; }
-      const sel = (args && args.selector) || 'body';
-      const r = await wv.executeJavaScript(
-        '(function(){var el=document.querySelector(' + JSON.stringify(sel) + ');' +
-        'if(!el)return "Not found";el.scrollIntoView({block:"center"});el.click();return "Clicked";})()', false);
-      window.orbit.agent.sendClickResult(r || 'Click failed');
-    } catch (e) {
-      window.orbit.agent.sendClickResult('Click error: ' + e.message);
-    }
-  });
-  window.orbit.on && window.orbit.on.agentType && window.orbit.on.agentType(async function(args) {
-    try {
-      const wv = activeWebview();
-      if (!wv) { window.orbit.agent.sendTypeResult('No active page'); return; }
-      const sel = (args && args.selector) || 'input';
-      const text = (args && args.text) || '';
-      const r = await wv.executeJavaScript(
-        '(function(){var el=document.querySelector(' + JSON.stringify(sel) + ');' +
-        'if(!el)return "Input not found";el.focus();el.value=' + JSON.stringify(text) + ';' +
-        'el.dispatchEvent(new Event("input",{bubbles:true}));return "Typed";})()', false);
-      window.orbit.agent.sendTypeResult(r || 'Type failed');
-    } catch (e) {
-      window.orbit.agent.sendTypeResult('Type error: ' + e.message);
-    }
-  });
-}
+// The legacy Electron-side agent loop is quarantined (see main.js A-04):
+// main registers no agent-state / agent-tool / agent-*-result senders and
+// answers agent:start with "disabled". The renderer listeners that used to
+// consume them were therefore permanently dead — they registered handlers
+// for events nothing emits, and advertised a second execution authority that
+// does not exist. Browser capability now runs through the JARVIS kernel via
+// dshNative/dshNative.runAgent, so there is nothing left to wire here.
 if (window.orbit?.on?.navigateTo) {
   window.orbit.on.navigateTo((url) => {
     if (url && /^https?:/i.test(url)) createTab(url);

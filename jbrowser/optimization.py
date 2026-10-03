@@ -58,14 +58,14 @@ OPTIMIZED_FLAGS: dict[str, str] = {
         "MediaEngagementBypassAutoplayPolicies,"
         "CalculateNativeWinOcclusion"
     ),
-    # Don't let background tabs lose timer priority while the agent works in
-    # the active tab (research: --disable-background-timer-throttling).
-    "disable-background-timer-throttling": "",
-    # Treat the (masked/occluded) window tab as foreground so page state stays
-    # live instead of being silently throttled/frozen on Windows.
-    "disable-backgrounding-occluded-windows": "",
-    # Keep the active renderer at full priority regardless of occlusion.
-    "disable-renderer-backgrounding": "",
+    # NOTE: --disable-background-timer-throttling / --disable-backgrounding-
+    # occluded-windows / --disable-renderer-backgrounding are deliberately
+    # NOT set. They told Chromium "never deprioritise a background tab" while
+    # MEMORY_SAVER_FLAGS below says "freeze background tabs" - contradictory
+    # goals, and on an 8 GB daily-driver host the never-throttle direction
+    # wins and the RAM budget is lost. Chromium's own throttling is the
+    # resource policy; the sleep loop in main.js / performance.js is the
+    # active-tab guarantee. Re-add one only with a measured win.
     # --- Startup / first-run noise -----------------------------------------
     # Skip first-run wizards, default-browser check and default-app installs;
     # each cuts startup work and background one-time work.
