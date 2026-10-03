@@ -53,12 +53,14 @@
     pttDown: false,
     sttAvailable: null,      // tri-state until /v1/voice/status answers
     voice: '',               // Kokoro voice name (server default when '')
-    speed: 1.0               // 0.5–2.0 speech rate
+    speed: 1.0,              // 0.5–2.0 speech rate
+    ttsEngine: 'auto'        // pinned TTS engine: auto|sapi|kokoro|elevenlabs
   };
 
   function loadPrefs() {
     try {
       state.voice = localStorage.getItem('orbit-voice-name') || '';
+      state.ttsEngine = localStorage.getItem('orbit-tts-engine') || 'auto';
       var s = parseFloat(localStorage.getItem('orbit-voice-speed'));
       if (!isNaN(s) && s >= 0.5 && s <= 2) state.speed = s;
     } catch (e) {}
@@ -67,6 +69,7 @@
     try {
       localStorage.setItem('orbit-voice-name', state.voice);
       localStorage.setItem('orbit-voice-speed', String(state.speed));
+      localStorage.setItem('orbit-tts-engine', state.ttsEngine);
     } catch (e) {}
   }
 
@@ -157,7 +160,13 @@
     // Voice + speed ride along; server clamps and falls back per engine.
     return fetch(_bridge + '/v1/tts', {
       method: 'POST', headers: headers(),
-      body: JSON.stringify({ text: text, format: 'raw', voice: state.voice, speed: state.speed })
+      body: JSON.stringify({
+        text: text,
+        format: 'raw',
+        voice: state.voice,
+        speed: state.speed,
+        voice_model: state.ttsEngine
+      })
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (d) { return { ok: false, error: d.error }; });
       return r.blob().then(function (b) { return { ok: true, blob: b };
@@ -515,86 +524,116 @@
   }
 
   // ── Main composer voice engine selector ─────────────────────────────
-  // The main composer (not the sidebar) has its own voice button and voice
-  // model menu. Wire them to /v1/voice/status (engines) and /v1/tts (model).
+  // The AI-drawer composer has its own voice button and engine menu. This
+  // picker pins WHICH ENGINE renders (auto|sapi|kokoro|elevenlabs); it is
+  // deliberately separate from state.voice, which is the Kokoro voice NAME
+  // used by the settings picker. Options are reconciled against the live
+  // /v1/voice/status chain so engines that are not available are dimmed
+  // rather than silently failing at synthesis time.
+  var ENGINE_LABELS = {
+    auto: 'Auto',
+    sapi: 'SAPI (Windows)',
+    kokoro: 'Kokoro (local)',
+    elevenlabs: 'ElevenLabs'
+  };
+
   function wireMainComposerVoice() {
-    var button = document.getElementById('voiceButton');
-    var modelButton = document.getElementById('voiceModelButton');
-    var modelMenu = document.getElementById('voiceModelMenu');
-    var modelName = document.getElementById('voiceModelName');
-    if (!button || !modelMenu) return;
+    var voiceBtn = document.getElementById('voiceButton');
+    var engBtn = document.getElementById('voiceModelButton');
+    var engMenu = document.getElementById('voiceModelMenu');
+    var engName = document.getElementById('voiceModelName');
+    if (!voiceBtn || !engBtn || !engMenu || engMenu.__wired) return;
+    engMenu.__wired = true;
 
-    // Close the voice menu on outside clicks.
-    document.addEventListener('click', function (e) {
-      if (!button.contains(e.target) && !modelMenu.contains(e.target)) {
-        modelMenu.classList.remove('open');
+    function label(engine) {
+      return ENGINE_LABELS[engine] || engine;
+    }
+
+    function paint() {
+      engName.textContent = label(state.ttsEngine);
+      var opts = engMenu.querySelectorAll('.model-option[data-voice]');
+      for (var i = 0; i < opts.length; i++) {
+        var key = opts[i].getAttribute('data-voice');
+        var on = key === state.ttsEngine;
+        opts[i].classList.toggle('active', on);
+        opts[i].setAttribute('aria-selected', on ? 'true' : 'false');
+        var dot = opts[i].querySelector('.dot');
+        if (!dot) {
+          dot = document.createElement('span');
+          dot.className = 'dot';
+          opts[i].insertBefore(dot, opts[i].firstChild);
+        }
+        dot.classList.toggle('on', on);
       }
+    }
+
+    function closeMenu() {
+      engMenu.classList.remove('open');
+      engMenu.removeAttribute('data-open');
+    }
+
+    engBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = engMenu.classList.toggle('open');
+      engMenu.setAttribute('data-open', open ? 'true' : 'false');
     });
 
-    button.addEventListener('click', function (e) {
-      e.stopPropagation();
-      var speaking = state._speaking || false;
-      state.handsFree = !state.handsFree;
-      if (!state.handsFree) { stopSpeaking(); clearTimeout(state._autoListenTimer); }
+    // Outside click closes the menu. Deferred by one tick so it never
+    // swallows the same click that opened it.
+    setTimeout(function () {
+      document.addEventListener('click', function (e) {
+        if (!engBtn.contains(e.target) && !engMenu.contains(e.target)) closeMenu();
+      });
+    }, 0);
+
+    engMenu.addEventListener('click', function (e) {
+      var opt = e.target.closest ? e.target.closest('.model-option') : null;
+      if (!opt || opt.disabled) return;
+      state.ttsEngine = opt.getAttribute('data-voice') || 'auto';
       persistPrefs();
-      updateVoiceUI();
-      // Re-announce the active voice engine so the user hears what's active.
-      window.UI && UI.Toast && UI.Toast('info', 'Voice', state.handsFree ? 'Hands-free on' : 'Hands-free off');
+      paint();
+      closeMenu();
+      // Stop in-flight audio: it was rendered by the previous engine.
+      stopSpeaking();
+      window.UI && UI.Toast && UI.Toast('info', 'Voice', label(state.ttsEngine));
     });
 
-    modelButton.addEventListener('click', function (e) {
+    voiceBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      modelMenu.classList.toggle('open');
+      state.handsFree = !state.handsFree;
+      if (!state.handsFree) {
+        stopSpeaking();
+        clearTimeout(_autoListenTimer);
+        if (state.recording && state.listening) stopRecording();
+      }
+      try { localStorage.setItem('orbit-voice', state.handsFree ? '1' : '0'); } catch (err) {}
+      updateVoiceUI();
+      voiceBtn.classList.toggle('active', state.handsFree);
+      window.UI && UI.Toast && UI.Toast(
+        'info', 'Voice', state.handsFree ? 'Hands-free on' : 'Hands-free off');
     });
 
-    // Voice engine options: hit /v1/voice/status for the engine list, default
-    // to the three well-known engines.
-    var voiceOptions = [
-      { value: 'auto', label: 'Auto' },
-      { value: 'sapi', label: 'SAPI (Windows)' },
-      { value: 'kokoro', label: 'Kokoro (local)' },
-      { value: 'elevenlabs', label: 'ElevenLabs' },
-    ];
-    modelMenu.querySelectorAll('.model-option[data-voice]').forEach(function (opt) {
-      var key = opt.getAttribute('data-voice');
-      var def = voiceOptions.find(function (o) { return o.value === key; });
-      if (def) {
-        opt.textContent = def.label;
-        var dot = document.createElement('span');
-        dot.className = 'dot' + (state.voice === key ? ' on' : '');
-        opt.insertBefore(dot, opt.firstChild);
-      }
-    });
-    // Fallback: load the real engine list from the bridge if available.
-    fetch('/v1/voice/status', { headers: { 'Content-Type': 'application/json' } })
+    voiceBtn.classList.toggle('active', state.handsFree);
+    paint();
+
+    // Reconcile the menu against the live engine chain from the bridge.
+    fetch(_bridge + '/v1/voice/status', { method: 'POST', headers: headers() })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        if (d && d.ok && d.voice_menu && d.voice_menu.engines) {
-          voiceOptions.forEach(function (o) { o.enabled = true; });
-          d.voice_menu.engines.forEach(function (en) {
-            var name = String(en);
-            // Map engine names to our menu keys.
-            if (name === 'sapi' || name === 'kokoro' || name === 'elevenlabs') {
-              var opt = modelMenu.querySelector('.model-option[data-voice="' + name + '"]');
-              if (opt) { opt.textContent = name.charAt(0).toUpperCase() + name.slice(1); opt.querySelector('.dot').classList.add('on'); }
-            }
-          });
+        if (!d || !d.ok) return;
+        var live = (d.voice_menu && d.voice_menu.engines) || d.tts_chain || [];
+        var opts = engMenu.querySelectorAll('.model-option[data-voice]');
+        for (var i = 0; i < opts.length; i++) {
+          var key = opts[i].getAttribute('data-voice');
+          if (key === 'auto') continue;
+          var available = live.indexOf(key) !== -1;
+          opts[i].disabled = !available;
+          opts[i].title = available ? '' : 'Not available on this machine';
+          opts[i].style.opacity = available ? '' : '0.4';
         }
+        paint();
       })
-      .catch(function () {});
-
-    // When a voice model is picked, persist it (no network trip unless tts uses it).
-    modelMenu.addEventListener('click', function (e) {
-      var opt = e.target.closest('.model-option');
-      if (!opt) return;
-      var key = opt.getAttribute('data-voice');
-      state.voice = key;
-      persistPrefs();
-      modelMenu.classList.remove('open');
-      var dot = modelMenu.querySelector('.dot');
-      if (dot) dot.classList.toggle('on', key === state.voice);
-      window.UI && UI.Toast && UI.Toast('info', 'Voice', String(key === 'auto' ? 'Auto' : key).charAt(0).toUpperCase() + String(key === 'auto' ? 'Auto' : key).slice(1));
-    });
+      .catch(function () { /* menu stays usable with the static labels */ });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

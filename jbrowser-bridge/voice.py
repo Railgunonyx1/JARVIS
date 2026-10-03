@@ -229,10 +229,9 @@ def _tts_one(text: str, speed: float = 1.0, engine_name: str | None = None) -> t
     unchanged for every tester that never assigns _tts_engine/_tts_engines.
     """
     engine_fn = _select_tts_engine(engine_name)
-    if engine_name is not None and engine_name != "auto":
-        key = engine_name
-    else:
-        key = getattr(engine_fn, "__name__", repr(engine_fn))
+    # Report the engine that ACTUALLY ran, not the one that was requested:
+    # an unknown pin falls back to the default chain and must say so.
+    key = getattr(engine_fn, "__name__", repr(engine_fn))
     data, mime = engine_fn(text, speed=speed)
     return data, mime, key
 

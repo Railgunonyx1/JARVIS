@@ -1,0 +1,576 @@
+﻿F401 [*] `time` imported but unused
+  --> .tmp_pristine_server.py:49:8
+   |
+47 | import re
+48 | import secrets
+49 | import time
+   |        ^^^^
+50 | import sys
+51 | from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+   |
+help: Remove unused import: `time`
+   |
+48 | import secrets
+   - import time
+49 | import sys
+   |
+
+F401 [*] `time` imported but unused
+  --> jbrowser-bridge\server.py:49:8
+   |
+47 | import re
+48 | import secrets
+49 | import time
+   |        ^^^^
+50 | import sys
+51 | from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+   |
+help: Remove unused import: `time`
+   |
+48 | import secrets
+   - import time
+49 | import sys
+   |
+
+F401 [*] `voice.tts_sapi` imported but unused
+  --> jbrowser-bridge\server.py:55:34
+   |
+53 | from backend import KernelBackend, make_backend
+54 |
+55 | from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+   |                                  ^^^^^^^^
+56 |
+57 | logger = logging.getLogger("jbrowser-bridge")
+   |
+help: Remove unused import
+   |
+54 |
+   - from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+55 + from voice import (_clamp_speed, stt_bytes, voice_status, _tts_one, _header_safe)
+56 |
+   |
+
+F401 [*] `voice._api_key` imported but unused
+  --> jbrowser-bridge\server.py:55:69
+   |
+53 | from backend import KernelBackend, make_backend
+54 |
+55 | from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+   |                                                                     ^^^^^^^^
+56 |
+57 | logger = logging.getLogger("jbrowser-bridge")
+   |
+help: Remove unused import
+   |
+54 |
+   - from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+55 + from voice import (_clamp_speed, stt_bytes, voice_status, _tts_one, _header_safe)
+56 |
+   |
+
+F841 [*] Local variable `exc` is assigned to but never used
+   --> jbrowser-bridge\server.py:212:29
+    |
+210 |         try:
+211 |             data_b, mime, engine_used = _tts_one(text, speed=speed, engine_name=voice_model)
+212 |         except Exception as exc:  # noqa: BLE001
+    |                             ^^^
+213 |             logger.exception("tts failed")
+214 |             self._json(500, {"ok": False, "error": "tts failed", "code": "tts_failed", "engine": "sapi"})
+    |
+help: Remove assignment to unused variable `exc`
+    |
+211 |             data_b, mime, engine_used = _tts_one(text, speed=speed, engine_name=voice_model)
+    -         except Exception as exc:  # noqa: BLE001
+212 +         except Exception:  # noqa: BLE001
+213 |             logger.exception("tts failed")
+    |
+
+F841 [*] Local variable `exc` is assigned to but never used
+   --> jbrowser-bridge\server.py:259:29
+    |
+257 |             import base64 as _b64
+258 |             raw = _b64.b64decode(audio_b64)
+259 |         except Exception as exc:  # noqa: BLE001
+    |                             ^^^
+260 |             self._json(400, {"ok": False, "error": "invalid audio_b64"})
+261 |             return
+    |
+help: Remove assignment to unused variable `exc`
+    |
+258 |             raw = _b64.b64decode(audio_b64)
+    -         except Exception as exc:  # noqa: BLE001
+259 +         except Exception:  # noqa: BLE001
+260 |             self._json(400, {"ok": False, "error": "invalid audio_b64"})
+    |
+
+F841 [*] Local variable `exc` is assigned to but never used
+   --> jbrowser-bridge\server.py:267:29
+    |
+265 |         try:
+266 |             text = stt_bytes(raw, filename=filename)
+267 |         except Exception as exc:  # noqa: BLE001
+    |                             ^^^
+268 |             logger.exception("stt failed")
+269 |             self._json(503, {"ok": False, "error": "ELEVENLABS_API_KEY not configured", "code": "stt_unavailable"})
+    |
+help: Remove assignment to unused variable `exc`
+    |
+266 |             text = stt_bytes(raw, filename=filename)
+    -         except Exception as exc:  # noqa: BLE001
+267 +         except Exception:  # noqa: BLE001
+268 |             logger.exception("stt failed")
+    |
+
+F401 [*] `json` imported but unused
+  --> providers\types.py:10:8
+   |
+ 8 | from __future__ import annotations
+ 9 |
+10 | import json
+   |        ^^^^
+11 | import re
+12 | from dataclasses import dataclass, field
+   |
+help: Remove unused import: `json`
+   |
+9  |
+   - import json
+10 | import re
+   |
+
+F401 [*] `jbrowser.backend.base.TabInfo` imported but unused
+   --> tests\test_jbrowser.py:922:43
+    |
+920 |         """
+921 |         import jbrowser.backend.playwright as pw_mod
+922 |         from jbrowser.backend.base import TabInfo
+    |                                           ^^^^^^^
+923 |         from jbrowser.backend.playwright import PlaywrightBackend
+924 |         b = PlaywrightBackend(headless=True)
+    |
+help: Remove unused import: `jbrowser.backend.base.TabInfo`
+    |
+921 |         import jbrowser.backend.playwright as pw_mod
+    -         from jbrowser.backend.base import TabInfo
+922 |         from jbrowser.backend.playwright import PlaywrightBackend
+    |
+
+F811 [*] Redefinition of unused `TabInfo` from line 922
+   --> tests\test_jbrowser.py:938:47
+    |
+936 |         def fake_navigate(url, tab_id=None):
+937 |             captured["url"] = url
+938 |             from jbrowser.backend.base import TabInfo
+    |                                               ^^^^^^^ `TabInfo` redefined here
+939 |             return TabInfo(tab_id=tab_id, session_id="s_nav",
+940 |                            url=url, title="Nav Title", active=True)
+    |
+   ::: tests\test_jbrowser.py:922:43
+    |
+920 |         """
+921 |         import jbrowser.backend.playwright as pw_mod
+922 |         from jbrowser.backend.base import TabInfo
+    |                                           ------- previous definition of `TabInfo` here
+923 |         from jbrowser.backend.playwright import PlaywrightBackend
+924 |         b = PlaywrightBackend(headless=True)
+    |
+help: Remove definition: `TabInfo`
+    |
+937 |             captured["url"] = url
+    -             from jbrowser.backend.base import TabInfo
+938 |             return TabInfo(tab_id=tab_id, session_id="s_nav",
+    |
+
+F401 [*] `asyncio` imported but unused
+  --> tests\test_json_repair.py:82:16
+   |
+80 |     @pytest.mark.asyncio
+81 |     async def test_marked_call_rejected_as_malformed(self):
+82 |         import asyncio
+   |                ^^^^^^^
+83 |
+84 |         from core.agent.permissions import PermissionEngine
+   |
+help: Remove unused import: `asyncio`
+   |
+81 |     async def test_marked_call_rejected_as_malformed(self):
+   -         import asyncio
+82 |
+   |
+
+F401 [*] `tools.schema.ToolResult` imported but unused
+  --> tests\test_mLIV_topic_watch_proactive.py:21:26
+   |
+19 | from tools import proactive  # noqa: E402
+20 | from tools import topic_watch as tw  # noqa: E402
+21 | from tools.schema import ToolResult  # noqa: E402
+   |                          ^^^^^^^^^^
+   |
+help: Remove unused import: `tools.schema.ToolResult`
+   |
+20 | from tools import topic_watch as tw  # noqa: E402
+   - from tools.schema import ToolResult  # noqa: E402
+21 |
+   |
+
+F401 [*] `memory.consolidation.is_tombstone` imported but unused
+  --> tests\test_memory_consolidation.py:18:50
+   |
+16 | import pytest
+17 |
+18 | from memory.consolidation import find_duplicate, is_tombstone, jaccard
+   |                                                  ^^^^^^^^^^^^
+19 | from memory.controller import MemoryController
+20 | from memory.metadata import MetadataStore
+   |
+help: Remove unused import: `memory.consolidation.is_tombstone`
+   |
+17 |
+   - from memory.consolidation import find_duplicate, is_tombstone, jaccard
+18 + from memory.consolidation import find_duplicate, jaccard
+19 | from memory.controller import MemoryController
+   |
+
+F841 Local variable `tp` is assigned to but never used
+   --> tests\test_repo_mine_pass3_tools.py:105:9
+    |
+104 |         sent = []
+105 |         tp = importlib.import_module("tools.task_pulse")
+    |         ^^
+106 |         fake_notify = types.SimpleNamespace(
+107 |             send_notification=lambda args: (
+    |
+help: Remove assignment to unused variable `tp`
+
+F401 [*] `json` imported but unused
+  --> tests\test_repo_mine_pass7.py:10:8
+   |
+ 8 | from __future__ import annotations
+ 9 |
+10 | import json
+   |        ^^^^
+11 | import sys
+12 | import urllib.request
+   |
+help: Remove unused import: `json`
+   |
+9  |
+   - import json
+10 | import sys
+   |
+
+F401 [*] `urllib.request` imported but unused
+  --> tests\test_repo_mine_pass7.py:12:8
+   |
+10 | import json
+11 | import sys
+12 | import urllib.request
+   |        ^^^^^^^^^^^^^^
+13 | import threading
+14 | from http.server import BaseHTTPRequestHandler, HTTPServer
+   |
+help: Remove unused import: `urllib.request`
+   |
+11 | import sys
+   - import urllib.request
+12 | import threading
+   |
+
+F401 [*] `threading` imported but unused
+  --> tests\test_repo_mine_pass7.py:13:8
+   |
+11 | import sys
+12 | import urllib.request
+13 | import threading
+   |        ^^^^^^^^^
+14 | from http.server import BaseHTTPRequestHandler, HTTPServer
+15 | from pathlib import Path
+   |
+help: Remove unused import: `threading`
+   |
+12 | import urllib.request
+   - import threading
+13 | from http.server import BaseHTTPRequestHandler, HTTPServer
+   |
+
+F401 [*] `http.server.BaseHTTPRequestHandler` imported but unused
+  --> tests\test_repo_mine_pass7.py:14:25
+   |
+12 | import urllib.request
+13 | import threading
+14 | from http.server import BaseHTTPRequestHandler, HTTPServer
+   |                         ^^^^^^^^^^^^^^^^^^^^^^
+15 | from pathlib import Path
+   |
+help: Remove unused import
+   |
+13 | import threading
+   - from http.server import BaseHTTPRequestHandler, HTTPServer
+14 | from pathlib import Path
+   |
+
+F401 [*] `http.server.HTTPServer` imported but unused
+  --> tests\test_repo_mine_pass7.py:14:49
+   |
+12 | import urllib.request
+13 | import threading
+14 | from http.server import BaseHTTPRequestHandler, HTTPServer
+   |                                                 ^^^^^^^^^^
+15 | from pathlib import Path
+   |
+help: Remove unused import
+   |
+13 | import threading
+   - from http.server import BaseHTTPRequestHandler, HTTPServer
+14 | from pathlib import Path
+   |
+
+F401 [*] `io` imported but unused
+  --> tests\test_repo_mine_tools.py:10:8
+   |
+ 8 | from __future__ import annotations
+ 9 |
+10 | import io
+   |        ^^
+11 | import json
+12 | import sys
+   |
+help: Remove unused import: `io`
+   |
+9  |
+   - import io
+10 | import json
+   |
+
+F401 [*] `json` imported but unused
+  --> tests\test_repo_mine_tools.py:11:8
+   |
+10 | import io
+11 | import json
+   |        ^^^^
+12 | import sys
+13 | from pathlib import Path
+   |
+help: Remove unused import: `json`
+   |
+10 | import io
+   - import json
+11 | import sys
+   |
+
+F401 [*] `pytest` imported but unused
+  --> tests\test_suKeesh_quick_compute.py:14:8
+   |
+12 | from pathlib import Path
+13 |
+14 | import pytest
+   |        ^^^^^^
+15 |
+16 | sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+   |
+help: Remove unused import: `pytest`
+   |
+13 |
+   - import pytest
+14 |
+   |
+
+F841 Local variable `calls` is assigned to but never used
+   --> tests\test_web_search.py:116:5
+    |
+115 | def test_score_results_reorders_relevance(monkeypatch):
+116 |     calls = {"n": 0}
+    |     ^^^^^
+117 |     monkeypatch.setattr(
+118 |         ws,
+    |
+help: Remove assignment to unused variable `calls`
+
+F401 `tools.agenda_view.agenda_add` imported but unused
+  --> tools\__init__.py:27:35
+   |
+25 |         browser_tabs,
+26 |     )
+27 |     from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
+   |                                   ^^^^^^^^^^
+28 |     from tools.api_collections import api_parse, api_run
+29 |     from tools.audit import run_audit
+   |
+help: Remove unused import
+
+F401 `tools.agenda_view.agenda_list` imported but unused
+  --> tools\__init__.py:27:47
+   |
+25 |         browser_tabs,
+26 |     )
+27 |     from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
+   |                                               ^^^^^^^^^^^
+28 |     from tools.api_collections import api_parse, api_run
+29 |     from tools.audit import run_audit
+   |
+help: Remove unused import
+
+F401 `tools.agenda_view.agenda_remove` imported but unused
+  --> tools\__init__.py:27:60
+   |
+25 |         browser_tabs,
+26 |     )
+27 |     from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
+   |                                                            ^^^^^^^^^^^^^
+28 |     from tools.api_collections import api_parse, api_run
+29 |     from tools.audit import run_audit
+   |
+help: Remove unused import
+
+F401 `tools.agenda_view.agenda_view` imported but unused
+  --> tools\__init__.py:27:75
+   |
+25 |         browser_tabs,
+26 |     )
+27 |     from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
+   |                                                                           ^^^^^^^^^^^
+28 |     from tools.api_collections import api_parse, api_run
+29 |     from tools.audit import run_audit
+   |
+help: Remove unused import
+
+F401 `tools.doc_retrieval.doc_search` imported but unused
+  --> tools\__init__.py:87:37
+   |
+85 |     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
+86 |     from tools.notify import send_notification
+87 |     from tools.doc_retrieval import doc_search, doc_stats
+   |                                     ^^^^^^^^^^
+88 |     from tools.feeds import feed_read
+89 |     from tools.page_watch import page_watch
+   |
+help: Remove unused import
+
+F401 `tools.doc_retrieval.doc_stats` imported but unused
+  --> tools\__init__.py:87:49
+   |
+85 |     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
+86 |     from tools.notify import send_notification
+87 |     from tools.doc_retrieval import doc_search, doc_stats
+   |                                                 ^^^^^^^^^
+88 |     from tools.feeds import feed_read
+89 |     from tools.page_watch import page_watch
+   |
+help: Remove unused import
+
+F401 `tools.web_archive.web_archive` imported but unused
+  --> tools\__init__.py:94:35
+   |
+92 |     from tools.snippets import snippet_handler
+93 |     from tools.weather_get import weather_get
+94 |     from tools.web_archive import web_archive, web_archive_list, web_archive_read
+   |                                   ^^^^^^^^^^^
+95 |     from tools.pdf_tools import (
+96 |         pdf_extract_tables,
+   |
+help: Remove unused import
+
+F401 `tools.web_archive.web_archive_list` imported but unused
+  --> tools\__init__.py:94:48
+   |
+92 |     from tools.snippets import snippet_handler
+93 |     from tools.weather_get import weather_get
+94 |     from tools.web_archive import web_archive, web_archive_list, web_archive_read
+   |                                                ^^^^^^^^^^^^^^^^
+95 |     from tools.pdf_tools import (
+96 |         pdf_extract_tables,
+   |
+help: Remove unused import
+
+F401 `tools.web_archive.web_archive_read` imported but unused
+  --> tools\__init__.py:94:66
+   |
+92 |     from tools.snippets import snippet_handler
+93 |     from tools.weather_get import weather_get
+94 |     from tools.web_archive import web_archive, web_archive_list, web_archive_read
+   |                                                                  ^^^^^^^^^^^^^^^^
+95 |     from tools.pdf_tools import (
+96 |         pdf_extract_tables,
+   |
+help: Remove unused import
+
+F401 `tools.topic_watch.add_topic` imported but unused
+   --> tools\__init__.py:125:35
+    |
+123 |     from tools.task_pulse import task_alert, task_ping
+124 |     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+125 |     from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
+    |                                   ^^^^^^^^^
+126 |     from tools.watch_rules import watch_rule, watch_run
+127 |     from tools.web_search import web_search
+    |
+help: Remove unused import
+
+F401 `tools.topic_watch.check_topics` imported but unused
+   --> tools\__init__.py:125:46
+    |
+123 |     from tools.task_pulse import task_alert, task_ping
+124 |     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+125 |     from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
+    |                                              ^^^^^^^^^^^^
+126 |     from tools.watch_rules import watch_rule, watch_run
+127 |     from tools.web_search import web_search
+    |
+help: Remove unused import
+
+F401 `tools.topic_watch.list_topics` imported but unused
+   --> tools\__init__.py:125:60
+    |
+123 |     from tools.task_pulse import task_alert, task_ping
+124 |     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+125 |     from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
+    |                                                            ^^^^^^^^^^^
+126 |     from tools.watch_rules import watch_rule, watch_run
+127 |     from tools.web_search import web_search
+    |
+help: Remove unused import
+
+F401 `tools.topic_watch.remove_topic` imported but unused
+   --> tools\__init__.py:125:73
+    |
+123 |     from tools.task_pulse import task_alert, task_ping
+124 |     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+125 |     from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
+    |                                                                         ^^^^^^^^^^^^
+126 |     from tools.watch_rules import watch_rule, watch_run
+127 |     from tools.web_search import web_search
+    |
+help: Remove unused import
+
+F401 `docx.shared.Pt` imported but unused; consider using `importlib.util.find_spec` to test for availability
+  --> tools\doc_report.py:52:33
+   |
+50 |     try:
+51 |         from docx import Document
+52 |         from docx.shared import Pt
+   |                                 ^^
+53 |     except ImportError:
+54 |         return ToolResult(success=False, error="python-docx not installed (pip install python-docx)")
+   |
+help: Remove unused import: `docx.shared.Pt`
+
+F401 [*] `json` imported but unused
+  --> tools\doc_retrieval.py:25:8
+   |
+23 | from __future__ import annotations
+24 |
+25 | import json
+   |        ^^^^
+26 | import logging
+27 | import math
+   |
+help: Remove unused import: `json`
+   |
+24 |
+   - import json
+25 | import logging
+   |
+
+Found 38 errors.
+[*] 22 fixable with the `--fix` option (2 hidden fixes can be enabled with the `--unsafe-fixes` option).

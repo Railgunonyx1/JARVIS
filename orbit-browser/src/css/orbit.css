@@ -2975,3 +2975,151 @@ body::after {
 
 /* ── Reduced motion / occlusion safety: no animated overlays. The grain
       and scanlines are static by construction; nothing here animates. */
+
+/* ══════════════════════════════════════════════════════════════════
+   AI DRAWER COMPOSER + MODEL / VOICE SELECTOR
+   The assistant composer (assistant-composer / composer-box) and the
+   model + voice pickers had markup but no styles. These rules use the
+   same Nothing-monochrome tokens as the rest of the shell: square
+   corners, hairline borders, mono micro-labels.
+   ══════════════════════════════════════════════════════════════════ */
+.assistant-composer {
+  border-top: 1px solid var(--jb-border-subtle);
+  padding: 10px 12px 12px;
+  position: relative;
+  z-index: 2;
+}
+.composer-box {
+  border: 1px solid var(--jb-border-subtle);
+  border-radius: 0;
+  background: var(--jb-bg);
+  padding: 10px 12px;
+  transition: border-color 0.2s ease;
+}
+.composer-box:focus-within { border-color: var(--jb-paper); }
+.composer-box textarea {
+  width: 100%;
+  min-height: 40px;
+  background: none;
+  border: 0;
+  outline: none;
+  resize: none;
+  color: var(--jb-text);
+  font: 13px/1.5 var(--jb-font-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+}
+.composer-box textarea::placeholder { color: var(--jb-mute); }
+
+.composer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.compose-button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--jb-border-subtle);
+  border-radius: 0;
+  background: var(--jb-surface);
+  color: var(--jb-mute);
+  font: 12px/1 var(--jb-font-mono, monospace);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.compose-button:hover { color: var(--jb-paper); border-color: var(--jb-paper); }
+.compose-button.send {
+  background: var(--jb-paper);
+  color: var(--jb-void);
+  border-color: var(--jb-paper);
+}
+.compose-button.send:hover { background: var(--jb-void); color: var(--jb-paper); }
+#voiceButton.active { background: var(--jb-live, var(--jb-accent)); color: var(--jb-void); border-color: var(--jb-live, var(--jb-accent)); }
+
+/* ── Model / voice picker (shared by model + voice menus) ───────── */
+.model-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.model-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--jb-border-subtle);
+  border-radius: 0;
+  background: var(--jb-surface);
+  color: var(--jb-text-secondary);
+  font: 9px/1 var(--jb-font-mono, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  max-width: 150px;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.model-button:hover { background: var(--jb-surface-hover); color: var(--jb-paper); border-color: var(--jb-paper); }
+.model-button > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-chevron { opacity: 0.6; }
+
+.model-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 168px;
+  padding: 4px 0;
+  background: var(--jb-elevated, var(--jb-surface));
+  border: 1px solid var(--jb-border-subtle);
+  border-radius: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 60;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+}
+.model-menu.open,
+.model-menu[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--jb-text-secondary);
+  font: 12px/1.4 var(--jb-font-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.model-option:hover { background: var(--jb-surface-hover); color: var(--jb-text); }
+.model-option.active,
+.model-option[aria-selected="true"] { color: var(--jb-paper); }
+.model-option .dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--jb-border);
+}
+.model-option.active .dot,
+.model-option .dot.on { background: var(--jb-accent); }
