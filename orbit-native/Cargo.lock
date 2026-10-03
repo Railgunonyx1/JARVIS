@@ -116,15 +116,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "orbit-host"
-version = "0.1.0"
-dependencies = [
- "orbit-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "pbkdf2"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

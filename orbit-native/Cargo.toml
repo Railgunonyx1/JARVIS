@@ -2,8 +2,14 @@
 resolver = "2"
 members = [
     "crates/orbit-core",
-    "crates/orbit-host",
 ]
+
+# Phase 1 (the WebView2 host) is designed in docs/ORBIT-NATIVE-MIGRATION.md but
+# is NOT implemented. Adding "crates/orbit-host" back is the first line of that
+# phase; until it compiles it must not sit in the workspace, or `cargo test`
+# stops being a signal about the code that does work.
+# crates/orbit-host = "not yet"
+exclude = ["crates/orbit-host"]
 
 [workspace.package]
 version = "0.1.0"
