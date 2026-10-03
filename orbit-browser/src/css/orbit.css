@@ -3123,3 +3123,35 @@ body::after {
 }
 .model-option.active .dot,
 .model-option .dot.on { background: var(--jb-accent); }
+
+/* Model rows carry a model name plus the provider that serves it, so the
+   menu can show WHY a pinned model might be offline. */
+.model-option[disabled] {
+  cursor: default;
+  opacity: 0.45;
+}
+.model-option[disabled]:hover {
+  background: none;
+  color: var(--jb-text-secondary);
+}
+.model-option.active {
+  background: var(--jb-surface-hover);
+}
+.model-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--jb-font-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+}
+.model-option-sub {
+  flex: none;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--jb-ghost);
+  font: 10px/1.4 var(--jb-font-mono, monospace);
+  letter-spacing: 0.02em;
+}

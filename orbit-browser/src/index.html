@@ -306,16 +306,11 @@
             <textarea id="assistantInput" placeholder="Ask Orbit…"></textarea>
             <div class="composer-bottom">
               <div class="model-select">
-                <button class="model-button" id="modelButton">
+                <button class="model-button" id="modelButton" title="Model: auto (router default)">
                   <span id="modelName">Auto</span>
                   <span class="model-chevron">▾</span>
                 </button>
-                <div class="model-menu" id="modelMenu">
-                  <button class="model-option active" data-model="Auto">Auto</button>
-                  <button class="model-option" data-model="1B Fast">1B Fast</button>
-                  <button class="model-option" data-model="3B Balanced">3B Balanced</button>
-                  <button class="model-option" data-model="4B Reasoning">4B Reasoning</button>
-                </div>
+                <div class="model-menu" id="modelMenu" role="menu" hidden></div>
               </div>
               <div class="composer-actions">
                 <button class="compose-button">+</button>
@@ -637,6 +632,7 @@
 <link rel="stylesheet" href="css/orbit-v2-polish.css" />
 <link rel="stylesheet" href="css/minimal.css" />
 <script defer src="js/v2.js"></script>
+<script defer src="js/model-button.js"></script>
 <script defer src="js/v2-watch.js"></script>
 <script defer src="js/v2-sidebar.js"></script>
 <script defer src="js/needle-agent.js"></script>
