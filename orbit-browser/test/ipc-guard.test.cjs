@@ -76,6 +76,28 @@ ok(classifySender({ sender: mainWC },
   { mainWebContents: null, guestIds: [], allowBootstrap: true }).ok,
   'bootstrap channel allowed before the window is stored');
 
+// ── bootstrap is a RACE exemption, not a trust exemption ────────────────
+// orbit:get-bridge-token hands out the secret that authenticates every JARVIS
+// browser call. Treating the bootstrap set as "carries no capability" made
+// ANY webContents able to read it -- caught by the runtime smoke test, where an
+// unlisted second window came back holding the token.
+ok(!classifySender({ sender: attacker }, ctx({ allowBootstrap: true })).ok,
+  'allowBootstrap does NOT excuse an unknown sender when a window exists');
+ok(!classifySender({ sender: { id: 999 } }, ctx({ allowBootstrap: true })).ok,
+  'allowBootstrap does NOT excuse an unattached popup');
+
+// ── Multiple chrome windows ─────────────────────────────────────────────
+// createWindow() reassigns mainWindow, so trusting only that reference locks
+// the first window out the moment a second one opens.
+const windowA = { id: 1 };
+const windowB = { id: 7 };
+const twoCtx = { mainWebContents: windowB, chromeIds: [1, 7], guestIds: [], isDevTools: true };
+ok(classifySender({ sender: windowA }, twoCtx).ok,
+  'the older chrome window stays trusted after a second window opens');
+ok(classifySender({ sender: windowB }, twoCtx).ok, 'the newest chrome window is trusted');
+ok(!classifySender({ sender: attacker }, twoCtx).ok,
+  'an unknown sender is still refused with two windows open');
+
 // ── Guests added at runtime are picked up (context is read per message) ──
 const growing = { mainWebContents: mainWC, guestIds: [42], isDevTools: true };
 ok(!classifySender({ sender: guestB }, growing).ok, 'guest B refused before attach');

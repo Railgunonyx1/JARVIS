@@ -124,6 +124,10 @@ const PAGES = {
 
 // ── State ─────────────────────────────────────────────────────────
 let mainWindow = null;
+// Every Orbit chrome renderer currently alive. mainWindow is REASSIGNED by
+// createWindow(), so trusting only that reference would lock out the first
+// window the moment a second one (Ctrl+N, private window) opens.
+const chromeWindows = new Set();
 let jarvisWs = null;
 let jarvisStatus = { ok: false, kernel: "offline" };
 let jarvisReconnectAttempts = 0;
@@ -865,12 +869,15 @@ function setupIPC() {
   const { guardHandler, guardListener, BOOTSTRAP_CHANNELS } = require('./ipc-guard');
   const guardContext = () => ({
     mainWebContents: mainWindow ? mainWindow.webContents : null,
+    chromeIds: Array.from(chromeWindows, (wc) => wc.id),
     guestIds: webContentsIds.values(),
     isDevTools: true,
   });
   // The renderer's first synchronous handshake must never be gated on window
   // readiness: if it is, the renderer gets `undefined` as its bridge token
-  // and fails auth instead of failing loudly here.
+  // and fails auth instead of failing loudly here. This only relaxes the
+  // no-window-yet race -- it is NOT a general exemption (see ipc-guard.js):
+  // that channel hands out the bridge token.
   const guardContextFor = (channel) =>
     BOOTSTRAP_CHANNELS.has(channel) ? { ...guardContext(), allowBootstrap: true }
                                      : guardContext();
@@ -1298,7 +1305,15 @@ function createWindow(incognito = false) {
       spellcheck: false,
       // Tell the renderer which webview partition to use (persist:orbit vs
       // in-memory for private browsing) before its scripts run.
-      additionalArguments: ["--orbit-partition=" + partition],
+      // The guest preload MUST be an absolute path: a relative one resolves
+      // against this document (src/index.html), not the app root, so
+      // "./guest-preload.js" pointed at src/guest-preload.js and silently
+      // loaded nothing -- no hardened-guest marker, and no first-party
+      // orbit:// bridge inside guests. Hand the renderer the real path.
+      additionalArguments: [
+        "--orbit-partition=" + partition,
+        "--orbit-guest-preload=" + path.join(__dirname, "guest-preload.js"),
+      ],
     },
     backgroundColor: "#000000",
     show: false,
@@ -1354,11 +1369,15 @@ function createWindow(incognito = false) {
   // button duplicate every tab.
   createTab("orbit://newtab");
 
+  const closingWebContents = mainWindow.webContents;
+  chromeWindows.add(closingWebContents);
   mainWindow.on("closed", () => {
     // Save session before closing (live URLs via sessionSnapshot)
     const tabData = sessionSnapshot();
     store?.set("lastSession", tabData);
-    // Cleanup
+    // Cleanup. Drop this window from the trusted set, or its dead
+    // webContents.id lingers in the allow-list forever.
+    chromeWindows.delete(closingWebContents);
     mainWindow = null;
     jarvisWs?.close();
     stopSleepingEngine();

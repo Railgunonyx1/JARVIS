@@ -79,6 +79,15 @@ contextBridge.exposeInMainWorld("orbit", {
     return arg ? arg.split("=")[1] : null;
   })(),
 
+  // Absolute path to the guest (<webview>) preload, handed over by main.js.
+  // It cannot be spelled relatively: relative webview preloads resolve against
+  // the embedder document (src/index.html), so "./guest-preload.js" pointed at
+  // a file that does not exist and every guest ran with no preload at all.
+  guestPreload: (() => {
+    const arg = process.argv.find((a) => a.startsWith("--orbit-guest-preload="));
+    return arg ? arg.slice("--orbit-guest-preload=".length) : null;
+  })(),
+
   // ── Navigation ──────────────────────────────────────────────────
   navigation: {
     to: (url) => ipcRenderer.invoke("navigate", url),

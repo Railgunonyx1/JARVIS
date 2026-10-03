@@ -109,7 +109,11 @@ function createWebview() {
   // it with about:blank so the guest is alive before the first navigation.
   wv.setAttribute("src", "about:blank");
   wv.setAttribute("partition", currentPartition());
-  wv.setAttribute("preload", seed?.getAttribute("preload") || "./guest-preload.js");
+  // Absolute path supplied by main.js. A relative one resolves against
+  // src/index.html and silently loads nothing (verified: __ORBIT_GUEST__ never
+  // appeared, so guests ran unhardened and the first-party orbit:// bridge in
+  // guests was dead).
+  wv.setAttribute("preload", seed?.getAttribute("preload") || window.orbit?.guestPreload || "../guest-preload.js");
   wv.setAttribute("webpreferences", seed?.getAttribute("webpreferences") || "contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false");
   contentArea.appendChild(wv);
   return wv;

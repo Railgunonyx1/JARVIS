@@ -59,25 +59,49 @@ for (const gone of ['system.permissions', 'system.downloads', 'system.spaces',
 }
 
 // ── 2. The two halves cannot rot independently ──────────────────────────
+// IPC is two directions. A renderer->main channel must be a registered
+// ipcMain handler; a main->renderer channel must be a webContents.send push.
+// Checking both against the same set is the easy way to write a test that
+// looks thorough and is wrong.
 const registered = new Set();
 const REG_RE = /ipcMain\.(?:handle|on)\(\s*["']([^"']+)["']/g;
 while ((m = REG_RE.exec(mainSrc)) !== null) registered.add(m[1]);
 ok(registered.size >= 55, `main.js registers ${registered.size} channels (expected >= 55)`);
 
-const used = new Set(calls.map((c) => c.channel));
-const orphans = [...used].filter((c) => !registered.has(c));
-ok(orphans.length === 0,
-  orphans.length === 0
-    ? 'every channel the preload calls is registered in main.js'
-    : 'preload calls channels main.js never registers: ' + orphans.join(', '));
+const pushed = new Set();
+const PUSH_RE = /webContents\.send\(\s*["']([^"']+)["']/g;
+while ((m = PUSH_RE.exec(mainSrc)) !== null) pushed.add(m[1]);
 
-// Channels main.js registers purely for internal use (there are none today,
-// but a future one should be annotated rather than silently unreachable).
-const unreachable = [...registered].filter((c) => !used.has(c));
+const inbound = new Set(calls.filter((c) => c.verb !== 'on').map((c) => c.channel));
+const outbound = new Set(calls.filter((c) => c.verb === 'on').map((c) => c.channel));
+
+const ghostInbound = [...inbound].filter((c) => !registered.has(c));
+ok(ghostInbound.length === 0,
+  ghostInbound.length === 0
+    ? `all ${inbound.size} renderer->main channels are registered in main.js`
+    : 'preload calls channels main.js never registers: ' + ghostInbound.join(', '));
+
+const ghostOutbound = [...outbound].filter((c) => !pushed.has(c));
+ok(ghostOutbound.length === 0,
+  ghostOutbound.length === 0
+    ? `all ${outbound.size} main->renderer channels are pushed by main.js`
+    : 'preload listens for channels main.js never sends: ' + ghostOutbound.join(', '));
+
+// Channels main.js handles but deliberately never exposes: the quarantined
+// agent tombstones. They must stay unreachable -- that IS their job -- so
+// they are named explicitly instead of being allowed to appear by accident.
+const TOMBSTONES = new Set(['agent:start', 'agent:stop', 'agent:status']);
+const unreachable = [...registered].filter((c) => !inbound.has(c) && !TOMBSTONES.has(c));
 ok(unreachable.length === 0,
   unreachable.length === 0
-    ? 'no registered channel is unreachable from the renderer'
-    : 'main.js registers channels the preload never calls: ' + unreachable.join(', '));
+    ? 'no handler is unreachable except the named agent tombstones'
+    : 'main.js handles channels the preload never calls: ' + unreachable.join(', '));
+
+const staleTombstones = [...TOMBSTONES].filter((c) => !registered.has(c));
+ok(staleTombstones.length === 0,
+  staleTombstones.length === 0
+    ? 'the agent tombstones are still registered in main.js'
+    : 'agent tombstones were deleted from main.js: ' + staleTombstones.join(', '));
 
 // ── 3. The quarantined agent surface stays deleted ──────────────────────
 ok(!/agent:\s*\{/.test(preloadSrc), 'preload exposes no `agent` object');

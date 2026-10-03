@@ -23,15 +23,24 @@
 
 "use strict";
 
-/** Channels that may be called before a window exists (renderer handshake). */
+/** Channels that may be called before a window reference exists. */
 const BOOTSTRAP_CHANNELS = new Set(["orbit:get-bridge-token"]);
 
 /**
  * Decide whether `event` came from a webContents Orbit trusts.
  *
+ * `allowBootstrap` is deliberately NOT a blanket exemption. It only covers the
+ * one case where refusing is worse than allowing: the main window reference is
+ * not stored yet. It must never let an *unknown* sender through, because the
+ * one bootstrap channel hands out the bridge token -- the secret that
+ * authenticates every JARVIS browser call. Treating it as "no capability of
+ * its own" is exactly backwards, and doing so is how a second window ends up
+ * holding a privileged token.
+ *
  * @param {{sender?: {id: number}}} event           Electron IPC event.
  * @param {{mainWebContents?: object|null, guestIds?: Iterable<number>,
- *          windowAlive?: boolean, isDevTools?: boolean}} ctx
+ *          chromeIds?: Iterable<number>, allowBootstrap?: boolean,
+ *          isDevTools?: boolean}} ctx
  * @returns {{ok: true} | {ok: false, reason: string}}
  */
 function classifySender(event, ctx) {
@@ -45,10 +54,12 @@ function classifySender(event, ctx) {
     return { ok: true };
   }
 
-  // Bootstrap channels are the renderer's first contact and may land before
-  // the window reference is stored. They carry no capability of their own.
-  if (ctx && ctx.allowBootstrap) {
-    return { ok: true };
+  // Every Orbit chrome renderer, not just the most recently created one.
+  // createWindow() reassigns mainWindow, so a second window (Ctrl+N, private)
+  // would otherwise lock the first one out of every privileged channel.
+  const chromeIds = (ctx && ctx.chromeIds) || [];
+  for (const id of chromeIds) {
+    if (sender.id === id) return { ok: true };
   }
 
   // DevTools attached to the main window is the same trust principal as the
@@ -65,7 +76,13 @@ function classifySender(event, ctx) {
     if (sender.id === id) return { ok: true };
   }
 
-  // The very first renderer handshake can land before the window is stored.
+  // Only now, with every real trust check exhausted, consider the bootstrap
+  // exemption -- and only because there is no window to compare against yet.
+  if ((mainWebContents === null || mainWebContents === undefined) &&
+      ctx && ctx.allowBootstrap) {
+    return { ok: true };
+  }
+
   if (mainWebContents === null || mainWebContents === undefined) {
     return { ok: false, reason: "no window yet" };
   }
