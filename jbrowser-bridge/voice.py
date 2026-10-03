@@ -35,6 +35,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 
 logger = logging.getLogger("jarvis.voice")
@@ -98,31 +99,56 @@ _client_cache: dict = {}
 _client_cache_at: float = 0.0
 _CLIENT_TTL = 300.0  # re-resolve the key periodically (env can change)
 
+# The bridge is a ThreadingHTTPServer: /v1/tts and /v1/stt can rebuild the
+# client concurrently. Without a lock two threads both construct a client
+# (one discarded), and a clear()-then-assign publish is a non-atomic
+# read-modify-write a reader can observe as empty -> spurious None.
+_client_lock = threading.Lock()
+
 def _api_key() -> str:
     return (os.getenv("ELEVENLABS_API_KEY") or "").strip()
 
 def _el_client():
-    """Lazily import and cache the ElevenLabs client (None when no key/SDK)."""
-    global _client_cache_at
-    now = time.monotonic()
-    if _client_cache and now - _client_cache_at < _CLIENT_TTL:
-        return _client_cache.get("client")
-    _client_cache_at = now
-    key = _api_key()
-    if not key:
-        _client_cache.clear()
-        _client_cache["client"] = None
-        return None
-    try:
-        from elevenlabs import ElevenLabs
+    """Lazily import and cache the ElevenLabs client (None when no key/SDK).
 
-        _client_cache["client"] = ElevenLabs(api_key=key)
-        logger.info("ElevenLabs voice enabled (model=%s voice=%s)", EL_TTS_MODEL, EL_VOICE_ID)
-    except Exception as e:  # SDK missing → SAPI fallback stays primary
-        logger.warning("ElevenLabs SDK unavailable (%s); falling back to SAPI", e)
-        _client_cache.clear()
-        _client_cache["client"] = None
-    return _client_cache.get("client")
+    Double-checked locking: the common cache-hit path stays lock-free, while
+    rebuilds are serialized and published by rebinding the module global, so
+    a concurrent reader never observes the cache mid-update.
+    """
+    global _client_cache, _client_cache_at
+
+    now = time.monotonic()
+    client = _client_cache.get("client")
+    if client is not None and now - _client_cache_at < _CLIENT_TTL:
+        return client
+
+    with _client_lock:
+        # Re-check: another thread may have rebuilt while we waited.
+        now = time.monotonic()
+        client = _client_cache.get("client")
+        if client is not None and now - _client_cache_at < _CLIENT_TTL:
+            return client
+
+        key = _api_key()
+        if not key:
+            _client_cache = {"client": None}
+            _client_cache_at = now
+            return None
+
+        try:
+            from elevenlabs import ElevenLabs
+
+            client = ElevenLabs(api_key=key)
+            logger.info("ElevenLabs voice enabled (model=%s voice=%s)",
+                        EL_TTS_MODEL, EL_VOICE_ID)
+        except Exception as e:  # SDK missing -> SAPI fallback stays primary
+            logger.warning("ElevenLabs SDK unavailable (%s); falling back to SAPI", e)
+            client = None
+
+        # Single rebind: readers see either the old or the new dict, never a gap.
+        _client_cache = {"client": client}
+        _client_cache_at = now
+        return client
 
 # ── TTS ───────────────────────────────────────────────────────────────────
 

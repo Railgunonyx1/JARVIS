@@ -46,13 +46,12 @@ import logging
 import os
 import re
 import secrets
-import time
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend import KernelBackend, make_backend
 
-from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+from voice import _clamp_speed, stt_bytes, voice_status, _tts_one, _header_safe
 
 logger = logging.getLogger("jbrowser-bridge")
 
@@ -213,7 +212,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         try:
             data_b, mime, engine_used = _tts_one(
                 text, speed=speed, engine_name=voice_model, voice=voice_name)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("tts failed")
             self._json(500, {"ok": False, "error": "tts failed", "code": "tts_failed", "engine": "sapi"})
             return
@@ -261,6 +260,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             import base64 as _b64
             raw = _b64.b64decode(audio_b64)
         except Exception as exc:  # noqa: BLE001
+            logger.debug("stt: undecodable audio_b64: %s", exc)
             self._json(400, {"ok": False, "error": "invalid audio_b64"})
             return
         if len(raw) < 100:
@@ -268,7 +268,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return
         try:
             text = stt_bytes(raw, filename=filename)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("stt failed")
             self._json(503, {"ok": False, "error": "ELEVENLABS_API_KEY not configured", "code": "stt_unavailable"})
             return
