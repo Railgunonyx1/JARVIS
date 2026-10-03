@@ -24,7 +24,7 @@ def _run_one(project_dir):
 
     import_ms = (time.perf_counter() - import_start) * 1000.0
     started = time.perf_counter()
-    loop = build_kernel(project_dir=project_dir)
+    loop = build_kernel(project_dir=project_dir).agent_loop
     total_ms = (time.perf_counter() - started) * 1000.0
 
     report = get_profiler().report()

@@ -1,0 +1,215 @@
+/* JARVIS Orbit new tab — Nothing design language.
+ * ORBIT wordmark (Doto), search, monochrome tiles, true-black void.
+ */
+
+@import url("../lib/tokens.css");
+
+html, body {
+  height: 100%;
+  background: var(--jb-void);
+  color: var(--jb-text);
+  font-family: var(--jb-font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.nt-wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--jb-space-8) var(--jb-space-6) var(--jb-space-6);
+}
+
+/* ── Wordmark ───────────────────────────────────────────────────── */
+.nt-center {
+  text-align: center;
+  margin-top: 10vh;
+}
+
+.nt-wordmark {
+  font-family: var(--jb-font-display);
+  font-size: var(--jb-text-display);
+  letter-spacing: 0.12em;
+  color: var(--jb-paper);
+  font-weight: 500;
+}
+
+.nt-sub {
+  margin-top: var(--jb-space-2);
+  color: var(--jb-mute);
+  font-size: var(--jb-text-md);
+}
+
+/* ── Search ─────────────────────────────────────────────────────── */
+.nt-omnibox {
+  display: flex;
+  align-items: center;
+  gap: var(--jb-space-3);
+  margin-top: var(--jb-space-8);
+  width: min(560px, 100%);
+  height: 44px;
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-line-hard);
+  border-radius: var(--jb-radius-md);
+  padding: 0 var(--jb-space-4);
+}
+.nt-omnibox:focus-within {
+  border-color: var(--jb-paper);
+}
+.nt-omnibox svg { color: var(--jb-mute); flex: none; }
+.nt-omnibox input {
+  flex: 1;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--jb-text);
+  font-size: var(--jb-text-lg);
+}
+.nt-omnibox input::placeholder { color: var(--jb-text-tertiary); }
+.nt-omnibox button {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: var(--jb-radius-xs);
+  color: var(--jb-mute);
+  flex: none;
+}
+.nt-omnibox button:hover { color: var(--jb-paper); }
+
+/* ── Status row ─────────────────────────────────────────────────── */
+.nt-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--jb-space-4);
+}
+.nt-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--jb-ghost);
+}
+.nt-dot.online { background: var(--jb-success); }
+.nt-dot.offline { background: var(--jb-danger); }
+.nt-status {
+  font-size: var(--jb-text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jb-mute);
+}
+
+/* ── Tiles ──────────────────────────────────────────────────────── */
+.nt-tiles {
+  display: flex;
+  gap: 12px;
+  margin-top: var(--jb-space-8);
+}
+.nt-tile {
+  width: 92px; height: 84px;
+  border-radius: var(--jb-radius-lg);
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--jb-mute);
+}
+.nt-tile:hover {
+  border-color: var(--jb-line-hard);
+  color: var(--jb-paper);
+  background: var(--jb-surface-active);
+}
+.nt-tile span { font-size: 11px; }
+
+/* ── Quick actions ──────────────────────────────────────────────── */
+.nt-quick {
+  margin-top: var(--jb-space-6);
+  text-align: center;
+}
+.nt-quick-title {
+  font-size: var(--jb-text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jb-ghost);
+  margin-bottom: var(--jb-space-3);
+}
+.nt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--jb-space-2);
+}
+.nt-chip {
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  border-radius: var(--jb-radius-full);
+  padding: var(--jb-space-2) var(--jb-space-4);
+  color: var(--jb-mute);
+  font-family: var(--jb-font-ui);
+  font-size: var(--jb-text-sm);
+  cursor: pointer;
+}
+.nt-chip:hover {
+  color: var(--jb-paper);
+  border-color: var(--jb-line-hard);
+}
+
+/* ── Conversation thread ────────────────────────────────────────── */
+.nt-thread {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: var(--jb-space-6);
+  width: min(600px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--jb-space-2);
+}
+
+.nt-msg {
+  max-width: 85%;
+  padding: var(--jb-space-3) var(--jb-space-4);
+  border-radius: var(--jb-radius-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.nt-msg.user {
+  align-self: flex-end;
+  background: var(--jb-surface-active);
+  color: var(--jb-paper);
+}
+.nt-msg.jarvis {
+  align-self: flex-start;
+  background: var(--jb-surface);
+  border: 1px solid var(--jb-border);
+  color: var(--jb-text);
+}
+.nt-msg.error {
+  border-color: var(--jb-danger);
+  color: var(--jb-danger);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────── */
+.nt-footer {
+  margin-top: auto;
+  padding-top: var(--jb-space-4);
+  text-align: center;
+  font-size: var(--jb-text-xs);
+  color: var(--jb-ghost);
+}
+.nt-footer-link {
+  color: var(--jb-mute);
+  font-size: var(--jb-text-xs);
+}
+.nt-footer-link:hover { color: var(--jb-paper); }
+.nt-footer-sep {
+  margin: 0 8px;
+  color: var(--jb-ghost);
+}
+.nt-footer-mono {
+  font-family: var(--jb-font-mono);
+  font-size: 10px;
+  color: var(--jb-ghost);
+}

@@ -28,8 +28,30 @@ READ_ONLY_TOOLS = {
     "memory.retrieve", "memory.stats",
     # Web
     "web.search",
+    # Data (read-only analysis)
+    "data.stats", "data.query",
+    # Routines — list/read and run (run validates and returns a plan only)
+    "routine.list", "routine.run",
+    # PDF (read-only extraction)
+    "pdf.extract_text", "pdf.extract_tables",
+    # Page watch (observe remote pages; state file is bookkeeping, not repo mutation)
+    "page.watch",
+    # Watch rules — run fires actions, but read-only listing/evaluation is observe
+    "watch.run",
+    # Secret refs — resolve returns masked handles only; never values (Infisical-style)
+    "secret.ref", "secret.status",
+    # Browser wait (observe-only condition polling)
+    "browser.wait",
+    # Remote storage — read-only inventory of rclone remotes (names only)
+    "remote.status",
+    # API collections — parse is read-only; run performs documented HTTP requests
+    "api.parse", "api.run",
     # Browser (read)
     "browser.open", "browser.extract", "browser.screenshot", "browser.status",
+    # Browser (J-Browser platform: observe / navigate / tab & session management)
+    "browser.read", "browser.find", "browser.scroll", "browser.tabs",
+    "browser.new_tab", "browser.close_tab", "browser.switch_tab",
+    "browser.profile", "browser.permissions",
     # System (read)
     "system.status",
     # Runtime (read)
@@ -44,13 +66,31 @@ READ_ONLY_TOOLS = {
     "security.check_permissions",
     # Self-audit (read)
     "self.audit",
+    # Skills (read)
+    "skills.list", "skills.load",
     # World monitor (read)
     "world_monitor.get_event", "world_monitor.get_alerts",
     "world_monitor.get_region", "world_monitor.get_sources",
     "world_monitor.search", "world_monitor.world_brief",
+    # Topic watch (observe news headlines; state file is bookkeeping)
+    "topic.watch",
+    # Feeds/reading/archive — read-only observation; state lives under memory/
+    "feed.read", "reading.list", "web.archive",
+    # Weather — key-free forecast fetch
+    "weather.get",
+    # Mail digest — headers-only, read-only IMAP (EXAMINE), disabled unless env-configured
+    "mail.digest",
+    # Quick compute — pure stdlib computation, no I/O (sukeesh/Jarvis-derived)
+    "calc.safe", "convert.unit", "convert.base", "gen.password",
+    # Doc retrieval — TF-IDF over workspace files, read-only (AnythingLLM-derived)
+    "doc.search",
+    # Agenda — ICS calendar read; add/remove mutate only its own source registry
+    "agenda.view",
 }
 
 MUTATING_TOOLS = {
+    # Snippets — :trigger store; add/remove mutate memory/snippets.json
+    "snippet.store",
     # Filesystem (write)
     "filesystem.write", "filesystem.copy", "filesystem.move",
     # Git (write)
@@ -60,14 +100,31 @@ MUTATING_TOOLS = {
     "git.worktree",
     # Patch (write)
     "patch.replace", "patch.insert", "patch.delete",
+    # Session state — undo mutates files back to prior states
+    "session.undo",
     # Memory (write) — safe: identity/preference updates
     "memory.remember", "memory.forget",
     # Testing (mutating)
     "test.run", "test.run_target", "test.coverage",
     # Security (write)
     "security.scan_secrets", "security.scan_code",
+    # Documents (write outputs under project root)
+    "pdf.split", "pdf.merge", "docs.to_markdown",
+    # Notifications (sends outbound messages on task completion)
+    "notify.send",
+    # Task pulse — writes ping state + can push alerts (healthchecks semantics)
+    "task.ping", "task.alert",
+    # Watch rules — creating/removing rules persists state under memory/
+    "watch.rule",
+    # Data tools — data.convert writes converted files under project root
+    "data.convert",
+    # Remote storage — rclone transfers write to destinations (sync is destructive-gated)
+    "remote.transfer",
+    # Report generation — writes .docx under project root
+    "doc.report",
+    # Routines — add/remove persist recipes; run returns a plan (no nested exec)
+    "routine.add", "routine.remove",
 }
-
 DANGEROUS_TOOLS = {
     # Shell
     "shell.execute",
@@ -275,7 +332,7 @@ def test_classify_tool_fills_defaults():
         permission="web.search", handler=noop, category="web",
     ))
     assert t.risk == "low"
-    assert t.timeout_seconds == 30.0
+    assert t.timeout_seconds == 15.0
     assert t.is_destructive is False
 
 

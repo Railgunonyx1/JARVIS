@@ -1,0 +1,19 @@
+{
+  "name": "verification_loop",
+  "description": "A comprehensive verification system for Claude Code sessions.",
+  "instructions": "skills/instructions/soc/verification-loop.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "verification",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

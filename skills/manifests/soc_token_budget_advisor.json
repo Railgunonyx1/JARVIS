@@ -1,0 +1,17 @@
+{
+  "name": "token_budget_advisor",
+  "description": "Offers the user an informed choice about how much response depth to consume before answering. Use this skill when the user explicitly wants to control response length, depth, or token budget. TRIGGER when: \"token budget\", \"token count\", \"token usage\", \"token limit\", \"response len",
+  "instructions": "skills/instructions/soc/token-budget-advisor.md",
+  "tools": [
+    "filesystem.read",
+    "runtime.status"
+  ],
+  "tags": [
+    "token",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

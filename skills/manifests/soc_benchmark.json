@@ -1,0 +1,18 @@
+{
+  "name": "benchmark",
+  "description": "Use this skill to measure performance baselines, detect regressions before/after PRs, and compare stack alternatives.",
+  "instructions": "skills/instructions/soc/benchmark.md",
+  "tools": [
+    "test.benchmark",
+    "runtime.latency",
+    "shell.execute"
+  ],
+  "tags": [
+    "benchmark",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

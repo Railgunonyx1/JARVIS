@@ -1,0 +1,10 @@
+{
+  "name": "mcp_builder",
+  "description": "Guide for building high-quality MCP (Model Context Protocol) servers that let LLMs interact with external services through well-designed tools. Covers Python (FastMCP) and Node/TypeScript (MCP SDK) implementations, tool design, error handling, and pagination. Use when integrating a new external API into JARVIS or the browser as a tool source. Ported from Anthropic's mcp-builder.",
+  "instructions": "skills/instructions/mcp-builder.md",
+  "tools": ["filesystem.read", "filesystem.write", "shell.execute", "test.run", "search.code"],
+  "tags": ["mcp", "integration", "api", "tools", "protocol"],
+  "risk": "medium",
+  "timeout": 300,
+  "version": "1.0.0"
+}

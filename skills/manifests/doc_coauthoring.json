@@ -1,0 +1,10 @@
+{
+  "name": "doc_coauthoring",
+  "description": "Structured workflow for co-authoring documentation, proposals, technical specs, and decision docs. Three stages: context gathering, refinement and structure, reader testing. Use when the user wants to write or substantially revise a document rather than a quick one-shot answer. Ported from Anthropic's doc-coauthoring.",
+  "instructions": "skills/instructions/doc-coauthoring.md",
+  "tools": ["filesystem.read", "filesystem.write", "search.find", "web.search"],
+  "tags": ["writing", "documentation", "workflow", "specifications"],
+  "risk": "low",
+  "timeout": 300,
+  "version": "1.0.0"
+}

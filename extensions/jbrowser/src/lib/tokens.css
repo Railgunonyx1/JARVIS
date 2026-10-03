@@ -1,0 +1,132 @@
+/* JARVIS Orbit — Nothing design tokens.
+ *
+ * Dark-first. Monochrome. Colour is a signal, never a theme.
+ * Geist for UI, Doto for display identity, Geist Mono for technical.
+ * Browser chrome stays calm and familiar; agent state uses the glyph matrix.
+ */
+
+@font-face{font-family:Geist;src:url("../fonts/Geist-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Geist;src:url("../fonts/Geist-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Geist;src:url("../fonts/Geist-SemiBold.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("../fonts/GeistMono-Regular.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("../fonts/GeistMono-Medium.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Regular.ttf") format("truetype");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Medium.ttf") format("truetype");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:Doto;src:url("../fonts/Doto-Bold.ttf") format("truetype");font-weight:700;font-style:normal;font-display:swap}
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — Nothing dark (true black + gray steps) */
+  --jb-void: #000000;
+  --jb-bg: #0b0b0b;
+  --jb-surface: #111111;
+  --jb-surface-hover: #1A1A1A;
+  --jb-surface-active: #242424;
+  --jb-elevated: #1A1A1A;
+  --jb-border: #222222;
+  --jb-border-subtle: #1A1A1A;
+  --jb-line-hard: #333333;
+
+  /* Text — Nothing monochrome scale */
+  --jb-text: #E8E8E8;
+  --jb-text-secondary: #999999;
+  --jb-text-tertiary: #666666;
+  --jb-text-disabled: #444444;
+  --jb-paper: #FFFFFF;
+  --jb-ghost: #666666;
+  --jb-mute: #999999;
+
+  /* Signal — colour as lamp, not paint can */
+  --jb-accent: #8AA4C8;          /* links / focus ring only — desaturated, not brand */
+  --jb-accent-hover: #9DB5D6;
+  --jb-accent-active: #7A96B8;
+  --jb-accent-muted: rgba(138, 164, 200, 0.12);
+  --jb-accent-text: #C0D0E4;
+
+  --jb-success: #6F9B6A;         /* completed / allowed — small indicators only */
+  --jb-success-muted: rgba(111, 155, 106, 0.15);
+  --jb-warning: #C9A227;         /* medium risk / waiting / degraded */
+  --jb-warning-muted: rgba(201, 162, 39, 0.15);
+  --jb-danger: #D71921;          /* Nothing red — approvals, destructive, blocked. Never decoration */
+  --jb-danger-muted: rgba(215, 25, 33, 0.15);
+  --jb-info: #8AA4C8;
+  --jb-info-muted: rgba(138, 164, 200, 0.12);
+  --jb-glyph: #FFFFFF;
+
+  /* Typography — Nothing late/era (OS 5): Geist system, Doto identity */
+  --jb-font-ui: Geist, Inter, system-ui, -apple-system, sans-serif;
+  --jb-font-mono: "Geist Mono", ui-monospace, monospace;
+  --jb-font-display: Doto, Geist, sans-serif;
+  --jb-text-xs: 10px;
+  --jb-text-sm: 11.5px;
+  --jb-text-md: 13px;
+  --jb-text-lg: 14px;
+  --jb-text-xl: 18px;
+  --jb-text-2xl: 24px;
+  --jb-text-display: 40px;
+  --jb-weight-regular: 400;
+  --jb-weight-medium: 500;
+  --jb-weight-semibold: 600;
+
+  /* Spacing — 8px base, compact chrome */
+  --jb-space-1: 4px;
+  --jb-space-2: 8px;
+  --jb-space-3: 12px;
+  --jb-space-4: 16px;
+  --jb-space-5: 20px;
+  --jb-space-6: 24px;
+  --jb-space-8: 32px;
+  --jb-space-10: 40px;
+
+  /* Shape — compact radius, almost no shadow in dark */
+  --jb-radius-xs: 6px;
+  --jb-radius-sm: 8px;
+  --jb-radius-md: 10px;
+  --jb-radius-lg: 12px;
+  --jb-radius-xl: 14px;
+  --jb-radius-full: 999px;
+  --jb-shadow: none;
+  --jb-ring: 0 0 0 2px var(--jb-paper);
+}
+
+/* ── Light theme ─────────────────────────────────────────────────── */
+html[data-theme="light"],
+[data-theme="light"] {
+  color-scheme: light;
+  --jb-void: #F3F3F3;
+  --jb-bg: #FFFFFF;
+  --jb-surface: #FFFFFF;
+  --jb-surface-hover: #F0F0F0;
+  --jb-surface-active: #E6E6E6;
+  --jb-elevated: #F0F0F0;
+  --jb-border: #E8E8E8;
+  --jb-border-subtle: #F0F0F0;
+  --jb-line-hard: #CCCCCC;
+
+  --jb-text: #1A1A1A;
+  --jb-text-secondary: #666666;
+  --jb-text-tertiary: #9A9A9A;
+  --jb-text-disabled: #B6B6B6;
+  --jb-paper: #000000;
+  --jb-ghost: #9A9A9A;
+  --jb-mute: #666666;
+
+  --jb-glyph: #000000;
+  --jb-shadow: 0 12px 32px rgba(0,0,0,.08);
+  --jb-ring: 0 0 0 2px var(--jb-paper);
+}
+
+/* ── Shared primitives ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+button { font-family: var(--jb-font-ui); }
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--jb-paper);
+  outline-offset: 2px;
+}
+
+.jb-visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "documentation_writer",
+  "description": "Di\u00e1taxis Documentation Expert. An expert technical writer specializing in creating high-quality software documentation, guided by the principles and structure of the Di\u00e1taxis technical documentation authoring framework.",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "docs.to_markdown"
+  ],
+  "tags": [
+    "docs",
+    "writing",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/documentation_writer.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\documentation-writer"
+}

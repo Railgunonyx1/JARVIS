@@ -1,0 +1,17 @@
+{
+  "name": "terminal_ops",
+  "description": "Evidence-first repo execution workflow for ECC. Use when the user wants a command run, a repo checked, a CI failure debugged, or a narrow fix pushed with exact proof of what was executed and verified.",
+  "instructions": "skills/instructions/soc/terminal-ops.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read"
+  ],
+  "tags": [
+    "terminal",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

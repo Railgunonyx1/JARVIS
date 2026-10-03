@@ -1,0 +1,22 @@
+{
+  "name": "python_testing",
+  "description": "Python testing strategies using pytest, TDD methodology, fixtures, mocking, parametrization, and coverage requirements.",
+  "instructions": "skills/instructions/soc/python-testing.md",
+  "tools": [
+    "test.run",
+    "test.discover",
+    "test.coverage",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "code.typecheck"
+  ],
+  "tags": [
+    "python",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

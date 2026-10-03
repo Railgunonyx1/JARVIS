@@ -1,0 +1,959 @@
+"""J-Browser platform tests.
+
+Covers the browser platform units without requiring Playwright: optimization
+profile, risk classification, tab/session identity, page-context extraction
+(via a fake page), and the controller facade with a fake backend verifying
+event emission on the EventBus.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from jbrowser.controller import BrowserController, get_controller, reset_controller
+from jbrowser.optimization import as_chromium_args, build_launch_kwargs
+from jbrowser.page_context import build_page_context
+from jbrowser.permissions import (
+    describe_permissions,
+    permission_key_for_tool,
+    requires_approval,
+    risk_for_tool,
+)
+from jbrowser.sessions import SessionManager
+from jbrowser.tabs import TabContext, TabManager, new_tab_id
+from runtime.event_bus import get_event_bus
+
+# ---------------------------------------------------------------------------
+# Optimization profile
+# ---------------------------------------------------------------------------
+
+class TestOptimizationProfile:
+    def test_launch_args_include_optimized_flags(self):
+        args = as_chromium_args()
+        assert "--enable-gpu-rasterization" in args
+        assert "--enable-quic" in args
+        assert any(a.startswith("--num-raster-threads=") for a in args)
+
+    def test_preserve_tabs_drops_memory_saver(self):
+        slim = as_chromium_args(preserve_tabs=False)
+        alive = as_chromium_args(preserve_tabs=True)
+        assert "--freeze-background-tabs" in slim
+        assert "--freeze-background-tabs" not in alive
+
+    def test_launch_kwargs_shape(self):
+        kwargs = build_launch_kwargs()
+        assert isinstance(kwargs["args"], list)
+        assert all(isinstance(a, str) for a in kwargs["args"])
+
+    def test_memory_and_startup_flags_present(self):
+        joined = " ".join(as_chromium_args())
+        for flag in ("mute-audio", "disable-extensions", "no-first-run",
+                     "disable-background-networking", "hide-scrollbars",
+                     "freeze-background-tabs"):
+            assert f"--{flag}" in joined, flag
+
+    def test_no_contradictory_never_throttle_flags(self):
+        # The never-throttle trio fights freeze-background-tabs and, on a
+        # memory-constrained daily driver, the never-throttle side wins and the
+        # RAM budget is lost. Chromium's own throttling is the policy.
+        joined = " ".join(as_chromium_args())
+        for flag in ("disable-background-timer-throttling",
+                     "disable-backgrounding-occluded-windows",
+                     "disable-renderer-backgrounding"):
+            assert f"--{flag}" not in joined, flag
+
+    def test_occlusion_detection_disabled(self):
+        args = as_chromium_args()
+        # Keep CalculateNativeWinOcclusion: Orbit still *detects* occlusion, it
+        # just no longer overrides Chromium's throttling because of it.
+        assert "CalculateNativeWinOcclusion" in " ".join(args)
+
+    def test_screenshot_kinds_keep_layout(self):
+        from jbrowser.optimization import (
+            RESOURCE_BLOCK_KEEP_FOR_SCREENSHOT,
+            RESOURCE_BLOCK_KINDS,
+        )
+        kept = RESOURCE_BLOCK_KEEP_FOR_SCREENSHOT
+        assert kept < RESOURCE_BLOCK_KINDS
+        assert "image" in kept and "stylesheet" in kept
+
+    def test_tab_limit_math(self):
+        from jbrowser.optimization import DEFAULT_TAB_LIMIT, enforce_tab_limit
+        assert enforce_tab_limit(5) == 0
+        assert enforce_tab_limit(DEFAULT_TAB_LIMIT) == 0
+        assert enforce_tab_limit(DEFAULT_TAB_LIMIT + 3) == 3
+
+
+# ---------------------------------------------------------------------------
+# Risk permissions
+# ---------------------------------------------------------------------------
+
+class TestPermissions:
+    def test_low_risk(self):
+        assert risk_for_tool("browser.read").value == "low"
+        assert risk_for_tool("browser.navigate").value == "low"
+        assert risk_for_tool("browser.tabs").value == "low"
+        assert risk_for_tool("browser.scroll").value == "low"
+
+    def test_high_risk_mutations(self):
+        # click/type are page mutations -> canonical HIGH (matches the P0
+        # classification / inventory DANGEROUS_TOOLS set), not medium.
+        assert risk_for_tool("browser.click").value == "high"
+        assert risk_for_tool("browser.type").value == "high"
+
+    def test_high_risk_requires_approval(self):
+        assert requires_approval("browser.submit")
+        assert requires_approval("browser.execute_script")
+        assert requires_approval("browser.delete")
+        assert requires_approval("browser.click")
+        assert not requires_approval("browser.read")
+
+    def test_permission_key_tiered(self):
+        assert permission_key_for_tool("browser.submit") == "browser.high"
+        assert permission_key_for_tool("browser.click") == "browser.high"
+        assert permission_key_for_tool("browser.open") == "browser.low"
+
+    def test_describe_permissions_has_all_tiers(self):
+        perms = describe_permissions()
+        assert set(perms) == {"low", "medium", "high"}
+        assert "browser.read" in perms["low"]
+        assert "browser.click" in perms["high"]
+        assert "browser.execute_script" in perms["high"]
+
+
+# ---------------------------------------------------------------------------
+# Tab identity
+# ---------------------------------------------------------------------------
+
+class TestTabManager:
+    def test_stable_ids_not_indices(self):
+        tm = TabManager()
+        a = new_tab_id()
+        b = new_tab_id()
+        assert a != b
+        tm.register(TabContext(tab_id=a, session_id="s1"))
+        tm.register(TabContext(tab_id=b, session_id="s1"))
+        assert len(tm) == 2
+        # removing then re-adding a different id must not confuse lookups
+        tm.remove(a)
+        assert tm.get(b) is not None
+
+    def test_activate_sets_active_flags(self):
+        tm = TabManager()
+        a = new_tab_id()
+        b = new_tab_id()
+        tm.register(TabContext(tab_id=a, session_id="s1"))
+        tm.register(TabContext(tab_id=b, session_id="s1"))
+        tm.activate(b)
+        assert tm.active().tab_id == b
+        assert tm.get(a).active is False
+        assert tm.get(b).active is True
+
+    def test_active_refills_after_remove(self):
+        tm = TabManager()
+        a = new_tab_id()
+        b = new_tab_id()
+        tm.register(TabContext(tab_id=a, session_id="s1"))
+        tm.register(TabContext(tab_id=b, session_id="s1"))
+        tm.activate(a)
+        tm.remove(a)
+        assert tm.active() is not None
+
+    def test_list_filters_by_session(self):
+        tm = TabManager()
+        a = new_tab_id()
+        b = new_tab_id()
+        tm.register(TabContext(tab_id=a, session_id="s1"))
+        tm.register(TabContext(tab_id=b, session_id="s2"))
+        assert {t.session_id for t in tm.list("s1")} == {"s1"}
+
+
+# ---------------------------------------------------------------------------
+# Sessions
+# ---------------------------------------------------------------------------
+
+class TestSessions:
+    def test_get_or_create_deduplicates(self):
+        sm = SessionManager()
+        s1 = sm.get_or_create("abc")
+        s2 = sm.get_or_create("abc")
+        assert s1 is s2
+
+    def test_persistent_session_gets_user_data_dir(self):
+        sm = SessionManager()
+        s = sm.get_or_create(persistent=True)
+        assert s.user_data_dir is not None
+        assert s.persistent is True
+
+
+# ---------------------------------------------------------------------------
+# Page context
+# ---------------------------------------------------------------------------
+
+class _FakeEl:
+    def __init__(self, tag, text="", href=None, label="", name=""):
+        self.tag = tag
+        self.text = text
+        self.href = href
+        self.label = label
+        self.name = name
+
+    def evaluate(self, js):  # noqa: ARG002
+        return self.tag
+
+    def get_attribute(self, name):
+        return {
+            "href": self.href, "aria-label": self.label, "name": self.name,
+        }.get(name)
+
+    def inner_text(self):
+        return self.text
+
+
+class _FakePage:
+    url = "https://example.com"
+    body = "Hello world\nSome link text here"
+
+    def title(self):
+        return "Example Title"
+
+    def evaluate(self, js, arg=None):  # noqa: ARG002
+        if "innerText" in js:
+            return self.body
+        if "tagName" in js:
+            return self.tag
+        if "innerWidth" in js:
+            return {"w": 1000, "h": 800}
+        if "scrollTo" in js:
+            return None
+        return None
+
+    def eval_on_selector_all(self, sel, js):  # noqa: ARG002
+        if "href" in js:
+            return ["https://a.com", "https://b.com"]
+        return []
+
+    def query_selector_all(self, sel):  # noqa: ARG002
+        return [
+            _FakeEl("A", "Docs", href="https://docs.example.com"),
+            _FakeEl("BUTTON", "Go"),
+            _FakeEl("INPUT", "", name="q"),
+        ]
+
+
+class TestPageContext:
+    def test_builds_structured_context(self):
+        ctx = build_page_context(_FakePage())
+        assert ctx.url == "https://example.com"
+        assert ctx.title == "Example Title"
+        assert ctx.text == "Hello world\nSome link text here"
+        assert len(ctx.interactives) == 3
+        assert ctx.interactives[0]["handle"].startswith("el0_g")
+        assert ctx.interactives[0]["tag"] == "a"
+        assert ctx.interactives[2]["tag"] == "input"
+        assert ctx.interactives[0]["generation"] == ctx.generation
+        assert ctx.links == ["https://a.com", "https://b.com"]
+
+    def test_prompt_block_renders(self):
+        ctx = build_page_context(_FakePage())
+        block = ctx.to_prompt_block()
+        assert "https://example.com" in block
+        assert "[el0_g" in block
+        assert "Links" in block
+        assert f"gen={ctx.generation}" in block
+
+
+# ---------------------------------------------------------------------------
+# Controller facade + EventBus
+# ---------------------------------------------------------------------------
+
+class _FakeBackend:
+    """Minimal BrowserBackend duck-type for exercising the controller."""
+
+    def __init__(self):
+        from jbrowser.tabs import TabManager
+        self.tabs = TabManager()
+        self.sessions = set()
+        self._active = None
+
+    def create_session(self, session_id, *, persistent=False):
+        self.sessions.add(session_id)
+
+    def close_session(self, session_id=None):
+        self.sessions.discard(session_id)
+
+    def status(self):
+        return {"backend": "fake", "available": True, "launched": True,
+                "headless": True, "tabs": len(self.tabs), "active_tab": self._active}
+
+    def create_tab(self, session_id, url=""):
+        from jbrowser.tabs import TabContext, new_tab_id
+        tab_id = new_tab_id()
+        self.tabs.register(TabContext(tab_id=tab_id, session_id=session_id, url=url))
+        self.tabs.activate(tab_id)
+        self._active = tab_id
+        from jbrowser.backend.base import TabInfo
+        return TabInfo(tab_id=tab_id, session_id=session_id, url=url)
+
+    def close_tab(self, tab_id):
+        self.tabs.remove(tab_id)
+        return True
+
+    def list_tabs(self, session_id=None):
+        return [self._to_info(t) for t in self.tabs.list(session_id)]
+
+    def _to_info(self, ctx):
+        from jbrowser.backend.base import TabInfo
+        return TabInfo(tab_id=ctx.tab_id, session_id=ctx.session_id,
+                       url=ctx.url, title=ctx.title, active=ctx.active)
+
+    def switch_tab(self, tab_id):
+        ctx = self.tabs.activate(tab_id)
+        self._active = tab_id
+        return self._to_info(ctx)
+
+    def active_tab(self):
+        return self.tabs.active()
+
+    def navigate(self, url, tab_id=None):
+        tab_id = tab_id or self._active
+        ctx = self.tabs.get(tab_id)
+        if ctx:
+            ctx.url = url
+            ctx.title = "FakeTitle"
+        return self._to_info(ctx) if ctx else None
+
+    def go_back(self, tab_id=None): pass
+    def go_forward(self, tab_id=None): pass
+    def reload(self, tab_id=None): pass
+    def get_url(self, tab_id=None):
+        ctx = self.tabs.active()
+        return ctx.url if ctx else ""
+    def get_title(self, tab_id=None):
+        return "FakeTitle"
+    def get_page_text(self, tab_id=None):
+        return "page text"
+    def get_dom_snapshot(self, tab_id=None):
+        return {"url": "u", "title": "t", "interactives": [], "links": [],
+                "forms": [], "viewport": {"w": 1000, "h": 800}}
+    def get_selector_text(self, selector=None, tab_id=None):
+        return "selector text" if selector else "page text"
+    def screenshot(self, path=None, tab_id=None):
+        return "/tmp/fake.png"
+    def click(self, handle, tab_id=None): return True
+    def type_text(self, handle, text, tab_id=None): return True
+    def click_selector(self, selector, tab_id=None): return True
+    def type_selector(self, selector, text, tab_id=None): return True
+    def scroll(self, direction, amount=500, tab_id=None): pass
+    def execute_script(self, script, tab_id=None): return "42"
+
+
+class TestController:
+    def test_new_tab_emits_event(self):
+        reset_controller()
+        bus = get_event_bus()
+        bus.clear()
+        controller = BrowserController(backend=_FakeBackend())
+        controller.new_tab("https://ex.com")
+        names = [e.name for e in bus.recent(50)]
+        assert "browser.tab.created" in names
+
+    def test_navigate_sets_active_tab_and_status(self):
+        controller = BrowserController(backend=_FakeBackend())
+        controller.ensure_session()
+        controller.new_tab("")
+        controller.navigate("https://example.org")
+        assert controller.status()["backend"] == "fake"
+        assert controller.status()["tabs"] >= 1
+
+    def test_read_returns_page_context(self):
+        controller = BrowserController(backend=_FakeBackend())
+        controller.new_tab("https://ex.com")
+        ctx = controller.read()
+        assert ctx.url == "https://ex.com"
+
+    def test_tab_listing(self):
+        controller = BrowserController(backend=_FakeBackend())
+        controller.new_tab("https://a.com")
+        controller.new_tab("https://b.com")
+        tabs = controller.list_tabs()
+        assert len(tabs) >= 2
+
+    def test_singleton_shared(self):
+        reset_controller()
+        c1 = get_controller()
+        c2 = get_controller()
+        assert c1 is c2
+        reset_controller()
+
+
+class TestToolRegistryIntegration:
+    def test_jbrowser_tools_registered(self):
+        from tools import build_default_registry
+        names = {t.name for t in build_default_registry().list()}
+        for expected in ("browser.read", "browser.tabs", "browser.new_tab",
+                         "browser.switch_tab", "browser.find", "browser.scroll",
+                         "browser.profile", "browser.permissions", "browser.close_tab"):
+            assert expected in names, expected
+
+
+class TestSkillsTransfer:
+    def test_skills_inherited_from_jarvis(self):
+        from jbrowser.skills import inherited_skills
+        skills = inherited_skills()
+        assert len(skills) >= 10
+        by_name = {s.name: s for s in skills}
+        assert "browser_automation" in by_name
+        assert "web_research" in by_name
+
+    def test_browser_skills_subset(self):
+        from jbrowser.skills import browser_skills
+        names = {s.name for s in browser_skills()}
+        assert "browser_automation" in names
+        assert "web_research" in names
+        # every browser skill must also appear in the inherited set
+        inherited = {s.name for s in __import__("jbrowser.skills", fromlist=["inherited_skills"]).inherited_skills()}
+        assert names <= inherited
+
+
+class TestLegacyBrowserCompatibility:
+    """Legacy tools/browser.py handlers must route through the controller."""
+
+    def _controller_with_fake(self) -> BrowserController:
+        reset_controller()
+        import jbrowser.controller as jbc
+        with jbc._controller_lock:
+            jbc._controller = BrowserController(backend=_FakeBackend())
+        return jbc.get_controller()
+
+    def test_open_delegates_to_controller(self):
+        from tools.browser import browser_open
+        self._controller_with_fake()
+        res = browser_open({"url": "example.com"})
+        assert res.success is True
+        assert res.output
+        assert res.metadata["url"]
+
+    def test_open_requires_url(self):
+        from tools.browser import browser_open
+        self._controller_with_fake()
+        res = browser_open({"url": "  "})
+        assert res.success is False
+
+    def test_click_selector_delegates(self):
+        from tools.browser import browser_click
+        self._controller_with_fake()
+        res = browser_click({"selector": "#btn"})
+        assert res.success is True
+        assert res.metadata["selector"] == "#btn"
+
+    def test_click_requires_selector(self):
+        from tools.browser import browser_click
+        self._controller_with_fake()
+        res = browser_click({"selector": ""})
+        assert res.success is False
+
+    def test_type_delegates(self):
+        from tools.browser import browser_type
+        self._controller_with_fake()
+        res = browser_type({"selector": "#q", "text": "hello"})
+        assert res.success is True
+        assert res.metadata["chars"] == 5
+
+    def test_extract_delegates(self):
+        from tools.browser import browser_extract
+        self._controller_with_fake()
+        res = browser_extract({"selector": "#content"})
+        assert res.success is True
+        assert res.metadata["chars"] >= 0
+
+    def test_status_delegates(self):
+        from tools.browser import browser_status
+        self._controller_with_fake()
+        res = browser_status({})
+        assert res.success is True
+        assert "backend" in res.output
+
+    def test_screenshot_delegates(self):
+        from tools.browser import browser_screenshot
+        self._controller_with_fake()
+        res = browser_screenshot({})
+        assert res.success is True
+        assert res.metadata["path"]
+
+    def test_browser_agent_adapter_delegates(self):
+        from external.browser_agent import BrowserAgent
+        self._controller_with_fake()
+        agent = BrowserAgent()
+        assert agent.open("example.org")["backend"] == "fake"
+        assert agent.click("#b") is True
+        assert agent.type_text("#q", "x") is True
+        assert agent.extract_text("#c") == "selector text"
+        assert agent.status()["backend"] == "fake"
+
+
+class _FakeRoute:
+    def __init__(self, resource_type):
+        self.request = type("R", (), {"resource_type": resource_type})()
+        self.aborted = False
+        self.continued = False
+
+    def abort(self):
+        self.aborted = True
+
+    def continue_(self):
+        self.continued = True
+
+
+class TestResourceBlocking:
+    def test_handler_aborts_blocked_kinds(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking()
+        route = _FakeRoute("image")
+        cfg["handler"](route)
+        assert route.aborted is True
+
+    def test_handler_continues_other_kinds(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking()
+        route = _FakeRoute("script")
+        cfg["handler"](route)
+        assert route.continued is True
+
+    def test_custom_kinds_respected(self):
+        from jbrowser.optimization import build_resource_blocking
+        cfg = build_resource_blocking(frozenset({"font"}))
+        assert cfg["kinds"] == frozenset({"font"})
+        blocked = _FakeRoute("font")
+        cfg["handler"](blocked)
+        assert blocked.aborted is True
+        passed = _FakeRoute("image")
+        cfg["handler"](passed)
+        assert passed.continued is True
+
+    def test_playwright_backend_installs_routing(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        backend = PlaywrightBackend(block_resources=True)
+        assert backend._blocking is not None
+        assert backend._blocking["kinds"]  # default kinds populated
+
+
+class TestToolExecutionServiceIntegration:
+    """J-Browser tools must execute through the single boundary (no bypass)."""
+
+    def _svc_with_fake(self):
+        import asyncio
+
+        from core.agent.tool_service import ToolExecutionService
+        from tools import build_default_registry
+        reset_controller()
+        import jbrowser.controller as jbc
+        with jbc._controller_lock:
+            jbc._controller = BrowserController(backend=_FakeBackend())
+        return asyncio, ToolExecutionService(registry=build_default_registry())
+
+    def _run(self, svc, asyncio, name, arguments, tool_id):
+        from providers.types import ToolCall
+        return asyncio.run(svc.execute_tool(ToolCall(
+            name=name, arguments=arguments, id=tool_id)))
+
+    def test_status_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.status", {}, "jb1")
+        assert res.success is True
+        assert "Browser backend" in res.output
+        assert "fake" in res.output
+
+    def test_new_tab_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.new_tab",
+                        {"url": "https://ex.com"}, "jb2")
+        assert res.success is True
+        assert res.metadata["tab_id"].startswith("tab_")
+
+    def test_tabs_listing_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        self._run(svc, asyncio, "browser.new_tab", {"url": "https://a.com"}, "jb3")
+        res = self._run(svc, asyncio, "browser.tabs", {}, "jb4")
+        assert res.success is True
+        assert len(res.metadata["tabs"]) >= 1
+
+    def test_read_through_boundary(self):
+        asyncio, svc = self._svc_with_fake()
+        self._run(svc, asyncio, "browser.new_tab", {"url": "https://ex.com"}, "jb5")
+        res = self._run(svc, asyncio, "browser.read", {}, "jb6")
+        assert res.success is True
+        assert res.metadata["url"]
+
+    def test_unknown_tool_still_rejected(self):
+        asyncio, svc = self._svc_with_fake()
+        res = self._run(svc, asyncio, "browser.not_a_tool", {}, "jb7")
+        assert res.success is False
+
+
+class TestSessionPersistence:
+    def test_persistent_profile_roundtrip(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.sessions import BrowserSession, SessionManager, profile_dir
+        root = Path(tempfile.mkdtemp())
+        sid = "sess_persist"
+        session = BrowserSession(sid, persistent=True, profile_root=root)
+        expected = profile_dir(root, sid)
+        assert session.user_data_dir == expected
+        assert expected.exists()
+        manager = SessionManager()
+        again = manager.get_or_create(sid, persistent=True, profile_root=root)
+        assert again is not session  # new manager instance
+        assert again.user_data_dir == expected
+        assert expected.exists()
+
+    def test_ephemeral_session_no_profile_dir(self):
+        from jbrowser.sessions import BrowserSession
+        session = BrowserSession(persistent=False)
+        assert session.user_data_dir is None
+        assert session.persistent is False
+
+    def test_session_describe(self):
+        from jbrowser.sessions import BrowserSession
+        session = BrowserSession("s1")
+        desc = session.describe()
+        assert desc["session_id"] == "s1"
+        assert desc["persistent"] is False
+
+
+# ---------------------------------------------------------------------------
+# Lazy launch + session isolation (real backend, NO browser launch)
+# ---------------------------------------------------------------------------
+
+class TestLazyLaunchAndIsolation:
+    def _backend(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        return PlaywrightBackend(headless=True)
+
+    def test_create_session_does_not_launch(self):
+        """Logical session creation must NOT create a context or a driver."""
+        b = self._backend()
+        b.create_session("lazy_s1")
+        assert b._contexts == {}
+        assert b._pw is None
+
+    def test_persistent_session_tracks_profile_without_launch(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.sessions import profile_dir
+        b = self._backend()
+        root = Path(tempfile.mkdtemp())
+        b.create_session("persist_s1", persistent=True, profile_root=root)
+        assert b._persistent["persist_s1"] == str(profile_dir(root, "persist_s1"))
+        assert b._contexts == {}
+        assert b._pw is None
+
+    def test_close_session_scoped_to_session(self):
+        """close_session must only tear down the requested session's pages."""
+        b = self._backend()
+        # simulate two sessions with a tab each (no real browser required)
+        b._session_of["tabA"] = "s_a"
+        b._session_of["tabB"] = "s_b"
+        b.close_session("s_a")
+        assert "tabB" in b._session_of
+        assert "tabA" not in b._session_of
+
+    def test_shutdown_releases_driver_state(self):
+        b = self._backend()
+        # fresh backend: shutdown is a no-op but must not raise
+        b.shutdown()
+        assert b._pw is None
+
+    def test_navigate_validates_private_network(self):
+        """Navigation to a private/loopback target must be blocked before goto."""
+        from jbrowser.network import NetworkPolicyError
+        b = self._backend()
+        with pytest.raises(NetworkPolicyError):
+            b._validate_target("http://127.0.0.1:8080/admin")
+
+    def test_navigate_allows_public_target(self):
+        b = self._backend()
+        assert b._validate_target("example.com") == "https://example.com"
+        assert b._validate_target("https://example.com/x") == "https://example.com/x"
+
+
+class TestControllerPersistentWiring:
+    def test_ensure_session_persistent_propagates(self):
+        import tempfile
+        from pathlib import Path
+
+        from jbrowser.backend.playwright import PlaywrightBackend
+        from jbrowser.sessions import profile_dir
+
+        root = Path(tempfile.mkdtemp())
+        b = PlaywrightBackend(headless=True, profile_root=root)
+        ctl = BrowserController(backend=b, profile_root=root)
+        sid = ctl.ensure_session(persistent=True)
+        assert b._persistent[sid] == str(profile_dir(root, sid))
+
+    def test_close_session_clears_session(self):
+        b = _FakeBackend()
+        ctl = BrowserController(backend=b)
+        sid = ctl.ensure_session()
+        ctl.close_session(sid)
+        assert ctl.session_info(sid) == {}
+
+
+
+
+# ---------------------------------------------------------------------------
+# Playwright availability caching + WebScraper fallback (regression: the old
+# availability check cached a broken verdict and the fallback was cosmetic)
+# ---------------------------------------------------------------------------
+
+class TestAvailabilityCaching:
+    def _backend(self):
+        from jbrowser.backend.playwright import PlaywrightBackend
+        return PlaywrightBackend(headless=True)
+
+    def test_failed_probe_caches_false_not_true(self):
+        """A first probe with no Chromium must cache False; `available` may not
+        flip back to True on later calls (the old `_checked` bug)."""
+        b = self._backend()
+        b._checked = True          # simulate a completed probe
+        b._playwright_ok = False   # ... which failed
+        b._pw = object()           # legacy bug: driver still running -> lied True
+        assert b.available is False
+
+    def test_successful_probe_caches_true(self):
+        b = self._backend()
+        b._checked = True
+        b._playwright_ok = True
+        assert b.available is True
+
+    def test_failed_probe_does_not_leak_driver(self, monkeypatch):
+        """The probe must stop its driver process when the binary is missing."""
+        import types
+
+        calls = {"stopped": 0}
+
+        class _FakePw:
+            def stop(self):
+                calls["stopped"] += 1
+
+        class _FakeChromium:
+            executable_path = "Z:/definitely/missing/chromium.exe"
+
+        fake = _FakePw()
+        fake.chromium = _FakeChromium()
+        monkeypatch.setattr(b := self._backend(), "_pw", None)
+        import sys
+
+        mod = types.ModuleType("playwright.sync_api")
+        mod.sync_playwright = lambda: type("H", (), {
+            "start": staticmethod(lambda: fake),
+        })()
+        monkeypatch.setitem(sys.modules, "playwright.sync_api", mod)
+        assert b._check_playwright() is False
+        assert calls["stopped"] == 1
+        assert b._pw is None
+
+
+class TestWebScraperFallback:
+    def _controller(self, backend):
+        from jbrowser.controller import BrowserController
+        return BrowserController(backend=backend)
+
+    def test_fallback_backend(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise RuntimeError("Playwright browser not available")
+
+            def status(self):
+                st = super().status()
+                st["available"] = False
+                return st
+
+        ctl = BrowserController(backend=_DeadBackend())
+        out = ctl.navigate("https://example.com/")
+        assert out.get("fallback") == "web_scraper"
+        assert "Example Domain" in out.get("text", "")
+
+    def test_fallback_enforces_network_policy(self):
+        """The static fallback must NOT become an SSRF side door."""
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        out = ctl.navigate("http://127.0.0.1:8080/admin")
+        # the fallback's policy gate must reject loopback explicitly
+        assert out.get("fallback") == "network_policy"
+        assert out.get("error"), out
+
+    def test_policy_denial_is_not_fallback_path(self):
+        """A policy denial returns an explicit error dict, no scraper retry."""
+        from jbrowser.controller import BrowserController
+        from jbrowser.network import NetworkPolicyError
+
+        class _DeadBackend(_FakeBackend):
+            def navigate(self, url, tab_id=None):
+                raise NetworkPolicyError("denied by policy")
+
+        called = {"n": 0}
+
+        def _boom(self_):
+            called["n"] += 1
+            raise AssertionError("scraper must not be invoked for policy denials")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        ctl._get_scraper = _boom.__get__(ctl)
+        out = ctl.navigate("http://127.0.0.1:9/x")
+        assert out.get("fallback") == "network_policy"
+        assert called["n"] == 0
+
+    def test_status_reports_fallback_truthfully(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def status(self):
+                st = super().status()
+                st["backend"] = "playwright"
+                st["available"] = False
+                return st
+
+        st = BrowserController(backend=_DeadBackend()).status()
+        assert "fallback" in st["backend"]
+        assert st["fallback"] == "web_scraper"
+        assert st["fallback_actions"] == ["open", "extract"]
+
+    def test_extract_text_falls_back_to_page_url(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def get_selector_text(self, selector=None, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        sid = ctl.ensure_session()
+        ctl.new_tab("https://example.com/", session_id=sid)
+        ctl._scrape = lambda url: {"text": "fallback body", "url": url}
+        assert ctl.extract_text() == "fallback body"
+
+    def test_extract_text_without_page_raises_helpfully(self):
+        from jbrowser.controller import BrowserController
+
+        class _DeadBackend(_FakeBackend):
+            def get_selector_text(self, selector=None, tab_id=None):
+                raise RuntimeError("engine down")
+
+        ctl = BrowserController(backend=_DeadBackend())
+        with pytest.raises(RuntimeError) as ei:
+            ctl.extract_text()
+        assert "open a URL first" in str(ei.value)
+
+
+# ---------------------------------------------------------------------------
+# Element handle contract (regression: backend parsed "el0_g12" as int("0_g12")
+# -> ValueError, so read->click/type was dead; generation was also global)
+# ---------------------------------------------------------------------------
+
+class TestElementHandleContract:
+    def _fake_page(self):
+        """Fake page with the _FakeEl surface used by TestPageContext."""
+        return _FakePage()
+
+    def test_handle_roundtrip_through_parse(self):
+        from jbrowser.page_context import parse_handle, is_handle_stale
+        parsed = parse_handle("el7_gdeadbeef.42")
+        assert parsed == (7, "deadbeef.42")
+        assert is_handle_stale("el7_gdeadbeef.42", "deadbeef.42") is False
+        assert is_handle_stale("el7_gdeadbeef.42", "other.43") is True
+        assert parse_handle("el7") == (7, "0")          # legacy numeric
+        assert parse_handle("garbage") is None
+        assert parse_handle("elx_g1") is None
+
+    def test_backend_resolves_fresh_handle(self):
+        """The exact flow that was broken: read -> click on a fresh handle."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        ctx = build_page_context(page)
+        handle = ctx.interactives[0]["handle"]          # el0_g<snapshot>
+        el = b._el(handle, page)
+        assert el is not None
+        assert el.tag.lower() == "a"   # index 0 in the fake page is the link
+
+    def test_backend_rejects_stale_handle(self):
+        """A handle from an older snapshot must raise, not mis-resolve."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        old = build_page_context(page)
+        stale_handle = old.interactives[0]["handle"]
+        build_page_context(page)                        # page changed; rescan
+        with pytest.raises(RuntimeError) as ei:
+            b._el(stale_handle, page)
+        assert "STALE_HANDLE" in str(ei.value)
+
+    def test_backend_rejects_handle_without_snapshot(self):
+        """click/type without a prior read must fail loudly (no blind index)."""
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page = self._fake_page()
+        with pytest.raises(RuntimeError) as ei:
+            b._el("el0_g0", page)
+        assert "browser.read" in str(ei.value)
+
+    def test_snapshots_are_per_page_not_global(self):
+        """Reading tab B must not invalidate tab A's handles (old global gen)."""
+        from jbrowser.page_context import build_page_context
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+        page_a, page_b = self._fake_page(), self._fake_page()
+        ctx_a = build_page_context(page_a)
+        build_page_context(page_b)                      # other tab scanned
+        assert b._el(ctx_a.interactives[0]["handle"], page_a) is not None
+
+    def test_create_tab_returns_post_navigation_state(self, monkeypatch):
+        """new_tab(url) must report the navigated URL/title, not (blank).
+
+        Hermetic on purpose: the real _ensure_session_context would start the
+        sync Playwright driver (and launch Chromium) on the MAIN thread, which
+        parks a running event loop there and poisons every later asyncio.run()
+        in the process (asyncio.run -> RuntimeError). Tool handlers run the
+        backend in worker threads via asyncio.to_thread in production; this
+        test only verifies tab-registry bookkeeping, so stub the context.
+        """
+        import jbrowser.backend.playwright as pw_mod
+        from jbrowser.backend.base import TabInfo
+        from jbrowser.backend.playwright import PlaywrightBackend
+        b = PlaywrightBackend(headless=True)
+
+        class _NavOnlyPage:
+            def set_default_timeout(self, ms):  # noqa: ARG002
+                pass
+
+        b._ensure_session_context = lambda session_id: type(
+            "FakeCtx", (), {"new_page": staticmethod(lambda: _NavOnlyPage())}
+        )()
+        monkeypatch.setattr(pw_mod, "new_tab_id", lambda: "tb_nav1")
+        captured = {}
+
+        def fake_navigate(url, tab_id=None):
+            captured["url"] = url
+            from jbrowser.backend.base import TabInfo
+            return TabInfo(tab_id=tab_id, session_id="s_nav",
+                           url=url, title="Nav Title", active=True)
+
+        b.navigate = fake_navigate
+        info = b.create_tab("s_nav", "https://example.com/")
+        assert info.url == "https://example.com/"
+        assert info.title == "Nav Title"
+        assert captured["url"] == "https://example.com/"
+        # Hermetic teardown: nothing native was launched, but be explicit.
+        b.shutdown()

@@ -1,0 +1,21 @@
+{
+  "name": "codebase_onboarding",
+  "description": "Analyze an unfamiliar codebase and generate a structured onboarding guide with architecture map, key entry points, conventions, and a starter CLAUDE.md. Use when joining a new project or setting up Claude Code for the first time in a repo.",
+  "instructions": "skills/instructions/soc/codebase-onboarding.md",
+  "tools": [
+    "filesystem.read",
+    "search.code",
+    "git.log",
+    "filesystem.tree",
+    "filesystem.write",
+    "patch.replace"
+  ],
+  "tags": [
+    "codebase",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

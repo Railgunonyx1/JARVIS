@@ -1,0 +1,15 @@
+{
+  "name": "convex_performance_audit",
+  "description": "Audits Convex performance for reads, subscriptions, write contention, and function limits. Use for slow features, insights findings, OCC conflicts, or read amplification.",
+  "tools": [],
+  "tags": [
+    "performance",
+    "audit",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/convex_performance_audit.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\convex-performance-audit"
+}

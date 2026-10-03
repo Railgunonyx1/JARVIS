@@ -1,0 +1,22 @@
+{
+  "name": "documentation_lookup",
+  "description": "Use up-to-date library and framework docs via Context7 MCP instead of training data. Activates for setup questions, API references, code examples, or when the user names a framework (e.g. React, Next.js, Prisma).",
+  "instructions": "skills/instructions/soc/documentation-lookup.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "shell.execute",
+    "search.code",
+    "patch.replace",
+    "runtime.status",
+    "web.search"
+  ],
+  "tags": [
+    "documentation",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

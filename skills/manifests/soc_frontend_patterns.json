@@ -1,0 +1,18 @@
+{
+  "name": "frontend_patterns",
+  "description": "Frontend development patterns for React, Next.js, state management, performance optimization, and UI best practices.",
+  "instructions": "skills/instructions/soc/frontend-patterns.md",
+  "tools": [
+    "filesystem.read",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "frontend",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

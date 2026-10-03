@@ -154,23 +154,33 @@ class EventBus:
 
 
 def _match_pattern(pattern: str, name: str) -> bool:
-    """Simple segment-level wildcard matching."""
+    """Segment-level glob matching for event subscription patterns.
+
+    ``*`` matches exactly one segment; ``**`` matches zero or more segments.
+    The pattern must match the entire event name. Examples:
+
+        "tool.*"      matches "tool.executed"       not "tool.a.b"
+        "tool.**"     matches "tool", "tool.executed", "tool.a.b"
+        "tool.**.done" matches "tool.done", "tool.a.done", "tool.a.b.done"
+    """
     p_parts = pattern.split(".")
     n_parts = name.split(".")
-    pi = 0
-    ni = 0
-    while pi < len(p_parts) and ni < len(n_parts):
+
+    def match(pi: int, ni: int) -> bool:
+        if pi == len(p_parts):
+            return ni == len(n_parts)
         if p_parts[pi] == "**":
-            return True
-        if p_parts[pi] == "*":
-            pi += 1
-            ni += 1
-            continue
-        if p_parts[pi] != n_parts[ni]:
+            for k in range(ni, len(n_parts) + 1):
+                if match(pi + 1, k):
+                    return True
             return False
-        pi += 1
-        ni += 1
-    return pi == len(p_parts) and ni == len(n_parts)
+        if ni == len(n_parts):
+            return False
+        if p_parts[pi] == "*" or p_parts[pi] == n_parts[ni]:
+            return match(pi + 1, ni + 1)
+        return False
+
+    return match(0, 0)
 
 
 _bus: EventBus | None = None

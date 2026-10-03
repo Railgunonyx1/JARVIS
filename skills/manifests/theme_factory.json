@@ -1,0 +1,10 @@
+{
+  "name": "theme_factory",
+  "description": "Apply cohesive color/font themes to any generated artifact: slides, docs, reports, HTML pages, dashboards. Ships 10 preset themes (colors + typography) and can generate a new theme on the fly from a brand reference or a mood description. Use when an artifact needs consistent styling or the user names a visual style. Ported from Anthropic's theme-factory.",
+  "instructions": "skills/instructions/theme-factory.md",
+  "tools": ["filesystem.read", "filesystem.write", "patch.replace"],
+  "tags": ["design", "themes", "styling", "artifacts"],
+  "risk": "low",
+  "timeout": 60,
+  "version": "1.0.0"
+}

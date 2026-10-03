@@ -1,0 +1,19 @@
+{
+  "name": "verification_before_completion",
+  "description": "Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always",
+  "tools": [
+    "test.run",
+    "test.run_target",
+    "test.failed"
+  ],
+  "tags": [
+    "testing",
+    "verification",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/verification_before_completion.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\verification-before-completion"
+}

@@ -101,10 +101,10 @@ async def runtime_status(params: dict) -> ToolResult:
 
     # ── Provider status ─────────────────────────────────────────
     try:
-        from core.config import Config
+        from core.api_keys import router_api_keys
         from providers.router import ProviderRouter
-        config = Config.instance()
-        router = ProviderRouter(config.get_section("models"), config.api_keys)
+        from runtime.kernel import _load_models_config
+        router = ProviderRouter(_load_models_config(), router_api_keys())
         providers = list(router._providers.keys())
         sections.append(f"PROVIDERS: {', '.join(providers)}")
     except Exception as e:

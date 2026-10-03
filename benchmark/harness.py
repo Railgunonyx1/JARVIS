@@ -93,7 +93,7 @@ def measure_startup() -> dict[str, Any]:
     start = time.perf_counter()
     proc = subprocess.run(
         [sys.executable, str(_STARTUP_PROBE)],
-        capture_output=True, text=True, timeout=300, cwd=str(ROOT),
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT), check=False,
     )
     wall_ms = (time.perf_counter() - start) * 1000.0
     if proc.returncode != 0:
@@ -164,7 +164,6 @@ async def _run_offline_task(loop, task: dict[str, Any]) -> dict[str, Any]:
         from core.context.budget import estimate_tokens
         record["context_tokens"] = estimate_tokens(system_prompt or "") + estimate_tokens(
             json.dumps(messages, default=str))
-        context_ms = (time.perf_counter() - t) * 1000.0
 
         tool_ms = 0.0
         outputs: list[str] = []
@@ -191,10 +190,11 @@ async def _run_offline_task(loop, task: dict[str, Any]) -> dict[str, Any]:
     record["RAM_peak"] = monitor.peak_rss_mb
     record["CPU_peak"] = monitor.peak_cpu
 
-    expected = task.get("expected", "")
-    if expected and not any(expected in out for out in outputs):
+    expected = task.get("expected")
+    if not outputs or (expected and not any(expected in out for out in outputs)):
         joined = " | ".join(outputs)[:200]
-        raise RuntimeError(f"task {task['id']}: expected {expected!r}, got {joined!r}")
+        what = expected if expected else "a non-empty result"
+        raise RuntimeError(f"task {task['id']}: expected {what!r}, got {joined!r}")
     return record
 
 
@@ -257,7 +257,7 @@ def run_offline_benchmark() -> dict[str, Any]:
     """Full offline pass: startup + microbenchmarks + deterministic tasks."""
     from runtime.kernel import build_kernel, close_kernel
 
-    loop = build_kernel("agent", 10)
+    loop = build_kernel("agent", 10).agent_loop
     try:
         startup = measure_startup()
         micro: dict[str, Any] = {}
@@ -282,7 +282,7 @@ def run_online_benchmark() -> dict[str, Any]:
     """Online pass: full AgentLoop tasks (requires a configured LLM provider)."""
     from runtime.kernel import build_kernel, close_kernel
 
-    loop = build_kernel("agent", 10)
+    loop = build_kernel("agent", 10).agent_loop
     try:
         if not loop.router._get_available_chain():
             raise RuntimeError("No LLM providers available — online benchmark skipped.")

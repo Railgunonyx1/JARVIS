@@ -1,0 +1,50 @@
+{
+  "name": "jarvis-orbit",
+  "version": "0.1.0",
+  "description": "JARVIS Orbit — A custom Chromium browser with native AI intelligence",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "test": "node test/ipc-guard.test.cjs && node test/preload-surface.test.cjs && node test/electron-compat.test.cjs && node test/model-button.test.cjs",
+    "test:smoke": "electron test/electron-smoke.cjs"
+  },
+  "author": "JARVIS Orbit",
+  "license": "MIT",
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.jarvis.orbit",
+    "productName": "JARVIS Orbit",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "*.js",
+      "src/**/*",
+      "python/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/icons/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "src/icons/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/icons/icon.png"
+    }
+  }
+}

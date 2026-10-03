@@ -1,0 +1,23 @@
+{
+  "name": "postgres_patterns",
+  "description": "PostgreSQL database patterns for query optimization, schema design, indexing, and security. Based on Supabase best practices.",
+  "instructions": "skills/instructions/soc/postgres-patterns.md",
+  "tools": [
+    "security.scan_code",
+    "security.scan_secrets",
+    "security.check_permissions",
+    "filesystem.read",
+    "shell.execute",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "postgres",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

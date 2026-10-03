@@ -1,12 +1,13 @@
-# JARVIS MK-X CI — three tiers per the optimization plan (Phase 21).
+# JARVIS Orbit CI — three tiers, two OSes (G13).
 #
-#   fast     on every push/PR: safety lint, import smoke, unit+security tests,
-#            and the offline performance gate (CI mode: benchmark must complete;
-#            timing deltas are warn-only because the committed baseline is
-#            captured on the developer machine — real regression enforcement
-#            runs locally via `python -m benchmark.gate`).
-#   full     on PR + main: the entire pytest suite.
-#   security on PR + main + weekly: dependency audit + secret scan.
+#   fast          every push/PR on ubuntu + windows: safety lint (ubuntu),
+#                 import smoke, and the hermetic unit/security suites —
+#                 executor boundary, Orbit G8–G13 gates, memory store, and
+#                 the offline performance gate (timing deltas warn-only;
+#                 committed baseline is captured on the developer machine).
+#   full          on PR + main: the entire pytest suite (live-browser tests
+#                 self-skip unless JARVIS_RUN_BROWSER_LIVE=1) on both OSes.
+#   security      on PR + main + weekly: dependency audit + secret scan.
 
 name: CI
 
@@ -25,9 +26,15 @@ defaults:
   run:
     shell: bash
 
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# Hermetic suites shared by the fast tier on both OSes. Live browser tests
+# (test_orbit_live / test_jbrowser_live) are excluded everywhere unless
+# JARVIS_RUN_BROWSER_LIVE=1 is set on a dedicated run.
 jobs:
   fast:
-    name: Fast (lint + unit + security + perf gate)
+    name: Fast (ubuntu: lint + unit + security + perf)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,8 +51,10 @@ jobs:
         run: ruff check . --select E9,F63,F7,F82
       - name: Import smoke
         run: python -c "import cli.main"
-      - name: Unit + security + benchmark tests
-        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_benchmark.py -q
+      - name: Hermetic unit + security suites
+        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_benchmark.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_executor_e2e.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g8_vertical_slice.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
+      - name: Orbit latency gate (P50/P95/P99)
+        run: python -m benchmark.orbit_timing
       - name: Performance gate (offline; CI mode)
         run: python -m benchmark.gate --baseline benchmark/baseline.json --ci
       - name: Upload benchmark results
@@ -56,8 +65,25 @@ jobs:
           path: benchmark/results/*.json
           if-no-files-found: ignore
 
+  fast-windows:
+    name: Fast (windows: unit + security)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Hermetic unit + security suites
+        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
+
   full:
-    name: Full test suite
+    name: Full test suite (ubuntu)
     runs-on: ubuntu-latest
     needs: fast
     steps:
@@ -71,6 +97,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff pytest
+      - name: Full pytest suite
+        run: python -m pytest tests/ -q
+
+  full-windows:
+    name: Full test suite (windows)
+    runs-on: windows-latest
+    needs: fast-windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
       - name: Full pytest suite
         run: python -m pytest tests/ -q
 

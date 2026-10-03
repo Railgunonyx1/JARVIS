@@ -42,6 +42,19 @@ ENV_TO_KEY = {
     "HF_API_KEY": "huggingface_api_key",
     "HUGGINGFACE_API_KEY": "huggingface_api_key",
     "OLLAMA_API_KEY": "ollama_api_key",
+    # Free-LLM-API directory providers (freellm.net)
+    "LLM7_API_KEY": "llm7_api_key",
+    "GITHUB_MODELS_API_KEY": "github_models_api_key",
+    "GITHUB_TOKEN": "github_models_api_key",
+    "CLOUDFLARE_API_KEY": "cloudflare_ai_api_key",
+    "CLOUDFLARE_API_TOKEN": "cloudflare_ai_api_key",
+    "COHERE_API_KEY": "cohere_api_key",
+    "SAMBANOVA_API_KEY": "sambanova_api_key",
+    "ZAI_API_KEY": "zai_api_key",
+    "ZHIPU_API_KEY": "zai_api_key",
+    "AGNES_API_KEY": "agnes_api_key",
+    "KILO_CODE_API_KEY": "kilo_code_api_key",
+    "SCALEWAY_API_KEY": "scaleway_api_key",
 }
 
 
@@ -99,6 +112,32 @@ def get_all_api_keys() -> dict:
             if _merged_keys is None:
                 _merged_keys = _load_all()
     return dict(_merged_keys)
+
+
+def router_api_keys() -> dict:
+    """Return API keys normalized for ProviderRouter construction.
+
+    ProviderRouter looks up ``api_keys["<provider>"]`` (e.g. ``"groq"``) while
+    this loader yields ``"<provider>_api_key"`` (plus numbered extras like
+    ``"groq_api_key_2"``). Without normalization the router silently skips
+    every keyed provider and only keyless ones (ollama, omni_route) start.
+    This is the single owner of that mapping — build routers with::
+
+        ProviderRouter(models_config, router_api_keys())
+    """
+    raw = get_all_api_keys()
+    keys: dict = {k: v for k, v in raw.items() if "_" not in k}
+    for k, v in raw.items():
+        if k.endswith("_api_key"):
+            keys[k[: -len("_api_key")]] = v
+    # numbered extras (e.g. GROQ_API_KEY_2) group under <provider>_extra for
+    # every provider, not just the original four
+    import re as _re
+    for k, v in raw.items():
+        m = _re.match(r"^([a-z_]+)_api_key_\d+$", k)
+        if m and v:
+            keys.setdefault(m.group(1) + "_extra", []).append(v)
+    return keys
 
 
 def reload_api_keys() -> dict:

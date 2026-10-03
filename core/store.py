@@ -21,7 +21,6 @@ Persistence is optional and injected via a serializer.
 from __future__ import annotations
 
 import json
-import orjson
 import logging
 import threading
 from collections.abc import Callable
@@ -33,6 +32,21 @@ from core.reducers import reduce
 from core.types import SessionState
 
 logger = logging.getLogger("jarvis.store")
+
+_json_loads = json.loads
+_json_dumps = json.dumps
+
+
+def _lazy_orjson_dumps(d: dict) -> str:
+    """orjson is ~500ms to import (native validation); defer it until the
+    first persisted snapshot so importing the package stays fast."""
+    global _json_dumps
+    try:
+        import orjson
+    except Exception:
+        return json.dumps(d)
+    _json_dumps = lambda x: orjson.dumps(x, default=str).decode()
+    return _json_dumps(d)
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +75,7 @@ class EventSerializer:
     def deserialize(line: str) -> CoreEvent | None:
         """One JSON line → one CoreEvent, or None on parse failure."""
         try:
-            d = orjson.loads(line)
+            d = _json_loads(line)
             return CoreEvent(
                 seq=d["seq"],
                 category=d["category"],
@@ -86,7 +100,7 @@ class EventSerializer:
         d["verification_status"] = state.verification_status.value
         if state.failure_class:
             d["failure_class"] = state.failure_class.value
-        return orjson.dumps(d, default=str).decode()
+        return _json_dumps(d)
 
     @staticmethod
     def deserialize_state(data: str) -> SessionState | None:
@@ -101,7 +115,7 @@ class EventSerializer:
                 TaskStatus,
                 VerificationStatus,
             )
-            d = orjson.loads(data)
+            d = _json_loads(data)
             d["status"] = TaskStatus(d["status"])
             d["mode"] = Mode(d["mode"])
             d["verification_status"] = VerificationStatus(d["verification_status"])

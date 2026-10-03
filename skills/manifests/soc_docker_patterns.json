@@ -1,0 +1,23 @@
+{
+  "name": "docker_patterns",
+  "description": "Docker and Docker Compose patterns for local development, container security, networking, volume strategies, and multi-service orchestration.",
+  "instructions": "skills/instructions/soc/docker-patterns.md",
+  "tools": [
+    "security.scan_code",
+    "security.scan_secrets",
+    "security.check_permissions",
+    "filesystem.read",
+    "shell.execute",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "docker",
+    "soc",
+    "open-code"
+  ],
+  "risk": "medium",
+  "timeout": 180,
+  "version": "1.0.0"
+}

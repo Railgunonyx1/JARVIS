@@ -317,14 +317,14 @@ async def run_evaluation(
     max_concurrency: int = 1,
 ) -> EvalReport:
     """Run full evaluation with a given system prompt."""
-    from core.config import Config
+    from core.api_keys import router_api_keys
     from providers.router import ProviderRouter
+    from runtime.kernel import _load_models_config
 
     if dataset is None:
         dataset = get_dataset()
 
-    config = Config.instance()
-    router = ProviderRouter(config.get_section("models"), config.api_keys)
+    router = ProviderRouter(_load_models_config(), router_api_keys())
 
     report = EvalReport(prompt_version=prompt_version)
     start = time.perf_counter()

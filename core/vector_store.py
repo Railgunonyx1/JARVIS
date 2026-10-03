@@ -23,10 +23,10 @@ import json
 import math
 import os
 import sqlite3
-from typing import Dict, Any, List, Optional, Tuple
+import time
+from typing import Any
 
 from core.config import ModelCatalog
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -39,10 +39,33 @@ DEFAULT_TTL_DAYS = 30  # Default TTL for vector entries
 
 
 # ---------------------------------------------------------------------------
+# sqlite-vector availability
+# ---------------------------------------------------------------------------
+
+def _detect_sqlite_vector() -> bool:
+    """Best-effort check that the sqlite-vector extension is loadable."""
+    try:
+        conn = sqlite3.connect(":memory:")
+        try:
+            conn.enable_load_extension(True)
+            conn.execute("SELECT load_extension('sqlitevector')")
+            return True
+        except sqlite3.OperationalError:
+            return False
+        finally:
+            conn.close()
+    except Exception:
+        return False
+
+
+HAS_SQLITEVECTOR = _detect_sqlite_vector()
+
+
+# ---------------------------------------------------------------------------
 # Cosine Similarity
 # ---------------------------------------------------------------------------
 
-def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
     """Calculate cosine similarity between two vectors.
 
     Parameters
@@ -63,7 +86,7 @@ def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
         raise ValueError("Vectors must have the same dimension")
 
     # Calculate dot product
-    dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
+    dot_product = sum(a * b for a, b in zip(vec_a, vec_b, strict=True))
 
     # Calculate magnitudes
     magnitude_a = math.sqrt(sum(a * a for a in vec_a))
@@ -85,19 +108,19 @@ class VectorEntry:
     def __init__(
         self,
         id: str,
-        embedding: List[float],
+        embedding: list[float],
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ):
         self.id = id
         self.embedding = embedding
         self.content = content
         self.metadata = metadata or {}
         self.content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-        self.created_at = datetime.now().isoformat() if False else time.time()
+        self.created_at = time.time()
         # Note: created_at set at insert time, not here
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "embedding": self.embedding,
@@ -107,7 +130,7 @@ class VectorEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "VectorEntry":
+    def from_dict(cls, data: dict[str, Any]) -> VectorEntry:
         entry = cls(
             id=data["id"],
             embedding=data["embedding"],
@@ -118,7 +141,6 @@ class VectorEntry:
 
 
 # Add the missing import at the top of the file
-from datetime import datetime
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +172,7 @@ class SQLiteVectorStore:
     def __init__(
         self,
         db_path: str = ":memory:",
-        dimension: Optional[int] = None,
+        dimension: int | None = None,
         use_extension: bool = True,
     ):
         # Auto-detect dimension from config if not specified
@@ -176,7 +198,7 @@ class SQLiteVectorStore:
 
         # TTL tracking
         self._ttl_days = DEFAULT_TTL_DAYS
-        self._created_entries: Dict[str, float] = {}  # id -> creation_time
+        self._created_entries: dict[str, float] = {}  # id -> creation_time
 
     def _init_table(self) -> None:
         """Initialize the vector table."""
@@ -270,9 +292,9 @@ class SQLiteVectorStore:
         self,
         id: str,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        embedding: Optional[List[float]] = None,
-        ttl_days: Optional[int] = None,
+        metadata: dict[str, Any] | None = None,
+        embedding: list[float] | None = None,
+        ttl_days: int | None = None,
     ) -> None:
         """Insert a vector entry.
 
@@ -359,11 +381,11 @@ class SQLiteVectorStore:
 
     def search(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int = 4,
-        filter_metadata: Optional[Dict[str, Any]] = None,
+        filter_metadata: dict[str, Any] | None = None,
         exclude_expired: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search for k nearest vectors to the query embedding.
 
         Parameters
@@ -406,12 +428,12 @@ class SQLiteVectorStore:
 
             # Build WHERE clause for metadata filter
             where_clause = ""
-            params: List[Any] = [embedding_blob]
+            params: list[Any] = [embedding_blob]
 
             if filter_metadata:
                 conditions = []
                 for key, value in filter_metadata.items():
-                    conditions.append(f"metadata LIKE ?")
+                    conditions.append("metadata LIKE ?")
                     # Search for key-value pair in JSON metadata
                     conditions.append(f"json_extract(metadata, '$.{key}') = ?")
                     params.append(json.dumps(value))
@@ -463,7 +485,7 @@ class SQLiteVectorStore:
                 query_embedding, k, filter_metadata, exclude_expired
             )
 
-    def _get_expired_ids(self) -> List[str]:
+    def _get_expired_ids(self) -> list[str]:
         """Get list of entry IDs that have exceeded their TTL."""
         expired = []
         for entry_id in self._created_entries:
@@ -473,11 +495,11 @@ class SQLiteVectorStore:
 
     def _search_python_mode(
         self,
-        query_embedding: List[float],
+        query_embedding: list[float],
         k: int,
-        filter_metadata: Optional[Dict[str, Any]],
+        filter_metadata: dict[str, Any] | None,
         exclude_expired: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search using pure Python cosine similarity.
 
         This is the fallback mode when sqlite-vector extension is not
@@ -486,7 +508,7 @@ class SQLiteVectorStore:
         # Retrieve all entries from table
         cursor = self._conn.execute(f"SELECT id, content, metadata, embedding FROM {DEFAULT_TABLE}")
 
-        entries: List[Dict[str, Any]] = []
+        entries: list[dict[str, Any]] = []
         for row in cursor:
             entry_id, content, metadata_str, embedding_str = row
 
@@ -548,7 +570,7 @@ class SQLiteVectorStore:
         if id in self._created_entries:
             del self._created_entries[id]
 
-    def get(self, id: str) -> Optional[Dict[str, Any]]:
+    def get(self, id: str) -> dict[str, Any] | None:
         """Get a single entry by id."""
         cursor = self._conn.execute(
             f"SELECT id, content, metadata, embedding FROM {DEFAULT_TABLE} WHERE id = ?",
@@ -588,14 +610,14 @@ class SQLiteVectorStore:
         )
         return cursor.fetchone()[0]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return statistics about the vector store."""
         total = self.count()
         active = self.count_active()
         expired = total - active
 
         # Get entry count by age range
-        age_distribution: Dict[str, int] = {"fresh": 0, "recent": 0, "old": 0, "expired": 0}
+        age_distribution: dict[str, int] = {"fresh": 0, "recent": 0, "old": 0, "expired": 0}
 
         for entry_id in self._created_entries:
             if self._is_expired(entry_id):
@@ -648,7 +670,7 @@ class SQLiteVectorStore:
 
         return len(expired_ids)
 
-    def cleanup(self) -> Dict[str, Any]:
+    def cleanup(self) -> dict[str, Any]:
         """Run full cleanup: prune expired + return stats."""
         removed = self.prune_expired()
         stats = self.get_stats()

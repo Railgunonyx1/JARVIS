@@ -1,0 +1,23 @@
+{
+  "name": "data_scraper_agent",
+  "description": "Build a fully automated AI-powered data collection agent for any public source \u2014 job boards, prices, news, GitHub, sports, anything. Scrapes on a schedule, enriches data with a free LLM (Gemini Flash), stores results in Notion/Sheets/Supabase, and learns from user feedback. Runs ",
+  "instructions": "skills/instructions/soc/data-scraper-agent.md",
+  "tools": [
+    "git.status",
+    "git.diff",
+    "git.log",
+    "git.commit",
+    "git.branch",
+    "shell.execute",
+    "git.push",
+    "git.fetch"
+  ],
+  "tags": [
+    "data",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

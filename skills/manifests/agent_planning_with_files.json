@@ -1,0 +1,18 @@
+{
+  "name": "planning_with_files",
+  "description": "Persistent file-based planning for multi-step AI-agent work. Keeps task_plan.md, findings.md, and progress.md on disk; lifecycle hooks inject selected project planning context. Automatic recovery reads project planning files only. Explicit session-catchup.py --metadata reads same-project local agent session records and emits aggregate counts only; --replay may emit bounded nonce-framed excerpts. Optional gated mode can request continuation only when the host supports it and never runs commands declared in Markdown. The skill has no network upload path. Use for research or work needing 5+ tool calls.",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write"
+  ],
+  "tags": [
+    "planning",
+    "workflow",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/planning_with_files.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\planning-with-files"
+}

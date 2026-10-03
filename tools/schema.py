@@ -23,11 +23,17 @@ class ToolResult:
 class Tool:
     """A capability exposed to the agent, described by a JSON schema.
 
-    ``risk``, ``capabilities``, ``timeout_seconds``, ``is_destructive`` and
-    ``side_effects`` are declarative metadata used by the harness, permission
-    engine, verification gate, and tool executor. They default to safe/empty
-    values; callers can override them, or derive them with
-    :func:`tools.classification.classify_tool`.
+    ``risk``, ``capabilities``, ``timeout_seconds``, ``is_destructive``,
+    ``side_effects``, ``retry_semantics`` and ``concurrency`` are declarative
+    metadata used by the harness, permission engine, verification gate, and tool
+    executor. They default to safe/empty values; callers can override them, or
+    derive them with :func:`tools.classification.classify_tool`.
+
+    ``retry_semantics``: READ (safe to re-run, no side effects), IDEMPOTENT
+    (re-running yields the same outcome), CONDITIONALLY (safe to retry but the
+    outcome depends on state/network), NON (re-running changes state again).
+    ``concurrency``: "parallel" (safe to run concurrently) or "serialized"
+    (must not run in parallel with other writes on the same resource).
     """
 
     name: str
@@ -42,6 +48,8 @@ class Tool:
     is_destructive: bool = False
     side_effects: tuple[str, ...] = ()
     max_output_chars: int = 8000
+    retry_semantics: str = "non_idempotent"
+    concurrency: str = "parallel"
 
     def to_openai(self) -> dict[str, Any]:
         """Serialize to an OpenAI-style function tool definition."""
@@ -67,6 +75,8 @@ class Tool:
             "is_destructive": self.is_destructive,
             "side_effects": list(self.side_effects),
             "max_output_chars": self.max_output_chars,
+            "retry_semantics": self.retry_semantics,
+            "concurrency": self.concurrency,
         }
 
 

@@ -12,16 +12,14 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 
 class TestMemoryContractCoreMemory:
     """CONTRACT: Every new conversation MUST receive core memory."""
 
     def test_identity_always_injected(self):
         """After storing identity, format_for_prompt() always includes it."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -40,8 +38,8 @@ class TestMemoryContractCoreMemory:
 
     def test_preferences_always_injected(self):
         """Preferences survive even after many other memories are written."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -63,8 +61,8 @@ class TestMemoryContractCoreMemory:
 
     def test_priorities_always_injected(self):
         """Priorities are always visible to the LLM."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -85,8 +83,8 @@ class TestMemoryContractRetrieval:
 
     def test_retrieve_returns_relevant_results(self):
         """memory.retrieve() returns memories matching the query."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -103,8 +101,8 @@ class TestMemoryContractRetrieval:
 
     def test_retrieve_across_categories(self):
         """Retrieve searches across all memory categories."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -122,8 +120,8 @@ class TestMemoryContractPersistence:
 
     def test_memory_survives_reboot(self):
         """Memory stored in one session is visible in the next."""
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
 
@@ -143,9 +141,9 @@ class TestMemoryContractPersistence:
 
     def test_decisions_persist(self):
         """Decisions recorded in one session are retrievable in the next."""
-        from memory.store import MemoryStore
-        from memory.decision_memory import DecisionMemory
         from memory.api import MemoryAPI
+        from memory.decision_memory import DecisionMemory
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
 
@@ -192,8 +190,8 @@ class TestMemoryContractTools:
 
     def test_memory_tools_survive_intent_filtering(self):
         """Intent classifier includes memory tools for memory-related queries."""
-        from tools import build_default_registry
         from core.agent.intent import IntentClassifier
+        from tools import build_default_registry
 
         registry = build_default_registry()
         clf = IntentClassifier(registry)

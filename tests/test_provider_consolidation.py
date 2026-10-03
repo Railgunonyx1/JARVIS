@@ -202,7 +202,6 @@ class TestRateLimitRetry:
         provider = _FakeProvider(fail_with=RateLimitError("test"))
         # First call: rate limit → router retries → second call: success
         call_count = 0
-        original_complete = provider.complete
 
         async def patched_complete(*args, **kwargs):
             nonlocal call_count
@@ -262,39 +261,39 @@ class TestRouterIsRateLimit:
 
 class TestClassifyProviderError:
     def test_429_status_code(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("any error", 429) == ErrorKind.RATE_LIMIT
 
     def test_429_daily_quota(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("daily quota exceeded", 429) == ErrorKind.QUOTA_EXHAUSTED
 
     def test_429_substring(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("Error code: 429 - rate limit") == ErrorKind.RATE_LIMIT
 
     def test_rate_limit_substrings(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("tokens per minute exceeded") == ErrorKind.RATE_LIMIT
         assert classify_provider_error("too many requests") == ErrorKind.RATE_LIMIT
         assert classify_provider_error("request limit reached, retry after 3s") == ErrorKind.RATE_LIMIT
 
     def test_quota_exhausted_no_retry(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("quota exhausted, credits depleted") == ErrorKind.QUOTA_EXHAUSTED
         assert classify_provider_error("daily quota exceeded") == ErrorKind.QUOTA_EXHAUSTED
         assert classify_provider_error("billing limit") == ErrorKind.QUOTA_EXHAUSTED
 
     def test_resource_exhausted_retryable(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("resource_exhausted, try again in 10s") == ErrorKind.RATE_LIMIT
 
     def test_resource_exhausted_permanent(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("resource_exhausted") == ErrorKind.QUOTA_EXHAUSTED
 
     def test_context_window_substrings(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error(
             "This model's maximum context length is 128000 tokens."
         ) == ErrorKind.CONTEXT_WINDOW
@@ -306,28 +305,28 @@ class TestClassifyProviderError:
         ) == ErrorKind.CONTEXT_WINDOW
 
     def test_auth_errors(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("unauthorized", 401) == ErrorKind.AUTH
         assert classify_provider_error("invalid key", 403) == ErrorKind.AUTH
         assert classify_provider_error("authentication failed") == ErrorKind.AUTH
 
     def test_timeout(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("request timed out", 504) == ErrorKind.TIMEOUT
         assert classify_provider_error("timeout after 30s") == ErrorKind.TIMEOUT
 
     def test_network(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("connection refused") == ErrorKind.NETWORK
         assert classify_provider_error("dns resolution failed") == ErrorKind.NETWORK
 
     def test_overloaded(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("service unavailable", 503) == ErrorKind.OVERLOADED
         assert classify_provider_error("server overloaded") == ErrorKind.OVERLOADED
 
     def test_unknown_falls_through(self):
-        from providers.types import classify_provider_error, ErrorKind
+        from providers.types import ErrorKind, classify_provider_error
         assert classify_provider_error("something weird happened") == ErrorKind.UNKNOWN
 
 
@@ -358,7 +357,7 @@ class TestParseRetryAfter:
 class _StubProvider:
     """Minimal concrete provider for testing base-class methods."""
     def __init__(self):
-        from providers.base import LLMProvider, ProviderHealth
+        from providers.base import LLMProvider
         # Use a concrete subclass to avoid abstract method error
         class _Concrete(LLMProvider):
             async def complete(self, *a, **kw): pass

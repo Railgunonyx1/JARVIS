@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import heapq
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
-
-import heapq
+from typing import Any, TypedDict
 
 
 class BusEvent(TypedDict):
@@ -18,7 +17,7 @@ class BusEvent(TypedDict):
     #: Unique identifier for this event type across the system
     name: str
     #: Contextual data specific to the event name
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     #: Originating component
     source: str
     #: Correlates all events within a single agent execution session
@@ -59,11 +58,11 @@ def make_trace_id() -> str:
 
 def _emit(
     name: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     *,
     source: str = "agent_loop",
     session_id: str,
-    trace_id: Optional[str] = None,
+    trace_id: str | None = None,
 ) -> BusEvent:
     """Emit a BusEvent with required session context.
 
@@ -109,11 +108,11 @@ class EventEvictionError(RuntimeError):
 
 
 def evict_old_events(
-    events: List[BusEvent],
+    events: list[BusEvent],
     max_events: int = MAX_EVENTS,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     max_age_seconds: int = MAX_EVENT_AGE_SECONDS,
-) -> Tuple[List[BusEvent], int]:
+) -> tuple[list[BusEvent], int]:
     """Evict old events to stay within TTL and count limits.
 
     Uses a min-heap keyed by timestamp for O(n log n) eviction.
@@ -139,7 +138,7 @@ def evict_old_events(
 
     now = time.time()
     evicted = 0
-    retained: List[BusEvent] = []
+    retained: list[BusEvent] = []
 
     # Quick check: if we're under the count limit and all events are fresh,
     # no eviction needed
@@ -155,7 +154,7 @@ def evict_old_events(
 
     # Use min-heap approach: sort by timestamp and evict oldest first
     # heap elements: (timestamp, index, event)
-    heap: List[Tuple[float, int, BusEvent]] = []
+    heap: list[tuple[float, int, BusEvent]] = []
     for i, event in enumerate(events):
         age = now - event["timestamp"]
         # Always evict if past max_age

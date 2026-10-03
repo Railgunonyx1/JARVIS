@@ -1,6 +1,7 @@
 import sys
+
 sys.path.insert(0, r'C:\Users\aayan\Desktop\deepseek_harness')
-from deepseek_memory import DeepSeekMemory, remember, recall, forget
+from deepseek_memory import DeepSeekMemory, forget
 
 mem = DeepSeekMemory()
 mem.add('project_name', 'JARVIS MK-X Automation')

@@ -1,0 +1,20 @@
+{
+  "name": "python_patterns",
+  "description": "Pythonic idioms, PEP 8 standards, type hints, and best practices for building robust, efficient, and maintainable Python applications.",
+  "instructions": "skills/instructions/soc/python-patterns.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "code.typecheck",
+    "patch.replace"
+  ],
+  "tags": [
+    "python",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

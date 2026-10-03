@@ -40,7 +40,7 @@ def test_config_load(benchmark):
 
 def test_security_init(benchmark):
     """Security engine init should stay under 100ms."""
-    from core.security.engine import SecurityEngine
+    from security.engine import SecurityEngine
 
     def _init():
         SecurityEngine()
