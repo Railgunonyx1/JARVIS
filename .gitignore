@@ -32,11 +32,14 @@ config/browser_profiles/
 logs/
 *.log
 daemon.log
+web_boot.log
 
 # Temporary
 temp/
 scratch/
 *.tmp
+.tmp*
+.tmp_rebuild/
 
 # MCP file-server sandbox root
 .sandbox/
@@ -48,6 +51,8 @@ benchmark/results/
 *_output.txt
 *_results.txt
 audit.log
+audit_*.txt
+audit_*.json
 
 # IDE / session metadata
 .kilocode/
@@ -68,7 +73,7 @@ dev_artifacts/
 vendor/
 benchmark/results/optimizer/
 
-# Random dev scratch (never commit throwaway one-off scripts/logs)
+# Random dev scratch
 fix*.py
 fix2.py
 fix3.py
@@ -81,13 +86,10 @@ tokenhance.py
 tokentracking.py
 token_monitoring.py
 quick_fix.py
-*.log
 *.bak
 *.tsbuildinfo
-web_boot.log
 
 # Placeholder leftovers
 path/
 orbit-profile/
 .orbit-profile/
-

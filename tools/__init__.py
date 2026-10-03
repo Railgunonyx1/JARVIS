@@ -6,9 +6,17 @@ wrappers live in core/agent/tools.py; individual tool handlers in tools/*.
 
 from __future__ import annotations
 
+from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
 from tools.classification import classify_tool
+from tools.doc_retrieval import doc_search, doc_stats
 from tools.registry import ToolRegistry
 from tools.schema import Tool, ToolResult, tool_result
+from tools.web_archive import web_archive, web_archive_list, web_archive_read
+
+# NOTE: the *_handler dispatchers at the bottom of this module call these
+# functions. They must be bound at MODULE scope -- importing them inside
+# build_default_registry() leaves the dispatchers with an unbound name, and
+# the NameError only surfaces when the tool is invoked, not at build time.
 
 
 def build_default_registry() -> ToolRegistry:
@@ -24,7 +32,6 @@ def build_default_registry() -> ToolRegistry:
         browser_switch_tab,
         browser_tabs,
     )
-    from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
     from tools.api_collections import api_parse, api_run
     from tools.audit import run_audit
     from tools.browser import (
@@ -36,9 +43,6 @@ def build_default_registry() -> ToolRegistry:
         browser_type,
     )
     from tools.browser_wait import browser_wait
-    from tools.data_tools import data_convert, data_query, data_stats
-    from tools.doc_export import doc_to_markdown
-    from tools.doc_report import doc_report
     from tools.code_intelligence import (
         code_ast,
         code_callees,
@@ -49,6 +53,10 @@ def build_default_registry() -> ToolRegistry:
         code_symbol,
         code_typecheck,
     )
+    from tools.data_tools import data_convert, data_query, data_stats
+    from tools.doc_export import doc_to_markdown
+    from tools.doc_report import doc_report
+    from tools.feeds import feed_read
     from tools.filesystem import (
         filesystem_copy,
         filesystem_delete,
@@ -82,23 +90,19 @@ def build_default_registry() -> ToolRegistry:
         git_tag,
         git_worktree,
     )
+    from tools.mail_digest import mail_digest
     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.notify import send_notification
-    from tools.doc_retrieval import doc_search, doc_stats
-    from tools.feeds import feed_read
     from tools.page_watch import page_watch
-    from tools.mail_digest import mail_digest
-    from tools.reading_list import reading_list
-    from tools.snippets import snippet_handler
-    from tools.weather_get import weather_get
-    from tools.web_archive import web_archive, web_archive_list, web_archive_read
+    from tools.patch import patch_delete, patch_insert, patch_replace
     from tools.pdf_tools import (
         pdf_extract_tables,
         pdf_extract_text,
         pdf_merge,
         pdf_split,
     )
-    from tools.patch import patch_delete, patch_insert, patch_replace
+    from tools.quick_compute import calc_safe, convert_base, convert_unit, gen_password
+    from tools.reading_list import reading_list
     from tools.remote_sync import remote_status, remote_transfer
     from tools.routines import routine_add, routine_list, routine_remove, routine_run
     from tools.runtime_tools import (
@@ -109,21 +113,21 @@ def build_default_registry() -> ToolRegistry:
         runtime_status,
     )
     from tools.search import code_search, file_find
+    from tools.secret_ref import secret_ref, secret_status
     from tools.security import (
         security_check_permissions,
         security_scan_code,
         security_scan_secrets,
     )
-    from tools.secret_ref import secret_ref, secret_status
     from tools.session_tools import session_undo
     from tools.shell import shell_execute
     from tools.skills_tools import skills_list, skills_load
-    from tools.quick_compute import calc_safe, convert_base, convert_unit, gen_password
+    from tools.snippets import snippet_handler
     from tools.system_monitor import system_status
     from tools.task_pulse import task_alert, task_ping
     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
-    from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
     from tools.watch_rules import watch_rule, watch_run
+    from tools.weather_get import weather_get
     from tools.web_search import web_search
     from tools.world_monitor import (
         world_monitor_get_alerts,
@@ -819,9 +823,9 @@ def build_default_registry() -> ToolRegistry:
         Tool(
             name="topic.watch",
             description=(
-                "Watch a TOPIC (concept, not a URL) via news headlines: add/list/" 
-                "remove topics or run today's check. Alerts only when the top " 
-                "headline changes; at most one check per topic per day. Refuses " 
+                "Watch a TOPIC (concept, not a URL) via news headlines: add/list/"
+                "remove topics or run today's check. Alerts only when the top "
+                "headline changes; at most one check per topic per day. Refuses "
                 "crypto/financial topics by policy."
             ),
             parameters={

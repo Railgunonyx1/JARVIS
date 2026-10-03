@@ -1,81 +1,120 @@
 # Contributing to JARVIS MK-X
 
-First off, thank you for considering contributing to **JARVIS MK-X**! It's people like you who make JARVIS a great autonomous engineering agent.
+Thank you for your interest in contributing to **JARVIS MK-X**! We welcome contributions to the autonomous agent kernel, the J-Browser / Orbit intelligence engine, multi-provider model routing, declarative tools, and the terminal user interface.
+
+Please review this guide before submitting issues or pull requests.
 
 ---
 
-## 🛠️ Code of Conduct
+## 🏛️ Architectural Contract & Invariants
 
-This project follows the standard Contributor Covenant Code of Conduct. Please be respectful and considerate in your interactions.
+JARVIS MK-X operates under a strict architectural contract. All pull requests modifying agent execution or browser control must adhere to these invariants:
+
+1. **Single Tool Boundary**:
+   All tool execution — whether triggered by the core agent loop or external protocols (MCP, ACP, Codex) — MUST pass through `core.agent.tool_service.ToolExecutionService`. Never instantiate or call `AgentToolExecutor` or tool handlers directly outside the boundary.
+
+2. **Harness ≠ Model**:
+   The Harness controls *how* the agent reasons (planning, tools, verification). The Model Gateway controls *which* model runs. They compose independently.
+
+3. **BusEvent is the Only Event Type**:
+   Every meaningful action emits a structured `BusEvent` carrying `schema_version` and `session_id`.
+
+4. **Verification is a Post-Execution Gate**:
+   Verification runs after the execution phase, not after every individual tool call. On failure, the agent transitions `VERIFYING → RECOVERING → EXECUTING` with structured context.
+
+5. **Deterministic Failure Classification**:
+   Precedence: `CANCELLED > TIMEOUT > PERMISSION_DENIED > MALFORMED_TOOL > CONTEXT_OVERFLOW > PROVIDER_FAILURE > MODEL_FAILURE > TOOL_FAILURE`.
+
+6. **One Browser Control Path**:
+   All browser interactions flow through `BrowserController` → `CDPBackend` (via `orbit.*` tools) through `ToolExecutionService`. Contested tabs yield deterministic `RESOURCE_LOCKED` signals.
 
 ---
 
-## 🚀 Getting Started & Local Development
+## 🚀 Development Setup
 
 ### 1. Prerequisites
 - **Python 3.11+**
 - Git
+- Optional: [Ollama](https://ollama.com/) (for offline local LLM testing)
+- Optional: Playwright (`pip install playwright && playwright install chromium`)
 
-### 2. Fork & Clone
+### 2. Clone & Environment Setup
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/JARVIS.git
+# Clone the repository
+git clone https://github.com/Railgunonyx1/JARVIS.git
 cd JARVIS
-```
 
-### 3. Environment Setup
-```bash
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv venv
 
-# Activate (Windows PowerShell / cmd)
+# Windows (PowerShell):
 .\venv\Scripts\Activate.ps1
-# or on Linux/macOS: source venv/bin/activate
+# Linux/macOS:
+source venv/bin/activate
 
-# Install dependencies
-python -m pip install --upgrade pip
+# Install dependencies and dev tools
 pip install -r requirements.txt
 pip install pytest ruff
 ```
 
-### 4. Running the Agent
+### 3. Launching Locally
+
 ```bash
-# Launch interactive terminal
+# Interactive agent CLI
 python -m cli
 
-# One-shot command execution
-python -m cli "inspect repository"
+# Interactive mode with specific risk profile
+python -m cli --mode smart
+
+# Fast one-shot JSON execution
+python -m cli.fast "summarize pyproject.toml"
+
+# Windows unified launcher
+JARVIS.bat
 ```
 
 ---
 
-## 🧪 Testing & Code Quality
+## 🧪 Testing & Quality Gates
 
-Before submitting a Pull Request, please ensure all checks pass:
+Before opening a pull request, run the test and invariant suite:
 
 ```bash
-# 1. Run quick safety lint checks
-ruff check . --select E9,F63,F7,F82
+# 1. Lint and style checks (Ruff)
+ruff check .
 
-# 2. Run the test suite
+# 2. Run core unit & integration test suite
 pytest tests/ -q
 
-# 3. Verify the performance gate
+# 3. Verify single-boundary architectural invariants
+pytest tests/test_architecture_invariants.py
+
+# 4. Optional: Run performance gate
 python -m benchmark.gate --baseline benchmark/baseline.json --ci
 ```
 
----
-
-## 📦 Pull Request Guidelines
-
-1. **Branch Naming**: Use descriptive branch names (e.g. `feat/mcp-connector`, `fix/provider-fallback`).
-2. **Atomic Commits**: Keep commits focused and logically grouped with descriptive messages.
-3. **Tests**: Add unit or integration tests in `tests/` for new functionality.
-4. **Documentation**: Update `README.md` or files under `docs/` when introducing user-facing changes or flags.
-5. **PR Description**: Include a clear summary of what changes were made, why, and how they were tested.
+> **Note**: Default tests are fully hermetic and do not make live network or browser calls. Live browser integration tests can be enabled with `JARVIS_RUN_BROWSER_LIVE=1 pytest tests/test_jbrowser_live.py`.
 
 ---
 
-## 💡 Reporting Bugs & Requesting Features
+## 📦 Pull Request Workflow
 
-- Use GitHub Issues to file bugs or feature requests.
-- Provide full logs, Python version, OS environment, and exact CLI commands when reporting bugs.
+1. **Branch Naming**: Use descriptive prefixes:
+   - `feat/` for new features or capabilities
+   - `fix/` for bug fixes
+   - `perf/` for performance or TTFT improvements
+   - `docs/` for documentation updates
+   - `security/` for permission, redaction, or sandbox hardening
+2. **Atomic Commits**: Write clear, imperative commit messages (`feat(kernel): add verification retry context`).
+3. **No Secrets**: Never commit `.env` files, API keys, credentials, or session databases.
+4. **Fill the Template**: Complete the PR checklist in `.github/PULL_REQUEST_TEMPLATE.md`.
+
+---
+
+## 📜 Code Style
+
+- Enforced via **Ruff** (configured in `pyproject.toml`).
+- Keep lines clear and idiomatic.
+- Type annotations are strongly encouraged for public interfaces.
+- Preserve existing comments and docstrings.

@@ -205,8 +205,11 @@ class BrowserController:
                     emit_browser_event(NAVIGATION_COMPLETED,
                                        {"tab_id": "", "url": url, "error": True},
                                        session_id=sid, trace_id=tid)
+                    # chain from exc2, not exc: Python unbinds the `as exc`
+                    # name when the NetworkPolicyError handler exits, so
+                    # `from exc` raised NameError instead of RuntimeError.
                     raise RuntimeError(
-                        f"browser engine unavailable and static fallback failed: {exc2}") from exc
+                        f"browser engine unavailable and static fallback failed: {exc2}") from exc2
                 emit_browser_event(NAVIGATION_COMPLETED,
                                    {"tab_id": "", "url": scraped["url"],
                                     "fallback": True},
