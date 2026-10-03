@@ -352,11 +352,13 @@ fn closing_the_active_tab_promotes_another() {
 
 #[test]
 fn closing_the_last_tab_leaves_no_active() {
-    let mut r = registry_with(1);
+    let mut r = TabRegistry::default();
     let id = r.create(None);
     r.set_active(&id);
+    assert_eq!(r.len(), 1);
     r.close(&id);
-    assert!(r.active().is_none());
+    assert_eq!(r.len(), 0);
+    assert!(r.active().is_none(), "no tab means no active tab, not a dangling id");
 }
 
 #[test]
