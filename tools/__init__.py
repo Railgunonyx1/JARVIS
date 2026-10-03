@@ -24,6 +24,8 @@ def build_default_registry() -> ToolRegistry:
         browser_switch_tab,
         browser_tabs,
     )
+    from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
+    from tools.api_collections import api_parse, api_run
     from tools.audit import run_audit
     from tools.browser import (
         browser_click,
@@ -34,7 +36,9 @@ def build_default_registry() -> ToolRegistry:
         browser_type,
     )
     from tools.browser_wait import browser_wait
+    from tools.data_tools import data_convert, data_query, data_stats
     from tools.doc_export import doc_to_markdown
+    from tools.doc_report import doc_report
     from tools.code_intelligence import (
         code_ast,
         code_callees,
@@ -80,7 +84,14 @@ def build_default_registry() -> ToolRegistry:
     )
     from tools.memory_tools import memory_forget, memory_remember, memory_retrieve, memory_stats
     from tools.notify import send_notification
+    from tools.doc_retrieval import doc_search, doc_stats
+    from tools.feeds import feed_read
     from tools.page_watch import page_watch
+    from tools.mail_digest import mail_digest
+    from tools.reading_list import reading_list
+    from tools.snippets import snippet_handler
+    from tools.weather_get import weather_get
+    from tools.web_archive import web_archive, web_archive_list, web_archive_read
     from tools.pdf_tools import (
         pdf_extract_tables,
         pdf_extract_text,
@@ -88,6 +99,8 @@ def build_default_registry() -> ToolRegistry:
         pdf_split,
     )
     from tools.patch import patch_delete, patch_insert, patch_replace
+    from tools.remote_sync import remote_status, remote_transfer
+    from tools.routines import routine_add, routine_list, routine_remove, routine_run
     from tools.runtime_tools import (
         runtime_errors,
         runtime_events,
@@ -105,9 +118,11 @@ def build_default_registry() -> ToolRegistry:
     from tools.session_tools import session_undo
     from tools.shell import shell_execute
     from tools.skills_tools import skills_list, skills_load
+    from tools.quick_compute import calc_safe, convert_base, convert_unit, gen_password
     from tools.system_monitor import system_status
     from tools.task_pulse import task_alert, task_ping
     from tools.test_tools import test_benchmark, test_coverage, test_discover, test_failed, test_run, test_run_target
+    from tools.topic_watch import add_topic, check_topics, list_topics, remove_topic
     from tools.watch_rules import watch_rule, watch_run
     from tools.web_search import web_search
     from tools.world_monitor import (
@@ -215,6 +230,246 @@ def build_default_registry() -> ToolRegistry:
             handler=doc_to_markdown,
             category="documents",
         ),
+        # -- data tools (repo-mine: miller, qsv, jq) --
+        Tool(
+            name="data.stats",
+            description=(
+                "Profile a CSV/TSV/JSON/JSONL file: row/column counts, per-column "
+                "types, nulls, uniques, numeric ranges and strongest correlation. "
+                "Use before analyzing any tabular data."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Data file path (relative to project root)."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=data_stats,
+            category="data",
+        ),
+        Tool(
+            name="data.query",
+            description=(
+                "Filter rows of a CSV/TSV/JSON/JSONL file with a pandas query "
+                "expression (e.g. \"revenue > 1000 and region == 'EMEA'\") and "
+                "show matching rows. Use to slice datasets without dumping them "
+                "into context."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Data file path."},
+                    "expr": {"type": "string", "description": "Pandas query expression."},
+                },
+                "required": ["path", "expr"],
+            },
+            permission="filesystem.read",
+            handler=data_query,
+            category="data",
+        ),
+        Tool(
+            name="data.convert",
+            description=(
+                "Convert data files between CSV, TSV, JSON and JSONL. Writes "
+                "inside the project root only."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Source data file."},
+                    "dest": {"type": "string", "description": "Output path with new extension."},
+                },
+                "required": ["path", "dest"],
+            },
+            permission="filesystem.write",
+            handler=data_convert,
+            category="data",
+        ),
+        # -- report generation (repo-mine: python-openxml/python-docx) --
+        Tool(
+            name="doc.report",
+            description=(
+                "Generate a formatted Word (.docx) report from a title and "
+                "sections. Each section is {'title', 'text'?, 'bullets'?}. "
+                "Use to deliver research results as a shareable document."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Report title."},
+                    "subtitle": {"type": "string", "description": "Optional subtitle line."},
+                    "author": {"type": "string", "description": "Optional author line."},
+                    "sections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "text": {"type": "string"},
+                                "bullets": {
+                                    "type": "array", "items": {"type": "string"}
+                                },
+                            },
+                        },
+                        "description": "Ordered sections: title/text/bullets.",
+                    },
+                    "dest": {"type": "string", "description": "Output .docx path (default report.docx)."},
+                },
+                "required": ["title", "sections"],
+            },
+            permission="filesystem.write",
+            handler=doc_report,
+            category="documents",
+        ),
+        # -- routines (repo-mine: casey/just) --
+        Tool(
+            name="routine.add",
+            description=(
+                "Save a named routine (recipe of tool steps) for reuse, e.g. "
+                "standup-digest: web.search -> summary -> notify. Steps are "
+                "{'tool', 'args'} pairs. Routines persist across restarts."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Routine name."},
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "tool": {"type": "string"},
+                                "args": {"type": "object"},
+                            },
+                        },
+                        "description": "Ordered steps: {'tool', 'args'}.",
+                    },
+                },
+                "required": ["name", "steps"],
+            },
+            permission="system.status",
+            handler=routine_add,
+            category="system",
+        ),
+        Tool(
+            name="routine.list",
+            description="List saved routines with their steps and run counts.",
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="filesystem.read",
+            handler=routine_list,
+            category="system",
+        ),
+        Tool(
+            name="routine.remove",
+            description="Delete a saved routine by name.",
+            parameters={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+            permission="system.status",
+            handler=routine_remove,
+            category="system",
+        ),
+        Tool(
+            name="routine.run",
+            description=(
+                "Resolve a saved routine into a validated step plan and execute "
+                "it step by step through the normal tool path. Use when the user "
+                "asks to run a saved routine by name."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+            },
+            permission="system.status",
+            handler=routine_run,
+            category="system",
+        ),
+        # -- remote storage (repo-mine: rclone/rclone) --
+        Tool(
+            name="remote.status",
+            description=(
+                "Report rclone availability, version, and configured remote "
+                "names (never credentials). Use to check which cloud storage "
+                "providers (70+) are usable for transfers/backups."
+            ),
+            parameters={"type": "object", "properties": {}, "required": []},
+            permission="system.status",
+            handler=remote_status,
+            category="system",
+        ),
+        Tool(
+            name="remote.transfer",
+            description=(
+                "Copy, move, or sync files between local paths and cloud "
+                "remotes via rclone (e.g. 'gdrive:backups', 'D:/data'). "
+                "mode='sync' makes dest identical to source and DELETES "
+                "extraneous dest files — review with dry_run=true first, "
+                "then confirm=true."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string", "enum": ["copy", "move", "sync"],
+                        "description": "Transfer type. Default 'copy'.",
+                    },
+                    "source": {"type": "string", "description": "Source path spec."},
+                    "dest": {"type": "string", "description": "Destination path spec."},
+                    "dry_run": {"type": "boolean", "description": "Show what would transfer without doing it."},
+                    "confirm": {"type": "boolean", "description": "Required true for destructive sync."},
+                },
+                "required": ["source", "dest"],
+            },
+            permission="filesystem.write",
+            handler=remote_transfer,
+            category="filesystem",
+        ),
+        # -- API collections (repo-mine: usebruno/bruno) --
+        Tool(
+            name="api.parse",
+            description=(
+                "Parse a .bru (Bruno) API request file and show the method, "
+                "URL, headers, query and body it defines. Use to inspect "
+                "collections before running them."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": ".bru file path."},
+                },
+                "required": ["path"],
+            },
+            permission="filesystem.read",
+            handler=api_parse,
+            category="web",
+        ),
+        Tool(
+            name="api.run",
+            description=(
+                "Run a .bru (Bruno) request file or a whole collection folder: "
+                "executes the HTTP requests and reports status per request. "
+                "{{vars}} interpolate from 'vars' and UPPER_CASE env vars "
+                "(secret values never appear in output)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": ".bru file or collection folder."},
+                    "vars": {"type": "object", "description": "Optional {{name}} -> value substitutions."},
+                    "allow_private": {"type": "boolean", "description": "Allow loopback/private targets. Default false."},
+                    "timeout": {"type": "number", "description": "Per-request timeout seconds (cap 60)."},
+                },
+                "required": ["path"],
+            },
+            permission="web.search",
+            handler=api_run,
+            category="web",
+        ),
         # -- watch & notify (repo-mine: changedetection.io, ntfy, gotify) --
         Tool(
             name="page.watch",
@@ -239,6 +494,188 @@ def build_default_registry() -> ToolRegistry:
             permission="web.search",
             handler=page_watch,
             category="web",
+        ),
+        # -- doc retrieval (repo-mine: AnythingLLM local-first RAG, TF-IDF slice) --
+        Tool(
+            name="doc.search",
+            description=(
+                "Search the workspace's OWN documents (.md/.txt/.pdf/.csv/.json/"
+                ".py/...) with TF-IDF — private, no upload, no model download. "
+                "Returns ranked files, chunks, scores, and snippets so answers "
+                "can quote real text. doc.search with action='stats' shows what "
+                "is indexed."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to look for."},
+                    "limit": {"type": "integer", "description": "Max hits (default 5, max 15)."},
+                    "action": {"type": "string", "enum": ["search", "stats"], "description": "Default 'search'."},
+                },
+                "required": ["query"],
+            },
+            permission="filesystem.read",
+            handler=doc_retrieval_handler,
+            category="system",
+        ),
+        # -- agenda (repo-mine: Leon/sukeesh scheduling gap; ICS standard) --
+        Tool(
+            name="agenda.view",
+            description=(
+                "Show upcoming events from iCalendar sources: local .ics files "
+                "in the workspace or subscribed .ics URLs. Supports simple "
+                "recurring events (daily/weekly/monthly). action='add' registers "
+                "a source; action='list'/'remove' manage them."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "View window, 1-60 days. Default 7."},
+                    "source": {"type": "string", "description": "For add/remove: an .ics URL or workspace path."},
+                    "action": {"type": "string", "enum": ["view", "add", "list", "remove"], "description": "Default 'view'."},
+                },
+                "required": [],
+            },
+            permission="filesystem.read",
+            handler=agenda_view_handler,
+            category="system",
+        ),
+        # -- feeds (repo-mine: miniflux/v2 — reader hygiene for agents) --
+        Tool(
+            name="feed.read",
+            description=(
+                "Fetch an RSS 2.0 / Atom 1.0 / JSON Feed URL and list its latest "
+                "items, newest first. Tracking parameters are stripped from item "
+                "URLs (utm_*, fbclid, ...) before they are reported. "
+                "unseen_only=true filters against the last marked check."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "http(s) feed URL."},
+                    "limit": {"type": "integer", "description": "Max items shown (default 10, max 50)."},
+                    "unseen_only": {"type": "boolean", "description": "Only items not seen in the last marked check."},
+                    "mark_seen": {"type": "boolean", "description": "Record all current item URLs as seen."},
+                    "timeout": {"type": "number", "description": "Fetch timeout seconds. Default 15."},
+                },
+                "required": ["url"],
+            },
+            permission="web.search",
+            handler=feed_read,
+            category="web",
+        ),
+        # -- reading list (repo-mine: wallabag — save for later, keep the text) --
+        Tool(
+            name="reading.list",
+            description=(
+                "Save an article URL for later WITH its extracted text stored "
+                "locally, so it can be read or searched even after the page "
+                "changes or disappears. action=save/list/read/remove; saved "
+                "text is automatically visible to doc.search."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Article URL (save/read/remove)."},
+                    "action": {"type": "string", "enum": ["save", "list", "read", "remove"], "description": "Default 'list'."},
+                    "timeout": {"type": "number", "description": "Fetch timeout seconds. Default 15."},
+                },
+                "required": [],
+            },
+            permission="web.search",
+            handler=reading_list,
+            category="web",
+        ),
+        # -- web archive (repo-mine: ArchiveBox — snapshots that survive page drift) --
+        Tool(
+            name="web.archive",
+            description=(
+                "Snapshot a page's readable text into a local, content-hash-"
+                "deduplicated archive: a new snapshot is stored only when the "
+                "page actually changed. action=archive/list/read; read takes an "
+                "index (-1 = newest) to diff history. Archived text is visible "
+                "to doc.search."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "http(s) page URL."},
+                    "action": {"type": "string", "enum": ["archive", "list", "read"], "description": "Default 'archive'."},
+                    "index": {"type": "integer", "description": "For read: snapshot index, -1 = newest."},
+                    "force": {"type": "boolean", "description": "Store a snapshot even if content is unchanged."},
+                    "timeout": {"type": "number", "description": "Fetch timeout seconds. Default 20."},
+                },
+                "required": ["url"],
+            },
+            permission="web.search",
+            handler=web_archive_handler,
+            category="web",
+        ),
+        # -- weather (repo-mine: wttr.in lineage via open-meteo — key-free) --
+        Tool(
+            name="weather.get",
+            description=(
+                "Current conditions and a short daily forecast for a place — "
+                "no API key, no sign-up. Open-meteo geocoding + forecast with "
+                "plain-language weather codes."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "Place name, e.g. 'Berlin'."},
+                    "days": {"type": "integer", "description": "Forecast days 1-7 (default 3)."},
+                    "lat": {"type": "number", "description": "Alternative to location: latitude."},
+                    "lon": {"type": "number", "description": "Alternative to location: longitude."},
+                    "label": {"type": "string", "description": "Display label when using lat/lon."},
+                },
+                "required": [],
+            },
+            permission="web.search",
+            handler=weather_get,
+            category="web",
+        ),
+        # -- mail digest (repo-mine: notmuch/neomutt headers-only school) --
+        Tool(
+            name="mail.digest",
+            description=(
+                "Summarize unread mail HEADERS over read-only IMAP: count by "
+                "sender domain, newest subjects. Bodies are never fetched and "
+                "nothing is marked read. Disabled unless JARVIS_IMAP_HOST, "
+                "JARVIS_IMAP_USER and JARVIS_IMAP_PASSWORD (app password) are "
+                "set in the environment."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer", "description": "Look-back window, 1-14 (default 2)."},
+                    "limit": {"type": "integer", "description": "Max subjects listed (default 10)."},
+                },
+                "required": [],
+            },
+            permission="system.query",
+            handler=mail_digest,
+            category="system",
+        ),
+        # -- snippets (repo-mine: federico-terzi/espanso text expansion) --
+        Tool(
+            name="snippet.store",
+            description=(
+                "Espanso-style text expansion: manage :trigger → text snippets "
+                "with action=add/list/remove/expand. browser.type expands "
+                ":triggers in typed text automatically before entering it."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "list", "remove", "expand"], "description": "Default 'list'."},
+                    "trigger": {"type": "string", "description": "Snippet name without the colon, e.g. 'sig'."},
+                    "text": {"type": "string", "description": "Expansion text (add) or text to expand (expand)."},
+                },
+                "required": [],
+            },
+            permission="memory.remember",
+            handler=snippet_handler,
+            category="memory",
         ),
         Tool(
             name="notify.send",
@@ -376,6 +813,30 @@ def build_default_registry() -> ToolRegistry:
             parameters={"type": "object", "properties": {}, "required": []},
             permission="web.search",
             handler=watch_run,
+            category="web",
+        ),
+        # -- topic watch (repo-mine: FatihMakes/Mark-LIV background_monitor) --
+        Tool(
+            name="topic.watch",
+            description=(
+                "Watch a TOPIC (concept, not a URL) via news headlines: add/list/" 
+                "remove topics or run today's check. Alerts only when the top " 
+                "headline changes; at most one check per topic per day. Refuses " 
+                "crypto/financial topics by policy."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string", "enum": ["add", "list", "remove", "check"],
+                        "description": "Default 'check' when omitted.",
+                    },
+                    "topic": {"type": "string", "description": "Topic phrase for add/remove."},
+                },
+                "required": [],
+            },
+            permission="web.search",
+            handler=topic_watch_handler,
             category="web",
         ),
         # -- secret refs (repo-mine: Infisical-style indirection) --
@@ -566,6 +1027,93 @@ def build_default_registry() -> ToolRegistry:
             },
             permission="shell.execute",
             handler=shell_execute,
+            category="system",
+        ),
+        # -- quick compute (repo-mine: sukeesh/Jarvis conversions + generators) --
+        Tool(
+            name="calc.safe",
+            description=(
+                "Evaluate an arithmetic expression exactly and instantly — "
+                "whitelisted AST only (numbers, + - * / // % **, parentheses, "
+                "sqrt/abs/round/min/max/floor/ceil/log/sin/cos/tan, pi/e/tau). "
+                "Never eval(); no shell, no network."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string", "description": "e.g. (2+3)*7 or sqrt(144)"},
+                },
+                "required": ["expression"],
+            },
+            permission="system.query",
+            handler=calc_safe,
+            category="system",
+        ),
+        Tool(
+            name="convert.unit",
+            description=(
+                "Convert a value between units: length, mass, temperature, data, "
+                "speed, time, volume, area. Category is auto-detected when the "
+                "units are unambiguous (e.g. km to mi, GB to MiB, C to F)."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "value": {"type": "number", "description": "Numeric value to convert."},
+                    "from": {"type": "string", "description": "Source unit, e.g. km"},
+                    "to": {"type": "string", "description": "Target unit, e.g. mi"},
+                    "category": {
+                        "type": "string",
+                        "enum": list(sorted(["length", "mass", "temperature", "data", "speed", "time", "volume", "area"])),
+                        "description": "Optional; auto-detected when omitted.",
+                    },
+                },
+                "required": ["value", "from", "to"],
+            },
+            permission="system.query",
+            handler=convert_unit,
+            category="system",
+        ),
+        Tool(
+            name="convert.base",
+            description=(
+                "Convert an integer between bases (2-36). With to_base, returns "
+                "the single conversion; without it, shows binary/octal/decimal/hex "
+                "side by side."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "value": {"type": "string", "description": "The numeral, e.g. FF or 1010"},
+                    "from_base": {"type": "integer", "description": "Default 10."},
+                    "to_base": {"type": "integer", "description": "Optional target base 2-36."},
+                },
+                "required": ["value"],
+            },
+            permission="system.query",
+            handler=convert_base,
+            category="system",
+        ),
+        Tool(
+            name="gen.password",
+            description=(
+                "Generate a strong random password using the secrets module. "
+                "Never stored, never logged; reports its entropy estimate."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "length": {"type": "integer", "description": "8-128, default 20."},
+                    "lower": {"type": "boolean", "description": "Include lowercase (default true)."},
+                    "upper": {"type": "boolean", "description": "Include uppercase (default true)."},
+                    "digits": {"type": "boolean", "description": "Include digits (default true)."},
+                    "symbols": {"type": "boolean", "description": "Include symbols (default true)."},
+                    "exclude_ambiguous": {"type": "boolean", "description": "Skip O/0/l/1 lookalikes (default true)."},
+                },
+                "required": [],
+            },
+            permission="system.query",
+            handler=gen_password,
             category="system",
         ),
         Tool(
@@ -1792,3 +2340,47 @@ __all__ = [
     "tool_result",
     "build_default_registry",
 ]
+
+
+def topic_watch_handler(args: dict) -> ToolResult:
+    """Dispatch topic.watch actions to the Mark-LIV-derived watcher."""
+    action = (args.get("action") or "check").strip().lower()
+    from tools import topic_watch as _tw
+
+    if action == "add":
+        return _tw.add_topic(args)
+    if action == "remove":
+        return _tw.remove_topic(args)
+    if action == "list":
+        return _tw.list_topics(args)
+    return _tw.check_topics(args)
+
+
+def doc_retrieval_handler(args: dict) -> ToolResult:
+    """Dispatch doc.search actions to the AnythingLLM-derived retriever."""
+    action = (args.get("action") or "search").strip().lower()
+    if action == "stats":
+        return doc_stats(args)
+    return doc_search(args)
+
+
+def agenda_view_handler(args: dict) -> ToolResult:
+    """Dispatch agenda.view actions to the ICS calendar reader."""
+    action = (args.get("action") or "view").strip().lower()
+    if action == "add":
+        return agenda_add(args)
+    if action == "remove":
+        return agenda_remove(args)
+    if action == "list":
+        return agenda_list(args)
+    return agenda_view(args)
+
+
+def web_archive_handler(args: dict) -> ToolResult:
+    """Dispatch web.archive actions to the ArchiveBox-derived snapshotter."""
+    action = (args.get("action") or "archive").strip().lower()
+    if action == "list":
+        return web_archive_list(args)
+    if action == "read":
+        return web_archive_read(args)
+    return web_archive(args)

@@ -1096,9 +1096,28 @@ reloadBtn.addEventListener("click", () => {
   } catch (e) { console.error("[NAV] Reload failed:", e); }
 });
 
-// ── New Tab ───────────────────────────────────────────────────
+// ── New Tab (sidebar + empty state) ─────────────────────────
 newTabBtn.addEventListener("click", () => createTab());
 if (emptyNewTabBtn) emptyNewTabBtn.addEventListener("click", () => createTab());
+
+// Add-tab in the vertical sidebar tab list
+const addTabBtn = $("#addTabBtn");
+if (addTabBtn) {
+  addTabBtn.addEventListener("click", () => createTab());
+}
+
+// Keyboard: Ctrl+1..9 switch tabs
+document.addEventListener("keydown", (e) => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+    e.preventDefault();
+    const ids = Array.from(tabs.keys());
+    if (!ids.length) return;
+    const n = parseInt(e.key, 10);
+    const target = n === 9 ? ids[ids.length - 1] : ids[n - 1];
+    if (target) activateTab(target);
+  }
+});
 
 // Middle-click on a tab closes it (Chrome), double-click on empty
 // strip space opens a new tab.

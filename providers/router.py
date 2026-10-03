@@ -540,6 +540,13 @@ class ProviderRouter:
         tracer = get_tracer()
         metrics = get_metrics()
         chain = self._get_available_chain()
+        # Consume any half-open probes this chain build admitted: the probe
+        # must be spent by REAL traffic, never by read-only is_available
+        # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.
+        for _probe_name in chain:
+            # getattr: minimal test fakes may not implement the optional
+            # probe contract (mirrors the captures_stream_tool_calls pattern).
+            getattr(self._providers[_probe_name], "consume_probe", lambda: None)()
         if not chain:
             raise RuntimeError("No LLM providers available.")
 
@@ -598,13 +605,9 @@ class ProviderRouter:
                         kind = self._classify_error(e)
                         # Before first token: safe to retry or fallback
                         if first_chunk:
-                            if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
-                                self._notify("provider.rate_limit",
-                                             provider=provider_name, message=kind.value,
-                                             kind="warning", switching=True)
-                                break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
+                                # Transient throttle with retry budget left:
+                                # record_rate_limit never feeds the breaker.
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
@@ -615,6 +618,26 @@ class ProviderRouter:
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()
                                 continue
+                            if kind == ErrorKind.RATE_LIMIT:
+                                # Retry budget exhausted: still transient by
+                                # design (cooldown, not breaker) — switch on.
+                                provider.record_rate_limit()
+                            else:
+                                # ANY other pre-first-token failure counts
+                                # toward provider health. Previously only
+                                # fallback-worthy classes (quota/auth/
+                                # invalid) were counted: hard-down servers
+                                # (500/502), dead networks, and exhausted
+                                # retryable classes (503/timeout) never
+                                # armed the breaker — every turn re-paid
+                                # the dead head, including the 1-3s retry
+                                # sleep, until process restart.
+                                provider.record_failure(str(e)[:200])
+                            self._notify("provider.rate_limit",
+                                         provider=provider_name, message=kind.value,
+                                         kind="warning", switching=True)
+                            self._invalidate_chain()  # latch takes effect NOW, not after the 1s cache
+                            break  # try next provider
                         # After first token: cannot replay, fall through to next provider
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
@@ -653,6 +676,13 @@ class ProviderRouter:
         tracer = get_tracer()
         metrics = get_metrics()
         chain = self._get_available_chain()
+        # Consume any half-open probes this chain build admitted: the probe
+        # must be spent by REAL traffic, never by read-only is_available
+        # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.
+        for _probe_name in chain:
+            # getattr: minimal test fakes may not implement the optional
+            # probe contract (mirrors the captures_stream_tool_calls pattern).
+            getattr(self._providers[_probe_name], "consume_probe", lambda: None)()
         if not chain:
             raise RuntimeError("No LLM providers available.")
 
@@ -736,24 +766,39 @@ class ProviderRouter:
                         kind = self._classify_error(e)
                         # Before first token: safe to retry or fallback
                         if first_chunk:
-                            if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
-                                self._notify("provider.rate_limit",
-                                             provider=provider_name, message=kind.value,
-                                             kind="warning", switching=True)
-                                break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
+                                # Transient throttle with retry budget left:
+                                # record_rate_limit never feeds the breaker.
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
                                 self._notify("provider.rate_limit",
                                              provider=provider_name, message="rate limited",
                                              kind="warning", retry_after=delay)
-                                logger.info("%s: stream_typed retry in %.1fs", provider_name, delay)
+                                logger.info(
+                                    "%s: stream_typed retry in %.1fs", provider_name, delay
+                                )
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()
                                 continue
-                        # After first token or non-retryable: cannot replay, fall through
+                            if kind == ErrorKind.RATE_LIMIT:
+                                # Retry budget exhausted: still transient by
+                                # design (cooldown, not breaker) — switch on.
+                                provider.record_rate_limit()
+                            else:
+                                # ANY other pre-first-token failure counts
+                                # toward provider health — mirrors the
+                                # complete_stream except-path so hard-down
+                                # servers, dead networks, and exhausted
+                                # retryable classes arm the breaker on the
+                                # agent (typed) path too.
+                                provider.record_failure(str(e)[:200])
+                            self._notify("provider.rate_limit",
+                                         provider=provider_name, message=kind.value,
+                                         kind="warning", switching=True)
+                            self._invalidate_chain()  # latch takes effect NOW, not after the 1s cache
+                            break  # try next provider
+                        # After first token: cannot replay, fall through
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
                         self._invalidate_chain()

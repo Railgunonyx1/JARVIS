@@ -1,0 +1,22 @@
+{
+  "name": "turborepo",
+  "description": "Turborepo monorepo build system guidance: turbo.json task pipelines, dependsOn, caching, remote cache, --filter/--affected, CI optimization, env vars, internal packages, boundaries. Triggers on turbo.json, task pipelines, cache debugging, or apps/packages layout.",
+  "instructions": "skills/instructions/turborepo/SKILL.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "search.find"
+  ],
+  "tags": [
+    "turborepo",
+    "monorepo",
+    "build",
+    "javascript",
+    "agent"
+  ],
+  "risk": "low",
+  "timeout": 300,
+  "version": "2.11.3-canary.2"
+}

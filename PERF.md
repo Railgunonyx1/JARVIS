@@ -91,3 +91,18 @@ or live, with unique prompts so the response cache can never mask a regression:
 
 Baseline conditions: kernel booted via `JARVIS.bat`, warmup thread finished
 (~20s), one throwaway turn to settle, unique one-word prompts.
+
+## Transport + breaker pass (2026-10-01)
+
+Three classes of residual latency/failure, all fixed:
+
+| Fix | Was | Now | Why |
+|---|---|---|---|
+| SSE `Connection: close` honesty + handler `disable_nagle_algorithm` + HTTP/1.1 | SSE headers advertised keep-alive while terminating via close; Nagle could hold small SSE frames for the peer's delayed ACK (hundreds of ms, nondeterministic) | Frames ship the moment they are produced; stream end is honestly framed | Nagle-off makes first-delta latency deterministic even when token deltas are tiny |
+| Drain coalescing (server.py `_drain`) | one syscall + flush per token-sized delta (dozens/sec per stream) | drains collect up to 24 already-queued events into one write; flush the moment the queue is empty | first token still ships alone instantly; dense bursts travel in one packet |
+| Provider circuit-breaker half-open probe (providers/base.py) | provider latched `available=False` after 5 failures stayed dead until process restart (only success revived it; excluded providers never get one) — one transient groq 5xx burst permanently degraded chat to slow chain tails | after `_PROBE_INTERVAL_S=120s` the circuit admits ONE probe; success closes it immediately (also clears stale cooldown), failure re-latches | turns the permanent degradation into a bounded 2-minute outage |
+| RAG index boot warm (server.py warmup, `wait=False`) | first knowledge-y chat turn of a process could wait up to 750ms for the TF-IDF build | index builds in background at boot; chat turns find it hot | removes the last first-turn stall added by the RAG pass |
+
+New regression coverage: tests/test_provider_breaker_recovery.py (6 tests — latch,
+no-probe-inside-interval, probe admission, close-on-success, re-latch-on-failure,
+one-probe-per-interval stamping).

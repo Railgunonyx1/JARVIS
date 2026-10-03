@@ -243,12 +243,21 @@ function renderPanel(name) {
       renderCompanionsPanel();
     } else if (name === "tools") {
       renderToolsPanel();
+    } else if (name === "log") {
+      // Route to the v2-sidebar renderLogPanel (it owns the full panel).
+      if (window._renderLogPanel) window._renderLogPanel();
+      return;
     } else if (name === "memory") {
       sbBody.innerHTML = '<div class="panel-pad panel-muted">No saved memories yet.</div>';
     }
   };
   if (window.__orbitBooted && window.UI) UI.viewTransition(swap);
   else swap();
+}
+
+// Place the log panel factory where the v2-sidebar can reach it.
+if (!window._renderLogPanel) {
+  try { window._renderLogPanel = renderLogPanel; } catch (e) {}
 }
 
 // ── AI Companions (Strawberry-style autonomous agents) ─────────

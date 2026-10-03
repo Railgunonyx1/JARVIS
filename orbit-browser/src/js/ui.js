@@ -17,11 +17,7 @@
     if (now - (_logAt[what] || 0) < 5000) return;
     _logAt[what] = now;
     try {
-      if (window.ErrorLogger && typeof window.ErrorLogger.log === "function") {
-        window.ErrorLogger.log("error", "[ui] " + what, String(err));
-      } else if (window.console) {
-        console.warn("[ui:" + what + "]", err);
-      }
+      window._log && window._log('error', '[ui] ' + what, String(err));
     } catch (_) { /* never throw from logging */ }
   }
 

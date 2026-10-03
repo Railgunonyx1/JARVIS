@@ -28,6 +28,10 @@ READ_ONLY_TOOLS = {
     "memory.retrieve", "memory.stats",
     # Web
     "web.search",
+    # Data (read-only analysis)
+    "data.stats", "data.query",
+    # Routines — list/read and run (run validates and returns a plan only)
+    "routine.list", "routine.run",
     # PDF (read-only extraction)
     "pdf.extract_text", "pdf.extract_tables",
     # Page watch (observe remote pages; state file is bookkeeping, not repo mutation)
@@ -38,6 +42,10 @@ READ_ONLY_TOOLS = {
     "secret.ref", "secret.status",
     # Browser wait (observe-only condition polling)
     "browser.wait",
+    # Remote storage — read-only inventory of rclone remotes (names only)
+    "remote.status",
+    # API collections — parse is read-only; run performs documented HTTP requests
+    "api.parse", "api.run",
     # Browser (read)
     "browser.open", "browser.extract", "browser.screenshot", "browser.status",
     # Browser (J-Browser platform: observe / navigate / tab & session management)
@@ -64,9 +72,25 @@ READ_ONLY_TOOLS = {
     "world_monitor.get_event", "world_monitor.get_alerts",
     "world_monitor.get_region", "world_monitor.get_sources",
     "world_monitor.search", "world_monitor.world_brief",
+    # Topic watch (observe news headlines; state file is bookkeeping)
+    "topic.watch",
+    # Feeds/reading/archive — read-only observation; state lives under memory/
+    "feed.read", "reading.list", "web.archive",
+    # Weather — key-free forecast fetch
+    "weather.get",
+    # Mail digest — headers-only, read-only IMAP (EXAMINE), disabled unless env-configured
+    "mail.digest",
+    # Quick compute — pure stdlib computation, no I/O (sukeesh/Jarvis-derived)
+    "calc.safe", "convert.unit", "convert.base", "gen.password",
+    # Doc retrieval — TF-IDF over workspace files, read-only (AnythingLLM-derived)
+    "doc.search",
+    # Agenda — ICS calendar read; add/remove mutate only its own source registry
+    "agenda.view",
 }
 
 MUTATING_TOOLS = {
+    # Snippets — :trigger store; add/remove mutate memory/snippets.json
+    "snippet.store",
     # Filesystem (write)
     "filesystem.write", "filesystem.copy", "filesystem.move",
     # Git (write)
@@ -92,8 +116,15 @@ MUTATING_TOOLS = {
     "task.ping", "task.alert",
     # Watch rules — creating/removing rules persists state under memory/
     "watch.rule",
+    # Data tools — data.convert writes converted files under project root
+    "data.convert",
+    # Remote storage — rclone transfers write to destinations (sync is destructive-gated)
+    "remote.transfer",
+    # Report generation — writes .docx under project root
+    "doc.report",
+    # Routines — add/remove persist recipes; run returns a plan (no nested exec)
+    "routine.add", "routine.remove",
 }
-
 DANGEROUS_TOOLS = {
     # Shell
     "shell.execute",

@@ -18,8 +18,8 @@ POST /v1/cdp     -> NOT a raw control path; always 501. Browser control is
 
 Backends
 --------
-* ``echo``    — deterministic offline stub (default; no kernel required).
-* ``kernel``  — drives the real JARVIS stack through a ``StreamEngine``
+* ``echo``    â€” deterministic offline stub (default; no kernel required).
+* ``kernel``  â€” drives the real JARVIS stack through a ``StreamEngine``
   (see engine.py). ``serve(..., backend_kind="kernel", engine=engine)``:
   the default ``ModelGatewayEngine`` streams chat through the JARVIS model
   gateway (ProviderRouter fallback) with input/output budgets. Supply
@@ -28,7 +28,7 @@ Backends
 Security (G1 hardenings)
 ------------------------
 * Loopback-only bind (127.0.0.1).
-* CORS restricted to ``chrome-extension://`` origins — never ``*``.
+* CORS restricted to ``chrome-extension://`` origins â€” never ``*``.
 * Optional bearer-token auth: when ``serve(..., require_auth=True)`` every
   state-changing request must send ``Authorization: Bearer <token>``. The
   token is provided by the caller (env ``J_BROWSER_BRIDGE_TOKEN``) or
@@ -52,6 +52,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend import KernelBackend, make_backend
 
+from voice import (_clamp_speed, tts_sapi, stt_bytes, voice_status, _api_key, _tts_one, _header_safe)
+
 logger = logging.getLogger("jbrowser-bridge")
 
 
@@ -64,7 +66,7 @@ DEFAULT_PORT = 8170
 TOKEN_ENV = "J_BROWSER_BRIDGE_TOKEN"
 
 # Canonical per-installation token: env override, else the launcher's token
-# file (same resolution as the WS bridge and Electron main — one secret).
+# file (same resolution as the WS bridge and Electron main â€” one secret).
 _TOKEN_FILE = os.path.join(
     os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
     "JARVIS", "bridge-token",
@@ -91,13 +93,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
     backend: object = None  # injected by server factory
     auth_token: str | None = None  # injected; None => auth not required
 
-    # ── CORS / plumbing ────────────────────────────────────────────────────
+    # â”€â”€ CORS / plumbing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _cors(self, origin: str | None) -> None:
         """Restrict CORS to JARVIS Orbit chrome-extension origins.
 
         The renderer itself is file:// (Origin: null) and dsh-native fetches
         the kernel from there; with mandatory bearer auth on every route,
-        CORS is defense-in-depth only — the token is the real boundary.
+        CORS is defense-in-depth only â€” the token is the real boundary.
         """
         safe = origin if (origin and _SAFE_ORIGINS.match(origin)) else None
         if safe is None and origin == "null":
@@ -172,11 +174,126 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         logger.debug(fmt, *args)
 
-    # ── HTTP verbs ─────────────────────────────────────────────────────────
+    # â”€â”€ HTTP verbs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
         self._cors(self.headers.get("Origin"))
         self.end_headers()
+
+    def _tts(self) -> None:
+        """POST /v1/tts — render speech audio from text.
+
+        Request body: {"text": str, "speed": float} (speed clamped to
+        ``SPEED_MIN..SPEED_MAX``, default 1.0).
+
+        Response: 200 JSON {"ok": True, "engine": str, "audio_b64": str};
+        400 invalid body; 401 unauth; 500 when TTS fails.
+        """
+        if not self._host_ok():
+            self._json(403, {"ok": False, "error": "forbidden host"})
+            return
+        if not self._authorized():
+            self._json(401, {"ok": False, "error": "unauthorized", "code": "unauthorized"})
+            return
+        data = self._read_json()
+        if data is None:
+            self._json(400, {"ok": False, "error": "invalid json body"})
+            return
+        text = str(data.get("text") or "").strip()
+        if not text:
+            self._json(400, {"ok": False, "error": "text is required"})
+            return
+        speed = _clamp_speed(data.get("speed", 1.0))
+        # Optional engine pin from the voice menu ("auto" keeps the default
+        # chain). Unknown names fall back inside ``_select_tts_engine``.
+        voice_model = str(data.get("voice_model") or "auto").strip().lower() or "auto"
+        try:
+            data_b, mime, engine_used = _tts_one(text, speed=speed, engine_name=voice_model)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("tts failed")
+            self._json(500, {"ok": False, "error": "tts failed", "code": "tts_failed", "engine": "sapi"})
+            return
+        format_raw = str(data.get("format", "json")).lower() == "raw"
+        if format_raw:
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("X-Voice-Engine", _header_safe(engine_used))
+            self.send_header("Content-Length", str(len(data_b)))
+            self.end_headers()
+            try:
+                self.wfile.write(data_b)
+            except (BrokenPipeError, ConnectionResetError,
+                    ConnectionAbortedError, TimeoutError, OSError):
+                pass
+        else:
+            import base64 as _b64
+            self._json(200, {"ok": True, "engine": engine_used, "audio_b64": _b64.b64encode(data_b).decode()})
+
+    def _stt(self) -> None:
+        """POST /v1/stt — transcribe audio bytes to text.
+
+        Request body: JSON {"audio_b64": str, "filename": str} (audio_b64 is
+        base64-encoded audio). The filename defaults to ``audio.webm``.
+
+        Response: 200 JSON {"ok": True, "text": str}; 400 invalid body;
+        401 unauth; 503 when STT cannot run (no API key / unavailable engine).
+        """
+        if not self._host_ok():
+            self._json(403, {"ok": False, "error": "forbidden host"})
+            return
+        if not self._authorized():
+            self._json(401, {"ok": False, "error": "unauthorized", "code": "unauthorized"})
+            return
+        data = self._read_json()
+        if data is None:
+            self._json(400, {"ok": False, "error": "invalid json body"})
+            return
+        audio_b64 = data.get("audio_b64")
+        if not audio_b64:
+            self._json(400, {"ok": False, "error": "audio_b64 is required"})
+            return
+        filename = data.get("filename", "audio.webm")
+        try:
+            import base64 as _b64
+            raw = _b64.b64decode(audio_b64)
+        except Exception as exc:  # noqa: BLE001
+            self._json(400, {"ok": False, "error": "invalid audio_b64"})
+            return
+        if len(raw) < 100:
+            self._json(400, {"ok": False, "error": "audio too short"})
+            return
+        try:
+            text = stt_bytes(raw, filename=filename)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("stt failed")
+            self._json(503, {"ok": False, "error": "ELEVENLABS_API_KEY not configured", "code": "stt_unavailable"})
+            return
+        self._json(200, {"ok": True, "text": text})
+
+    def _voice_status(self) -> None:
+        """GET /v1/voice/status — bridge voice subsystem status.
+
+        Response: 200 JSON status payload from :func:`voice_status` plus
+        voice menu capability metadata (engine list, precision, speed range).
+        """
+        if not self._host_ok():
+            self._json(403, {"ok": False, "error": "forbidden host"})
+            return
+        status = voice_status()
+        # ``voice_status()`` already reports the live engine chain and the
+        # clamped speed range; the renderer only needs it under a stable
+        # ``voice_menu`` key. Deriving the engine list from
+        # ``_resolve_tts_engine()`` would be wrong anyway: that returns a
+        # single callable, not an iterable of engines.
+        chain = status.get("tts_chain") or ["sapi"]
+        status["voice_menu"] = {
+            "engines": list(chain),
+            "default": "auto",
+            "speed_range": status.get("speed_range", [0.5, 2.0]),
+        }
+        self._json(200, status)
+
+    # ── CORS / plumbing
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._host_ok():
@@ -209,11 +326,20 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self.path == "/v1/cdp":
             self._cdp()
             return
+        if self.path == "/v1/tts":
+            self._tts()
+            return
+        if self.path == "/v1/stt":
+            self._stt()
+            return
+        if self.path == "/v1/voice/status":
+            self._voice_status()
+            return
         self._json(404, {"ok": False, "error": "not found"})
 
-    # ── endpoints ──────────────────────────────────────────────────────────
+    # â”€â”€ endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     def _models(self) -> None:
-        """GET /v1/models — selectable models for the browser model picker.
+        """GET /v1/models â€” selectable models for the browser model picker.
 
         Reads availability live from the engine's router (config models +
         dynamic Ollama tags). Answers with an empty list rather than failing
@@ -239,7 +365,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         ``threading.Queue`` instead of writing directly to the socket.  A
         dedicated *drain* thread on the **handler** thread pops events and
         performs the blocking ``wfile.write`` + ``wfile.flush``.  This keeps
-        the shared async loop free — a slow-reading SSE client now only
+        the shared async loop free â€” a slow-reading SSE client now only
         stalls its own drain thread, never every other concurrent chat.
         """
         self.send_response(200)
@@ -266,7 +392,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             loop).  The queue blocks on ``get()`` until the next event or
             ``_DONE`` sentinel arrives; ``wfile.flush()`` applies natural
             back-pressure that now only affects this drain thread and the
-            client it serves — never the loop.
+            client it serves â€” never the loop.
             """
             while True:
                 ev = event_queue.get()
@@ -278,7 +404,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError,
                         ConnectionAbortedError, TimeoutError, OSError):
                     # ConnectionAbortedError is a Windows-specific abort
-                    # (WinError 10053) — a sibling of, not a subclass of,
+                    # (WinError 10053) â€” a sibling of, not a subclass of,
                     # the reset/broken errors. Any of these means the
                     # client is gone; stop draining. OSError is the
                     # umbrella for exotic socket teardowns.
@@ -329,7 +455,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         text = str(data.get("text") or "").strip()
         if text:
             # Append the current turn to the prior thread (if the client sent
-            # one) instead of REPLACING it — this is what gives the model
+            # one) instead of REPLACING it â€” this is what gives the model
             # conversation continuity across calls.
             messages = list(messages) + [{"role": "user", "content": text}]
         if not messages:
@@ -434,7 +560,7 @@ def main(argv=None) -> int:
         handlers=[handler],
     )
     # A `kernel` backend is only real intelligence when an engine is attached.
-    # ModelGatewayEngine is the default chat engine (lazy provider import —
+    # ModelGatewayEngine is the default chat engine (lazy provider import â€”
     # constructing it never loads the model stack; if no provider is usable the
     # first chat turn fails closed with a clear SSE error instead of silently).
     engine = None
@@ -445,7 +571,7 @@ def main(argv=None) -> int:
             logger.info("kernel backend attached with engine=%s", engine.name)
             # Warm eagerly at boot: the router build (~3s) plus provider SDK
             # imports (~8s) must land during startup, not on the first hello
-            # (which would otherwise pay 10s+ of TTFT). Background thread —
+            # (which would otherwise pay 10s+ of TTFT). Background thread â€”
             # the server binds and answers /status immediately.
             import threading
             def _warm() -> None:
@@ -457,7 +583,7 @@ def main(argv=None) -> int:
                     # TTFT prewarm: open the TLS/TCP connection to the top
                     # race providers with a 1-token ping so the first REAL
                     # message skips the ~1-2s connection handshake and any
-                    # per-key first-request overhead. Failures are fine —
+                    # per-key first-request overhead. Failures are fine â€”
                     # the connection cache is per-client and a 429 still
                     # establishes the socket.
                     import asyncio
@@ -479,7 +605,7 @@ def main(argv=None) -> int:
                         except Exception:
                             pass
                     async def _ping_all() -> None:
-                        # Quota-aware keepalive target: ping ONE provider —
+                        # Quota-aware keepalive target: ping ONE provider â€”
                         # the highest-priority available one whose free-tier
                         # quotas comfortably absorb a 2-token ping every 3
                         # minutes (>=15 RPM and >=5,000 RPD). OpenRouter's
@@ -498,7 +624,7 @@ def main(argv=None) -> int:
                     async def _warm_engine_path() -> None:
                         # Drain ONE stream through the engine's REAL dispatch
                         # path (_race_providers -> router.complete_stream ->
-                        # sticky bookkeeping) — the provider pings above warm
+                        # sticky bookkeeping) â€” the provider pings above warm
                         # sockets but skip the router/race machinery entirely,
                         # so the first real message paid that machinery's
                         # first-run cost (measured: boot-edge turn ~2-3s even
@@ -513,7 +639,7 @@ def main(argv=None) -> int:
                             pass
                     # CRITICAL: pings must run on the engine's SHARED loop.
                     # asyncio.run() here would warm connections owned by a
-                    # throwaway loop's HTTP clients — useless to the message
+                    # throwaway loop's HTTP clients â€” useless to the message
                     # path, which runs on _get_shared_loop() (measured: first
                     # turn after idle still paid a 2.1s reconnect with the
                     # old throwaway-loop prewarm).
@@ -553,7 +679,7 @@ def main(argv=None) -> int:
                         # keepalive_expiry, refreshing it before eviction. The
                         # old sleep(30)+sleep(25)-then-ping order left a dead
                         # zone (~t+50..55s) where the prewarm connection had
-                        # expired but no ping had run yet — a turn there paid
+                        # expired but no ping had run yet â€” a turn there paid
                         # the full ~2.1-3s reconnect (re-measured at t+45s).
                         _time.sleep(10)
                         while True:
@@ -565,10 +691,10 @@ def main(argv=None) -> int:
                             except Exception:  # noqa: BLE001
                                 pass
                             # 25s interval: pairs with the provider SDK pools'
-                            # 30s keepalive_expiry — each ping refreshes a
+                            # 30s keepalive_expiry â€” each ping refreshes a
                             # connection that is never older than ~25s, so a
                             # real turn NEVER finds a connection in the
-                            # 30s-eviction zone. 2880 pings/day ≈ 10% of
+                            # 30s-eviction zone. 2880 pings/day â‰ˆ 10% of
                             # groq's 28,800/day free quota.
                             _time.sleep(25)
                     _th.Thread(target=_keepalive, daemon=True,

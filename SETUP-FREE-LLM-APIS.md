@@ -154,3 +154,47 @@ JARVIS is pre-wired: a `sakana` provider exists in `config/models.toml` and
 it activates automatically. It is intentionally **not** in the race/fallback
 chain until latency is pinned — orchestration adds provider-side hops, so
 measure before promoting (see PERF.md).
+
+## Voice — ElevenLabs + local Kokoro (JARVIS as a voice assistant)
+
+JARVIS now talks. Push-to-talk (hold **Ctrl+Space** in Orbit) or toggle the
+**hands-free** button in the composer: mic → speech-to-text → the same chat
+pipeline → spoken reply. Mark-LIV behaviors are folded in: instant
+acknowledgment before long tasks, self-echo guard (mic never listens while
+JARVIS speaks), and sentence-streamed playback so long answers start talking
+after the first sentence.
+
+### TTS chain (first available wins)
+1. **ElevenLabs** — `ELEVENLABS_API_KEY` in `config/.env`. Flash v2.5 (~75ms,
+   realtime-grade), Sarah voice. Free tier: 10k chars/mo at
+   <https://elevenlabs.io> → Profile → API Keys. Optional overrides:
+   `ELEVENLABS_VOICE_ID`, `ELEVENLABS_TTS_MODEL`.
+2. **Kokoro-82M** — fully local ONNX (Apache-2.0), zero key, zero network.
+   Auto-downloads the ~330MB fp32 model + 28MB voice bank to
+   `%LOCALAPPDATA%/JARVIS/kokoro` on first use. The model loads in the
+   background at bridge startup (first reply is instant, no 10s load).
+   Tuned ONNX session (physical-core thread count + full graph opts) runs
+   roughly real-time on a quiet laptop; expect rtf 1–4 depending on
+   background load — sentence-streamed playback keeps conversation flowing
+   regardless. Set `JARVIS_TTS_THREADS` to pin the thread count (default:
+   physical cores — 8 threads on a 4-core HT machine measured *slower*).
+   `JARVIS_KOKORO_PRECISION=fp16|int8` shrinks the download; fp32 is the
+   latency sweet spot on x86 (int8 benchmarked slower). `JARVIS_KOKORO_VOICE`
+   picks any of the 54 voices (default `af_sarah`). Needs `pip install
+   kokoro-onnx` (in requirements). Repeated lines (acks, status replies) are
+   served from bounded LRU caches in ~0ms.
+3. **Windows SAPI** — robotic last resort, always available, no deps.
+
+Check what's active: `GET /v1/voice/status` on the bridge.
+
+### STT (mic → text)
+ElevenLabs **Scribe v2** (`scribe_v2`), key-gated — without a key the mic
+button explains the setup instead of failing silently. 10k free chars/month
+on the same key. Transcript text is treated strictly as untrusted input:
+it flows into the composer exactly like typed text and never grants tools.
+
+### The key never leaves the server
+Browser code holds no secrets: Orbit calls the bridge's `/v1/tts`,
+`/v1/stt`, `/v1/voice/status` with the same per-launch bearer token as every
+other endpoint. (The heavier speech-engine WebSocket route can come later;
+the HTTP pipeline already covers hands-free conversation.)

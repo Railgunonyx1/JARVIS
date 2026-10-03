@@ -93,19 +93,41 @@ document.addEventListener("keydown", (e) => {
     try { window.orbit?.window?.close?.(); } catch (err) {}
     return;
   }
+  // Ctrl+H: History
+  if (ctrl && e.key.toLowerCase() === "h") { e.preventDefault(); navigateTo("orbit://history"); return; }
+  // Ctrl+J: Downloads
+  if (ctrl && e.key.toLowerCase() === "j") { e.preventDefault(); navigateTo("orbit://downloads"); return; }
   // Ctrl+L: Focus omnibox
   if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); omniInput.focus(); omniInput.select(); return; }
-  // Ctrl+Shift+J: Toggle sidebar
-  if (ctrl && shift && e.key.toLowerCase() === "j") { e.preventDefault(); jarvisBtn.click(); return; }
-  // Ctrl+Shift+K: Floating JARVIS chat window
-  if (ctrl && shift && e.key.toLowerCase() === "k") { e.preventDefault(); toggleJarvisFloat(); return; }
-  if (ctrl && shift && e.key.toLowerCase() === "s") { e.preventDefault(); takeScreenshot(); return; }
+  // Ctrl+J: Ask Orbit (AI drawer)
+  if (ctrl && e.key.toLowerCase() === "j") { e.preventDefault(); toggleAssistantDrawer(); return; }
+  // Ctrl+K: Command palette
+  if (ctrl && e.key.toLowerCase() === "k") { e.preventDefault(); openCommandPalette(); return; }
+  // Ctrl+T: New tab
+  if (ctrl && e.key.toLowerCase() === "t") { e.preventDefault(); createTab(); return; }
+  // Ctrl+W: Close tab; with no tabs left, close the browser window
+  if (ctrl && e.key.toLowerCase() === "w") {
+    e.preventDefault();
+    if (activeTabId) { closeTab(activeTabId); return; }
+    try { window.orbit?.window?.close?.(); } catch (err) {}
+    return;
+  }
+  // Ctrl+Shift+T: Reopen closed tab (Chrome)
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === "t") { e.preventDefault(); reopenClosedTab(); return; }
+  // Ctrl+Shift+Plus: Split view
+  if (ctrl && e.shiftKey && (e.key === "+" || e.key === "=")) { e.preventDefault(); toggleSplitView(); return; }
+  // Ctrl+Shift+S: Compact mode
+  if (ctrl && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); toggleCompactMode(); return; }
   // (split view moved to Ctrl+Shift+\ — Ctrl+Shift+S was double-bound)
   if (ctrl && shift && e.key.toLowerCase() === "r") { e.preventDefault(); openReaderMode(); return; }
   // Ctrl+Shift+F: Tab search
   if (ctrl && shift && e.key.toLowerCase() === "f") { e.preventDefault(); toggleTabSearch(); return; }
   // Ctrl+Shift+B: Toggle bookmark bar
   if (ctrl && shift && e.key.toLowerCase() === "b") { e.preventDefault(); if (bookmarkBar) bookmarkBar.classList.toggle("hidden"); return; }
+  // Ctrl+Shift+J: Toggle sidebar
+  if (ctrl && shift && e.key.toLowerCase() === "j") { e.preventDefault(); toggleSidebar(); return; }
+  // Ctrl+Shift+K: Floating JARVIS chat window
+  if (ctrl && shift && e.key.toLowerCase() === "k") { e.preventDefault(); toggleJarvisFloat(); return; }
   // Ctrl+R: Reload
   if (ctrl && e.key.toLowerCase() === "r" && !shift) {
     e.preventDefault();
@@ -124,7 +146,7 @@ document.addEventListener("keydown", (e) => {
     if (window.readingMode) window.readingMode.toggle();
     return;
   }
-  // Ctrl+1..8: switch to tab N; Ctrl+9: jump to last tab (Chrome)
+  // Ctrl+1..9: Switch tabs
   if (ctrl && !shift && /^[1-9]$/.test(e.key)) {
     e.preventDefault();
     const ids = Array.from(tabs.keys());
@@ -156,8 +178,16 @@ document.addEventListener("keydown", (e) => {
   }
   // Ctrl+F: Find on page
   if (ctrl && e.key.toLowerCase() === "f") { e.preventDefault(); toggleFind(); return; }
-  // Ctrl+Tab: Next tab
+  // Ctrl+Tab: Previous tab (switch back)
   if (ctrl && e.key === "Tab") {
+    // If Shift is held, go next; else previous (default behavior)
+    e.preventDefault();
+    const ids = Array.from(tabs.keys());
+    const idx = ids.indexOf(activeTabId);
+    const next = shift ? (idx + 1 + ids.length) % ids.length : (idx - 1 + ids.length) % ids.length;
+    activateTab(ids[next]);
+    return;
+  }
     e.preventDefault();
     const ids = Array.from(tabs.keys());
     const idx = ids.indexOf(activeTabId);

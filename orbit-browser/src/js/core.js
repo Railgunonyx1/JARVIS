@@ -2,10 +2,12 @@
  * Classic script, loads in the shared global scope before renderer.js.
  * Event bindings use closures so load order never matters.
  */
+
 // ---------------------------------------------------------------------
+
 /**
  * JARVIS Orbit — Renderer Process (Complete)
- * 
+ *
  * Manages browser UI: tabs, omnibox, sidebar, JARVIS communication.
  * All JARVIS IPC goes through preload bridge (window.orbit).
  * Features merged: Command Palette, Zoom, Bookmarks, Toast, Sessions, HUD, Vertical Tabs, Print/Screenshot
@@ -24,7 +26,7 @@ function invalidateCache(id) {
   else Object.keys(_domCache).forEach(k => delete _domCache[k]);
 }
 
-// ── Debounce/Throttle Utilities ─────────────────────────────────
+// ── Debounce/Throttle Utilities ───────────────────────────────
 function debounce(fn, ms) {
   var timer;
   return function() {
@@ -32,7 +34,7 @@ function debounce(fn, ms) {
     var ctx = this;
     clearTimeout(timer);
     timer = setTimeout(function() { fn.apply(ctx, args); }, ms);
-  };
+  }
 }
 function throttle(fn, ms) {
   var last = 0;
@@ -42,14 +44,75 @@ function throttle(fn, ms) {
       last = now;
       fn.apply(this, arguments);
     }
-  };
+  }
 }
+
+// ── Shared log channel (bridge panel reads this) ──────────────
+// Renderers push structured events here; the bridge panel polls GET /v1/logs.
+function _batchLog() {
+  var events = window._orbitLogBatch || [];
+  window._orbitLogBatch = [];
+  return events;
+}
+function _flushLog() {
+  var events = _batchLog();
+  if (!events.length) return;
+  if (window.orbit && typeof window.orbit.perf.logs === "function") {
+    try { window.orbit.perf.logs(events); } catch (e) { /* never throw from logging */ }
+  }
+  // Fall back to the bridge endpoint directly when the perf extension is not ready.
+  if (window._orbitLastLogsUrl) {
+    try {
+      var body = JSON.stringify({ entries: events });
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", window._orbitLastLogsUrl, false);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.send(body);
+    } catch (e) { /* never throw from logging */ }
+  }
+}
+function _log(level, source, message, detail) {
+  var entry = {
+    ts: new Date().toISOString(),
+    level: level || "info",
+    source: source || "",
+    message: message || "",
+    detail: detail || null,
+    tabId: null,
+    duration_ms: null,
+  };
+  if (window._orbitTabs && window.activeTabId !== undefined) {
+    entry.tabId = window.activeTabId;
+  }
+  if (detail && (detail.tabId !== undefined || detail.duration_ms !== undefined)) {
+    entry.tabId = entry.tabId === null ? detail.tabId : entry.tabId;
+    entry.duration_ms = detail.duration_ms;
+  }
+  window._orbitLogBatch = window._orbitLogBatch || [];
+  window._orbitLogBatch.push(entry);
+  if (window._orbitLogBatch.length >= 50) {
+    _flushLog();
+  }
+  if (window._orbitLogListeners) {
+    try { window._orbitLogListeners.forEach(function(cb) { try { cb(entry); } catch (e) {} }); } catch (e) {}
+  }
+  return entry;
+}
+window._log = _log;
+window._orbitLogListeners = [];
+window._orbitLogListeners.push(function(entry) {
+  // keep the in-process ErrorLogger's own store in sync
+  if (window._errorLogger && typeof window._errorLogger.record === "function") {
+    try { window._errorLogger.record(entry); } catch (e) {}
+  }
+});
 
 // ── Error Logger (captures all errors for diagnostics) ──────────
 const ErrorLogger = (function() {
   var _errors = [];
   var MAX_ERRORS = 500;
   var _listeners = [];
+  var _logAt = Object.create(null);
 
   function log(level, message, details) {
     var entry = {
@@ -72,11 +135,21 @@ const ErrorLogger = (function() {
   }
 
   function logError(err, source) {
-    var entry = log('error', err.message || String(err), source || '');
-    if (err.filename) entry.source = err.filename;
-    if (err.lineno) entry.line = err.lineno;
-    if (err.colno) entry.col = err.colno;
-    if (err.stack) entry.stack = err.stack;
+    var entry;
+    if (window._log) {
+      entry = window._log('error', source || '', err.message || String(err), {
+        filename: err.filename,
+        lineno: err.lineno,
+        colno: err.colno,
+        stack: err.stack,
+      });
+    } else {
+      entry = log('error', err.message || String(err), source || '');
+      if (err.filename) entry.source = err.filename;
+      if (err.lineno) entry.line = err.lineno;
+      if (err.colno) entry.col = err.colno;
+      if (err.stack) entry.stack = err.stack;
+    }
     return entry;
   }
 
@@ -128,6 +201,7 @@ const ErrorLogger = (function() {
     onUpdate: onUpdate,
   };
 })();
+
 window._errorLogger = ErrorLogger;
 
 // ── Error Boundary ──────────────────────────────────────────────
@@ -230,7 +304,6 @@ function initMatrix(el) {
   if (!el || el.childElementCount) return;
   el.innerHTML = Array.from({ length: 49 }, () => "<i></i>").join("");
 }
-
 function setMatrix(state) {
   agentState = state;
   if (sbMatrix) sbMatrix.dataset.state = state;
@@ -251,3 +324,17 @@ function setMatrix(state) {
   if (floatTitle) floatTitle.textContent = state === "ask" ? "Approval needed" : "Researching";
   if (floatMatrix) floatMatrix.dataset.state = state === "ask" ? "ask" : "running";
 }
+
+window._log = _log;
+
+// ── Perf bridge extension ─────────────────────────────────────
+// Expose batch logs to the bridge bridge (`window.orbit.perf.logs()`), used
+// by the unified log panel (v2-sidebar `renderLogPanel` → `GET /v1/logs`).
+try {
+  if (window.orbit && window.orbit.perf && !window.orbit.perf.logs) {
+    window.orbit.perf.logs = function(entries) {
+      // Handled by the bridge; the panel polls GET /v1/logs instead.
+      return entries;
+    };
+  }
+} catch (e) { /* never throw from init */ }

@@ -98,6 +98,12 @@ def browser_type(args: dict[str, Any]) -> ToolResult:
     text = str(args.get("text", "") or "")
     if not selector:
         return ToolResult(success=False, error="selector is required")
+    try:  # espanso-style expansion: :trigger tokens become their stored text
+        from tools.snippets import expand_text
+
+        text, _expanded = expand_text(text)
+    except Exception:  # expansion must never block typing
+        pass
     try:
         _controller().type_selector(selector, text)
     except Exception as e:

@@ -45,3 +45,6 @@ textual==8.2.8
 pypdf
 pdfplumber
 markdownify
+
+# Voice: local neural TTS (ElevenLabs SDK optional, install when keyed)
+kokoro-onnx>=0.4

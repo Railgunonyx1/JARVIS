@@ -34,6 +34,7 @@
     flow: renderFlowPanel, bookmarks: renderBookmarksPanel,
     'browser-history': renderHistoryPanelSide, downloads: renderDownloadsPanel,
     watches: renderWatchesPanel,
+    log: renderLogPanel,
   };
 
   renderPanel = function (name) {
@@ -54,6 +55,160 @@
   };
   // Re-route Chat panels through the same entry (Chat.renderPanel skips its
   // own title sync for non-chat panels; keep titles consistent).
+
+  // ── Log panel (unified browser/bridge/main-process log) ──────────────
+  function renderLogPanel() {
+    sbBody.innerHTML =
+      '<div class="panel-pad">' +
+        '<div class="log-toolbar">' +
+          '<div class="log-seg">' +
+            '<select id="logLevel" aria-label="Log level">' +
+              '<option value="">All levels</option>' +
+              '<option value="debug">debug</option>' +
+              '<option value="info">info</option>' +
+              '<option value="warn">warn</option>' +
+              '<option value="error">error</option>' +
+              '<option value="fatal">fatal</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="log-seg"><input id="logSearch" class="log-search" placeholder="Search message/source..." aria-label="Search" /></div>' +
+          '<div class="log-seg"><input id="logSource" class="log-search" placeholder="Source module..." aria-label="Source" /></div>' +
+          '<div class="log-seg"><span class="log-count" id="logCount">0 entries</span></div>' +
+          '<div class="log-seg log-actions">' +
+            '<button id="logClear" class="ui-btn ui-btn--ghost">Clear</button>' +
+            '<button id="logExport" class="ui-btn ui-btn--ghost">Export</button>' +
+            '<button id="logMain" class="ui-btn ui-btn--ghost">Main</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="logList" class="log-list"></div>' +
+      '</div>';
+
+    var listEl = document.getElementById('logList');
+    var filter = {
+      level: '',
+      q: '',
+      source: '',
+      main: false,
+    };
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function levelClass(lvl) {
+      return 'log-level-' + lvl;
+    }
+
+    function render(entry) {
+      var time = entry.ts || '';
+      var level = entry.level || 'info';
+      var src = entry.source || '';
+      var msg = entry.message || '';
+      var detail = entry.detail;
+      var li = document.createElement('div');
+      li.className = 'log-row' + (level === 'error' ? ' log-row-err' : '');
+      li.innerHTML =
+        '<div class="log-time">' + escapeHtml(time) + '</div>' +
+        '<div class="log-level ' + levelClass(level) + '">' + escapeHtml(level.toUpperCase()) + '</div>' +
+        '<div class="log-src">' + escapeHtml(src) + '</div>' +
+        '<div class="log-msg">' + escapeHtml(msg) + '</div>';
+      if (detail && typeof detail === 'object') {
+        var d = detail;
+        if (d.duration_ms !== undefined) {
+          li.innerHTML += '<div class="log-meta">' + d.duration_ms + 'ms</div>';
+        }
+        if (d.tabId !== undefined) {
+          li.innerHTML += '<div class="log-meta">tab ' + escapeHtml(d.tabId) + '</div>';
+        }
+        if (d.message !== undefined) {
+          // If the entry we rendered is actually a detail-structured blob, the
+          // original message lives in detail.message — keep that as the main text.
+          li.innerHTML = '<div class="log-time">' + escapeHtml(time) + '</div>' +
+            '<div class="log-level ' + levelClass(level) + '">' + escapeHtml(level.toUpperCase()) + '</div>' +
+            '<div class="log-src">' + escapeHtml(src) + '</div>' +
+            '<div class="log-msg">' + escapeHtml(String(d.message || msg)) + '</div>';
+        }
+      }
+      li.dataset.src = src;
+      li.dataset.level = level;
+      return li;
+    }
+
+    function load() {
+      var url = '/v1/logs?tail=400';
+      if (filter.level) url += '&level=' + encodeURIComponent(filter.level);
+      if (filter.q) url += '&q=' + encodeURIComponent(filter.q);
+      if (filter.source) url += '&source=' + encodeURIComponent(filter.source);
+      fetch(url, { headers: { 'X-Log-Tail': '400' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          try {
+            var entries = (data && data.entries) || [];
+            listEl.innerHTML = entries.map(render).join('') || '<div class="log-empty">No matching log entries.</div>';
+            document.getElementById('logCount').textContent = entries.length + ' entry' + (entries.length !== 1 ? 's' : '');
+            // Keep the list scrolled to the bottom unless the user has scrolled up.
+            if (listEl.scrollHeight - listEl.clientHeight - listEl.scrollTop < 60) {
+              listEl.scrollTop = listEl.scrollHeight;
+            }
+          } catch (e) {
+            listEl.textContent = 'Log fetch failed';
+          }
+        })
+        .catch(function () { listEl.textContent = 'Log fetch failed'; });
+    }
+
+    // Wire controls.
+    var levelSel = document.getElementById('logLevel');
+    if (levelSel) levelSel.addEventListener('change', function () { filter.level = levelSel.value; load(); });
+    var searchIn = document.getElementById('logSearch');
+    if (searchIn) {
+      var debounce = null;
+      searchIn.addEventListener('input', function () {
+        clearTimeout(debounce);
+        debounce = setTimeout(function () { filter.q = searchIn.value; load(); }, 180);
+      });
+    }
+    var srcIn = document.getElementById('logSource');
+    if (srcIn) {
+      var debounce2 = null;
+      srcIn.addEventListener('input', function () {
+        clearTimeout(debounce2);
+        debounce2 = setTimeout(function () { filter.source = srcIn.value; load(); }, 180);
+      });
+    }
+    var clearBtn = document.getElementById('logClear');
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+      listEl.textContent = 'Cleared.';
+      document.getElementById('logCount').textContent = '0 entries';
+    });
+    var exportBtn = document.getElementById('logExport');
+    if (exportBtn) exportBtn.addEventListener('click', function () {
+      fetch('/v1/logs?tail=2000', { headers: { 'X-Log-Tail': '2000' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var entries = (data && data.entries) || [];
+          var blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'orbit-log-' + new Date().toISOString().slice(0, 10) + '.json';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+    });
+    var mainBtn = document.getElementById('logMain');
+    if (mainBtn) mainBtn.addEventListener('click', function () {
+      filter.main = !filter.main;
+      load();
+    });
+
+    // Poll every 2s (a capped tail fetch is cheap; the server filters on the path).
+    setInterval(load, 2000);
+    load();
+  };
+
+  // ── shared row builders ─────────────────────────────────────── */
   if (window.Chat && typeof window.Chat.renderPanel === 'function') {
     var _chatRenderPanel = window.Chat.renderPanel;
     window.Chat.renderPanel = function (name) {
