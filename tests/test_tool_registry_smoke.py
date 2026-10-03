@@ -60,37 +60,57 @@ def test_handler_dispatchers_are_reachable(registry):
 def test_module_dispatchers_are_bound():
     """Verify that module-level dispatcher targets in tools package are bound."""
     for fn_name in (
-        "agenda_add", "agenda_list", "agenda_remove", "agenda_view",
+        "agenda_add", "agenda_list", "agenda_remove",
         "doc_search", "doc_stats",
-        "web_archive", "web_archive_list", "web_archive_read",
+        "web_archive_list", "web_archive_read",
     ):
         target = getattr(tools_pkg, fn_name, None)
         assert callable(target), f"{fn_name} must be imported and callable in tools package"
 
 
+def test_submodule_attributes_survive():
+    """`tools.agenda_view` / `tools.web_archive` must stay MODULES.
+
+    Both modules export a function that shares its own module's name. Binding
+    that function as a bare package attribute silently replaces the submodule
+    the rest of the codebase does `from tools import agenda_view as ag`, which
+    breaks every caller of `ag.agenda_view(...)` with
+    "'function' object has no attribute ...". The dispatchers therefore reach
+    these two through the module object instead of a bare name.
+    """
+    import types
+
+    for mod_name in ("agenda_view", "web_archive", "doc_retrieval"):
+        attr = getattr(tools_pkg, mod_name)
+        assert isinstance(attr, types.ModuleType), (
+            f"tools.{mod_name} must stay a module, got {type(attr).__name__}"
+        )
+        assert attr.__name__.endswith(mod_name)
+
+
 _DISPATCH_CASES = [
-    # (handler attr, action, expected global the action must reach)
+    # (handler attr, action, dotted target the action must reach)
     ("doc_retrieval_handler", "stats", "doc_stats"),
     ("doc_retrieval_handler", "search", "doc_search"),
     ("doc_retrieval_handler", "", "doc_search"),
     ("agenda_view_handler", "add", "agenda_add"),
     ("agenda_view_handler", "remove", "agenda_remove"),
     ("agenda_view_handler", "list", "agenda_list"),
-    ("agenda_view_handler", "view", "agenda_view"),
+    ("agenda_view_handler", "view", "_agenda_view_mod.agenda_view"),
     ("web_archive_handler", "list", "web_archive_list"),
     ("web_archive_handler", "read", "web_archive_read"),
-    ("web_archive_handler", "archive", "web_archive"),
+    ("web_archive_handler", "archive", "_web_archive_mod.web_archive"),
 ]
 
 
 @pytest.mark.parametrize("handler_name,action,target_name", _DISPATCH_CASES)
 def test_dispatcher_invocation_reaches_target(monkeypatch, handler_name, action, target_name):
-    """Every action branch must resolve its target global and return a ToolResult.
+    """Every action branch must resolve its target and return a ToolResult.
 
     This is the test that catches the F821 class of bug: the dispatchers
-    reference bare names (doc_search, agenda_add, ...) that must be bound in
-    the `tools` package namespace at *call* time. Stubbing the target keeps
-    the test hermetic -- no calendar, archive, or index side effects.
+    reference names (doc_search, agenda_add, _web_archive_mod.web_archive, ...)
+    that must resolve at *call* time. Stubbing the target keeps the test
+    hermetic -- no calendar, archive, or index side effects.
     """
     reached: list[str] = []
 
@@ -98,7 +118,11 @@ def test_dispatcher_invocation_reaches_target(monkeypatch, handler_name, action,
         reached.append(args.get("action", ""))
         return tools_pkg.tool_result(True, target_name)
 
-    monkeypatch.setattr(tools_pkg, target_name, _stub, raising=False)
+    owner, _, attr = target_name.rpartition(".")
+    if owner:
+        monkeypatch.setattr(getattr(tools_pkg, owner), attr, _stub)
+    else:
+        monkeypatch.setattr(tools_pkg, target_name, _stub, raising=False)
     handler = getattr(tools_pkg, handler_name)
 
     result = handler({"action": action})

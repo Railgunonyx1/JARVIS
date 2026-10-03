@@ -6,17 +6,30 @@ wrappers live in core/agent/tools.py; individual tool handlers in tools/*.
 
 from __future__ import annotations
 
-from tools.agenda_view import agenda_add, agenda_list, agenda_remove, agenda_view
 from tools.classification import classify_tool
 from tools.doc_retrieval import doc_search, doc_stats
 from tools.registry import ToolRegistry
 from tools.schema import Tool, ToolResult, tool_result
-from tools.web_archive import web_archive, web_archive_list, web_archive_read
 
 # NOTE: the *_handler dispatchers at the bottom of this module call these
 # functions. They must be bound at MODULE scope -- importing them inside
 # build_default_registry() leaves the dispatchers with an unbound name, and
 # the NameError only surfaces when the tool is invoked, not at build time.
+#
+# agenda_view / web_archive are referenced through the MODULE object, never
+# rebound as bare names. Both modules export a function that shares its own
+# module's name, so `from tools.agenda_view import agenda_view` would replace
+# the `tools.agenda_view` submodule attribute with a plain function and break
+# every `from tools import agenda_view as ag` in the codebase.
+from tools import agenda_view as _agenda_view_mod
+from tools import web_archive as _web_archive_mod
+
+agenda_add = _agenda_view_mod.agenda_add
+agenda_list = _agenda_view_mod.agenda_list
+agenda_remove = _agenda_view_mod.agenda_remove
+
+web_archive_list = _web_archive_mod.web_archive_list
+web_archive_read = _web_archive_mod.web_archive_read
 
 
 def build_default_registry() -> ToolRegistry:
@@ -2377,7 +2390,7 @@ def agenda_view_handler(args: dict) -> ToolResult:
         return agenda_remove(args)
     if action == "list":
         return agenda_list(args)
-    return agenda_view(args)
+    return _agenda_view_mod.agenda_view(args)
 
 
 def web_archive_handler(args: dict) -> ToolResult:
@@ -2387,4 +2400,4 @@ def web_archive_handler(args: dict) -> ToolResult:
         return web_archive_list(args)
     if action == "read":
         return web_archive_read(args)
-    return web_archive(args)
+    return _web_archive_mod.web_archive(args)
