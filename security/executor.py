@@ -160,11 +160,11 @@ class CommandPolicy:
         self._dangerous_patterns = tuple(dangerous_patterns or _DANGEROUS_PATTERNS)
         self._shell_operators = tuple(shell_operators or _SHELL_OPERATORS)
         self.default_shell = default_shell if default_shell in ("powershell", "cmd") else "powershell"
-        self.allowed_cwds = [os.path.expanduser(d) for d in (allowed_cwds or [
+        self.allowed_cwds = [os.path.realpath(os.path.expanduser(d)) for d in (allowed_cwds or [
             "~", "~/Desktop", "~/Documents", "~/Downloads", "~/Pictures",
             "~/Music", "~/Videos",
         ])]
-        self.blocked_cwds = [os.path.expanduser(d) for d in (blocked_cwds or [
+        self.blocked_cwds = [os.path.realpath(os.path.expanduser(d)) for d in (blocked_cwds or [
             "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
             "C:\\System32", "C:\\ProgramData", os.path.join(os.path.expanduser("~"), ".ssh"),
         ])]
@@ -385,9 +385,10 @@ class SecureExecutor:
                               stderr=f"Working directory is not a directory: {cwd}",
                               mode=mode.value)
         env = sanitize_environment(req.env)
-        creationflags = subprocess.CREATE_NO_WINDOW if _is_windows() else 0
+        creationflags = 0
         if _is_windows():
-            creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
+            creationflags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 
         try:
             # Structured argv (executable + args) with shell=False; the command
