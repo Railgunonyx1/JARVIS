@@ -1,0 +1,13 @@
+# JARVIS MK-X — development & test dependencies
+# The runtime import graph is requirements.txt (audit-verified).
+# These are needed only to run the test suite / lint:
+#   pytest            - test runner
+#   pytest-asyncio    - @pytest.mark.asyncio tests (json_repair, ollama provider)
+#   ruff              - lint + architecture style gate
+#   pandas            - tests/test_repo_mine_pass6.py (data tools)
+#   python-docx       - tests/test_repo_mine_pass6.py (doc report)
+pytest
+pytest-asyncio
+ruff
+pandas
+python-docx
