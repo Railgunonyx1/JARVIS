@@ -1319,3 +1319,142 @@ Existing `api.py`/`api_v2.py` normalized to one OpenAI base URL; two-tier voice 
 | **No license (do not reuse)** | affaan-m/JARVIS |
 
 **Round 5 index (17 repos):** wukong-robot (wzpan), kalliope, Naomi, thevickypedia/Jarvis, CosyVoice, Qwen3-TTS, MeloTTS, index-tts, KittenTTS, F5-TTS, fish-speech, GPT-SoVITS, microsoft/ai-agents-for-beginners, karpathy/autoresearch, nexu-io/open-design, alexylem/jarvis, affaan-m/JARVIS.
+
+---
+
+# Round 6
+
+## W. TTS engines with distinct signal
+
+### coqui-ai/TTS (XTTS v2) — code MPL-2.0; **weights = Coqui Public Model License (non-commercial)**
+- Streaming inference (<200ms chunked) behind one `/v1/audio/speech` adapter. → `voice/`, `providers/model_gateway.py` · M/med.
+- 16-language + cross-language cloning **API shape** (`speaker_wav` + `language_idx`) → reference-clip contract behind a fail-closed consent gate. → `voice/clone.py`, `security/*` · M/high.
+- Consented speaker-embedding registry under ownership keys. → `memory/` · S/med.
+- *Avoid:* XTTS-v2 weights (CPML poisons commercial use) — keep API patterns only; training stack.
+
+### resemble-ai/chatterbox (MIT — code **and** all weights)
+- **Size tiers as `ModelProfile`s** — Nano 110M (CPU) / Turbo 350M (GPU ~75ms) / Multilingual V3 500M; register in `ModelGateway.select()` by capability + health. → `providers/model_gateway.py` · S/low.
+- **Emotion exaggeration + paralinguistic tags** (`[laugh]`, `[chuckle]`) via `extra_body` passthrough. → `voice/`, `runtime/protocols/` · S/low.
+- **Built-in PerTh watermarking** → log watermark status on BusEvents for provenance/audit. → `runtime/event_bus.py` · S/low.
+- 5s zero-shot cloning behind an explicit approval gate; store embedding id in `memory/`. → `voice/`, `security/*` · M/med.
+- *Recommended reference local backend* (cleanest licensing of the batch).
+
+### Zyphra/Zonos (v0.1 Apache-2.0 code+weights; ZONOS2 MIT)
+- **Fine-grained conditioning dict** (speaking_rate, pitch, max_freq, emotion axes) as a structured `speech_style` object. → `runtime/protocols/`, `voice/` · M/low.
+- **Speaker embedding as `.npy` artifact** (not raw audio) → smaller memory footprint. → `memory/` · S/low.
+- CPU-capable mid-tier profile between Nano and full GPU. → `providers/model_gateway.py` · S/low.
+- *Secondary backend* — richest conditioning; 1.6B v0.1 is heavy for CPU.
+
+### 2noise/ChatTTS (**AGPL-3.0 + CC BY-NC weights — dual poison**)
+- OpenAI-compatible `openai_api.ipynb` wire-format **reference only**; prosody/paralinguistic tag grammar; conversational turn-taking tuning. → `voice/` design notes · S/low.
+- *Avoid entirely:* AGPL code + non-commercial weights — do not vendor or ship; steal design notes only.
+
+## X. STT / VAD / voice pipelines
+
+### moonshine-ai/moonshine (MIT — streaming/English; some legacy non-English models = Moonshine Community License)
+- **TinyVadCNN + moving-average segmenter** (32ms hop) producing segment bounds without storing audio; front-align/energy-centroid to avoid clipping. → `voice/` · M/low.
+- **Streaming ASR pipeline** (frontend→VAD→segment→STT) with separate sessions/state + speculative token verification. → `voice/`, `providers/model_gateway.py` · M/low.
+- **OpenAI-compatible surface** with chunked `add_audio` + `update_interval` for live partials; word timestamps. → `runtime/protocols/` · M/low.
+- *Avoid:* legacy Community-licensed non-English non-streaming models; shipping third-party TFLM/ONNX without checksum/scan.
+
+### k2-fsa/OmniVoice (Apache-2.0)
+- **Server concurrency model** (ThreadPoolExecutor + asyncio.Semaphore, `MAX_CONCURRENT`, request timeout) for STT/TTS gating. → `voice/`, `runtime/protocols/` · M/med.
+- **Streaming TTS** (sentence-split → per-sentence PCM chunks, low TTFA). → `voice/` · M/med.
+- OpenAI-compatible `/v1/audio/speech` + voices/profiles CRUD. → `providers/model_gateway.py` · S/low.
+- *Avoid:* heavy FlashInfer CUDA kernels; multi-process weight duplication.
+
+### abus-aikorea/voice-pro (GPL-3.0 → ideas only)
+- VAD module + audio separation (Demucs/MDX-NET ONNX) as a pre-STT cleanup stage. → `voice/` · M/med.
+- Whisper stack (openai/faster-whisper/whisper-timestamped) + ONNX/PyTorch dual runtime abstraction. → `voice/`, `providers/model_gateway.py` · M/med.
+- Batch subtitle translation with sentence segmentation (spaCy/lingua) → chunking strategy. → `tools/*` · M/low.
+- *Avoid:* GPL-3.0 code if distributed — architectural reference only.
+
+### PaddlePaddle/PaddleSpeech (Apache-2.0)
+- **Online streaming ASR** (DeepSpeech2/Conformer with `num_decoding_left_chunks`, stride/window) + **CTC prefix beam search** (beam alpha/beta/cutoff, optional external LM). → `voice/` · M–L/med.
+- **WebSocket streaming ASR server** with chunked features + `advance_decoding` endpointing. → `runtime/protocols/` · M/med.
+- Modular model-centric CLI (`paddlespeech asr --model ... --decode_method ...`). → `cli/*`, `providers/model_gateway.py` · M/med.
+- *Avoid:* PaddlePaddle as a runtime dep in core; training scripts; runtime LM downloads bypassing policy.
+
+## Y. Tool / data / media pipelines
+
+### OpenBB-finance/OpenBB (Apache-2.0) — *backlog listed as `openbq-org/OpenBB`*
+- **Entry-point plugin discovery** (`openbb_core_extension` / `_provider_extension` / `_obbject_extension` groups) → `tools/*` registrations loaded only through ToolExecutionService. → `runtime/protocols/` · M/low.
+- **TET provider abstraction** (`Fetcher` = QueryParams + Data + `transform_query`/`extract_data`/`transform_data`; ProviderInterface maps model→fetchers) → data-provider abstraction in `core/harness/*`. → `core/harness/*` · M/low.
+- **Skills registry** (`develop_extension`, install/list/read) as a direct model for `skills/*`. → `skills/*` · S/low.
+- Unified dispatch where Python+REST+MCP share one command runner → single ToolExecutionService boundary. → `tools/*` · M/low.
+- *Avoid:* mutable OBBject plugins modifying results outside controlled paths; pulling the full FastAPI/Pydantic stack wholesale.
+
+### jianchang512/pyvideotrans (**GPL-3.0 → ideas only**)
+- Deterministic staged batch pipeline (STT→translate→TTS→align→mux) — model each stage as a `tools/*` with `retry_semantics` + BusEvents. → `tools/*`, `runtime/event_bus.py` · M/low.
+- Channel/provider adapters with local-only keys; stage input/output contracts validated by the verification gate. → `core/harness/*`, `runtime/protocols/` · M/low.
+- *Avoid:* GPL-3.0 integration into core (keep as a separate process/service at most); heavy torch/onnx/CUDA footprint.
+
+### DrewThomasson/ebook2audiobook (Apache-2.0)
+- CHAPTER-split batch pipeline (EPUB/MOBI → per-chapter TTS → mux) with progress BusEvents. → `tools/*` · M/low.
+- Pluggable TTS provider abstraction with capability flags. → `core/harness/*` · S/low.
+- Per-book/chapter state in memory with artifacts as BLOBs (not secrets). → `memory/` · S/low.
+- `skills/audiobook_batch` end-to-end workflow. → `skills/*` · S/low.
+- *Avoid:* third-party model-license caveats (surface terms via permissions); hardcoding providers.
+
+### krillinai/OpenCreator (Apache-2.0)
+- **Skills registry + install** (`SkillsDirectoryProvider`/`SkillProvider`, vendor mapping for Claude/Cursor/Codex/OpenCode/Gemini/Goose) — near-identical to `skills/*`. → `skills/*` · S/low.
+- **Tool catalog + transforms** (`PromptsAsTools`/`ResourcesAsTools`, per-session activate/deactivate) → ToolExecutionService catalog + harness activation state. → `core/harness/*` · M/low.
+- Creation templates (`template.json` + assets) as reusable skills; media tools emit BusEvents with a post-execution verification gate. → `skills/*`, `tools/*` · M/low.
+- *Avoid:* coupling to the Codex CLI environment; heavy media deps mandatory.
+
+## Z. Triage — reviewed, deferred (patterns already captured in Rounds 3–6)
+
+These map onto the voice-engine / agent pattern set already documented; adopting code is not planned, so per-repo license verification is deferred until there is an adoption intent. Listing them keeps the backlog honest rather than re-deriving the same bullets.
+
+| Repo | Category | Triage rationale |
+|---|---|---|
+| debpalash/VoiceStudio | voice desktop app | Same engine + plugin patterns as `voice/` (Rounds 5–6); UI-bound. |
+| CorentinJ/Real-Time-Voice-Cloning | voice cloning | Cloning already covered (consent gate); legacy toolchain. |
+| myshell-ai/OpenVoice | voice cloning | Clone + tone-color conversion → same consent-gated clone contract. |
+| babysor/MockingBird | voice cloning | Legacy cloning; superseded by consent-gated engines above. |
+| ATH-MaaS/Pixelle-Video | media gen pipeline | Same staged-pipeline pattern as pyvideotrans/OpenCreator. |
+| nari-labs/dia | TTS dialogue | Multi-speaker dialogue → covered by multi-speaker registry pattern. |
+| neonbjb/tortoise-tts | TTS | Slow legacy engine; adds nothing to the engine-adapter design. |
+| supertone-oss-archive/supertonic | TTS | On-device tier idea already captured (ONNX tiers). |
+| SparkAudio/Spark-TTS | TTS + cloning | Same streaming + consent-gated clone contract. |
+| mozilla/TTS | TTS toolkit | Legacy toolkit; engine-adapter pattern already captured. |
+| kyutai-labs/pocket-tts | streaming TTS | Streaming chunk protocol already captured (edge-tts/VoxCPM). |
+| jianchang512/clone-voice | cloning tool | Consent-gated clone pattern already captured. |
+| fishaudio/Bert-VITS2 | TTS training | Training-centric; not adoptable in core. |
+| santinic/audiblez | ebook→audio | Same batch pipeline as ebook2audiobook (now covered). |
+| netease-youdao/EmotiVoice | TTS emotion | Emotion/conditioning covered by Chatterbox/Zonos. |
+| Blaizzy/mlx-audio | Apple-silicon audio | Platform-specific runtime; not portable to the base-URL abstraction. |
+| Plachtaa/VALL-E-X | TTS | Legacy; engine-adapter pattern already captured. |
+| jaywalnut310/vits | TTS research | Research model; training-centric. |
+| jianchang512/ChatTTS-ui | ChatTTS frontend | UI over AGPL/NC engine — avoid on license grounds. |
+| hiyouga/LlamaFactory | LLM fine-tuning | Training infra; no product relevance to the agent runtime. |
+| rasbt/LLMs-from-scratch | education | Learning material; no code to adopt. |
+| microsoft/generative-ai-for-beginners | education | Course repo; pattern docs only (agents course already mined in Round 5). |
+| Snailclimb/JavaGuide | education (Java) | No relevance (non-Python, no agent patterns). |
+| unslothai/unsloth | LLM fine-tuning | Training/fine-tuning infra; not adopted. |
+| career-ops-hq/career-ops | niche web tool | Out of product scope. |
+| blogminhquy/javis-os | UI experiment | Idle; cosmetic only; no new patterns. |
+
+### Round 6 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Capability enum + `ModelProfile` size/device tiers in ModelGateway | `providers/model_gateway.py` | S | low |
+| One `voice/` provider adapter normalizing all TTS/STT to `/v1/audio/speech` | `voice/`, `runtime/protocols/` | M | med |
+| Consent-gated clone tool (approval → reference hash → embedding id in memory) | `voice/`, `security/*`, `memory/` | M | low |
+| Emotion/prosody structured field (`speech_style` + tag grammar) | `runtime/protocols/`, `voice/` | S | low |
+| TTS watermark status surfaced on BusEvents for provenance | `runtime/event_bus.py` | S | low |
+| VAD segmenter (hop/energy-centroid) producing bounds without storing audio | `voice/` | M | low |
+| Entry-point-style plugin discovery for tools, loaded only via ToolExecutionService | `runtime/protocols/`, `tools/*` | M | low |
+| TET data-provider abstraction (`transform_query/extract/transform`) | `core/harness/*` | M | low |
+| Staged media pipelines as `tools/*` with per-stage BusEvents + retry semantics | `tools/*`, `runtime/event_bus.py` | M | low |
+
+**License tiers (Round 6):**
+| Tier | Repos |
+|---|---|
+| **Permissive** | chatterbox, Zonos, moonshine (MIT), OmniVoice, PaddleSpeech, OpenBB, ebook2audiobook, OpenCreator |
+| **Copyleft** | coqui-ai/TTS (MPL-2.0 code), voice-pro (GPL-3.0), pyvideotrans (GPL-3.0) |
+| **Weight-restricted / Non-standard** | Coqui XTTS weights (CPML, non-commercial), moonshine legacy non-English (Community License) |
+| **Dual poison (avoid)** | ChatTTS (AGPL-3.0 + CC BY-NC) |
+
+**Round 6 index (12 deep + 26 triaged):** coqui-ai/TTS, chatterbox, Zonos, ChatTTS, moonshine, OmniVoice, voice-pro, PaddleSpeech, OpenBB, pyvideotrans, ebook2audiobook, OpenCreator — plus triage table above.
