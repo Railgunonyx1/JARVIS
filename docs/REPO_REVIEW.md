@@ -1182,3 +1182,140 @@ All tests green, lint clean. Comprehensive voice/STT/TTS/S2S + agent frameworks 
 **Round 4 index (8 repos):** voltagent, agency-agents, readest, pot-desktop, edge-tts, piper, NVIDIA-NeMo/Speech, VoxCPM.
 
 > Housekeeping: the working tree also carried an uncommitted browser-repo block with 4 sections duplicated from Section A (`rote`, `openbrowse`, `WebFurl`, `browser-memory`) and a deleted `## B.` header; both were repaired in this batch.
+
+---
+
+# Round 5
+
+## T. Voice assistants & wake-word
+
+### wzpan/wukong-robot (MIT) — *backlog listed as `wukong-robot/wukong-robot`; org URL 404s*
+- **Two-engine hotword abstraction** (`detector.py` picks porcupine vs snowboy) → `voice.WakeWordBackend` interface. → `voice/` · M/low.
+- **Plugin loader** (`pkgutil.walk_packages` over plugin/contrib/custom paths; `Plugin` class, `SLUG` dedup, enable/disable config, `PRIORITY` sort). → `skills/`, tool registry · M/med.
+- **Snowboy PASSIVE→ACTIVE FSM** (ring buffer, silence threshold, recording timeout, detected callback). → `voice/` · S/low.
+- **Barge-in** — `interrupt()` aborts TTS when re-woken; emit a BusEvent-driven cancel. → `voice/`, `runtime/event_bus.py` · S/low.
+- **Tunables** (sensitivity, silent_threshold, AEC) to cut false wake. → `voice/` · S/low.
+- *Avoid:* `load_module()` executes arbitrary plugin code (needs sandbox + `security/code_scan.py`); detectors call `activeListen()/doResponse()` directly — bypasses the single tool boundary.
+
+### kalliope-project/kalliope (GPL-3.0 → ideas only)
+- **Explicit FSM states + lifecycle hooks** (`Order.py`: starting_trigger → waiting → analysing; `HookManager.on_triggered/on_start_listening`). → `voice/` · M/low.
+- **Signal abstraction** — any input source (order/MQTT/GPIO/schedule) binds to skills. → `runtime/event_bus.py`, intent router · M/med.
+- **Trigger pause/"deaf" mode** during TTS + `skip_trigger`/`max_retry` follow-up window (multi-turn without re-wake). → `voice/` · S/med.
+- **Pluggable STT/TTS/trigger factories** selected by `settings.yml` → provider registry over one base URL. → `voice/`, `providers/` · M/low.
+- **`Cortex` last-order key/value memory**. → session memory · S/low.
+- *Avoid:* GPL-3.0 copyleft — clean-room reimplement; YAML-driven neuron execution bypasses the tool boundary; global singletons.
+
+### NaomiProject/Naomi (MIT)
+- **ABC plugin base classes** (STT/TTS/VAD/SpeechHandler) + `info` metadata dict + `GenericPlugin` auto-prompt for missing settings. → `voice/`, `runtime/protocols/` · M/low.
+- **`VADPlugin`** voice-activity detection (timeout / minimum_capture / padding frames). → `voice/` · M/med.
+- **sync/async mic abstraction** → cross-platform audio I/O. → `voice/` · M/med.
+- **TTI intent templates** with `{}` keyword slots + WER fuzzy `match_phrase`. → `skills/` intent match · M/low.
+- **Compiled-vocabulary caching** keyed on phrases. → `voice/` · S/low.
+- *Avoid:* `main_loop()/handleForever` dispatches intents straight to handlers (no ToolExecutionService); WER fuzzy matching can mis-route — gate with `verification.py`.
+
+### thevickypedia/Jarvis (MIT)
+- **Executor registry** — keyword→executor fns + `word_match.py` trigger matching. → `tools/*`, `skills/*` · M/med.
+- **Tuned SpeechRecognition params** (energy/pause/non_speaking thresholds) as mic calibration. → `voice/` · S/low.
+- **Hotword (porcupine) + offline fallback** (`recognize_sphinx`). → `voice/` · M/med.
+- **FastAPI + Bearer-token auth** for remote control. → `runtime/protocols/` · M/low.
+- **retry/timeout + background_task + crontab** modules. → `tools/*`, scheduler · M/low.
+- *Avoid:* API endpoints run system commands with a stored ROOT_PASSWORD (boundary bypass + fail-open without auth); `recognize_google` ships audio to cloud by default; broad retry-except loops hide failures.
+
+## U. Local TTS engine candidates (`voice/`)
+
+> Streaming-first engines behind ONE OpenAI-compatible `/v1/audio/speech` base URL. Every clone path must be **consent-gated and fail-closed** (invariant 9).
+
+### FunAudioLLM/CosyVoice (Apache-2.0)
+Bi-streaming adapter (~150ms); `zero_shot/cross_lingual/sft/instruct` modes → OpenAI `voice`+extra; 300M/0.5B size tiers routed by device; vLLM/TensorRT backend optional. → `voice/`, `providers/model_gateway.py` · M/low–med.
+*Avoid:* training stacks in prod; raw reference audio in responses/logs.
+
+### QwenLM/Qwen3-TTS (Apache-2.0)
+Dual-track streaming (single-char first packet); unified `/v1/audio/speech` + speaker registry; VoiceDesign→clone stored as **hashes only** in `memory/*`; 0.6B/1.7B tiers. → `voice/`, `providers/model_gateway.py` · M/low–med.
+*Avoid:* unconsented reuse of voice-design outputs; training pipelines.
+
+### myshell-ai/MeloTTS (Apache-2.0)
+Lightweight chunked-synthesis wrapper; minimal `/v1/audio/speech` shim; centralized language/speaker registry; CPU-friendly small tier. → `voice/`, `providers/model_gateway.py` · S/low.
+
+### index-tts/index-tts (Apache-2.0)
+Streaming adapter with sentence/phoneme boundary tracking; OpenAI-compatible surface; strict consent (token + reference hash + purpose, no cross-session reuse without re-consent); size tiers + latency-aware routing. → `voice/`, `security/*`, `memory/authority.py` · M/low–med.
+
+### KittenML/KittenTTS (code Apache-2.0; **weights = Stellon Labs Community License**)
+ONNX CPU tiers (15M/40M/80M, 25–80 MB); sentence-aware `generate_stream` with seam fades; 5–30s zero-shot clone behind consent; device-tier autodetect; expression markup tags. → `voice/backends`, `providers/model_gateway.py` · M/low–med.
+*Avoid:* KittenTTS 2 weights without per-model license review; promising token-level latency (it is chunk-level).
+
+### SWivid/F5-TTS (code MIT; **weights CC-BY-NC**)
+`/v1/audio/speech`-shaped handler over `f5-tts_infer-cli`; prompt-based zero-shot behind consent gate; RTF-driven GPU tiers; ONNX/MLX CPU port reference; sentence-chunk streaming. → `runtime/protocols/`, `voice/` · M/low–med.
+*Avoid:* CC-BY-NC weights in any shipped product; Triton/TensorRT infra (SLO reference only).
+
+### fishaudio/fish-speech (**Fish Audio Community License** — hosted-API use needs separate license)
+Adopt their consent clause (no impersonation without consent, no watermark removal, bind downstream users) as JARVIS cloning policy; first-audio SLO (~100ms) as a gateway budget; unified prosody-tag grammar; speaker-ID-in-text. → `security/consent`, `voice/` · S/low–med.
+*Avoid:* exposing JARVIS as a third-party TTS API; training on outputs; S2-Pro research weights.
+
+### RVC-Boss/GPT-SoVITS (MIT)
+Existing `api.py`/`api_v2.py` normalized to one OpenAI base URL; two-tier voice registry (zero-shot 5s vs fine-tuned 1min) with per-voice consent provenance; RTF tier table (0.526 CPU vs 0.028 GPU); version-pin voices. → `runtime/protocols/`, `voice/registry` · M/med.
+*Avoid:* embedding the training stack (conda/UVR5/FunASR/flash-attn/Docker) in-tree — keep fine-tuning out-of-process; unbounded cloning.
+
+## V. Agent patterns, autonomous research & JARVIS-named repos
+
+### microsoft/ai-agents-for-beginners (MIT — pattern docs, not code)
+- **Planning as an explicit Harness phase** (plan BusEvent → execute → verify) rather than implicit in the loop. → `core/harness/*` · S/low.
+- **Metacognition loop** — self-question/critique/refine observation feeding VERIFYING→RECOVERING. → `core/agent/loop.py`, `core/agent/verification.py` · M/low.
+- **Trustworthy-agent checklist** (grounding audit, tool-input validation, prompt-injection defenses) as a gap checklist against `security/code_scan.py`. → `security/*` · S/low.
+- **Agentic RAG** — query rewrite + self-reflective retrieval/retry before declaring empty. → `memory/*` · M/med.
+- **Context assembly pipeline** (system / tool defs / working memory / retrieved) as an explicit, testable step. → `memory/keyspace.py`, `core/harness/*` · M/low.
+- *Avoid:* hard coupling to Microsoft Agent Framework / Foundry — do not import.
+
+### karpathy/autoresearch (MIT) — *highest signal*
+- **`program.md` as a lightweight skill** programming the research org (not the code) → a `self_improvement` skill. → `skills/*` · S/low.
+- **Keep/discard git-branch loop** — experiment on a branch, log metric to TSV, advance else `git reset`; a concrete self-improvement/eval loop. → `core/harness/*`, `memory/*` · M/med.
+- **Fixed wall-clock budget per experiment** for comparable eval runs. → `core/harness/*`, `benchmark/` · S/low.
+- **Single-file edit scope** — agent may modify only its own skill/prompt files, never `ToolExecutionService`/executor (safe self-modification contract). → `skills/*`, `security/*` · M/low.
+- **Simplicity criterion** — "equal metric + simpler code = win" as a verification preference. → `core/agent/verification.py` · S/low.
+- **Structured metric extraction** (`grep "^val_bpb:"`) instead of dumping noisy logs into context. → `core/agent/tool_service.py` · S/low.
+- *Avoid:* "NEVER STOP / disable all permissions" autonomy — violates invariant 9; loops must still gate high/critical actions.
+
+### nexu-io/open-design (Apache-2.0)
+- **Skills as portable `SKILL.md` directories** with catalog discovery (validates our registry format). → `skills/*` · S/low.
+- **Live-file MCP exposure, not stale exports** — MCP adapter surfaces live BusEvent/memory state, never snapshots; still routed through ToolExecutionService. → `runtime/protocols/` · M/med.
+- **One adapter contract with shared streaming/cancellation** for every runtime → one provider-adapter contract in ModelGateway. → `providers/model_gateway.py` · M/low.
+- **SSRF guard at the edge** — block RFC1918/link-local/CGNAT/metadata IPs, drop malformed entries; reinforces `BrowserNetworkPolicy` + bridge loopback posture. → `security/*`, `jbrowser/network.py` · S/low.
+- *Avoid:* their "external CLI is the engine, no kernel shipped" model is the inverse of JARVIS; preserve NOTICE if any code copied.
+
+### alexylem/jarvis (MIT)
+- **One-shot CLI verbs** (`-x "order"` direct-execute, `-l` listen-once) → `jarvis run "intent"` non-interactive. → `cli/*` · S/low.
+- **`-j` JSON output mode** — machine-readable output alongside the TUI. → `cli/*` · S/low.
+- **`-b` background daemon + menu** — detached, survives terminal close (cf. Orbit launcher single-instance lock). → `cli/*`, `orbit/*` · M/med.
+- **Conversation-mode toggle** (`-c`) as an explicit Harness mode affecting memory writes. → `core/harness/*`, `memory/*` · S/low.
+- *Avoid:* `-p https://…` installs and runs remote plugin code — fail-open install is exactly the boundary-bypass pattern the no-bypass architecture test forbids.
+
+### affaan-m/JARVIS (**NO LICENSE — all rights reserved; ideas only, do not copy**)
+- **Graceful-degradation service registry** — `GET /api/services` reports configured capabilities; JARVIS should expose a provider capability report in `cli/status`. → `providers/model_gateway.py`, `cli/*` · S/low.
+- **SSE streaming of incremental results** as observations land (BusEvent streaming, no new event type). → `runtime/event_bus.py`, `cli/*` · M/low.
+- **Browser-agent fan-out swarm** — parallel tabs per research target under tab-ownership locks. → `orbit/*`, `skills/*` · L/med.
+- **Staged pipeline orchestrator** (capture → research → synthesize) with per-stage fallback. → `core/harness/*` · M/low.
+- *Avoid:* **everything in code** (unlicensed) and its facial-recognition / account-pool stack (ethically toxic); never let degradation touch *consent* — permissions stay fail-closed.
+
+### Round 5 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Wake-word FSM + `info`-dict plugin metadata as BusEvent fields | `voice/`, `runtime/event_bus.py` | M | low |
+| One provider-ABC per capability (STT/TTS/VAD) over the base URL | `voice/`, `providers/model_gateway.py` | M | med |
+| Consent-gate every voice-clone path (token + reference hash + audit) | `security/*`, `memory/authority.py` | M | low |
+| Voice engine capability matrix + size/device tiers | `providers/model_gateway.py`, `voice/` | S | low |
+| `program.md`-style self-improvement skill + keep/discard eval loop | `skills/*`, `core/harness/*` | M | med |
+| Safe self-modification: agent edits only its own skill/prompt files | `skills/*`, `security/*` | M | low |
+| Metacognition self-critique feeding the verification gate | `core/agent/verification.py` | M | low |
+| SSRF/network edge-hardening audit | `security/*`, `jbrowser/network.py` | S | low |
+| Provider capability report + fallback chain | `providers/model_gateway.py`, `cli/*` | M | med |
+| One-shot / JSON CLI verbs | `cli/*` | S | low |
+
+**License tiers (Round 5):**
+| Tier | Repos |
+|---|---|
+| **Permissive** | wukong-robot, Naomi, thevickypedia/Jarvis, CosyVoice, Qwen3-TTS, MeloTTS, index-tts, KittenTTS (code), F5-TTS (code), GPT-SoVITS, ai-agents-for-beginners, autoresearch, open-design, alexylem/jarvis |
+| **Copyleft** | kalliope (GPL-3.0) |
+| **Weight-restricted / Non-standard** | KittenTTS 2 weights, F5-TTS weights (CC-BY-NC), fish-speech (Community License) |
+| **No license (do not reuse)** | affaan-m/JARVIS |
+
+**Round 5 index (17 repos):** wukong-robot (wzpan), kalliope, Naomi, thevickypedia/Jarvis, CosyVoice, Qwen3-TTS, MeloTTS, index-tts, KittenTTS, F5-TTS, fish-speech, GPT-SoVITS, microsoft/ai-agents-for-beginners, karpathy/autoresearch, nexu-io/open-design, alexylem/jarvis, affaan-m/JARVIS.

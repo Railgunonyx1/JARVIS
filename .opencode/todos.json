@@ -166,7 +166,7 @@
   },
   {
     "content": "Review RVC-Boss/GPT-SoVITS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -206,7 +206,7 @@
   },
   {
     "content": "Review fishaudio/fish-speech and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -231,12 +231,12 @@
   },
   {
     "content": "Review index-tts/index-tts and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review QwenAudio/CosyVoice and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -266,12 +266,12 @@
   },
   {
     "content": "Review KittenML/KittenTTS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review SWivid/F5-TTS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -286,7 +286,7 @@
   },
   {
     "content": "Review QwenLM/Qwen3-TTS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -386,7 +386,7 @@
   },
   {
     "content": "Review myshell-ai/MeloTTS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -401,7 +401,7 @@
   },
   {
     "content": "Review nexu-io/open-design and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -411,7 +411,7 @@
   },
   {
     "content": "Review karpathy/autoresearch and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -461,7 +461,7 @@
   },
   {
     "content": "Review microsoft/ai-agents-for-beginners and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -516,27 +516,27 @@
   },
   {
     "content": "Review wukong-robot/wukong-robot and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review kalliope-project/kalliope and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review NaomiProject/Naomi and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review alexylem/jarvis and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review affaan-m/JARVIS and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -546,7 +546,7 @@
   },
   {
     "content": "Review thevickypedia/Jarvis and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
