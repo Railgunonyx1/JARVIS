@@ -6,23 +6,24 @@ import logging
 import re
 from pathlib import Path
 
+from security.credentials import CREDENTIAL_SIGNATURES
 from tools.schema import ToolResult, tool_result, truncate
 
 logger = logging.getLogger("jarvis.tools.security")
 
 _MAX_OUTPUT = 8000
 
-# Patterns that look like hardcoded secrets
+# Patterns that look like hardcoded secrets. The first block covers generic
+# assignment-shaped leaks (key = "value"); the second block is the shared
+# vendor-signature table from security.credentials so file scans and the
+# redaction pass agree on what a credential looks like.
 _SECRET_PATTERNS = [
     (re.compile(r"(?:api[_-]?key|apikey)\s*[=:]\s*['\"]([A-Za-z0-9+/=_-]{16,})['\"]", re.I), "API key"),
     (re.compile(r"(?:secret|password|passwd|pwd)\s*[=:]\s*['\"]([^'\"]{8,})['\"]", re.I), "Secret/password"),
     (re.compile(r"(?:token|access_token|auth_token)\s*[=:]\s*['\"]([A-Za-z0-9+/=_-]{16,})['\"]", re.I), "Token"),
     (re.compile(r"(?:aws_access_key_id)\s*[=:]\s*['\"]([A-Z0-9]{20})['\"]", re.I), "AWS key"),
     (re.compile(r"(?:private_key)\s*[=:]\s*['\"]-----BEGIN", re.I), "Private key"),
-    (re.compile(r"sk-[A-Za-z0-9]{20,}", re.I), "OpenAI/Anthropic key"),
-    (re.compile(r"ghp_[A-Za-z0-9]{36}", re.I), "GitHub token"),
-    (re.compile(r"xox[bpas]-[A-Za-z0-9-]+", re.I), "Slack token"),
-]
+] + CREDENTIAL_SIGNATURES
 
 # Files/dirs to skip
 _SKIP_DIRS = {

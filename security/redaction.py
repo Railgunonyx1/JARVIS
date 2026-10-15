@@ -57,7 +57,13 @@ def redact_sensitive(text: str) -> str:
     """Replace sensitive content in `text` with [REDACTED]."""
     if not text:
         return text
-    out = text
+    from security.credentials import redact_credential_leaks
+
+    # Precise, vendor-signed formats first so the leak is labelled and the
+    # surrounding sentence stays readable. The blunt patterns below then catch
+    # anything the signature table deliberately skips (bare long tokens, card
+    # numbers, emails, phones).
+    out = redact_credential_leaks(text)
     for pat in _PATTERNS:
         out = pat.sub("[REDACTED]", out)
     for secret in _configured_secrets():
