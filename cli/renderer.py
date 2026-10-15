@@ -42,7 +42,7 @@ from .models import (
     Plan,
     StepStatus,
 )
-from .theme import COLORS, BoxStyles, build_rich_theme, get_symbols
+from .theme import COLORS, BoxStyles, build_rich_theme, get_symbols, unicode_supported
 
 # Lazy-loaded to save ~1.7s cold-start (rich.markdown imports pygments)
 _Markdown = None
@@ -99,10 +99,10 @@ class Renderer:
     All other methods are building blocks.
     """
 
-    def __init__(self, console: Console | None = None, unicode: bool = True) -> None:
+    def __init__(self, console: Console | None = None, unicode: bool | None = None) -> None:
         self.console = console or Console(theme=build_rich_theme(), highlight=False, emoji=False)
         self.layout_mgr = LayoutManager(self.console)
-        self.symbols = get_symbols(unicode)
+        self.symbols = get_symbols(unicode if unicode is not None else unicode_supported())
         self.state = AppState()
         self._live_display = None
         self._streaming_text: str = ""

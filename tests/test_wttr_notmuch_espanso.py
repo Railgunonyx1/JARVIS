@@ -132,10 +132,10 @@ class FakeIMAPConn:
     def fetch(self, mid, spec):
         assert "HEADER.FIELDS" in spec  # headers only, never bodies
         raw = (
-            f"From: Ada Lovelace <ada@analytical.example>\r\n"
-            f"Subject: =?utf-8?q?Encod=C3=A9d_subject?=\r\n"
-            f"Date: Tue, 22 Sep 2026 10:00:00 +0000\r\n"
-        ).encode()
+            b"From: Ada Lovelace <ada@analytical.example>\r\n"
+            b"Subject: =?utf-8?q?Encod=C3=A9d_subject?=\r\n"
+            b"Date: Tue, 22 Sep 2026 10:00:00 +0000\r\n"
+        )
         return ("OK", [(b"1", raw)])
 
     def logout(self):

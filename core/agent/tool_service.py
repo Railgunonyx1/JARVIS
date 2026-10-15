@@ -118,7 +118,7 @@ class ToolExecutionService:
                 lines = [
                     f"ERROR: {error}",
                     "",
-                    f"YOUR ORIGINAL ARGUMENTS (invalid JSON):",
+                    "YOUR ORIGINAL ARGUMENTS (invalid JSON):",
                     raw_snippet or "(not captured)",
                     "",
                     "Fix the JSON — close all quotes/brackets, escape newlines as \\n",

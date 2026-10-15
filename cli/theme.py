@@ -7,6 +7,7 @@ green ok, yellow warn, red err, magenta provider, dim metadata).
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 from rich.box import DOUBLE, HEAVY, MINIMAL, ROUNDED, SIMPLE
@@ -156,3 +157,26 @@ SYMBOLS_ASCII = {
 
 def get_symbols(unicode_supported: bool = True) -> dict[str, str]:
     return SYMBOLS if unicode_supported else SYMBOLS_ASCII
+
+
+def encoding_supports_unicode(encoding: str | None) -> bool:
+    """True when *encoding* can represent every preferred symbol verbatim."""
+    if not encoding:
+        return False
+    try:
+        "".join(SYMBOLS.values()).encode(encoding)
+    except (UnicodeEncodeError, LookupError):
+        return False
+    return True
+
+
+def unicode_supported(stream=None) -> bool:
+    """True when the output *stream* (default stdout) can render our glyphs.
+
+    A Windows console defaults to an OEM/ANSI code page (cp437/cp1252) that
+    cannot encode box-drawing characters or these symbols. Writing them anyway
+    is what produces the mojibake (UTF-8 bytes rendered as cp1252) the TUI is
+    known for, so callers use this to pick the ASCII fallback instead.
+    """
+    stream = stream if stream is not None else sys.stdout
+    return encoding_supports_unicode(getattr(stream, "encoding", None))

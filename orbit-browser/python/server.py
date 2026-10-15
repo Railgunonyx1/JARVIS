@@ -30,9 +30,14 @@ sys.path.insert(0, str(ROOT))
 try:
     import websockets
     from websockets.server import serve
-except ImportError:
-    print("ERROR: websockets not installed. Run: pip install websockets")
-    sys.exit(1)
+except ImportError as _ws_exc:
+    # Keep the friendly message when run as a CLI, but never sys.exit() on
+    # import: a missing optional dependency must not kill the interpreter of
+    # whatever imports this module (e.g. pytest collecting test_bridge_security).
+    if __name__ == "__main__":
+        print("ERROR: websockets not installed. Run: pip install websockets")
+        sys.exit(1)
+    raise ImportError("websockets is required: pip install websockets") from _ws_exc
 
 
 # ── Configuration ──────────────────────────────────────────────────
@@ -65,7 +70,7 @@ def _resolve_token() -> str | None:
     if tok:
         return tok
     try:
-        with open(_TOKEN_FILE, "r", encoding="utf-8") as fh:
+        with open(_TOKEN_FILE, encoding="utf-8") as fh:
             tok = fh.read().strip()
         return tok or None
     except OSError:
@@ -304,7 +309,7 @@ class JarvisBridge:
             timeout = max(ack_deadline - loop.time(), 0.01) if not acked else None
             try:
                 ev = await asyncio.wait_for(events.get(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Deadline decision is over whether or not we acked — stop
                 # computing short timeouts (a 10ms poll loop otherwise spins
                 # between late deltas for the rest of the turn).

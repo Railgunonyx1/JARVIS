@@ -5,10 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
-
 
 KEY_FILES = [
     "README.md",
@@ -33,7 +31,7 @@ SIGNAL_DIRS = [
 ]
 
 
-def first_existing(root: Path, names: List[str]) -> Optional[Path]:
+def first_existing(root: Path, names: list[str]) -> Path | None:
     for name in names:
         candidate = root / name
         if candidate.exists():
@@ -41,7 +39,7 @@ def first_existing(root: Path, names: List[str]) -> Optional[Path]:
     return None
 
 
-def scan_repo(root: Path) -> Dict[str, object]:
+def scan_repo(root: Path) -> dict[str, object]:
     if not root.exists():
         raise FileNotFoundError(f"Repository path does not exist: {root}")
 
@@ -50,14 +48,14 @@ def scan_repo(root: Path) -> Dict[str, object]:
     detected_dirs = [name for name in SIGNAL_DIRS if (root / name).exists()]
     readme = first_existing(root, ["README.md", "README"])
 
-    warnings: List[str] = []
+    warnings: list[str] = []
     if readme is None:
         warnings.append("No README file was found at the repository root.")
     if not detected_files:
         warnings.append("No common environment or packaging files were detected.")
 
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "repo_path": str(root.resolve()),
         "readme_path": str(readme.resolve()) if readme else None,
         "detected_files": detected_files,

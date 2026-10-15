@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools import build_default_registry  # noqa: E402
-from tools.agenda_view import _expand_rrule, _parse_events  # noqa: E402
 from tools import agenda_view as ag  # noqa: E402
+from tools import build_default_registry  # noqa: E402
 from tools import doc_retrieval as dr  # noqa: E402
+from tools.agenda_view import _expand_rrule, _parse_events  # noqa: E402
 
 
 @pytest.fixture()

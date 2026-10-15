@@ -150,9 +150,11 @@ class InputReader:
     def read_line(self, prompt: str = PROMPT_TEXT) -> str:
         """Read one command line with editing + history. Raises
         ``KeyboardInterrupt`` on Ctrl+C and ``EOFError`` on Ctrl+Z/EOF."""
+        if self._raw_key_source:
+            return self._read_raw(prompt)
         if sys.platform != "win32":
             return self._read_fallback(prompt)
-        if self._raw_key_source or _stdin_is_tty():
+        if _stdin_is_tty():
             return self._read_raw(prompt)
         return self._read_plain(prompt)
 

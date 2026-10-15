@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from memory.consolidation import find_duplicate, is_tombstone, jaccard
+from memory.consolidation import find_duplicate, jaccard
 from memory.controller import MemoryController
 from memory.metadata import MetadataStore
 from memory.models import MemoryItem

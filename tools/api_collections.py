@@ -65,7 +65,7 @@ def _interpolate(text: str, vars: dict[str, str]) -> str:
     Secret values sourced from the environment are consumed for the request
     but never echoed back in results (only status/size are reported).
     """
-    def repl(m: "re.Match[str]") -> str:
+    def repl(m: re.Match[str]) -> str:
         name = m.group(1)
         if name in vars:
             return str(vars[name])

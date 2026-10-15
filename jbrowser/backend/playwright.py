@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -107,7 +108,11 @@ class PlaywrightBackend(BrowserBackend):
             return self._playwright_ok
         self._checked = True
         try:
-            import playwright.sync_api as _p
+            # Prefer an already-imported module so test/hermetic injections of
+            # ``playwright.sync_api`` (without its parent package) resolve.
+            _p = sys.modules.get("playwright.sync_api")
+            if _p is None:
+                import playwright.sync_api as _p
             # Start-and-KEEP one driver instance. We must NOT open/close a
             # `with sync_playwright()` here: that stops the process-wide sync
             # driver, so the real launch later fails with "Event loop closed".
@@ -475,7 +480,7 @@ class PlaywrightBackend(BrowserBackend):
         older snapshot raises RuntimeError("STALE_HANDLE ...") — the agent
         must re-read the page rather than risk clicking the wrong element.
         """
-        from jbrowser.page_context import parse_handle, _SELECTOR
+        from jbrowser.page_context import _SELECTOR, parse_handle
         parsed = parse_handle(handle)
         if parsed is None:
             raise RuntimeError(f"invalid element handle: {handle}")

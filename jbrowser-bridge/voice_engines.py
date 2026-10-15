@@ -279,15 +279,15 @@ def _multipart(fields: dict[str, str], filename: str, blob: bytes,
         chunks.append(
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'
-            .encode("utf-8")
+            .encode()
         )
     chunks.append(
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-        f"Content-Type: {mime}\r\n\r\n".encode("utf-8")
+        f"Content-Type: {mime}\r\n\r\n".encode()
     )
     chunks.append(blob)
-    chunks.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+    chunks.append(f"\r\n--{boundary}--\r\n".encode())
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 

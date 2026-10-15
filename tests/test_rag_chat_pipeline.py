@@ -26,8 +26,9 @@ sys.path.insert(0, str(ROOT))
 BRIDGE_DIR = ROOT / "jbrowser-bridge"
 sys.path.insert(0, str(BRIDGE_DIR))
 
-from server import serve  # noqa: E402
 import rag  # noqa: E402
+from server import serve  # noqa: E402
+
 from tools import doc_retrieval as dr  # noqa: E402
 
 PROJECT = __import__("core.project", fromlist=["ProjectContext"]).ProjectContext

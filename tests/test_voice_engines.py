@@ -23,7 +23,6 @@ if str(_BRIDGE) not in sys.path:
 import voice  # noqa: E402
 import voice_engines as ve  # noqa: E402
 
-
 # ── Inventory ───────────────────────────────────────────────────────────
 
 def test_tts_inventory_covers_every_named_engine():

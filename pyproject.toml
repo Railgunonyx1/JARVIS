@@ -3,7 +3,7 @@ name = "jarvis1"
 version = "0.1.0"
 description = "JARVIS MK-X — Autonomous Engineering Agent"
 requires-python = ">=3.11"
-license = "MIT"
+license = { text = "Proprietary — All Rights Reserved" }
 
 [tool.uv.workspace]
 members = ["packages/*", "plugins/*", "apps/*", "vendor/*"]

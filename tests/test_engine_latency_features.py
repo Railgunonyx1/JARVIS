@@ -11,6 +11,7 @@ BRIDGE_DIR = Path(__file__).resolve().parent.parent / "jbrowser-bridge"
 if str(BRIDGE_DIR) not in sys.path:
     sys.path.insert(0, str(BRIDGE_DIR))
 
+import engine as engine_mod  # noqa: E402
 from engine import (  # noqa: E402
     _RESPONSE_CACHE,
     Budget,
@@ -19,7 +20,6 @@ from engine import (  # noqa: E402
     _response_cache_key,
     _response_cache_put,
 )
-import engine as engine_mod  # noqa: E402
 
 
 def _arm_sticky(name):

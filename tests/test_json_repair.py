@@ -79,7 +79,6 @@ class TestToolServiceEnforcement:
 
     @pytest.mark.asyncio
     async def test_marked_call_rejected_as_malformed(self):
-        import asyncio
 
         from core.agent.permissions import PermissionEngine
         from core.agent.state import FailureClass

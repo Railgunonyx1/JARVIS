@@ -7,8 +7,6 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
-
 
 CODE_BLOCK_RE = re.compile(r"```(?P<lang>[^\n`]*)\n(?P<body>.*?)```", re.DOTALL | re.IGNORECASE)
 # Bare ">" is deliberately excluded: it marks markdown blockquotes (prose),
@@ -39,8 +37,8 @@ COMMAND_PREFIXES = (
 )
 
 
-def collect_headings(readme_text: str) -> List[Dict[str, object]]:
-    headings: List[Dict[str, object]] = []
+def collect_headings(readme_text: str) -> list[dict[str, object]]:
+    headings: list[dict[str, object]] = []
     offset = 0
     inside_fence = False
     for line in readme_text.splitlines(keepends=True):
@@ -65,8 +63,8 @@ def collect_headings(readme_text: str) -> List[Dict[str, object]]:
     return headings
 
 
-def nearest_heading(headings: List[Dict[str, object]], offset: int) -> Optional[str]:
-    current: Optional[str] = None
+def nearest_heading(headings: list[dict[str, object]], offset: int) -> str | None:
+    current: str | None = None
     for heading in headings:
         if int(heading["offset"]) > offset:
             break
@@ -74,7 +72,7 @@ def nearest_heading(headings: List[Dict[str, object]], offset: int) -> Optional[
     return current
 
 
-def infer_section_category(section: Optional[str]) -> Optional[str]:
+def infer_section_category(section: str | None) -> str | None:
     if not section:
         return None
     lowered = section.lower()
@@ -92,7 +90,7 @@ def infer_section_category(section: Optional[str]) -> Optional[str]:
     return None
 
 
-def infer_section_kind(section: Optional[str]) -> Optional[str]:
+def infer_section_kind(section: str | None) -> str | None:
     if not section:
         return None
     lowered = section.lower()
@@ -128,7 +126,7 @@ SETUP_PREFIXES = (
 ASSET_PREFIXES = ("wget ", "curl ", "mkdir ", "tar ", "unzip ", "7z ", "aria2c ")
 
 
-def classify(command: str, section: Optional[str] = None) -> str:
+def classify(command: str, section: str | None = None) -> str:
     lowered = command.lower().strip()
     # Unambiguous setup/asset syntax outranks generic headings such as
     # "Basic Example", which otherwise makes installation look like inference.
@@ -143,7 +141,7 @@ def classify(command: str, section: Optional[str] = None) -> str:
         if pattern.search(lowered):
             return category
 
-    def any_word(words: List[str]) -> bool:
+    def any_word(words: list[str]) -> bool:
         return any(re.search(rf"\b{re.escape(word)}\b", lowered) for word in words)
 
     if any_word(["infer", "inference", "predict", "generate", "sample", "demo", "transcribe"]) or any(
@@ -159,7 +157,7 @@ def classify(command: str, section: Optional[str] = None) -> str:
     return "other"
 
 
-def command_kind(command: str, section: Optional[str] = None) -> str:
+def command_kind(command: str, section: str | None = None) -> str:
     lowered = command.lower().strip()
     if lowered.startswith(SETUP_PREFIXES):
         return "setup"
@@ -193,9 +191,9 @@ def looks_like_command(line: str) -> bool:
     return False
 
 
-def join_continuations(block: str) -> List[str]:
+def join_continuations(block: str) -> list[str]:
     """Join backslash-continued shell lines into single logical commands."""
-    joined: List[str] = []
+    joined: list[str] = []
     buffer = ""
     for raw_line in block.splitlines():
         line = raw_line.strip()
@@ -210,8 +208,8 @@ def join_continuations(block: str) -> List[str]:
     return joined
 
 
-def clean_lines(block: str) -> List[str]:
-    commands: List[str] = []
+def clean_lines(block: str) -> list[str]:
+    commands: list[str] = []
     for line in join_continuations(block):
         if not line or line.startswith("#"):
             continue
@@ -234,7 +232,7 @@ TRAINING_STRUCTURE_SIGNALS = [
 ]
 
 
-def referenced_python_script(command: str, readme_dir: Path) -> Optional[Path]:
+def referenced_python_script(command: str, readme_dir: Path) -> Path | None:
     matched = PYTHON_ENTRYPOINT_RE.search(command)
     if not matched:
         return None
@@ -249,12 +247,12 @@ def referenced_python_script(command: str, readme_dir: Path) -> Optional[Path]:
     return candidate
 
 
-def training_structure_evidence(script: Path) -> List[str]:
+def training_structure_evidence(script: Path) -> list[str]:
     try:
         content = script.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    evidence: List[str] = []
+    evidence: list[str] = []
     score = 0
     for label, pattern, weight in TRAINING_STRUCTURE_SIGNALS:
         if pattern.search(content):
@@ -263,7 +261,7 @@ def training_structure_evidence(script: Path) -> List[str]:
     return evidence if score >= 4 else []
 
 
-def apply_entrypoint_structure(commands: List[Dict[str, str]], readme_dir: Optional[Path]) -> None:
+def apply_entrypoint_structure(commands: list[dict[str, str]], readme_dir: Path | None) -> None:
     if readme_dir is None:
         return
     for item in commands:
@@ -281,9 +279,9 @@ def apply_entrypoint_structure(commands: List[Dict[str, str]], readme_dir: Optio
         item["classification_evidence"] = evidence
 
 
-def extract_commands(readme_text: str, readme_dir: Optional[Path] = None) -> Dict[str, object]:
-    commands: List[Dict[str, str]] = []
-    warnings: List[str] = []
+def extract_commands(readme_text: str, readme_dir: Path | None = None) -> dict[str, object]:
+    commands: list[dict[str, str]] = []
+    warnings: list[str] = []
     seen = set()
     headings = collect_headings(readme_text)
 
@@ -341,7 +339,7 @@ def extract_commands(readme_text: str, readme_dir: Optional[Path] = None) -> Dic
     if not commands:
         warnings.append("No shell-like commands were extracted from the README.")
 
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
     for item in commands:
         category = item["category"]
         counts[category] = counts.get(category, 0) + 1

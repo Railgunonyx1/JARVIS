@@ -45,15 +45,20 @@ def _get_gpu() -> float:
 def get_system_status() -> dict[str, Any]:
     """Current CPU/RAM/uptime snapshot (cached 2s)."""
     global _cache, _cache_time
+    # Optional (environment-dependent) fields are recomputed on every call so an
+    # unavailable sensor is reflected immediately, even when cpu/ram are cached.
+    temp = _get_cpu_temp()
+    gpu = _get_gpu()
+
     now = time.time()
     if _cache and (now - _cache_time) < _CACHE_TTL:
+        _cache["cpu_temp_c"] = (round(temp, 1) if temp > 0 else None)
+        _cache["gpu_percent"] = (round(gpu, 1) if gpu >= 0 else None)
         return _cache
 
     cpu = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory()
     uptime_s = time.time() - psutil.boot_time()
-    temp = _get_cpu_temp()
-    gpu = _get_gpu()
 
     _cache = {
         "cpu_percent": round(cpu, 1),

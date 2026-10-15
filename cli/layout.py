@@ -20,7 +20,7 @@ from rich.layout import Layout
 from rich.panel import Panel
 from rich.text import Text
 
-from .theme import COLORS, PANEL_TITLES, get_symbols
+from .theme import COLORS, PANEL_TITLES, get_symbols, unicode_supported
 
 
 class LayoutMode(StrEnum):
@@ -75,7 +75,7 @@ class LayoutManager:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
         self.config = LayoutConfig()
-        self._symbols = get_symbols(True)
+        self._symbols = get_symbols(unicode_supported())
         self._force_mode: LayoutMode | None = None
 
     def set_mode(self, mode: str | LayoutMode) -> None:

@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
 import tools as tools_pkg
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent

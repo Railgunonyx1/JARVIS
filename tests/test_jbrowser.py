@@ -866,7 +866,7 @@ class TestElementHandleContract:
         return _FakePage()
 
     def test_handle_roundtrip_through_parse(self):
-        from jbrowser.page_context import parse_handle, is_handle_stale
+        from jbrowser.page_context import is_handle_stale, parse_handle
         parsed = parse_handle("el7_gdeadbeef.42")
         assert parsed == (7, "deadbeef.42")
         assert is_handle_stale("el7_gdeadbeef.42", "deadbeef.42") is False
@@ -877,8 +877,8 @@ class TestElementHandleContract:
 
     def test_backend_resolves_fresh_handle(self):
         """The exact flow that was broken: read -> click on a fresh handle."""
-        from jbrowser.page_context import build_page_context
         from jbrowser.backend.playwright import PlaywrightBackend
+        from jbrowser.page_context import build_page_context
         b = PlaywrightBackend(headless=True)
         page = self._fake_page()
         ctx = build_page_context(page)
@@ -889,8 +889,8 @@ class TestElementHandleContract:
 
     def test_backend_rejects_stale_handle(self):
         """A handle from an older snapshot must raise, not mis-resolve."""
-        from jbrowser.page_context import build_page_context
         from jbrowser.backend.playwright import PlaywrightBackend
+        from jbrowser.page_context import build_page_context
         b = PlaywrightBackend(headless=True)
         page = self._fake_page()
         old = build_page_context(page)
@@ -911,8 +911,8 @@ class TestElementHandleContract:
 
     def test_snapshots_are_per_page_not_global(self):
         """Reading tab B must not invalidate tab A's handles (old global gen)."""
-        from jbrowser.page_context import build_page_context
         from jbrowser.backend.playwright import PlaywrightBackend
+        from jbrowser.page_context import build_page_context
         b = PlaywrightBackend(headless=True)
         page_a, page_b = self._fake_page(), self._fake_page()
         ctx_a = build_page_context(page_a)
@@ -946,7 +946,6 @@ class TestElementHandleContract:
 
         def fake_navigate(url, tab_id=None):
             captured["url"] = url
-            from jbrowser.backend.base import TabInfo
             return TabInfo(tab_id=tab_id, session_id="s_nav",
                            url=url, title="Nav Title", active=True)
 

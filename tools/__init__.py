@@ -6,11 +6,6 @@ wrappers live in core/agent/tools.py; individual tool handlers in tools/*.
 
 from __future__ import annotations
 
-from tools.classification import classify_tool
-from tools.doc_retrieval import doc_search, doc_stats
-from tools.registry import ToolRegistry
-from tools.schema import Tool, ToolResult, tool_result
-
 # NOTE: the *_handler dispatchers at the bottom of this module call these
 # functions. They must be bound at MODULE scope -- importing them inside
 # build_default_registry() leaves the dispatchers with an unbound name, and
@@ -23,6 +18,10 @@ from tools.schema import Tool, ToolResult, tool_result
 # every `from tools import agenda_view as ag` in the codebase.
 from tools import agenda_view as _agenda_view_mod
 from tools import web_archive as _web_archive_mod
+from tools.classification import classify_tool
+from tools.doc_retrieval import doc_search, doc_stats
+from tools.registry import ToolRegistry
+from tools.schema import Tool, ToolResult, tool_result
 
 agenda_add = _agenda_view_mod.agenda_add
 agenda_list = _agenda_view_mod.agenda_list

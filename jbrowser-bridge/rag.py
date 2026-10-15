@@ -260,12 +260,20 @@ def build_context_block(query: str) -> dict | None:
         return None
 
 
+def _rag_enabled() -> bool:
+    import os
+
+    return os.environ.get("JARVIS_RAG", "1").strip().lower() not in {"0", "false", "no", "off", ""}
+
+
 def inject(messages: list[dict]) -> list[dict]:
     """Wrap a chat turn: prepend workspace context when it adds signal.
 
     The returned list is always a NEW list — the caller's thread history is
     never mutated in place.
     """
+    if not _rag_enabled():
+        return messages
     try:
         query = _query_from_messages(messages)
         if not query:

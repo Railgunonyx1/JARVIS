@@ -11,13 +11,10 @@ import string
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import build_default_registry  # noqa: E402
 from tools.quick_compute import calc_safe, convert_base, convert_unit, gen_password  # noqa: E402
-
 
 # ----------------------------------------------------------------- registry
 

@@ -104,9 +104,9 @@ def remote_transfer(args: dict[str, Any]) -> ToolResult:
         return ToolResult(
             success=False,
             error=(
-                f"mode='sync' makes dest identical to source (deletes extraneous "
-                f"dest files). Review first with dry_run=true, then re-run with "
-                f"confirm=true."
+                "mode='sync' makes dest identical to source (deletes extraneous "
+                "dest files). Review first with dry_run=true, then re-run with "
+                "confirm=true."
             ),
         )
 

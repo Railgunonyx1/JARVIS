@@ -29,8 +29,8 @@ Design (per the text-to-speech / speech-to-text skills):
 
 from __future__ import annotations
 
-import io
 import inspect
+import io
 import logging
 import os
 import re

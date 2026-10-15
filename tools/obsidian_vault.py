@@ -134,7 +134,7 @@ def vault_write(args: dict[str, Any]) -> ToolResult:
     if path.is_dir():
         return ToolResult(success=False, error=f"Is a directory: {path}")
     if not path.is_relative_to(_VAULT_ROOT.resolve()):
-        return ToolResult(success=False, error=f"Path is outside the Obsidian vault.")
+        return ToolResult(success=False, error="Path is outside the Obsidian vault.")
     content = str(args.get("content", "") or "")
     overwrite = bool(args.get("overwrite", True))
     if path.exists() and not overwrite:
@@ -337,7 +337,7 @@ def vault_create(args: dict[str, Any]) -> ToolResult:
     return ToolResult(
         success=True,
         output=f"Created note {name}",
-        metadata={"path": name, "title": title, "bytes": len(f"# {title}\n\n".encode("utf-8"))},
+        metadata={"path": name, "title": title, "bytes": len(f"# {title}\n\n".encode())},
     )
 
 

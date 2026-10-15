@@ -7,11 +7,7 @@ monkeypatched for api.run so no real network egress happens.
 
 from __future__ import annotations
 
-import json
 import sys
-import urllib.request
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest

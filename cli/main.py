@@ -22,13 +22,36 @@ from pathlib import Path
 
 _IMPORT_START = time.perf_counter()  # noqa: E402 — must be before heavy imports
 
-# Pipes on Windows default to cp1252, which cannot encode arrows/dashes the
-# cockpit uses — force UTF-8 everywhere with a lossless fallback.
-for _stream in (sys.stdout, sys.stderr):
-    try:
-        _stream.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
+def _configure_output_encoding() -> None:
+    """Make console output Unicode-safe without mojibake.
+
+    Non-Windows terminals are UTF-8, so forcing UTF-8 is safe. On Windows the
+    active code page decides how bytes are *rendered*: writing UTF-8 into a
+    cp1252/cp437 console is exactly what produces the garbled box-drawing and
+    dash glyphs the TUI is known for. So switch the console to UTF-8 (code page 65001)
+    first and only then force UTF-8; if that fails, keep the native encoding
+    and let the ASCII symbol fallbacks carry the UI. ``errors="replace"``
+    guarantees an unencodable glyph never raises.
+    """
+    utf8_ok = sys.platform != "win32"
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            utf8_ok = bool(ctypes.windll.kernel32.SetConsoleOutputCP(65001))
+        except Exception:
+            utf8_ok = False
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            if utf8_ok:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            else:
+                _stream.reconfigure(errors="replace")
+        except Exception:
+            pass
+
+
+_configure_output_encoding()
 
 # Quiet by default: suppress library progress bars / telemetry before any
 # provider is imported (google.generativeai, transformers, huggingface_hub…).

@@ -15,11 +15,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools import build_default_registry  # noqa: E402
-from tools import proactive  # noqa: E402
+from tools import (
+    build_default_registry,  # noqa: E402
+    proactive,  # noqa: E402
+)
 from tools import topic_watch as tw  # noqa: E402
-from tools.schema import ToolResult  # noqa: E402
-
 
 # ------------------------------------------------------------------ fixtures
 
