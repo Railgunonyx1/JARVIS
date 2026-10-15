@@ -100,3 +100,5 @@ quick_fix.py
 path/
 orbit-profile/
 .orbit-profile/
+.coverage
+mypy.ini
