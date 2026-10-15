@@ -115,8 +115,8 @@ class TestLiveCDPChain:
         import asyncio
         payload, read = asyncio.run(run())
         assert payload["success"] is True
-        assert payload["readback"]["page"]["title"] == "Orbit Live"
-        assert "orbit cdp works" in payload["readback"]["page"]["text_preview"]
+        assert (payload.get("observation") or (payload.get("metadata") or {}).get("page") or {})["title"] == "Orbit Live"
+        assert "orbit cdp works" in (payload.get("observation") or (payload.get("metadata") or {}).get("page") or {})["text_preview"]
         assert read["success"] is True
         assert "orbit cdp works" in read["output"]
         # Interactive el[0] should be the link; handle exists.

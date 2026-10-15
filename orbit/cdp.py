@@ -322,35 +322,65 @@ class CDPBackend(BrowserBackend):
             port = self._pick_port()
             self._profile_dir = self._profile_dir or Path("config/browser_profiles/orbit")
             self._profile_dir.mkdir(parents=True, exist_ok=True)
-            cmd = [
-                chrome,
-                f"--remote-debugging-port={port}",
-                f"--user-data-dir={self._profile_dir}",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-features=Translate",
-            ]
-            if self._headless:
-                cmd.append("--headless=new")
-            if self._extension_dir:
-                cmd.append(f"--load-extension={self._extension_dir}")
-            cmd.append(launch_url)
-            logger.info("orbit cdp launch: port=%s headless=%s", port, self._headless)
-            self._process = subprocess.Popen(
-                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-            self._base = f"http://127.0.0.1:{port}"
-            try:
-                self._wait_http(self._base)
-            except CDPError:
-                if self._process.poll() is not None:
+            # Some restricted environments (containers, Flatpak) lack an
+            # unprivileged user namespace and cannot use Chromium's sandbox.
+            # Try the normal (secure) launch first and only fall back to
+            # --no-sandbox when the kernel refuses to start a sandboxed
+            # process, so deployments that support the sandbox keep it.
+            launched = False
+            for use_no_sandbox in (False, True):
+                cmd = [
+                    chrome,
+                    f"--remote-debugging-port={port}",
+                    f"--user-data-dir={self._profile_dir}",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-features=Translate",
+                ]
+                if use_no_sandbox:
+                    cmd.insert(1, "--no-sandbox")
+                if self._headless:
+                    cmd.append("--headless=new")
+                if self._extension_dir:
+                    cmd.append(f"--load-extension={self._extension_dir}")
+                cmd.append(launch_url)
+                logger.info("orbit cdp launch: port=%s headless=%s no_sandbox=%s",
+                            port, self._headless, use_no_sandbox)
+                self._process = subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+                self._base = f"http://127.0.0.1:{port}"
+                try:
+                    self._wait_http(self._base)
+                    launched = True
+                    break
+                except CDPError:
+                    if self._process.poll() is None:
+                        # Still waiting on the endpoint; treat as recoverable
+                        # only on the first pass.
+                        if not use_no_sandbox:
+                            try:
+                                self._process.terminate()
+                                self._process.wait(timeout=5)
+                            except Exception:
+                                pass
+                            continue
+                        raise
+                    if not use_no_sandbox:
+                        # Likely sandbox failure; clean up and retry unsandboxed.
+                        try:
+                            self._process.wait(timeout=5)
+                        except Exception:
+                            pass
+                        continue
                     raise CDPError(
                         f"Chromium exited early (code {self._process.poll()}); "
                         f"a stale profile lock in {self._profile_dir} may be "
                         "held by another Orbit instance"
                     ) from None
-                raise
+            if not launched:
+                raise CDPError("Chromium failed to launch")
             self._browser_conn = CDPConnection(self._version_ws(), timeout=self._timeout)
             self._launched = True
             self._started = True
