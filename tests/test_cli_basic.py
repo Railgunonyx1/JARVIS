@@ -195,6 +195,26 @@ def test_theme_builds():
     assert t is not None
 
 
+def test_focus_pairing_registered():
+    from cli.theme import COLORS, build_rich_theme
+
+    theme = build_rich_theme()
+    assert COLORS.focus.ring == "bright_cyan"
+    # border_focus was declared but unregistered before; both must resolve now
+    assert str(theme.styles["jarvis.border_focus"]) != ""
+    assert str(theme.styles["jarvis.focus"]) != ""
+    assert str(theme.styles["jarvis.selected"]) != ""
+
+
+def test_selected_style_is_paired_fg_bg():
+    from cli.theme import COLORS, build_rich_theme
+
+    theme = build_rich_theme()
+    selected = str(theme.styles["jarvis.selected"])
+    assert COLORS.focus.selection in selected
+    assert COLORS.focus.selection_bg in selected
+
+
 def test_modes_are_policies():
     r = Renderer()
     r.set_mode("controlled")

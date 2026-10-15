@@ -8,10 +8,23 @@ green ok, yellow warn, red err, magenta provider, dim metadata).
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from rich.box import DOUBLE, HEAVY, MINIMAL, ROUNDED, SIMPLE
 from rich.theme import Theme
+
+
+@dataclass(frozen=True)
+class FocusRing:
+    """Paired fg/bg tokens so a panel border, an input and a selected row all
+    agree on what 'active' looks like. Kept as a pair (not a lone colour) so the
+    selection stays readable on any terminal background.
+    """
+
+    ring: str = "bright_cyan"       # border of the focused panel
+    ring_bg: str = "grey11"         # subtle fill behind a focused chrome
+    selection: str = "black"        # text of a selected list row
+    selection_bg: str = "bright_cyan"
 
 
 @dataclass(frozen=True)
@@ -51,6 +64,9 @@ class JarvisColors:
     tool: str = "yellow"
     system: str = "grey50"
 
+    # Focus / selection pairing (see FocusRing)
+    focus: FocusRing = field(default_factory=FocusRing)
+
 
 COLORS = JarvisColors()
 
@@ -70,6 +86,10 @@ def build_rich_theme() -> Theme:
             "jarvis.error": COLORS.error,
             "jarvis.info": COLORS.info,
             "jarvis.border": COLORS.border,
+            "jarvis.border_focus": COLORS.focus.ring,
+            "jarvis.focus": COLORS.focus.ring,
+            "jarvis.focus_bg": COLORS.focus.ring_bg,
+            "jarvis.selected": f"{COLORS.focus.selection} on {COLORS.focus.selection_bg}",
             "jarvis.muted": COLORS.muted,
             "jarvis.dim": COLORS.dim,
             "jarvis.user": COLORS.user,

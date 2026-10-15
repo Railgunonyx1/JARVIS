@@ -533,7 +533,7 @@ class Renderer:
         lines = []
         for f in self.state.code_files:
             mark = " *" if f.modified else ""
-            style = "jarvis.active" if f.selected else "jarvis.dim"
+            style = "jarvis.selected" if f.selected else "jarvis.dim"
             lines.append(Text(f"  {f.path}{mark}", style=style))
         return Group(*lines)
 
