@@ -27,6 +27,20 @@ from urllib.parse import urlparse
 # address, and IPv4-mapped IPv6 is normalized first.
 _LOCALHOST_HOSTS = {"localhost", "localhost.localdomain", "localtest.me"}
 
+# Cloud instance-metadata service hostnames. These are SSRF magnets (they hand
+# out temporary credentials), so they are denied by name even before DNS — a
+# name that resolves to a link-local address would be caught anyway, but this
+# stays correct if resolution is intercepted or blocked.
+_METADATA_HOSTS = {
+    "metadata",
+    "metadata.google.internal",
+    "metadata.goog",
+    "instance-data",
+    "instance-data.ec2.internal",
+    "169.254.169.254",
+    "fd00:ec2::254",
+}
+
 
 class NetworkPolicyError(Exception):
     """Raised when a navigation target is denied by the network policy."""
@@ -61,14 +75,25 @@ def _is_private_ip(host: str) -> bool:
     if not host:
         return True
     host = host.strip().strip("[]")
+    if host.lower() in _METADATA_HOSTS:
+        return True
     if host.lower().endswith(".localhost"):
         return True
     try:
         addr = ipaddress.ip_address(host.split("%")[0].split("/")[0])
     except ValueError:
         return False  # not an IP literal; resolved later
+    # Normalize embedded IPv4 (v4-mapped ``::ffff:a.b.c.d`` and 6to4) and
+    # classify by the inner address, so ``::ffff:127.0.0.1`` cannot slip past.
+    embedded = getattr(addr, "ipv4_mapped", None) or getattr(addr, "sixtofour", None)
+    if embedded is not None:
+        addr = embedded
+    # Deny anything that is not globally routable. ``not is_global`` additionally
+    # covers shared/CGNAT (100.64.0.0/10), benchmark (198.18.0.0/15) and other
+    # special-purpose ranges that Python does not report as ``is_private``.
     return (
-        addr.is_private
+        not addr.is_global
+        or addr.is_private
         or addr.is_loopback
         or addr.is_link_local
         or addr.is_multicast
