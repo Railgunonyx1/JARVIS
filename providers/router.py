@@ -10,6 +10,11 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from providers.base import LLMProvider, LLMResponse
+from providers.capabilities import (
+    ProviderCapability,
+    capabilities_for,
+    provider_capability_report,
+)
 from providers.types import (
     ErrorKind,
     ProviderError,
@@ -236,6 +241,34 @@ class ProviderRouter:
         self._available_chain = None
         self._chain_checked_at = 0.0
 
+    def _chain_for(
+        self, required: set[ProviderCapability] | None = None
+    ) -> list[str]:
+        """Available fallback chain, optionally filtered by required capabilities.
+
+        Capabilities are the integration-level, code-attested set from
+        ``providers.capabilities`` — a provider that does not declare a
+        required capability is skipped so a request is never routed at an
+        integration that cannot serve it.
+        """
+        chain = self._get_available_chain()
+        if not required:
+            return chain
+        req = set(required)
+        return [n for n in chain if capabilities_for(n).capabilities >= req]
+
+    def select_chain(self, required: set[ProviderCapability] | None = None) -> list[str]:
+        """Providers that are currently available AND satisfy ``required``."""
+        return self._chain_for(required)
+
+    def capability_report(self) -> dict:
+        """Declared provider capabilities merged with live health + fallback chain."""
+        return provider_capability_report(
+            status=self.status,
+            fallback_chain=self._get_available_chain(),
+            local_models=self.ollama_tags() if "ollama" in self._providers else [],
+        )
+
     @staticmethod
     def _classify_error(exc: Exception) -> ErrorKind:
         """Structured classification of an exception."""
@@ -327,6 +360,7 @@ class ProviderRouter:
         tools: list | None = None,
         preferred_provider: str | None = None,
         preferred_model: str | None = None,
+        required_capabilities: set[ProviderCapability] | None = None,
     ) -> LLMResponse:
         """Send completion request with automatic fallback.
 
@@ -337,7 +371,10 @@ class ProviderRouter:
 
         tracer = get_tracer()
         metrics = get_metrics()
-        chain = self._get_available_chain()
+        required = required_capabilities
+        if required is None and tools:
+            required = {ProviderCapability.TOOL_CALLS}
+        chain = self._chain_for(required)
         if not chain:
             raise RuntimeError("No LLM providers available. Check API keys and network.")
 
@@ -525,6 +562,7 @@ class ProviderRouter:
         tools: list | None = None,
         preferred_provider: str | None = None,
         preferred_model: str | None = None,
+        required_capabilities: set[ProviderCapability] | None = None,
     ) -> AsyncIterator[str]:
         """Stream completion with automatic fallback + TTFT/token KPIs.
 
@@ -539,7 +577,10 @@ class ProviderRouter:
 
         tracer = get_tracer()
         metrics = get_metrics()
-        chain = self._get_available_chain()
+        required = required_capabilities
+        if required is None and tools:
+            required = {ProviderCapability.TOOL_CALLS}
+        chain = self._chain_for(required)
         # Consume any half-open probes this chain build admitted: the probe
         # must be spent by REAL traffic, never by read-only is_available
         # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.
@@ -660,6 +701,7 @@ class ProviderRouter:
         tools: list | None = None,
         preferred_provider: str | None = None,
         preferred_model: str | None = None,
+        required_capabilities: set[ProviderCapability] | None = None,
     ) -> AsyncIterator[tuple[str | None, list | None]]:
         """Like :meth:`complete_stream` but also surfaces streamed tool calls.
 
@@ -675,7 +717,10 @@ class ProviderRouter:
 
         tracer = get_tracer()
         metrics = get_metrics()
-        chain = self._get_available_chain()
+        required = required_capabilities
+        if required is None and tools:
+            required = {ProviderCapability.TOOL_CALLS}
+        chain = self._chain_for(required)
         # Consume any half-open probes this chain build admitted: the probe
         # must be spent by REAL traffic, never by read-only is_available
         # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.

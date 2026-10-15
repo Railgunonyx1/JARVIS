@@ -1163,6 +1163,16 @@ def _cmd_status(loop) -> None:
     model = getattr(loop.router, "_last_model", "-")
     table.add_row("Provider", provider or "-")
     table.add_row("Model", (model or "-")[:40])
+    # Provider capability report (fallback chain + online count)
+    try:
+        report = loop.router.capability_report()
+        online = [n for n, e in report.get("providers", {}).items() if e.get("available")]
+        table.add_row("Providers", f"{len(online)} online")
+        chain = report.get("fallback_chain") or []
+        if chain:
+            table.add_row("Fallback", " → ".join(chain))
+    except Exception:
+        pass
     # Memory
     if loop.mem is not None:
         try:

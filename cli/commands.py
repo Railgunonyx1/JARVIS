@@ -392,26 +392,48 @@ class CommandRegistry:
             if loop is None or not getattr(loop, "router", None):
                 r.print_error("provider backend not connected")
                 return
-            status = getattr(loop.router, "status", {})
+            router = loop.router
+            report = None
+            if hasattr(router, "capability_report"):
+                try:
+                    report = router.capability_report()
+                except Exception:
+                    report = None
+            if args and args[0] in ("report", "caps", "--json"):
+                import json as _json
+                if report is None:
+                    r.print_error("capability report unavailable")
+                    return
+                r.print(_json.dumps(report, indent=2, default=str))
+                return
+            status = getattr(router, "status", {})
+            caps_by_provider = (report or {}).get("providers", {})
             table = RichTable(title="Provider Status")
             table.add_column("Provider", style="bold")
             table.add_column("Model")
             table.add_column("Status")
             table.add_column("Latency")
             table.add_column("Errors")
+            table.add_column("Capabilities")
             for name, info in status.items():
                 available = bool(info.get("available", False))
                 status_text = "online" if available else "offline"
                 status_style = "green" if available else "red"
                 latency = info.get("latency_ms", 0)
+                cap_entry = caps_by_provider.get(name, {})
+                caps = ",".join(cap_entry.get("capabilities", [])) or "-"
                 table.add_row(
                     name,
                     str(info.get("model", "-"))[:30],
                     Text(status_text, style=status_style),
                     f"{latency:.0f}ms" if latency else "-",
                     str(info.get("errors", 0) or 0),
+                    caps,
                 )
             r.print(table)
+            chain = (report or {}).get("fallback_chain") or []
+            if chain:
+                r.print(Text("Fallback: " + " → ".join(chain), style="dim"))
 
         def history_cmd(args: list[str]) -> None:
             try:
