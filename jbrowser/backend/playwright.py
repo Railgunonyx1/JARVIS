@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from jbrowser.backend.base import BrowserBackend, TabInfo
-from jbrowser.network import BrowserNetworkPolicy
+from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError
 from jbrowser.optimization import DEFAULT_TAB_LIMIT, build_launch_kwargs
 from jbrowser.page_context import build_page_context
 from jbrowser.sessions import profile_dir
@@ -180,8 +180,53 @@ class PlaywrightBackend(BrowserBackend):
             )
         if self._blocking is not None:
             ctx.route(self._blocking["pattern"], self._blocking["handler"])
+        # Request-boundary egress enforcement (registered LAST so Playwright
+        # runs it FIRST). Validates every request — redirects, subresources,
+        # XHR — so a pre-navigation check on the initial URL is not the only
+        # gate. Denied requests are aborted before they leave the browser.
+        ctx.route("**/*", self._network_route_handler)
         self._contexts[session_id] = ctx
         return ctx
+
+    def _enforce_request(self, url: str) -> None:
+        """Raise NetworkPolicyError when an intercepted request URL is denied.
+
+        Non-HTTP(S) schemes (``data:``, ``blob:``, ``about:``, devtools) are
+        not egress and pass through. HTTP(S) URLs — including those produced by
+        redirects and subresource loads — are validated against the policy.
+        """
+        scheme = (url or "").split(":", 1)[0].lower()
+        if scheme not in ("http", "https"):
+            return
+        self._network.validate(url)
+
+    def _network_route_handler(self, route: Any, request: Any = None) -> None:
+        """Playwright route callback enforcing the network policy per request."""
+        try:
+            url = getattr(getattr(route, "request", None), "url", "") or ""
+            if not url:
+                url = getattr(request, "url", "") or ""
+            self._enforce_request(url)
+        except NetworkPolicyError:
+            try:
+                route.abort("blockedbyclient")
+            except Exception:
+                pass
+            return
+        except Exception:
+            # Never let a policy error open a path the browser then follows.
+            try:
+                route.abort("blockedbyclient")
+            except Exception:
+                pass
+            return
+        try:
+            route.fallback()
+        except Exception:
+            try:
+                route.continue_()
+            except Exception:
+                pass
 
     def validate_url(self, url: str) -> str:
         """Public policy gate so non-engine paths (WebScraper fallback) enforce

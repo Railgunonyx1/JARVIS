@@ -13,6 +13,7 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import time
 from dataclasses import dataclass, field
@@ -27,6 +28,14 @@ from providers.types import ToolCall
 from security.redaction import redact_sensitive
 
 logger = logging.getLogger("jarvis.tool_execution_service")
+
+# Task-local session identity. A shared ToolExecutionService can serve several
+# sessions concurrently; storing the session on ``self`` races. The contextvar
+# is copied per asyncio task, so a call's session (and any internal call it
+# makes without an explicit session) stays attributed to the right session.
+_CURRENT_SESSION: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "jarvis_tool_session_id", default="",
+)
 
 
 @dataclass
@@ -65,6 +74,7 @@ class ToolExecutionService:
         decision_logger: DecisionLogger | None = None,
         bus=None,
         mode: str = "agent",
+        session_id: str = "",
     ):
         self._registry = registry
         from core.decision_logger import get_decision_logger
@@ -75,7 +85,10 @@ class ToolExecutionService:
         self._logger = _logger
         self._bus = bus
         self._mode = mode
-        self._session_id: str = ""  # session identity stamped on emitted events
+        # Stable default session id (never mutated per call). Per-call identity
+        # travels through ``_CURRENT_SESSION`` so concurrent sessions cannot
+        # contaminate each other's events.
+        self._session_id: str = session_id
 
     async def execute_tool(
         self,
@@ -96,7 +109,9 @@ class ToolExecutionService:
         """
         start = time.perf_counter()
         if session_id:
-            self._session_id = session_id
+            _CURRENT_SESSION.set(session_id)
+        else:
+            session_id = _CURRENT_SESSION.get() or self._session_id
         has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 
@@ -364,7 +379,7 @@ class ToolExecutionService:
             self._bus.publish(BusEvent(
                 name=name, payload=payload or {},
                 source="tool_execution_service", trace_id=trace_id,
-                session_id=session_id or self._session_id,
+                session_id=session_id or _CURRENT_SESSION.get() or self._session_id,
             ))
         except Exception:
             pass

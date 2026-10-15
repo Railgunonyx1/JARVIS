@@ -25,13 +25,16 @@ import pytest
 #    of ToolExecutionService
 # ---------------------------------------------------------------------------
 
-def _find_bypass_calls() -> list[tuple[str, int, str]]:
+def _find_bypass_calls() -> tuple[list[tuple[str, int, str]], list[tuple[str, str]]]:
     """Scan Python source files for calls to .executor.execute() or
     .permissions.check() on objects that look like AgentLoop instances.
 
-    Returns list of (file, line_no, code_line).
+    Returns (violations, parse_errors) where parse_errors is a list of
+    (file, error) for source files that could not be parsed. A skipped file
+    may hide a bypass, so callers MUST treat parse errors as failures.
     """
     violations: list[tuple[str, int, str]] = []
+    parse_errors: list[tuple[str, str]] = []
     project_root = Path(__file__).resolve().parents[1]
 
     # Files that are allowed to reference permissions/executor directly
@@ -80,7 +83,11 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
             try:
                 source = py_file.read_text(encoding="utf-8")
                 tree = ast.parse(source, filename=str(rel))
-            except Exception:
+            except OSError:
+                continue
+            except (SyntaxError, ValueError) as e:
+                # A file we cannot parse could contain a bypass we cannot see.
+                parse_errors.append((str(rel), f"{type(e).__name__}: {e}"))
                 continue
 
             for node in ast.walk(tree):
@@ -99,19 +106,34 @@ def _find_bypass_calls() -> list[tuple[str, int, str]]:
                             line_text = source.splitlines()[line_no - 1].strip()
                             violations.append((str(rel), line_no, line_text))
 
-    return violations
+    return violations, parse_errors
 
 
 def test_no_direct_executor_bypass():
     """No file outside tool_service.py/loop.py should call
     .permissions.check() or .executor.execute() directly.
     """
-    violations = _find_bypass_calls()
+    violations, parse_errors = _find_bypass_calls()
     if violations:
         msg = "Architecture violation: direct permission/executor access found:\n"
         for f, ln, code in violations:
             msg += f"  {f}:{ln}  {code}\n"
         msg += "\nAll tool execution must go through ToolExecutionService."
+        pytest.fail(msg)
+
+
+def test_architecture_scan_parses_every_active_file():
+    """The bypass scan must not silently skip files it cannot parse.
+
+    A skipped file could hide a boundary violation, so an unexpected parse
+    error fails the suite instead of passing with a blind spot.
+    """
+    _, parse_errors = _find_bypass_calls()
+    if parse_errors:
+        msg = "Architecture scan could not parse active source files:\n"
+        for f, err in parse_errors:
+            msg += f"  {f}  {err}\n"
+        msg += "\nFix the syntax error or add an explicit allowlist entry with justification."
         pytest.fail(msg)
 
 

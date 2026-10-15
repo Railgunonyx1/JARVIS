@@ -9,7 +9,6 @@
 [![Test Suite: 660+ Passed](https://img.shields.io/badge/Tests-660%2B%20Passing-brightgreen?style=for-the-badge&logo=pytest&logoColor=white)](tests/)
 [![Code Style: Ruff](https://img.shields.io/badge/Code%20Style-Ruff-000000?style=for-the-badge&logo=astral&logoColor=white)](https://github.com/astral-sh/ruff)
 [![Steady TTFT: 62ms](https://img.shields.io/badge/TTFT-62--102ms-FF6F00?style=for-the-badge&logo=lightning&logoColor=white)](PERF.md)
-[![License: CC0 1.0](https://img.shields.io/badge/License-CC0%201.0-cc.svg?style=for-the-badge)](LICENSE)
 
 <br/>
 
@@ -394,4 +393,4 @@ pytest tests/test_architecture_invariants.py
 
 ## 📄 License
 
-JARVIS MK-X is released under the [CC0 1.0 Universal](LICENSE) public-domain dedication. The software is held in the public domain; no rights are granted and no use is permitted under copyright.
+JARVIS MK-X is proprietary software. All rights reserved. Use, copying, modification, distribution, or transmission in any form or by any means is not permitted without prior written permission from the copyright holder.

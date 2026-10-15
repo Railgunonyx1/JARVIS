@@ -14,7 +14,7 @@
     "test:smoke": "electron test/electron-smoke.cjs"
   },
   "author": "JARVIS Orbit",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "electron-store": "^8.1.0",
     "ws": "^8.16.0"

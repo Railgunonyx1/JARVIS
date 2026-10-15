@@ -23,7 +23,7 @@
   "peerDependencies": {
     "@deepseek-ai/dsh": ">=0.1.0-rc.2"
   },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "https://github.com/Railgunonyx1/JARVIS1"

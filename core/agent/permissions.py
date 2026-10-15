@@ -20,6 +20,12 @@ from tools.schema import Tool
 _CONFIRMABLE_SECURITY_MODE = {"plan": "controlled", "controlled": "controlled",
                               "smart": "smart", "agent": "agent"}
 
+# Permission matrix: modes in which a destructive/high-risk tool with NO wired
+# consent channel must fail closed (denied) rather than proceed. Controlled and
+# Smart are consent-first modes (see SECURITY.md); Plan is read-only; Agent is
+# the autonomous coding posture. An explicit ``fail_closed_risky`` overrides.
+_FAIL_CLOSED_MODES = frozenset({ExecutionMode.CONTROLLED, ExecutionMode.SMART})
+
 
 class PermissionEngine:
     """Bridges mode configuration and the security engine for tool calls."""
@@ -29,7 +35,7 @@ class PermissionEngine:
         decision_logger: DecisionLogger,
         mode: str = ExecutionMode.AGENT,
         confirmation_handler: Callable[[str, dict[str, Any]], str] | None = None,
-        fail_closed_risky: bool = False,
+        fail_closed_risky: bool | None = None,
     ) -> None:
         self.logger = decision_logger
         self.mode_manager = get_mode_manager()
@@ -37,13 +43,25 @@ class PermissionEngine:
         self.security = get_security_engine()
         self.security.set_mode(_CONFIRMABLE_SECURITY_MODE[self.mode])
         self.confirmation_handler = confirmation_handler
-        # Orbit (Phase C invariant 9): high/critical-risk tools ALWAYS require
-        # explicit operator approval — with no consent channel wired the
-        # decision is deny (fail closed). Off by default so the shared coding
-        # agent keeps its autonomy posture.
+        # Consent matrix (audit Phase 1): in consent-first modes (Controlled,
+        # Smart) a destructive/high-risk tool with no wired consent channel is
+        # DENIED. Agent mode keeps its autonomous posture; Orbit passes True
+        # explicitly. An explicit argument always wins.
+        if fail_closed_risky is None:
+            fail_closed_risky = self.mode in _FAIL_CLOSED_MODES
         self.fail_closed_risky = fail_closed_risky
         if confirmation_handler:
             self.security.set_confirmation_handler(confirmation_handler)
+
+    @staticmethod
+    def consent_matrix() -> dict[str, bool]:
+        """Documented fail-closed posture per execution mode (no explicit override)."""
+        return {
+            ExecutionMode.PLAN: False,
+            ExecutionMode.CONTROLLED: True,
+            ExecutionMode.SMART: True,
+            ExecutionMode.AGENT: False,
+        }
 
     @staticmethod
     def _resolve_mode(mode: str) -> ExecutionMode:
