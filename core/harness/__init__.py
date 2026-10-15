@@ -65,6 +65,8 @@ class HarnessConfig:
     temperature: float = 0.4
     enable_planning: bool = True
     enable_verification: bool = True
+    enable_self_critique: bool = True  # merge deterministic self-critique into the gate
+    self_critique_strict: bool = False  # escalate heuristic findings to blocking
     tool_whitelist: tuple[str, ...] = ()  # empty = all tools
     tool_blacklist: tuple[str, ...] = ()
     model_preference: tuple[str, ...] = ()  # preferred model names

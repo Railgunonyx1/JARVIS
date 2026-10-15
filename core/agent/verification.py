@@ -56,6 +56,20 @@ class VerificationReport:
     total_duration_ms: float = 0.0
     steps_run: int = 0
     steps_passed: int = 0
+    critique: dict[str, Any] | None = None
+
+    def merged(self, result: VerificationResult) -> VerificationReport:
+        """Return a new report with ``result`` appended (used by self-critique)."""
+        results = (*self.results, result)
+        passed = sum(1 for r in results if r.passed)
+        return VerificationReport(
+            results=results,
+            all_passed=self.all_passed and result.passed,
+            total_duration_ms=self.total_duration_ms + result.duration_ms,
+            steps_run=len(results),
+            steps_passed=passed,
+            critique=self.critique,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,6 +77,7 @@ class VerificationReport:
             "steps_run": self.steps_run,
             "steps_passed": self.steps_passed,
             "total_duration_ms": round(self.total_duration_ms, 1),
+            "critique": self.critique,
             "results": [
                 {
                     "name": r.step_name,

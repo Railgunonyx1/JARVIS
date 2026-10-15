@@ -160,6 +160,8 @@ class AgentLoop:
             self._verification_enabled = hc.enable_verification
             self._planning_enabled = hc.enable_planning
             self._max_verification_retries = getattr(hc, "max_verification_retries", 3)
+            self._self_critique_enabled = getattr(hc, "enable_self_critique", True)
+            self._self_critique_strict = getattr(hc, "self_critique_strict", False)
         else:
             self.max_iterations = max_iterations
             self.temperature = temperature
@@ -171,6 +173,8 @@ class AgentLoop:
                 self.max_tool_calls_per_step = 10
             self._verification_enabled = True
             self._planning_enabled = True
+            self._self_critique_enabled = True
+            self._self_critique_strict = False
 
         self._tool_counter = 0
         self._preferred_model: str | None = None  # request-scoped model override
@@ -627,7 +631,9 @@ class AgentLoop:
 
                         # Post-execution verification gate
                         if self._verification_enabled:
-                            ver_report = await self._run_verification(trace_id)
+                            ver_report = await self._run_verification(
+                                trace_id, goal=goal, final_output=final, state=state,
+                            )
                             if not ver_report.all_passed:
                                 _verification_retries += 1
                                 if _verification_retries > self._max_verification_retries:
@@ -916,7 +922,8 @@ class AgentLoop:
         trace = tracer.end(root, status=status, error=error)
         return trace or {}
 
-    async def _run_verification(self, trace_id: str):
+    async def _run_verification(self, trace_id: str, goal: str = "",
+                                final_output: str = "", state=None):
         from core.agent.verification import VerificationEngine, VerificationStep
         engine = VerificationEngine(project_root=str(self.project.root_path))
         if self._harness is not None and self._harness.config.verification_steps:
@@ -925,7 +932,38 @@ class AgentLoop:
         else:
             engine.configure_defaults()
         self._emit("verification.started", {}, trace_id)
-        return await engine.verify()
+        report = await engine.verify()
+
+        # Metacognition: self-critique the turn and merge it into the same gate.
+        if self._self_critique_enabled:
+            report = self._apply_self_critique(report, goal, final_output, state, trace_id)
+        return report
+
+    def _apply_self_critique(self, report, goal: str, final_output: str,
+                             state, trace_id: str):
+        """Run deterministic self-critique and fold it into the verification report."""
+        from core.agent.metacognition import SelfCritique
+        from core.agent.verification import VerificationResult
+
+        critique = SelfCritique(strict=self._self_critique_strict).critique(
+            goal=goal,
+            final_output=final_output,
+            tool_calls=getattr(state, "tool_calls", ()) if state is not None else (),
+            files_changed=getattr(state, "files_changed", ()) if state is not None else (),
+            errors=getattr(state, "errors", ()) if state is not None else (),
+        )
+        report.critique = critique.to_dict()
+        passed = critique.passed
+        result = VerificationResult(
+            step_name="self_critique",
+            passed=passed,
+            exit_code=0 if passed else 1,
+            command="self_critique",
+            summary="" if passed else critique.summary(),
+            error="" if passed else "self-critique raised blocking findings",
+        )
+        self._emit("critique.completed", critique.to_dict(), trace_id)
+        return report.merged(result)
 
     @staticmethod
     def _build_verification_failure_context(report) -> str:
@@ -949,6 +987,13 @@ class AgentLoop:
                     lines.append(f"- {r.step_name}: {r.error[:300]}")
                 else:
                     lines.append(f"- {r.step_name}: unknown failure")
+        critique = getattr(report, "critique", None)
+        if critique and not critique.get("passed", True):
+            for finding in critique.get("blocking", []):
+                lines.append(
+                    f"- self-critique: {finding.get('message', 'issue')}"
+                    + (f" ({finding['evidence']})" if finding.get("evidence") else "")
+                )
         return "\n".join(lines) if lines else "unknown verification failure"
 
     def _finish_observation(self, success: bool, response: str, state: AgentState,
