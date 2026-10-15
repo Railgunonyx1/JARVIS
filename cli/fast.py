@@ -28,7 +28,7 @@ __all__ = ["run_fast", "main"]
 async def _run_one(goal: str, mode: str | None = None,
                    on_event: Callable[[str, dict], None] | None = None) -> dict:
     """Run ``goal`` in-process through the real agent engine."""
-    from cli.main import _build_loop
+    from cli.boot import build_loop as _build_loop
 
     loop = _build_loop(mode or "agent", 10, None, None)
     if on_event is not None:

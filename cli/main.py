@@ -9,7 +9,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import json
 import logging
@@ -199,6 +198,8 @@ def _capture_notification(name: str, payload: dict, notifications: list) -> None
 async def _run_once(goal: str, loop, json_output: bool = False,
                     collapsed: bool = False, notifications: list | None = None,
                     perf: bool = False, bridge=None, screen: bool = False) -> None:
+    import asyncio
+
     from cli.ux import LiveTaskDisplay
 
     loop._last_goal = goal
@@ -348,6 +349,8 @@ def main(
                               help="Print a request performance timeline after the run."),
 ) -> None:
     """JARVIS MK-X — terminal-first autonomous engineering agent."""
+    import asyncio
+
     if ctx.invoked_subcommand is not None:
         return
     if mode not in _MODES:
@@ -464,6 +467,8 @@ _interrupt_classifier = None
 
 def _interactive(mode: str, max_iterations: int, max_tokens: int | None,
                  project_dir: str | None, profile_startup: bool = False) -> None:
+    import asyncio
+
     from cli.bridge import AgentBridge
     from cli.cockpit import render_cockpit, render_notifications
     from cli.commands import CommandRegistry
