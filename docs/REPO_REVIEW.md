@@ -233,6 +233,137 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Actionability gating:** wait visible + enabled + stable before acting. → `orbit/controller.py` · S/low.
 - *Avoid:* Pro binary distribution (license keys, opaque Chromium downloads); **any CAPTCHA/anti-bot-evasion framing** — conflicts with default-deny network policy and consent model. Adopt behavioral consistency only, never detection-evasion patches.
 
+### terx (ixchio/terx, MIT)
+- **Local policy-enforced replay** — records semantic workflow after success, replays via CDP without LLM call → `orbit/runtime.py`, `orbit/memory.py` · M/low.
+- **Three actions only** (`navigate`, `click`, `type`) with exact accessible role/label → `orbit/tools.py` · S/low.
+- **Scope + precondition + postcondition** contracts (URL/title/text/selector) with fingerprint; versioned workflows → `orbit/memory.py` · M/low.
+- **Destructive side-effect gating** — consume-once approval verifier required for `side_effect="destructive"`; standalone server fails closed → `core/agent/permissions.py` · M/med.
+- **Dependency-free adapter** — reuses existing CDP bridge, no Playwright/Selenium runtime → `orbit/cdp.py` · S/low.
+- **MCP server** with `flow.replay` tool, named discoverable tools with scope digest → `runtime/protocols/` · S/low.
+- **Avoid:** not a general automation framework; only 3 semantic actions; Browser Use adapter experimental.
+
+### flowreplay (kuilenren/flowreplay, Apache-2.0)
+- **Record → portable `SKILL.md`** — human demo in real browser compiles to Markdown with machine-readable block → `skills/`, `core/harness/` · M/low.
+- **Locator ladder** (CSS → ARIA role → text → XPath → coordinate) with self-healing write-back; winning locator promoted → `orbit/tools.py`, `orbit/controller.py` · M/low.
+- **Deterministic replay engine** — slim Playwright executor, `{{variable}}` substitution, `flowreplay replay` · M/low.
+- **Lossless SKILL.md round-trip** (`flow_to_skill_md` / `parse_skill_md`) + `distill_flow` (LLM-optional) → `skills/manifests.py` · S/low.
+- **Static robustness grading** (no execution) — demotes framework-volatile CSS below semantic locators → `tools/classification.py` · S/low.
+- **M0/M1 complete** (format spec, recorder, SKILL.md round-trip, replay engine, self-heal, variables); M2/M3 in progress → `skills/registry.py` · S/low.
+- **Boks/Claw platform import** lossless → `extensions/jbrowser` · S/low.
+
+### browser-trace (Wadehl/browser-trace, MIT)
+- **Trace (JSONL) → Replay Spec (YAML) → deterministic replay** with network assertions → `orbit/runtime.py`, `orbit/controller.py` · M/low.
+- **Locator fallback chain** (selector → role+text → rect) with assertions on network requests (`wait_for_request`) → `orbit/controller.py` · S/low.
+- **CLI + MCP server + Skill** — same code path (MCP forwards to CLI) → `runtime/protocols/`, `orbit/tools.py` · S/low.
+- **Trust boundary** — CLI sole entry owning browser (random port, temp profile); agents/scripts only act through commands → `orbit/controller.py` · S/low.
+- **Timing comparison** (`.compare.json` with recorded vs replay ms) → `benchmark/` · S/low.
+
+### scout (pcamarajr/scout, MIT)
+- **Self-healing QA** — one-sentence scenario → AI agent verifies in real browser → deterministic Playwright script → `orbit/runtime.py`, `orbit/controller.py` · M/low.
+- **Stable selector ladder** (data-testid → id → role+name → text → positional CSS) with record-time fragility warnings + deterministic fallback retries → `orbit/tools.py` · S/low.
+- **Self-heal loop** — UI change → AI re-verifies & re-records → diff review → `orbit/runtime.py`, `core/agent/verification.py` · M/low.
+- **MCP server** (`scout mcp`) + agent onboarding skills (`.claude/skills/scout/`, `.cursor/rules/`) → `runtime/protocols/`, `skills/` · S/low.
+- **Pure replay CI** (`scout go --no-heal`) — zero LLM, seconds, ~zero cost → `benchmark/` · S/low.
+
+### agentbrowser (AshtonVaughan/agentbrowser, MIT)
+- **Visible-cursor real Chromium** — SVG cursor sprite via context init, Bezier trajectories with jitter/ease/overshoot, click ripple, 14-point trail → `orbit/controller.py` · M/low.
+- **Goal-based API** — `findAndClick({goal})` DOM → text → role → vision-LLM, every step verified; `executor.executeAction` action-memory hot path → `orbit/tools.py`, `orbit/controller.py` · M/low.
+- **Action verifier** — snapshots ElementBoxes pre-action, diffs post-settle, declares verified on URL/element/text change → `orbit/controller.py`, `core/agent/verification.py` · M/low.
+- **Stale-element recovery** — selector failure → fallback to `getByText(originalText)` → `orbit/controller.py` · S/low.
+- **Modal interrupter** — detects high-z dialogs at viewport center, classifies (cookie/consent/subscribe = blocker, login = user-relevant), auto-dismisses blockers → `orbit/controller.py` · S/low.
+- **Selector library learns from verified outcomes only** — per-domain cache, cross-domain transfer via `recallByGoal` (hypothesis transfer) → `orbit/memory.py` · M/low.
+- **Recorder + replay** — JSONL traces to `~/.agentbrowser/traces/`, `ReplayEngine` with configurable speed, `compactTrace` collapses trajectories, per-step screenshot + element capture (plan audit) → `orbit/runtime.py`, `benchmark/` · M/low.
+- **Per-context fingerprint shield** — 5 GPU profiles, `hardwareConcurrency`, `deviceMemory`, AudioContext noise, Canvas jitter, `navigator.plugins`, deterministic seed per session → `orbit/cdp.py` · M/low.
+- **CAPTCHA pipeline** — 2Captcha API, detect → solve → inject → `orbit/controller.py` · M/med.
+- **HTTP API** (13 integration tests) + WebSocket events + JSONL traces at `~/.agentbrowser/traces/` → `runtime/protocols/` · M/low.
+- **119/119 tests passing**, clean TypeScript build, verified bot detection bypass (Cloudflare, OneTrust, Cookiebot, Reddit, StackOverflow) · CI · S/low.
+
+### lumen (omxyz/lumen, MIT)
+- **Vision-only perception loop** — screenshot → model → action(s) → screenshot; no DOM scraping/selectors → `orbit/runtime.py`, `orbit/tools.py` · M/low.
+- **History compression** — tier-1 screenshot drop + tier-2 LLM summarization at 80% context utilization → `core/agent/tool_service.py` · S/low.
+- **Persistent memory** — `writeState` structured JSON survives compaction → `memory/` · S/low.
+- **Streaming + session resumption** — `agent.stream()` typed `StreamEvent`, serialize/restore with `Agent.resume()` → `orbit/runtime.py` · S/low.
+- **Safety** — `SessionPolicy` (domain allow/block), `PreActionHook` (imperative deny), `Verifier` (completion gate) → `core/agent/permissions.py`, `core/agent/verification.py` · S/low.
+- **Repeat detection** — 3-layer (exact action repeats, category dominance, URL stall) with escalating nudges → `core/agent/loop.py` · S/low.
+- **Action caching** — on-disk cache for replaying known-good actions → `orbit/memory.py` · S/low.
+- **Child delegation** — model hands off sub-tasks via `delegate` → `core/agent/loop.py` · M/low.
+- **Inspired by** Surfer 2 (StateStore+Verifier+plannerModel), Magnitude (ActionCache+screenshot compression), ColorBrowserAgent (SiteKB), Agent Workflow Memory (WorkflowMemory) → `memory/`, `core/harness/` · S/low.
+
+### st4ck-lite (edo-ceder/st4ck-lite, Apache-2.0)
+- **Record → deterministic markdown test** — `st4ck browse --record` writes `.md` file, replay with zero LLM (`st4ck run`) · `skills/`, `orbit/runtime.py` · M/low.
+- **One primitive per call** — stable IPC vocabulary (`navigate`, `click`, `fill`, `press`, `select`, `check_box`, `hover`, `upload`, `wait_until`, `evaluate` + `click_by_text`/`type_by_text`/`hover_by_text`, conditional `branch`, observation `snapshot`/`url`, control `continue`/`abort`) over line-delimited JSON → `orbit/tools.py`, `orbit/controller.py` · S/low.
+- **Conditional dispatch flags** (`dispatch_chain`, `dispatch_events`, `atomic`) for no-code runtimes (Bubble, Retool, Webflow, n8n, Wix, Glide, FlutterFlow) → `orbit/controller.py` · S/low.
+- **PRD authoring skills** — three independent reviewer agents (PO/QA/Dev) → `skills/`, `core/harness/` · M/low.
+- **Standalone CLI** (`npx st4ck@latest ...`) + `.claude-plugin/` marketplace manifest → `cli/`, `extensions/jbrowser` · S/low.
+- **Apache-2.0**, public alpha, stable md format/CLI surface · CI · S/low.
+
+### cairn (team-poem/cairn, MIT)
+- **Discover once, replay forever** — AI discovers flow once, freezes to `skill.json`; deterministic replay with zero LLM calls → `orbit/runtime.py`, `orbit/memory.py` · M/low.
+- **Self-heal on drift** — broken step → LLM maps original intent to new page, repairs single step, re-freezes → `orbit/runtime.py`, `core/agent/verification.py` · M/low.
+- **Policy gate** — `ActionPolicy` deterministic gate vets every proposed action before execution (block destructive, cap wandering, stop on goal) → `core/agent/permissions.py` · S/low.
+- **Perceive hook** — `PerceptionAdapter` corrects state of widgets outside a11y tree (custom checkbox in styled class) → `jbrowser/page_context.py` · S/low.
+- **Trace stream** — full lifecycle as flat ordered versioned event stream (watch live or store for viewer) → `runtime/event_bus.py` · S/low.
+- **Model-agnostic** — Anthropic, OpenAI, Gemini, key-less Claude Code/Codex CLI → `providers/model_gateway.py` · S/low.
+- **Portable engine** — core (`cairn-engine`) with pluggable `Driver` (Playwright), `Critic`, `Reporter`, `ContextProvider`, `LlmClient` → `orbit/controller.py`, `runtime/protocols/` · M/low.
+- **Browser/extension build** — `cairn-engine/browser` for non-Node environments → `extensions/jbrowser` · S/low.
+
+### flowproof (automators-com/flowproof, Apache-2.0)
+- **Record once, replay forever** — agent runs once, records trace; deterministic replay with zero LLM calls → `orbit/runtime.py`, `orbit/memory.py` · M/low.
+- **Strict tool-call assertions** — `assert_tool_call` / `assert_no_tool_call` / `assert_no_egress` (Linux seccomp containment) → `core/agent/tool_service.py`, `security/` · M/med.
+- **Multi-adapter** — Web (CDP), Windows desktop (UIA), SAP GUI, Vision (OCR), API, Agent boundary (OpenAI/Anthropic proxy) → `jbrowser/`, `orbit/controller.py` · M/low.
+- **Healing with reviewable diff** — broken step → proposes trace diff with before/after frames, applied only with explicit `--apply` → `orbit/runtime.py`, `core/agent/verification.py` · M/low.
+- **Suite support** — shared browser + isolated contexts per flow, `suite.yaml` manifest, seed/cleanup hooks, data minted by external CLI → `orbit/runtime.py` · M/low.
+- **Reports** — JUnit XML, HTML report, screenshot checkpoints, optional GIF/video, `--highlight-cursor` → `benchmark/` · S/low.
+- **MCP server** (`flowproof[mcp]`) — `record`, `run`, `get_trace`, `heal` over MCP → `runtime/protocols/` · S/low.
+- **Security controls** — Linux egress containment (seccomp filter, declare `allow_egress`, certify `assert_no_egress`) → `security/`, `jbrowser/network.py` · M/med.
+- **Rust/Python/Node unified** — single wheel via PyO3/maturin, same version across crates/python/npm → CI/CD · S/low.
+- **Agent boundary testing** — record agent trajectory once against real model, replay with zero model calls, assert tool calls (OpenAI/Anthropic dialect) → `core/agent/tool_service.py` · M/low.
+
+### FSQ (microsoft/FSQ, MIT)
+- **Evidence-first AI UI automation** — Goal → Evidence → Candidate YAML → Strict Replay → Runs report → Portable HTML → `orbit/runtime.py`, `orbit/controller.py` · M/low.
+- **Strict replay provider-free** — reviewed `.fsq.yaml` Case replays without LLM; CI/coding agents verify without Provider → `orbit/runtime.py`, `benchmark/` · M/low.
+- **Cross-platform Cases** — Web (Playwright), Android (uiautomator2), Windows (pywinauto), macOS (Appium) share same Case/evidence/Run format → `jbrowser/`, `orbit/controller.py` · M/low.
+- **Separate exploration from regression** — AI explores goal; reviewed YAML replays authored actions deterministically → `core/agent/loop.py`, `core/agent/verification.py` · M/low.
+- **Evidence bundle** — screenshots, normalized UI snapshots, ordered events, metadata, reports kept per Run → `orbit/runtime.py`, `benchmark/` · S/low.
+- **Local Control Plane** — workspace, evidence, Provider config local by default; `~/.fsq` auth → `cli/`, `security/` · S/low.
+- **Provider support** — OpenAI, Azure OpenAI, DeepSeek, Google Gemini, GitHub Copilot; one active at a time → `providers/model_gateway.py` · S/low.
+- **Suggest mode** — `--suggest` analyzes persisted Case/evidence for improvements without modifying source → `core/agent/verification.py` · S/low.
+- **Local web UI** — compiled frontend on `127.0.0.1:8879`, no Node at runtime → `extensions/jbrowser` · S/low.
+- **Avoid:** alpha v0.1.0, APIs may evolve; platform prerequisites not installed by `init` (browsers, ADB, Appium).
+
+### Bug0 AI (bug0inc/passmark, Other)
+- **AI regression testing** — natural-language steps via Playwright, intelligent Redis caching, auto-healing, multi-model assertion consensus (Claude + Gemini + arbiter) → `core/agent/tool_service.py`, `providers/model_gateway.py` · M/med.
+- **Cache-first execution** — Redis keyed by `userFlow + step.description`; cache hit executes directly without AI; bypass on retries → `memory/store.py`, `core/agent/tool_service.py` · M/low.
+- **Multi-model consensus** — primary (Claude) + secondary (Gemini) + arbiter on disagreement; consensus-based validation → `providers/model_gateway.py`, `core/agent/verification.py` · M/med.
+- **Video assertions** — `video: true` records step via `page.screencast`, uploads `.webm` to Gemini Files API, evaluates against full video (toasts/banners) → `orbit/tools.py`, `orbit/controller.py` · M/low.
+- **Smart waits** — AI-evaluated wait conditions with exponential backoff, no rigid selectors/time waits → `orbit/controller.py` · S/low.
+- **Caching limits** — only single-step actions cached; multi-step varies too widely → `memory/store.py` · S/low.
+- **Avoid:** non-standard license (Other); Redis dependency for full features; caching limited to single-step.
+
+### autoheal-qa (RitualDev-Lab/autoheal-qa, MIT)
+- **100% free local self-healing** — Playwright interceptor captures failures; Tier 1 deterministic heuristics (≥85% confidence) + Tier 2 local Ollama (`qwen2.5-coder`, `llama3.2`) for complex rewrites → `orbit/controller.py`, `orbit/tools.py` · M/low.
+- **Surgical AST patcher** — updates `.spec.ts` in place, preserving indentation, chaining, formatting; `autoheal rollback` reverts `.autoheal-backup` snapshots → `orbit/tools.py`, `orbit/controller.py` · M/low.
+- **Verification loop** — auto-re-runs failed test before committing patch; fails → auto-rolls back & tries next candidate → `core/agent/verification.py` · M/low.
+- **Tiered reasoning** — Heuristics first ($0, <1ms), then local Ollama (`qwen2.5-coder`/`llama3.2`), graceful fallback → `core/agent/verification.py` · S/low.
+- **Interactive dark-mode report** — `autoheal report` generates `autoheal-report.html` with side-by-side locator comparison, confidence breakdown (role match, string distance, action compatibility), AXTree inspector → `benchmark/`, `cli/` · S/low.
+- **Playwright native** — drop-in interceptor in `playwright.config.ts`; zero wrapper/vendor lock-in → `jbrowser/backend/playwright.py` · S/low.
+- **CLI commands** — `autoheal test`, `autoheal test --heal`, `autoheal heal [--yes/--no-verify]`, `autoheal report`, `autoheal rollback` → `cli/` · S/low.
+- **Zero cloud** — local Ollama, no API keys, no telemetry; DOM never leaves device → `security/`, `core/agent/permissions.py` · S/low.
+- **MIT license**, PRs welcome, Playwright 1.50+, Ollama local.
+
+### healix (kunaal-ai/healix, MIT)
+- **Privacy-first local self-healing** — AI runs via Ollama, zero data leaves device; HIPAA/SOC2/PCI-DSS/air-gap ready → `security/`, `core/agent/permissions.py` · S/low.
+- **Agentic heal loop** — Observe (DOM) → Reason (AI) → Act (corrected action) → Verify → Learn (cache successful fixes) → `orbit/controller.py`, `orbit/tools.py` · M/low.
+- **Smart APIs** — `smart_click(page, selector, text)` heals in one line; `healed_locator(page, selector)` returns Playwright `Locator` for `expect()`; `Healix.patch(page)` zero-refactor Page Objects → `orbit/tools.py`, `orbit/controller.py` · S/low.
+- **Confidence scoring** — logs every decision with confidence/reasoning; returns scoped selector when count>1 → `core/agent/verification.py` · S/low.
+- **Persistent learning** — `~/.healix/cache.json` persists fixes; instant replay on cache hit; separate cache per engine (Chromium/Firefox/WebKit) → `memory/store.py`, `orbit/memory.py` · S/low.
+- **Performance metrics** — Prometheus `healix_heal_duration_seconds` (p95), `healix_heal_cache_total` (hit/miss) exposed; scoped follow-up call reduces second Ollama round-trip → `benchmark/`, `core/agent/verification.py` · S/low.
+- **Zero-refactor integration** — `Healix.patch(page)` wraps existing Page Objects; `smart_locator` for assertions → `orbit/tools.py` · S/low.
+- **Unit + integration tests** (18 unit, live browser healing demo) · CI · S/low.
+- **Avoid:** Python only; Ollama required for healing; no OpenAI/Anthropic yet (planned).
+
+### BrowserOS neo (browseros-ai/BrowserOS, AGPL-3.0 → ideas only)
+
 ---
 
 ## B. Agent loop, harness, verification, skills
@@ -537,6 +668,14 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | agentic-stealth-browser | MIT | Human-mimicking (Bézier, fatigue, TLS spoof) + auto-recovery + 14-day warming + fail-closed MCP |
 | mochi | MIT | Relational 48-rule fingerprint DAG + JA4/JA3 coherent fetch + behavioral synthesis + Probe-Manifest CI |
 | rebrowser-bot-detector | MIT | Modern bot detection test suite (Runtime.enable, sourceUrl, mainWorld, webdriver, CSP, viewport) |
+| browser-memory | MIT | Deterministic replay memory + MCP |
+| terx | MIT | Local policy-enforced replay (3 actions) + scope contracts + approval gate |
+| flowreplay | Apache-2.0 | Record → portable SKILL.md + locator ladder self-heal + variables |
+| browser-trace | MIT | Trace JSONL → Replay Spec YAML → deterministic replay + network assertions |
+| scout | MIT | Self-healing QA: one-sentence → AI verify → deterministic Playwright replay |
+| agentbrowser | MIT | Visible cursor real Chromium + goal API + action memory + cross-domain recall + CAPTCHA |
+| lumen | MIT | Vision-only loop + tiered compression + persistent memory + action cache + delegation |
+| st4ck-lite | Apache-2.0 | Record → deterministic md test + stable IPC vocab + no-code runtime flags + PRD skills |
 
 ---
 
@@ -847,3 +986,199 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | Pre-execution declarative arg/graph validation | `core/agent/tool_service.py` | M | low |
 | Stage checkpoints + pre-validated batch manifest | `core/harness/` | L | med |
 | Versioned migrations + seeds | `memory/store.py` | M | low |
+
+---
+
+## P. Voice / STT / TTS / Speech-to-Speech
+
+### speech-to-speech (huggingface/speech-to-speech, MIT)
+- **Full local speech-to-speech pipeline** — Silero VAD → Parakeet TDT → Qwen3.5-4B → Qwen3-TTS; runs entirely on-device → `voice/` · M/low.
+- **OpenAI Realtime protocol** (WebSocket + WebRTC) at `/v1/realtime` — drop-in for OpenAI Realtime API clients, LiveKit Agents, browser demo → `runtime/protocols/`, `voice/` · M/low.
+- **Swappable backends** — VAD (Silero, FireRed), STT (Parakeet, Whisper, Faster-Whisper, Nemotron, Qwen3-ASR), LLM (mlx-lm, Transformers, responses-api, chat-completions, llama.cpp), TTS (Qwen3-TTS, Kokoro-82M, KittenTTS, Pocket TTS, ChatTTS, MMS) → `voice/`, `providers/model_gateway.py` · M/low.
+- **Local + hosted LLM** — swap `--llm_backend` between local (mlx-lm/Transformers) and hosted (responses-api/chat-completions) with same STT/TTS → `providers/model_gateway.py` · S/low.
+- **llama.cpp integration** — separate server for LLM, speech process connects via responses-api → `providers/model_gateway.py` · S/low.
+- **Offline operation** — after first run caches all model assets; runs without internet → `voice/`, `scripts/download_dependencies.py` · S/low.
+- **CLI modes** — `serve` (Realtime server), `talk` (mic client), `local` (in-process compose), `websocket` (raw PCM), `socket` (TCP) → `cli/` · S/low.
+- **Web search tooling** (Keenable) — LLM gets `web_search`/`fetch_page` tools executed inside pipeline, results fed back same turn → `tools/`, `runtime/protocols/` · M/low.
+- **MLX / GGML / CUDA / CPU** — platform-aware defaults (MLX on macOS, GGML on Linux) → CI/CD · S/low.
+
+### keenable-s2s (keenableai/keenable-s2s, MIT)
+- **Modular VAD→STT→LLM→TTS pipeline** — OpenAI Realtime-compatible WebSocket API, every component swappable → `voice/`, `runtime/protocols/` · M/low.
+- **Same backend matrix** as speech-to-speech (Parakeet TDT STT, OpenAI-compat LLM, Qwen3-TTS) → `voice/`, `providers/model_gateway.py` · S/low.
+- **Live web search** — server advertises `web_search`/`fetch_page` tools to LLM, executes inside pipeline, feeds results back same turn → `tools/`, `runtime/protocols/` · M/low.
+- **Fully local via llama.cpp** — separate server for LLM, speech process connects via responses-api → `providers/model_gateway.py` · S/low.
+- **CLI flags for every component** — `--stt`, `--llm_backend`, `--tts`, `--mode` (realtime/local/websocket/socket) → `cli/` · S/low.
+
+### voice-agent-starter (sarmakska/voice-agent-starter, MIT)
+- **Self-hosted full-duplex voice agent** — browser captures mic → WebSocket → VAD → STT → LLM → TTS → audio chunks back → `voice/`, `runtime/protocols/` · M/low.
+- **Sub-second round-trip** target (P50 ~800ms) — mic→VAD 30ms, STT partial 250ms, LLM first token 250ms, TTS first chunk 250ms → `voice/`, `benchmark/` · S/low.
+- **Barge-in** — aborts in-flight LLM + TTS streams the moment user starts speaking → `voice/` · M/low.
+- **Function-call passthrough** — LLM calls server-side tools mid-turn, results fed back same turn → `tools/`, `runtime/protocols/` · M/low.
+- **Pluggable adapters** — STT (Whisper.cpp/Deepgram/Whisper), LLM (Groq/SarmaLink/OpenAI), TTS (OpenTTS/Cartesia/ElevenLabs) via env vars → `providers/model_gateway.py`, `voice/` · S/low.
+- **Fastify 5 + Next.js 15** — `/health` endpoint, `/voice` WebSocket, web client captures audio/render transcripts → `runtime/protocols/`, `extensions/jbrowser` · S/low.
+- **Shared SSE reader** for OpenAI-compatible LLM adapters → `providers/model_gateway.py` · S/low.
+- **One-file adapter pattern** — drop new adapter in `adapters/` implementing interface, register in registry → `providers/model_gateway.py` · S/low.
+
+### open-voice-agent (dvalle08/open-voice-agent, MIT)
+- **Local-first LiveKit voice pipeline** — Silero VAD + Moonshine STT → Ollama LLM → Pocket TTS → audio response → `voice/`, `runtime/protocols/` · M/low.
+- **Custom LiveKit plugins** — `moonshine_stt` (streaming Moonshine), `pocket_tts` (streaming Pocket TTS 24kHz) implement LiveKit `stt.STT`/`tts.TTS` interfaces → `voice/`, `runtime/protocols/` · M/low.
+- **Provider config via env** — `STT_PROVIDER` (moonshine/deepgram/nvidia), `LLM_PROVIDER` (ollama/nvidia), `TTS_PROVIDER` (pocket/deepgram/nvidia) → `providers/model_gateway.py` · S/low.
+- **MCP support** — `MCP_ENABLED` + `MCP_SERVER_URL` / `MCP_EXTRA_SERVER_URLS` → `runtime/protocols/` · S/low.
+- **Streamlit UI** — lightweight browser client for local/Spaces deployment → `extensions/jbrowser` · S/low.
+- **Docker deploy** — one-command container build → CI/CD · S/low.
+
+### voice-agents-from-scratch (pguso/voice-agents-from-scratch, MIT)
+- **Tutorial + library** — numbered chapters (audio I/O, streaming Whisper, streaming Kokoro, agent core, full voice loop, real-time duplex, tools, personality, projects) → `voice/`, `cli/` · S/low.
+- **Shared library** `src/voice_agents/` — `audio`, `stt`, `tts`, `agent`, `tools` reusable building blocks → `voice/` · S/low.
+- **Streaming STT/TTS** — `faster-whisper` one-shot + streaming, Kokoro streaming with profiles → `voice/` · S/low.
+- **Real-time duplex** — turn-taking, interruption, duplex patterns, latency tooling → `voice/`, `benchmark/` · M/low.
+- **Tool routing** — calculator, time, weather, web search, LLM tool loops → `tools/`, `core/harness/` · S/low.
+- **Personality/emotional variation** — style injection in prompts → `core/harness/` · S/low.
+- **Local models** — Whisper tiny.en, Qwen 2.5 0.5B Q4 GGUF, Kokoro v1.0 (~800MB) → `scripts/download_dependencies.py` · S/low.
+- **uv-based** — extras for vad/serve/deploy; `models/` gitignored → CI/CD · S/low.
+
+### NVIDIA NeMo Voice Agent (NVIDIA-NeMo/Speech/examples/voice_agent, Apache-2.0)
+- **Open-source NeMo STT/TTS + HF LLM** — FastConformer streaming ASR + EOU detection (Parakeet-realtime-eou-120m), Kokoro-82M / FastPitch-HiFiGAN / magpie_tts_multilingual_357m TTS, Nemotron-3-Nano-30B / Nemotron-Nano-9B LLM → `voice/`, `providers/model_gateway.py` · M/low.
+- **vLLM / HF auto-switch** — `llm.type` config forces or auto-switches between vLLM and HuggingFace backends → `providers/model_gateway.py` · S/low.
+- **Speaker diarization** — up to 4 speakers in different turns (`diar_streaming_sortformer_4spk-v2.1`) → `voice/` · S/low.
+- **WebSocket server** — WebRTC transport, tool calling for LLMs (weather, speaking speed, voice/accent switching) → `runtime/protocols/`, `tools/` · S/low.
+- **Tool calling** — change speed, switch male/female/British/American accents, weather API → `tools/` · S/low.
+- **NIM services** — optional NVIDIA Riva ASR/TTS, NIM LLM for production deployment → `providers/model_gateway.py` · M/low.
+
+### dograh (dograh-hq/dograh, BSD-2-Clause)
+- **Open-source self-hosted Vapi/Retell alternative** — visual workflow builder, MCP native, telephony (Twilio, Vonage, Telnyx, Plivo, Asterisk ARI) → `voice/`, `runtime/protocols/` · M/low.
+- **Visual workflow builder** — start nodes, agent nodes, global instructions, tools, transitions, end-call outcomes → `core/harness/`, `extensions/jbrowser` · M/low.
+- **Test Agent panel** — Test Audio (browser voice), Test Chat (fast text iteration with turn replay/regeneration) → `voice/`, `cli/` · S/low.
+- **Telephony integrations** — Twilio, Vonage, Telnyx, Plivo, Vobiz, Cloudonix, Asterisk ARI; human handoff with call transfer → `voice/`, `jbrowser/network.py` · M/med.
+- **MCP server** — coding agents inspect agents, search docs, fetch node schemas, create workflows, save edits via natural language → `runtime/protocols/` · S/low.
+- **Python/Node SDKs** — programmatic agent creation and outbound calls → `cli/`, `runtime/protocols/` · S/low.
+- **BYOK** — bring your own LLM/TTS/STT/telephony; self-hosted MinIO/S3 for artifacts → `security/`, `memory/store.py` · S/low.
+- **One-command Docker** — `docker-compose` + `start_docker.sh`; auto-generated keys, own LLM/TTS/STT stack → CI/CD · S/low.
+- **Claude Code plugin** — agent handles install, config, troubleshooting → `extensions/jbrowser`, `cli/` · S/low.
+
+### pipecat (pipecat-ai/pipecat, MIT)
+- **Open-source voice/multimodal agent framework** — composable pipelines, multi-agent ready (handoff, parallel fan-out, sidecar workers, distributed) → `core/agent/loop.py`, `core/harness/`, `runtime/event_bus.py` · M/low.
+- **Huge provider matrix** — STT (AssemblyAI, AWS, Azure, Cartesia, Deepgram, ElevenLabs, Groq, Meta, Mistral, Moonshine, NVIDIA, OpenAI, Sarvam, Soniox, Speechmatics, Together, Whisper, xAI), TTS (Async, AWS, Azure, Bland, Camb AI, Cartesia, Deepgram, ElevenLabs, Fish, Google, Groq, Hume, Inworld, Kokoro, MiniMax, Mistral, Neuphonic, NVIDIA, OpenAI, Piper, Resemble, Rime, Sarvam, Smallest, Soniox, Speechify, Speechmatics, Together, xAI, XTTS), STT→STS (AWS Nova Sonic, Azure Voice Live, Gemini Multimodal Live, Grok, OpenAI Realtime, Ultravox), Transport (Daily WebRTC, FastAPI WebSocket, LiveKit WebRTC, SmallWebRTC, Vonage, WebSocket, WhatsApp) → `voice/`, `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **CLI + AI coding assistant** — `pipecat init` scaffolds bot in <1 min,Claude Code/Codex builds it → `cli/`, `core/harness/` · S/low.
+- **Multi-agent** — pipelines as agents; handoff, parallel fan-out, sidecar workers, distributed deployment → `core/agent/loop.py`, `core/harness/` · M/low.
+- **Ultra-low latency** — WebRTC/WebSocket transports, real-time audio/video orchestration → `voice/`, `runtime/protocols/` · S/low.
+- **Python SDKs** — `uv add "pipecat-ai[option,...]"` for selective deps → CI/CD · S/low.
+- **CLI monitor/deploy** — `pipecat-ai[cli]` for production monitoring → `cli/` · S/low.
+
+---
+
+**License tier updates:**
+| Tier | Repos |
+|---|---|
+| **Permissive** | + speech-to-speech, keenable-s2s, voice-agent-starter, open-voice-agent, voice-agents-from-scratch, NVIDIA-NeMo Voice Agent, dograh, pipecat, agentmaker, agentos, NeuroCore, argus, agentset, mem0, aius, MemGraphRAG |
+| **AGPL** | (none new) |
+| **GPL** | (none new) |
+| **NC/ShareAlike/Closed** | (none new) |
+
+All tests green, lint clean. Comprehensive voice/STT/TTS/S2S + agent frameworks + memory/RAG section added.
+
+---
+
+# Round 4
+
+## Q. Agent frameworks & personas
+
+### VoltAgent/voltagent (MIT)
+- **Per-tool `needsApproval` policy fn** — dynamic, risk-conditional approval (auto-approve LOW, escalate above a threshold) layered on fail-closed consent. → `core/agent/permissions.py` · M/low.
+- **Structured denial codes** (`ToolDeniedError`: TOOL_FORBIDDEN / PLAN / QUOTA + reason) feed deterministic FailureClass. → `core/agent/*` · S/low.
+- **Tool tags** (`destructive`, `read-only`, `external-api`) carried on spans/events for policy + audit filters. → `tools/*` · S/low.
+- **Prompt-budget discipline** — supervisor sees only each sub-agent's one-line `purpose`; full `instructions` load at delegation. → `core/harness/*` · M/low.
+- **"Bail" after handoff** — skip supervisor re-processing when the sub-agent emits a final output (~79% token savings). → `core/harness/*` · M/med.
+- **Abort signal inside `execute`** — cancellation checked mid-tool; escalates cleanly to CANCELLED/TIMEOUT. → `core/agent/*` · M/low.
+- **Streaming tool results as preliminary BusEvents** (progress yields) before the final ToolResult. → `runtime/event_bus.py` · M/med.
+- *Avoid:* client-side tools with no server `execute` (violates single tool boundary); direct MCP registration; `needsApproval` default-off (consent must stay fail-closed).
+
+### msitarzewski/agency-agents (MIT)
+- **Strict frontmatter schema** for persona/skill files (`name`, `description`, `vibe`) validated at registry load. → `skills/*` · S/low.
+- **Manifest-as-source-of-truth + CI consistency check** — registry consumers must agree with the manifest or build fails. → `skills/*` · S/low.
+- **Runbook rosters** — named installable teams of skills/agents (reusable task recipes). → `core/harness/*` · S/low.
+- **Selective activation** (`--division`, `--agent`, `--dry-run`, `--list`) — scoped skill loading instead of context flooding. → `cli/*` · S/low.
+- **Single-renderer contract** — one `format` name guarantees byte-identical output across consumers. → `runtime/protocols/` · M/low.
+- **Severity-tiered review checklist** (blocker / suggestion / nit) reusable for verification + skill prompts. → `skills/*`, `core/agent/verification.py` · S/low.
+- *Avoid:* prompt-declared "Memory" sections (memory must flow through `memory/*`); direct file-copy installers; mass-activating 100+ personas; personas granting permission (invariant 9).
+
+## R. Cross-platform UI & desktop
+
+### readest/readest (AGPL-3.0 → ideas only)
+- **Host-service abstraction** — one `AppService` interface with runtime-picked impls (web/native/node); extend the `BrowserBackend` pattern to a general host-services seam (fs, dialogs, TTS). → `runtime/protocols/` · M/low.
+- **Theme from 3 anchors** (`base`, `base-content`, `primary`) + generated light ramp; dark/light/auto mode. → `extensions/jbrowser/src/lib/tokens.css` · S/low.
+- **Global vs per-context settings layering** with per-panel reset / reset-all. → `orbit/*`, `memory/*` · M/low.
+- **Rebindable keybindings with conflict UX** (record-on-press, multi-bind, conflict names-and-asks, reset-one/all). → `cli/*` · M/low.
+- **Command palette** fuzzy-finding all actions/settings. → `cli/*` · M/med.
+- **Ordered user find/replace rules** (plain/regex) applied to display / TTS-only scopes. → `voice/`, `tools/*` · M/low.
+- **Runtime-config injection** — server-built config JSON read at startup (no rebuild for bridge URL/token). → `extensions/jbrowser` · S/low.
+- *Avoid:* AGPL code; React/Next stack; 80-component reader monolith.
+
+### pot-app/pot-desktop (GPL-3.0 → ideas only)
+- **Declarative plugin manifest** (`info.json` with typed `needs[]`) drives a generic config UI. → `tools/*`, `cli/*` · M/low.
+- **Service instances** — multiple instances of one plugin/provider with unique keys (multi-account/model). → `runtime/protocols/` · M/low.
+- **Parallel fan-out** — N services answer one request concurrently (fits existing `concurrency` metadata). → `core/harness/*` · M/med.
+- **Loopback action API** — tiny HTTP verb surface for external callers (keep `/v1/agent`, `/v1/cdp` 501). → `runtime/protocols/` · M/med.
+- **Plugin dirs as first-class backup data** — keyspace backup should include skills/tool packs. → `memory/*` · S/low.
+- **Toggleable background watchers** with persisted enable state (tab/page-change → EventBus). → `core/harness/*`, `orbit/*` · S/low.
+- *Avoid:* GPL-3.0 code; `eval()` plugin execution (must route through ToolExecutionService + `security/code_scan.py`); unauthenticated loopback HTTP (bridge stays fail-closed); 500ms clipboard polling (prefer event-driven).
+
+## S. Local TTS engines (`voice/`)
+
+### rany2/edge-tts (LGPLv3 + MIT `srt_composer.py`)
+- **Typed chunk stream** (`{audio | WordBoundary | SentenceBoundary}`) — audio + timing in one async generator. → `voice/` · S/low.
+- **SSML/UTF-8-safe byte-boundary splitter** for chunked synthesis of long replies. → `voice/` · S/low.
+- **Boundary metadata → subtitle/progress BusEvents**. → `runtime/event_bus.py`, `cli/` · M/low.
+- **`stream_sync()` bridge** — async core consumed by sync terminal code. → `voice/` · S/low.
+- *Avoid:* vendoring LGPLv3; dependence on an undocumented MS endpoint — pluggable driver only.
+
+### rhasspy/piper (MIT, archived; successor piper1-gpl is GPL-3.0)
+- **Voice manifest** = one `.onnx` + sidecar `.onnx.json` (sample rate, phoneme map, default knobs, speakers). → `voice/` · S/low.
+- **On-demand `download_voices` + `--data-dir`** registry with lazy fetch/cache. → `voice/` · S/low.
+- **Local HTTP server** (`/synthesize`, `/voices`, `/info`) with request→CLI→config default fallback chain. → `voice/`, `runtime/protocols/` · M/med.
+- **Offline engine behind the same OpenAI-compatible facade** — online fails → fallback, state machine unaffected. → `voice/`, `providers/model_gateway.py` · M/med.
+- **`speaker_id` + `length_scale`** mapped onto OpenAI `voice`/`speed`. → `voice/` · S/low.
+- *Avoid:* GPL-3.0 successor code; archived upstream; espeak-ng as a hard dep (optional extra).
+
+### NVIDIA-NeMo/Speech (Apache-2.0 code; weights per-model)
+- **Latency-accuracy Pareto as one knob** — selectable streaming latency modes (80ms–1s). → `voice/` · L/high.
+- **Offline + streaming in one checkpoint** (Parakeet-unified) — prefer unified STT engines. → `voice/` · M/med.
+- **NIM/OpenAI-compatible deploy** — just another provider behind the base URL. → `providers/model_gateway.py` · M/med.
+- **Hydra/YAML declarative model configs** → declarative voice profile files. → `voice/` · S/low.
+- **Operational docs packaged as an agent skill** for self-service voice diagnosis. → `skills/` · S/low.
+- *Avoid:* `nemo-toolkit` as a runtime dep (CUDA/Lightning/NGC weights); training pipelines — ideas only.
+
+### OpenBMB/VoxCPM (Apache-2.0, code + weights)
+- **`generate_streaming()`** — numpy chunk generator consumed incrementally (play before synthesis ends). → `voice/` · M/low.
+- **Reference contract** — `POST /v1/audio/speech` (`model`/`input`/`voice`, chunked body) validates our single base-URL schema. → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Capability matrix per engine** (params, VRAM, RTF, sample rate, languages) + health probe at startup. → `providers/model_gateway.py` · S/low.
+- **`--timestamps` word/char alignment → timeline BusEvents** for speech-synced subtitles. → `runtime/event_bus.py`, `cli/` · M/med.
+- **Voice design from a natural-language description** stored as a `user.*` voice profile. → `voice/`, `memory/` · L/med.
+- *Avoid:* 2B model (~8GB VRAM) as default; LoRA/webui training stack; voice cloning only with explicit consent (fail-closed via permissions).
+
+### Round 4 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Per-tool dynamic approval policy + structured denial codes | `core/agent/permissions.py` | M | low |
+| Cancellation honored inside tool execution → CANCELLED/TIMEOUT | `core/agent/*` | M | low |
+| Streaming preliminary BusEvents for long tool runs | `runtime/event_bus.py` | M | med |
+| Manifest-as-source-of-truth + registry CI consistency gate | `skills/*`, CI | S | low |
+| Selective skill/agent activation flags (`--division/--agent/--dry-run`) | `cli/*` | S | low |
+| Host-service abstraction for fs/dialog/TTS seams | `runtime/protocols/` | M | low |
+| Theme from 3 anchors + generated light ramp | `extensions/jbrowser/src/lib/tokens.css` | S | low |
+| Declarative provider/tool manifest driving a generic config UI | `tools/*`, `cli/*` | M | low |
+| One OpenAI-compatible facade fronting local + online TTS engines | `voice/`, `providers/model_gateway.py` | M | med |
+| Voice engine capability matrix + startup health probe | `providers/model_gateway.py` | S | low |
+
+**License tier updates (Round 4):**
+| Tier | Repos |
+|---|---|
+| **Permissive** | voltagent, agency-agents, piper (MIT, archived), NVIDIA-NeMo/Speech, VoxCPM |
+| **AGPL** | readest |
+| **GPL / LGPL** | pot-desktop (GPL-3.0), edge-tts (LGPLv3), piper successor (GPL-3.0) |
+| **NC/ShareAlike/Closed** | (none new) |
+
+**Round 4 index (8 repos):** voltagent, agency-agents, readest, pot-desktop, edge-tts, piper, NVIDIA-NeMo/Speech, VoxCPM.
+
+> Housekeeping: the working tree also carried an uncommitted browser-repo block with 4 sections duplicated from Section A (`rote`, `openbrowse`, `WebFurl`, `browser-memory`) and a deleted `## B.` header; both were repaired in this batch.

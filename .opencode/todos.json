@@ -46,7 +46,7 @@
   },
   {
     "content": "Review msitarzewski/agency-agents and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -191,7 +191,7 @@
   },
   {
     "content": "Review OpenBMB/VoxCPM and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -226,7 +226,7 @@
   },
   {
     "content": "Review readest/readest and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -256,12 +256,12 @@
   },
   {
     "content": "Review pot-app/pot-desktop and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review NVIDIA-NeMo/Speech and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -311,12 +311,12 @@
   },
   {
     "content": "Review rany2/edge-tts and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review rhasspy/piper and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -331,7 +331,7 @@
   },
   {
     "content": "Review VoltAgent/voltagent and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
