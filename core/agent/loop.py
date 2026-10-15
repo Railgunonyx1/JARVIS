@@ -931,6 +931,7 @@ class AgentLoop:
                 engine.add_step(VerificationStep(name=name, command=cmd))
         else:
             engine.configure_defaults()
+        self._add_skill_verification(state, engine, VerificationStep)
         self._emit("verification.started", {}, trace_id)
         report = await engine.verify()
 
@@ -964,6 +965,31 @@ class AgentLoop:
         )
         self._emit("critique.completed", critique.to_dict(), trace_id)
         return report.merged(result)
+
+    def _add_skill_verification(self, state, engine, step_cls) -> None:
+        """Append verification steps declared by skills activated this run.
+
+        Skills loaded via ``skills.load`` land in ``state.active_skills``; each
+        one may declare a post-execution checklist in its manifest. Adding them
+        to the same engine keeps a single verification gate (no parallel path).
+        """
+        names = getattr(state, "active_skills", None) or ()
+        if not names:
+            return
+        try:
+            from skills.registry import get_skill
+        except Exception:
+            return
+        existing = {s.name for s in getattr(engine, "_steps", [])}
+        for skill_name in names:
+            skill = get_skill(skill_name)
+            if skill is None:
+                continue
+            for name, command in skill.verification_steps():
+                if name in existing:
+                    continue
+                engine.add_step(step_cls(name=name, command=command))
+                existing.add(name)
 
     @staticmethod
     def _build_verification_failure_context(report) -> str:

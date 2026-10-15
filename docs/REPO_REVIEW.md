@@ -16,23 +16,23 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 ## Priority roadmap (highest leverage first)
 
-| # | Action | Module | Effort | Risk |
-|---|--------|--------|--------|------|
-| 1 | A11y-tree-first SoM observation + **change-diff snapshots** (only new/removed `[elN]`) | `jbrowser/page_context.py`, `orbit/cdp.py` | S | low |
-| 2 | `include_snapshot` flag on every `orbit.*` tool + covering-element pre-click failure + dialog policy | `orbit/tools.py`, `orbit/controller.py` | M | low |
-| 3 | Browser-tool doctrine: reference-over-value, semantic summaries, self-healing errors, pagination, slim tool profiles | `tools/classification.py`, `runtime/protocols/` | S | low |
-| 4 | SKILL.md frontmatter + progressive-disclosure loading (name+desc in prompt, body on demand) | `skills/registry.py` | S | low |
-| 5 | Skill verification checklists wired into the post-execution gate | `core/agent/verification.py` | M | low |
-| 6 | Post-compaction / CONTEXT_OVERFLOW skill re-bootstrap | `core/agent/state.py` | S | low |
-| 7 | Reversible tool-output compression (raw kept for the gate) | `core/agent/tool_service.py` | M | med |
-| 8 | Provider fallback chain + local-server capability probe + `<provider>/<model>` slugs | `providers/model_gateway.py` | M | med |
-| 9 | Multiline input + reverse history search + queue-behind-running-turn | `cli/input.py` | M | low |
-| 10 | Theme tokens as data with an ASCII fallback theme | `cli/theme.py` | S | low |
-| 11 | Multi-signal (vector + BM25 + entity) fused retrieval + SQLite FTS5 | `memory/store.py`, `tools/doc_retrieval.py` | M | low |
-| 12 | Secret placeholders resolved only at the tool boundary, scrubbed from observations | `memory/keyspace.py`, `core/agent/tool_service.py` | M | low |
-| 13 | MCP single authenticated entry point mirroring the single tool boundary | `runtime/protocols/` | L | med |
-| 14 | UI-visible agent state machine (Thinking/Speaking/Standby) as BusEvents | `core/agent/state.py` | S | low |
-| 15 | Wake-word voice state machine over one OpenAI-compatible STT/TTS base URL | `voice/` | M | med |
+| # | Action | Module | Effort | Risk | Status |
+|---|--------|--------|--------|------|--------|
+| 1 | A11y-tree-first SoM observation + **change-diff snapshots** (only new/removed `[elN]`) | `jbrowser/page_context.py`, `orbit/cdp.py` | S | low | pending |
+| 2 | `include_snapshot` flag on every `orbit.*` tool + covering-element pre-click failure + dialog policy | `orbit/tools.py`, `orbit/controller.py` | M | low | pending |
+| 3 | Browser-tool doctrine: reference-over-value, semantic summaries, self-healing errors, pagination, slim tool profiles | `tools/classification.py`, `runtime/protocols/` | S | low | pending |
+| 4 | SKILL.md frontmatter + progressive-disclosure loading (name+desc in prompt, body on demand) | `skills/registry.py` | S | low | **Done** — native `*/SKILL.md` YAML frontmatter discovery + on-demand body (`parse_skill_frontmatter`) |
+| 5 | Skill verification checklists wired into the post-execution gate | `core/agent/verification.py` | M | low | **Done** — manifest `verification` → `AgentState.active_skills` → `AgentLoop._add_skill_verification` |
+| 6 | Post-compaction / CONTEXT_OVERFLOW skill re-bootstrap | `core/agent/state.py` | S | low | pending |
+| 7 | Reversible tool-output compression (raw kept for the gate) | `core/agent/tool_service.py` | M | med | pending |
+| 8 | Provider fallback chain + local-server capability probe + `<provider>/<model>` slugs | `providers/model_gateway.py` | M | med | Partial — capability registry + fallback chain (`providers/capabilities.py`, `router.select_chain`); local-server probe + slugs pending |
+| 9 | Multiline input + reverse history search + queue-behind-running-turn | `cli/input.py` | M | low | pending |
+| 10 | Theme tokens as data with an ASCII fallback theme | `cli/theme.py` | S | low | pending |
+| 11 | Multi-signal (vector + BM25 + entity) fused retrieval + SQLite FTS5 | `memory/store.py`, `tools/doc_retrieval.py` | M | low | pending |
+| 12 | Secret placeholders resolved only at the tool boundary, scrubbed from observations | `memory/keyspace.py`, `core/agent/tool_service.py` | M | low | Partial — `security/credentials.py` scanner wired into redaction |
+| 13 | MCP single authenticated entry point mirroring the single tool boundary | `runtime/protocols/` | L | med | pending |
+| 14 | UI-visible agent state machine (Thinking/Speaking/Standby) as BusEvents | `core/agent/state.py` | S | low | pending |
+| 15 | Wake-word voice state machine over one OpenAI-compatible STT/TTS base URL | `voice/` | M | med | pending |
 
 ---
 

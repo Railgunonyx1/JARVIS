@@ -199,6 +199,7 @@ class AgentState:
     provider: str = ""
     model: str = ""
     context_usage: dict[str, Any] = field(default_factory=dict)
+    active_skills: list[str] = field(default_factory=list)
     failure_class: FailureClass | None = None
     terminal_reason: TerminalReason | None = None
     _status_history: list[tuple[str, float]] = field(default_factory=list, repr=False)
@@ -228,6 +229,9 @@ class AgentState:
         if diff:
             entry["diff"] = diff[:800]
         self.tool_calls.append(entry)
+        skill = (metadata or {}).get("skill")
+        if skill and skill not in self.active_skills:
+            self.active_skills.append(str(skill))
         if not success and error:
             self.errors.append(error)
 
@@ -249,5 +253,6 @@ class AgentState:
             "provider": self.provider,
             "model": self.model,
             "context_usage": self.context_usage,
+            "active_skills": self.active_skills,
             "duration_ms": round((time.time() - self.start_time) * 1000, 1),
         }

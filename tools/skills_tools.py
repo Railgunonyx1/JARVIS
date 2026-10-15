@@ -62,6 +62,8 @@ async def skills_load(params: dict) -> ToolResult:
         )
 
     body = skill.load_instructions()
+    steps = [list(step) for step in skill.verification_steps()]
+    base_meta = {"name": name, "skill": name, "verification_steps": steps}
     if not body:
         return ToolResult(
             success=True,
@@ -69,7 +71,7 @@ async def skills_load(params: dict) -> ToolResult:
                 f"Skill '{name}' has no separate instruction file. "
                 f"Guidance: {skill.description}"
             ),
-            metadata={"name": name, "loaded": False},
+            metadata={**base_meta, "loaded": False},
         )
 
     return ToolResult(
@@ -77,7 +79,7 @@ async def skills_load(params: dict) -> ToolResult:
         output=truncate(
             f"# Skill: {name}\n\n{body}", _MAX_INSTRUCTION_CHARS
         ),
-        metadata={"name": name, "loaded": True, "chars": len(body)},
+        metadata={**base_meta, "loaded": True, "chars": len(body)},
     )
 
 
