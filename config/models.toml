@@ -187,7 +187,7 @@ priority = 5
 # Anonymous-access model, verified live 2026-09-20 with the "unused" token.
 # (gpt-oss-20b and the big-name models now 401 anonymously; codestral-latest
 # also works keyless but GLM-5.3-Flash is the stronger general chat model.)
-model = "GLM-5.3-Flash"
+model = "codestral-latest"
 max_tokens = 4096
 temperature = 0.7
 base_url = "https://api.llm7.io/v1"

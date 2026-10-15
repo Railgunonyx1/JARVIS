@@ -41,7 +41,7 @@ class LLM7Provider(OpenAICompatibleProvider):
             "llm7", config, api_key or self.ANON_TOKEN,
             extra_keys=extra_keys,
             base_url=base_url or config.get("base_url", "https://api.llm7.io/v1"),
-            default_model=default_model or config.get("model", "GLM-5.3-Flash"),
+            default_model=default_model or config.get("model", "codestral-latest"),
         )
 
 

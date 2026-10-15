@@ -153,5 +153,370 @@
     "content": "Review smithakolan/AssemblyAI-AI-Voice-Bot and extract useful ideas/features for JARVIS",
     "status": "pending",
     "priority": "high"
+  },
+  {
+    "content": "Review unslothai/unsloth and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review debpalash/VoiceStudio and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review RVC-Boss/GPT-SoVITS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review CorentinJ/Real-Time-Voice-Cloning and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review mudler/LocalAI and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review coqui-ai/TTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review 2noise/ChatTTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review OpenBMB/VoxCPM and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review myshell-ai/OpenVoice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review babysor/MockingBird and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review fishaudio/fish-speech and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review ATH-MaaS/Pixelle-Video and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review mastra-ai/mastra and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review resemble-ai/chatterbox and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review readest/readest and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review index-tts/index-tts and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review QwenAudio/CosyVoice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review DrewThomasson/ebook2audiobook and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review nari-labs/dia and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review jianchang512/pyvideotrans and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review pot-app/pot-desktop and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review NVIDIA-NeMo/Speech and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review KittenML/KittenTTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review SWivid/F5-TTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review neonbjb/tortoise-tts and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review k2-fsa/OmniVoice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review QwenLM/Qwen3-TTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review supertone-oss-archive/supertonic and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review krillinai/OpenCreator and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review abus-aikorea/voice-pro and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review PaddlePaddle/PaddleSpeech and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review rany2/edge-tts and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review rhasspy/piper and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review moonshine-ai/moonshine and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review SparkAudio/Spark-TTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review VoltAgent/voltagent and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review mozilla/TTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review kyutai-labs/pocket-tts and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review jianchang512/clone-voice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review fishaudio/Bert-VITS2 and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review santinic/audiblez and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review netease-youdao/EmotiVoice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review GetStream/Vision-Agents and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review Blaizzy/mlx-audio and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review Plachtaa/VALL-E-X and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review jaywalnut310/vits and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review myshell-ai/MeloTTS and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review jianchang512/ChatTTS-ui and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review Zyphra/Zonos and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review nexu-io/open-design and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review thedotmack/claude-mem and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review karpathy/autoresearch and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review Panniantong/Agent-Reach and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review Leonxlnx/taste-skill and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review infiniflow/ragflow and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review OpenHands/OpenHands and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review koala73/worldmonitor and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review unclecode/crawl4ai and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review bytedance/deer-flow and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review lobehub/lobehub and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review dair-ai/Prompt-Engineering-Guide and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review microsoft/ai-agents-for-beginners and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review hiyouga/LlamaFactory and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review headroomlabs-ai/headroom and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review career-ops-hq/career-ops and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review ruvnet/ruflo and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review thedaviddias/Front-End-Checklist and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review openbq-org/OpenBB and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review FoundationAgents/MetaGPT and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review calesthio/OpenMontage and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review shanraisshan/claude-code-best-practice and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review mem0ai/mem0 and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
+  },
+  {
+    "content": "Review wukong-robot/wukong-robot and extract useful ideas/features for JARVIS",
+    "status": "pending",
+    "priority": "high"
   }
 ]
