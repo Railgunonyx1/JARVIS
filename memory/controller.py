@@ -23,7 +23,7 @@ from memory.extractor import MemoryExtractor
 from memory.graph import KnowledgeGraph
 from memory.lifecycle import PRIORITY_LOW, MemoryLifecycle
 from memory.metadata import MetadataStore
-from memory.models import DECISION, KnowledgeTriple, MemoryItem
+from memory.models import DECISION, EPISODIC, IDENTITY, KnowledgeTriple, MemoryItem
 from memory.ranking import HybridRanker, ImportanceScorer, decay_importance
 from memory.tiered_store import TieredMemoryStore
 
@@ -73,7 +73,36 @@ class MemoryController:
 
     # ── write path ────────────────────────────────────────────────────
     def store(self, item: MemoryItem, key: str | None = None) -> str:
-        """Persist an item across backends. Returns the stable key."""
+        """Persist an item across backends. Returns the stable key.
+
+        Consolidation (mem0-style): near-duplicates of an existing memory
+        UPDATE it in place (stable key, no duplicate rows); a changed fact
+        tombstones its predecessor (Zep-style, superseded-not-deleted).
+        """
+        item = _as_item(item)
+        if key is not None:
+            # Explicit-key writes are authoritative (update() and keyed
+            # store()): they bypass dedup so a targeted overwrite can never
+            # tombstone itself or an unrelated memory.
+            return self._store_plain(item, key=key)
+        return self._store_consolidated(item)
+
+    def _store_consolidated(self, item: MemoryItem) -> str:
+        """Consolidation gate, then the plain persistence path."""
+        decision, dup = self._consolidate(item)
+        if decision == "noop":
+            return dup["key"] if isinstance(dup, dict) and dup.get("key") else ""
+        if decision == "update" and isinstance(dup, dict):
+            # mem0 semantics: UPDATE replaces the fact IN PLACE under its
+            # stable key (no key churn, no tombstone needed) — the prompt
+            # index and any stored references keep working.
+            new_key = dup["key"]
+            self._store_plain(item, key=new_key)
+            return new_key
+        return self._store_plain(item)
+
+    def _store_plain(self, item: MemoryItem, key: str | None = None) -> str:
+        """Original persistence path (formerly the body of store())."""
         item = _as_item(item)
         key = key or item.id or _make_key(item)
         item.id = key
@@ -99,6 +128,53 @@ class MemoryController:
             self._store_decision(item)
         return key
 
+    # ── consolidation helpers ─────────────────────────────────────────
+    def _consolidate(self, item: MemoryItem) -> tuple[str, dict | None]:
+        """mem0-style ADD / UPDATE / NO-OP decision for a candidate item.
+
+        Returns ("add"|"update"|"noop", matching_row_or_None). Identity,
+        decision, and episodic memories are exempt: the first two have
+        canonical keys/content, and events are append-only — each
+        occurrence is a distinct fact no matter how similar the phrasing.
+        """
+        if item.type in (IDENTITY, DECISION, EPISODIC):
+            return "add", None
+        from memory.consolidation import find_duplicate
+
+        existing: list[dict] = []
+        if self._vector is not None:
+            try:
+                for hit in self._vector.search_similar(item.content, top_k=3, min_score=0.3):
+                    meta = self._metadata.get(str(hit["id"])) if self._metadata else None
+                    existing.append({
+                        "key": str(hit["id"]),
+                        "content": hit["text"],
+                        "score": hit.get("score"),
+                        "superseded_by": (meta or {}).get("superseded_by"),
+                    })
+            except Exception:  # noqa: BLE001 - consolidation must never break store
+                existing = []
+        if not existing and self._kv is not None:
+            try:
+                for row in self._kv.search_lexical(item.content, limit=5):
+                    meta = self._metadata.get(row["key"]) if self._metadata else None
+                    existing.append({
+                        "key": row["key"],
+                        "content": row["value"],
+                        "superseded_by": (meta or {}).get("superseded_by"),
+                    })
+            except Exception:  # noqa: BLE001
+                existing = []
+        if not existing:
+            return "add", None
+        dup = find_duplicate(item.content, existing, vector_assist=self._vector is not None)
+        if dup is None:
+            return "add", None
+        content_a, content_b = item.content.strip(), str(dup.get("content", "")).strip()
+        if content_a == content_b:
+            return "noop", dup
+        return "update", dup
+
     def update(self, key: str, item: MemoryItem) -> str:
         """Overwrite an existing memory by key (same backends as store)."""
         item.id = key
@@ -113,6 +189,13 @@ class MemoryController:
             self._metadata.remove(key)
         if self._tiers is not None:
             self._tiers.delete(key)
+        if self._vector is not None:
+            # Without this, a deleted memory's embedding lingers in the
+            # vector index and keeps resurfacing in semantic results.
+            try:
+                self._vector.delete(key)
+            except Exception:  # noqa: BLE001 - best-effort, kv/metadata already gone
+                pass
         return deleted
 
     # ── retrieval ─────────────────────────────────────────────────────
@@ -142,6 +225,8 @@ class MemoryController:
         if self._vector is not None:
             for hit in self._vector.search_similar(query, top_k=max(top_k * 3, 3), min_score=min_score):
                 meta = self._metadata.get(str(hit["id"])) if self._metadata else None
+                if meta and meta.get("superseded_by"):
+                    continue  # tombstoned: superseded facts don't resurface
                 item = MemoryItem(
                     id=f"v:{hit['id']}",
                     content=hit["text"],
@@ -159,6 +244,8 @@ class MemoryController:
             for row in self._kv.search_lexical(query, limit=max(top_k * 3, 3)):
                 key = row["key"]
                 meta = self._metadata.get(key) if self._metadata else None
+                if meta and meta.get("superseded_by"):
+                    continue  # tombstoned
                 lexical = _lexical_score(f"{key.replace('_', ' ')} {row['value']}", query)
                 item = MemoryItem(
                     id=f"kv:{key}",

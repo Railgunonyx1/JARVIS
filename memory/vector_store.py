@@ -173,6 +173,35 @@ class VectorMemoryStore:
         """)
         conn.commit()
 
+    def delete(self, key: str) -> bool:
+        """Remove a memory by key ("category:key" or bare key suffix).
+
+        Without this, a deleted memory's embedding lingered in the index
+        and kept resurfacing in semantic retrieval results.
+        """
+        conn = self._get_conn()
+        suffix = key.split(":", 1)[-1]  # accept "kv:foo" / "category:foo" / "foo"
+        with self._db_lock:
+            candidates = conn.execute(
+                "SELECT id, text FROM vector_meta WHERE text LIKE ?",
+                (f"%{suffix}%",),
+            ).fetchall()
+            # Exact key-as-content match wins; otherwise unique-content
+            # rows whose text embeds the key.
+            target = None
+            for row_id, text in candidates:
+                if text == key or text.endswith(":" + suffix) or text == suffix:
+                    target = row_id
+                    break
+            if target is None and len(candidates) == 1:
+                target = candidates[0][0]
+            if target is None:
+                return False
+            conn.execute("DELETE FROM vector_meta WHERE id = ?", (target,))
+            conn.execute("DELETE FROM vector_index WHERE rowid = ?", (target,))
+            conn.commit()
+        return True
+
     def store_vector(self, text: str, category: str = "general") -> bool:
         if not text.strip():
             return False

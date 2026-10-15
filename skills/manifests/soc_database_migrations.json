@@ -1,0 +1,19 @@
+{
+  "name": "database_migrations",
+  "description": "Database migration best practices for schema changes, data migrations, rollbacks, and zero-downtime deployments across PostgreSQL, MySQL, and common ORMs (Prisma, Drizzle, Kysely, Django, TypeORM, golang-migrate).",
+  "instructions": "skills/instructions/soc/database-migrations.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code"
+  ],
+  "tags": [
+    "database",
+    "soc",
+    "open-code"
+  ],
+  "risk": "medium",
+  "timeout": 180,
+  "version": "1.0.0"
+}

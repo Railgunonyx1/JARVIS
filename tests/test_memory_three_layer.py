@@ -16,9 +16,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-
 # ── Layer 1: Core Memory Always Injected ────────────────────────────────
 
 
@@ -27,8 +24,8 @@ class TestCoreMemoryInjection:
     in format_for_prompt(), regardless of how many other memories exist."""
 
     def test_format_includes_identity(self):
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -44,8 +41,8 @@ class TestCoreMemoryInjection:
         assert "[CORE MEMORY]" in prompt
 
     def test_format_includes_preferences(self):
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -60,8 +57,8 @@ class TestCoreMemoryInjection:
         assert "[CORE MEMORY]" in prompt
 
     def test_format_includes_priorities(self):
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -75,8 +72,8 @@ class TestCoreMemoryInjection:
         assert "[CORE MEMORY]" in prompt
 
     def test_core_memory_survives_many_writes(self):
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -95,8 +92,8 @@ class TestCoreMemoryInjection:
         assert "[CORE MEMORY]" in prompt
 
     def test_recent_memory_excludes_core_duplicates(self):
-        from memory.store import MemoryStore
         from memory.api import MemoryAPI
+        from memory.store import MemoryStore
 
         tmpdir = tempfile.mkdtemp()
         store = MemoryStore(Path(tmpdir))
@@ -180,7 +177,7 @@ class TestInterruptLaneMemory:
         assert "memory.retrieve" in _INTERRUPT_ALLOWED_TOOLS
 
     def test_memory_classified_as_interrupt(self):
-        from core.agent.lanes import RequestClassifier, ExecutionLane
+        from core.agent.lanes import ExecutionLane, RequestClassifier
 
         clf = RequestClassifier()
         queries = [
@@ -196,7 +193,7 @@ class TestInterruptLaneMemory:
             )
 
     def test_code_modify_goes_to_main(self):
-        from core.agent.lanes import RequestClassifier, ExecutionLane
+        from core.agent.lanes import ExecutionLane, RequestClassifier
 
         clf = RequestClassifier()
         # Code modifications should always go to main lane

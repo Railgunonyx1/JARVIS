@@ -61,11 +61,36 @@ class OpenAICompatibleProvider(LLMProvider):
     def _get_client(self):
         if self._client is None or self._client_key_index != self._key_index:
             import openai
+            # Shared HTTP client: one process-wide TLS context (Windows cert
+            # store load is 400-1000ms per construction — the bulk of the
+            # 1-2.6s SDK client cost) plus one connection pool shared across
+            # providers. The SDK injects its own auth header per request, so
+            # key rotation stays correct with a shared transport.
+            from core.http_pool import get_shared_ssl_context
+            import httpx
             self._client = openai.AsyncOpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
                 max_retries=0,
                 timeout=self._timeout_seconds,
+                http_client=httpx.AsyncClient(
+                    verify=get_shared_ssl_context(),
+                    headers={"User-Agent": "JARVIS/1.0"},
+                    limits=httpx.Limits(
+                        max_connections=16,
+                        max_keepalive_connections=8,
+                        # 30s (was 300s): home-router NAT silently drops idle
+                        # connections well before 300s. A turn handed a
+                        # half-dead pooled connection stalls ~2.1s (OS
+                        # retransmit window) before failing — measured
+                        # 2026-09-17 on first turn after idle, while a FRESH
+                        # connection to the same provider costs only 130-470ms
+                        # (direct probe, no pooling). Evicting at 30s means a
+                        # turn either finds a connection idle <30s (alive) or
+                        # pays one fresh handshake.
+                        keepalive_expiry=30.0,
+                    ),
+                ),
             )
             self._client_key_index = self._key_index
             logger.info("%s: using key index %d", self.name, self._key_index)
@@ -86,6 +111,15 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _extra_headers(self) -> dict:
         """Override to inject extra HTTP headers into every SDK call."""
+        return {}
+
+    def _extra_request_params(self) -> dict:
+        """Override to inject provider-specific request params.
+
+        Used for latency knobs like Groq's ``reasoning_effort`` ("none"
+        skips thinking tokens entirely — the single biggest TTFT win on
+        reasoning models) without per-provider copies of complete().
+        """
         return {}
 
     # ── Rate-limit detection ────────────────────────────────────────────
@@ -129,6 +163,9 @@ class OpenAICompatibleProvider(LLMProvider):
                     kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
+                extra = self._extra_request_params()
+                if extra:
+                    kwargs.update(extra)
                 response = await client.chat.completions.create(
                     model=self.config.get("model", self.default_model),
                     messages=full_messages,
@@ -175,6 +212,7 @@ class OpenAICompatibleProvider(LLMProvider):
         max_tokens: int | None = None,
         temperature: float | None = None,
         tools: list | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[str]:
         full_messages = self._build_messages(messages, system_prompt)
         tool_param = openai_tools_param(tools)
@@ -190,8 +228,11 @@ class OpenAICompatibleProvider(LLMProvider):
                     kwargs["extra_headers"] = headers
                 if tool_param:
                     kwargs["tools"] = tool_param
+                extra = self._extra_request_params()
+                if extra:
+                    kwargs.update(extra)
                 stream = await client.chat.completions.create(
-                    model=self.config.get("model", self.default_model),
+                    model=model or self.config.get("model", self.default_model),
                     messages=full_messages,
                     max_tokens=max_tokens or self.config.get("max_tokens", 4096),
                     temperature=temperature or self.config.get("temperature", 0.7),

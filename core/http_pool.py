@@ -50,6 +50,28 @@ def _build_client():
     )
 
 
+# ── Shared TLS verification context (latency) ────────────────────
+# httpx.create_ssl_context() re-loads the whole Windows cert store (~120
+# entries) on EVERY call: 400-1000ms measured per provider SDK client
+# construction (AsyncGroq ctor 2.6s is mostly this). The context is
+# immutable after load, so one process-wide instance serves every client;
+# constructing httpx.AsyncClient(verify=<ctx>) afterwards costs ~1ms.
+_ssl_context = None
+_ssl_lock = threading.Lock()
+
+
+def get_shared_ssl_context():
+    """Return the process-wide httpx SSL context (built exactly once)."""
+    global _ssl_context
+    if _ssl_context is not None:
+        return _ssl_context
+    with _ssl_lock:
+        if _ssl_context is None:
+            import httpx
+            _ssl_context = httpx.create_ssl_context()
+    return _ssl_context
+
+
 def get_client():
     """Return the shared thread-safe httpx.Client (lazy init)."""
     global _client

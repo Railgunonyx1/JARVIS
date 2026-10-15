@@ -1,0 +1,23 @@
+{
+  "name": "github_ops",
+  "description": "GitHub repository operations, automation, and management. Issue triage, PR management, CI/CD operations, release management, and security monitoring using the gh CLI. Use when the user wants to manage GitHub issues, PRs, CI status, releases, contributors, stale items, or any GitH",
+  "instructions": "skills/instructions/soc/github-ops.md",
+  "tools": [
+    "security.scan_code",
+    "security.scan_secrets",
+    "security.check_permissions",
+    "filesystem.read",
+    "git.status",
+    "git.diff",
+    "git.log",
+    "git.commit"
+  ],
+  "tags": [
+    "github",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

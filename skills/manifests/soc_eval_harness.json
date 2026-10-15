@@ -1,0 +1,20 @@
+{
+  "name": "eval_harness",
+  "description": "Formal evaluation framework for Claude Code sessions implementing eval-driven development (EDD) principles",
+  "instructions": "skills/instructions/soc/eval-harness.md",
+  "tools": [
+    "test.run",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "eval",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

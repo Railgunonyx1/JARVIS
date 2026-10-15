@@ -1,0 +1,1 @@
+var fs=require("fs");var lines=[];function add(l){lines.push(l)}

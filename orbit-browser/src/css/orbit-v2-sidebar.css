@@ -1,0 +1,292 @@
+/* ══════════════════════════════════════════════════════════════════
+   ORBIT v2.1 — Opera GX sidebar completion + clash fixes
+   Loads after orbit-v2.css. Fixes:
+   1. Status footer slid UNDER the sidebar (z-index 60 vs sidebar stacking)
+      → footer now stops left of the rail; sidebar rises above it.
+   2. Two competing .sidebar::before/::after rules (gradient wash + "+"
+      crosshairs) fought each other → single quiet source of truth.
+   3. `.rail-btn.on` was restyled paper-solid by the F1 layer, clashing with
+      the v2 pill language → one coherent active treatment (accent notch).
+   Plus the new rail (brand glyph, 44px targets, badge) and the sidebar
+   panel styles for Flow / Bookmarks / History / Downloads / Watches.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. (status footer removed from the product) ─────────────────── */
+
+/* ── 2. Clash: kill the duplicate crosshair decorations ──────────── */
+/* The F1 layer's "+" crosshairs and the old gradient wash both targeted
+   .sidebar::before/::after; they stacked into visual noise at the rail
+   corners. One quiet source of truth wins: */
+.sidebar::before,
+.sidebar::after { content: none !important; }
+
+/* ── 3. Rail redesign (Opera GX, restrained) ─────────────────────── */
+.sidebar {
+  width: 448px; /* 48 rail + 400 panel */
+}
+.sb-rail {
+  width: 48px;
+  gap: 3px;
+  padding: 10px 0 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border-right: 1px solid var(--jb-border-subtle);
+}
+.rail-brand {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  margin-bottom: 6px;
+  color: var(--jb-accent);
+  opacity: 0.9;
+}
+.rail-btn {
+  position: relative;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  color: var(--jb-text-tertiary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.rail-btn:hover {
+  background: var(--jb-surface-hover);
+  color: var(--jb-text);
+}
+/* Active: quiet pill + accent notch on the rail edge (replaces both the
+   old grey wash and the F1 layer's paper-solid inversion). */
+.rail-btn.on {
+  background: var(--jb-surface-active);
+  color: var(--jb-accent);
+  font-weight: inherit;
+}
+.rail-btn.on::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 9px; bottom: 9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--jb-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--jb-accent) 60%, transparent);
+}
+/* Watch badge on the rail icon */
+.rail-badge {
+  position: absolute;
+  top: 3px; right: 3px;
+  min-width: 14px; height: 14px;
+  padding: 0 3px;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  background: var(--jb-accent);
+  color: var(--jb-void);
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+.rail-badge[hidden] { display: none; }
+
+/* ── 4. Panel content styles (all sidebar panels) ────────────────── */
+.panel-pad { padding: 14px 16px 18px; overflow-y: auto; }
+.sbx-label {
+  font-family: var(--jb-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--jb-text-tertiary);
+  margin: 14px 0 8px;
+}
+.panel-pad > .sbx-label:first-child { margin-top: 0; }
+.sbx-empty {
+  padding: 18px 4px;
+  color: var(--jb-text-tertiary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.sbx-empty a { color: var(--jb-accent); text-decoration: none; }
+.sbx-empty a:hover { text-decoration: underline; }
+
+.sbx-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: var(--jb-void);
+  border: 1px solid var(--jb-border-subtle);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.sbx-row:hover { border-color: var(--jb-border); background: var(--jb-surface-hover); }
+.sbx-row.watch.changed { border-color: color-mix(in srgb, var(--jb-accent) 45%, transparent); }
+.sbx-row-main { flex: 1; min-width: 0; }
+.sbx-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--jb-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sbx-sub {
+  font-size: 11px;
+  color: var(--jb-text-tertiary);
+  margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sbx-sub b { color: var(--jb-accent); font-weight: 600; }
+.sbx-fav {
+  width: 26px; height: 26px;
+  flex: none;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: var(--jb-surface-active);
+  color: var(--jb-text-tertiary);
+  font-size: 12px;
+}
+.sbx-fav.mono { font-family: var(--jb-font-mono); font-size: 11px; }
+.sbx-x {
+  flex: none;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: none; background: none;
+  color: var(--jb-text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.sbx-row:hover .sbx-x { opacity: 1; }
+.sbx-x:hover { color: var(--jb-danger); background: var(--jb-surface-hover); }
+.sbx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--jb-border); flex: none; }
+.sbx-dot.on { background: var(--jb-accent); box-shadow: 0 0 8px color-mix(in srgb, var(--jb-accent) 55%, transparent); }
+.sbx-link {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 0;
+  border: 1px solid var(--jb-border);
+  border-radius: 10px;
+  background: none;
+  color: var(--jb-text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.sbx-link:hover { border-color: var(--jb-accent); color: var(--jb-accent); }
+
+/* Flow panel */
+.sbx-clock {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 14px 2px 4px;
+}
+.sbx-clock span:first-child {
+  font-family: var(--jb-font-mono);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--jb-text);
+}
+.sbx-utc {
+  font-family: var(--jb-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--jb-text-tertiary);
+}
+.sbx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.sbx-cell {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--jb-void);
+  border: 1px solid var(--jb-border-subtle);
+}
+.sbx-cell span {
+  display: block;
+  font-family: var(--jb-font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: var(--jb-text-tertiary);
+}
+.sbx-cell b {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--jb-font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--jb-text);
+}
+.sbx-note {
+  width: 100%;
+  resize: vertical;
+  min-height: 84px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--jb-void);
+  border: 1px solid var(--jb-border-subtle);
+  color: var(--jb-text);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: inherit;
+  outline: none;
+}
+.sbx-note:focus { border-color: var(--jb-accent); }
+.sbx-kbd {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 2px;
+  font-size: 11.5px;
+  color: var(--jb-text-secondary);
+}
+.sbx-kbd kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-left: 3px;
+  border-radius: 5px;
+  background: var(--jb-surface-active);
+  border: 1px solid var(--jb-border-subtle);
+  font-family: var(--jb-font-mono);
+  font-size: 9.5px;
+  color: var(--jb-text);
+}
+
+/* ── 5. Reduced motion ─────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sbx-row, .rail-btn { transition: none; }
+}
+
+/* ── 6. Badge pulse (watch fired) ──────────────────────────────── */
+@keyframes badgePulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jb-accent) 70%, transparent); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+.rail-badge.pulse { animation: badgePulse 0.9s ease-out 2; }
+
+/* ── 7. Collapse-to-rail mode (double-click rail to toggle) ──── */
+.sidebar { transition: width 0.22s ease; }
+.sidebar.collapsed { width: 48px; }
+.sidebar.collapsed .sb-panel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 400px;
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.22s ease, opacity 0.18s ease;
+  background: var(--jb-bg);
+  border-left: 1px solid var(--jb-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  z-index: 5;
+}
+/* Hover flyout: the panel slides over the web content, rail stays parked */
+.sidebar.collapsed.flyout .sb-panel {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Collapsed rail hint: slightly darker so the parked rail reads as
+   intentional, not as a rendering accident. */
+.sidebar.collapsed .sb-rail { background: rgba(0, 0, 0, 0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .sidebar.collapsed .sb-panel { transition: none; }
+}

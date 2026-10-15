@@ -1,0 +1,17 @@
+[package]
+name = "orbit-core"
+description = "Pure browser policy for Orbit: tabs, lifecycle, URL governance, permissions. No platform code."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+hmac = "0.12"
+subtle = "2"
+hex = "0.4"
+getrandom = "0.2"

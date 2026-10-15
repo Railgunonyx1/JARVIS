@@ -2,8 +2,10 @@
 
 import asyncio
 import importlib
+import json
 import logging
 import time
+import urllib.request
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -34,6 +36,17 @@ _PROVIDER_CLASSES: dict[str, tuple[str, str]] = {
     "cerebras": ("providers.cerebras_provider", "CerebrasProvider"),
     "deepseek": ("providers.deepseek_provider", "DeepSeekProvider"),
     "huggingface": ("providers.huggingface_provider", "HuggingFaceProvider"),
+    # Generic free-tier providers (freellm-apis directory) — one shared module.
+    "llm7": ("providers.free_llm_providers", "LLM7Provider"),
+    "github_models": ("providers.free_llm_providers", "GitHubModelsProvider"),
+    "cloudflare_ai": ("providers.free_llm_providers", "CloudflareAIProvider"),
+    "cohere": ("providers.free_llm_providers", "CohereProvider"),
+    "sambanova": ("providers.free_llm_providers", "SambaNovaProvider"),
+    "zai": ("providers.free_llm_providers", "ZAIProvider"),
+    "agnes": ("providers.free_llm_providers", "AgnesProvider"),
+    "kilo_code": ("providers.free_llm_providers", "KiloCodeProvider"),
+    "scaleway": ("providers.free_llm_providers", "ScalewayProvider"),
+    "sakana": ("providers.sakana_provider", "SakanaProvider"),
 }
 
 
@@ -47,6 +60,16 @@ def _lazy_import_provider(name: str) -> type:
 
 # Maximum retry-after delay before we fallback instead of waiting.
 _MAX_RETRY_WAIT_S = 5.0
+
+
+def _ollama_local_fetch(url: str, timeout: int = 3) -> bytes:
+    """Fetch a URL bypassing any system proxy — for localhost Ollama reads."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    resp = opener.open(url, timeout=timeout)
+    try:
+        return resp.read()
+    finally:
+        resp.close()
 
 
 class ProviderRouter:
@@ -100,25 +123,57 @@ class ProviderRouter:
             "cerebras": CircuitBreaker(),
             "deepseek": CircuitBreaker(),
             "huggingface": CircuitBreaker(),
+            "llm7": CircuitBreaker(),
+            "github_models": CircuitBreaker(),
+            "cloudflare_ai": CircuitBreaker(),
+            "cohere": CircuitBreaker(),
+            "sambanova": CircuitBreaker(),
+            "zai": CircuitBreaker(),
+            "agnes": CircuitBreaker(),
+            "kilo_code": CircuitBreaker(),
+            "scaleway": CircuitBreaker(),
         }
         for _name, _breaker in self._circuit_breakers.items():
             _breaker.register(_name)
 
         # Provider constructor kwargs (only loaded when config has the key)
+        # every keyed provider supports numbered extra keys (KEY_2, KEY_3...)
+        # via <provider>_extra — rotation lives in OpenAICompatProvider._rotate_key
         _PROVIDER_KWARGS: dict[str, dict[str, Any]] = {
-            "groq": {"extra_keys": lambda: [k for k in api_keys.get("groq_extra", []) if k]},
-            "openrouter": {"extra_keys": lambda: [k for k in api_keys.get("openrouter_extra", []) if k]},
-            "mistral": {"extra_keys": lambda: [k for k in api_keys.get("mistral_extra", []) if k]},
+            name: {"extra_keys": (
+                lambda n=name: [k for k in api_keys.get(n + "_extra", []) if k]
+            )}
+            for name in (
+                "groq", "openrouter", "mistral", "gemini", "deepseek",
+                "llm7", "github_models", "cloudflare", "cohere",
+                "sambanova", "zai", "agnes", "kilo_code", "scaleway",
+                "zen", "together", "fireworks", "cerebras", "nvidia",
+                "perplexity", "xai",
+            )
+            if name in _PROVIDER_CLASSES
         }
 
         for name in list(config.keys()):
             if name == "router":
                 continue
             provider_key = api_keys.get(name)
-            # Ollama and omni_route don't need API keys
-            if name not in ("ollama", "omni_route") and not provider_key:
+            # Ollama, omni_route and llm7 don't need API keys — llm7 serves a
+            # subset of its menu with the literal anonymous token "unused"
+            # (verified 2026-09-20: GLM-5.3-Flash + codestral-latest work).
+            if name not in ("ollama", "omni_route", "llm7") and not provider_key:
                 continue
             if name not in _PROVIDER_CLASSES:
+                continue
+            # Vendor-mismatch guard: a key copied from the wrong vendor (e.g.
+            # an OpenRouter ``sk-or-v1-…`` pasted as DEEPSEEK_API_KEY) can
+            # never authenticate — skip it loudly instead of paying a doomed
+            # 401 round-trip in every fallback walk.
+            if name == "deepseek" and provider_key.startswith("sk-or-v1-"):
+                logger.error(
+                    "deepseek: DEEPSEEK_API_KEY is an OpenRouter key "
+                    "(sk-or-…). Set a real DeepSeek key or remove it — "
+                    "OpenRouter requests should use the openrouter provider."
+                )
                 continue
             try:
                 cls = _lazy_import_provider(name)
@@ -319,7 +374,7 @@ class ProviderRouter:
                     if name_map:
                         restore_tool_names(response.tool_calls, name_map)
                     self._last_provider = provider_name
-                    self._last_model = provider.model
+                    self._last_model = _request_model or provider.model
                     metrics.counter(f"provider.ok.{provider_name}", 1)
                     if span is not None:
                         span.set_attribute("provider", provider_name)
@@ -373,7 +428,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             metrics.counter(f"provider.ok.{provider_name}", 1)
                             return response
                         except Exception as retry_err:
@@ -390,6 +445,76 @@ class ProviderRouter:
                 span.set_attribute("last_error", str(last_error)[:200])
 
         raise RuntimeError(f"All providers failed. Last error: {last_error}")
+
+    def _model_for(self, provider_name: str, request_model: str | None) -> str | None:
+        """Resolve the request-scoped model override for one provider.
+
+        Ollama accepts any local tag, so the caller's choice always applies
+        there. Cloud providers only honor a choice that matches a model they
+        are configured for (their configured model or fallback) — a choice
+        aimed at one provider must never silently rewrite another's request.
+        """
+        if not request_model:
+            return None
+        if provider_name == "ollama":
+            return request_model
+        provider = self._providers.get(provider_name)
+        if provider is None:
+            return None
+        owned = {provider.model, provider.config.get("model")}
+        fallback = self._config.get(provider_name, {}).get("fallback", {})
+        if isinstance(fallback, dict) and fallback.get("model"):
+            owned.add(fallback.get("model"))
+        owned.discard(None)
+        return request_model if request_model in owned else None
+
+    def list_models(self) -> list[dict]:
+        """Every selectable model across the configured provider fleet.
+
+        One entry per provider's primary and fallback model plus its dynamic
+        Ollama tags, marked with availability so the UI can gray out providers
+        that are offline (missing key, rate-limited, circuit open).
+        """
+        models: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for name in self._chain:
+            provider = self._providers.get(name)
+            if provider is None:
+                continue
+            cfg = self._config.get(name, {}) or {}
+            available = bool(provider.is_available)
+            entries: list[tuple[str, str]] = [(provider.model, "primary")]
+            fallback = cfg.get("fallback", {})
+            if isinstance(fallback, dict) and fallback.get("model") and fallback.get("model") != provider.model:
+                entries.append((fallback["model"], "fallback"))
+            if name == "ollama":
+                for tag in self.ollama_tags():
+                    entries.append((tag, "local"))
+            for model, kind in entries:
+                key = (name, model)
+                if not model or key in seen:
+                    continue
+                seen.add(key)
+                models.append({
+                    "id": f"{name}/{model}",
+                    "provider": name,
+                    "model": model,
+                    "kind": kind,
+                    "available": available,
+                })
+        return models
+
+    def ollama_tags(self) -> list[str]:
+        """Live model tags from a running Ollama daemon ([] when offline)."""
+        ollama = self._providers.get("ollama")
+        if ollama is None:
+            return []
+        try:
+            raw = _ollama_local_fetch(f"{ollama.base_url}/api/tags", timeout=3)
+            data = json.loads(raw)
+            return [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+        except Exception:
+            return []
 
     async def complete_stream(
         self,
@@ -415,17 +540,28 @@ class ProviderRouter:
         tracer = get_tracer()
         metrics = get_metrics()
         chain = self._get_available_chain()
+        # Consume any half-open probes this chain build admitted: the probe
+        # must be spent by REAL traffic, never by read-only is_available
+        # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.
+        for _probe_name in chain:
+            # getattr: minimal test fakes may not implement the optional
+            # probe contract (mirrors the captures_stream_tool_calls pattern).
+            getattr(self._providers[_probe_name], "consume_probe", lambda: None)()
         if not chain:
             raise RuntimeError("No LLM providers available.")
 
         if preferred_provider and preferred_provider in self._providers:
             chain = [preferred_provider] + [p for p in chain if p != preferred_provider]
 
+        _request_model = preferred_model
         last_error = None
         with tracer.span("router.stream") as span:
             for provider_name in chain:
                 provider = self._providers[provider_name]
-                # All providers get sanitized tools; Ollama provider re-maps internally
+                # Request-scoped model override: honor the caller's model on
+                # whichever provider actually owns it (Ollama swap + cloud
+                # providers whose configured model matches the choice).
+                _stream_model = self._model_for(provider_name, _request_model)
                 tools_param, name_map = sanitize_tools(tools)
                 retries = 0
                 while True:
@@ -436,6 +572,7 @@ class ProviderRouter:
                             first_chunk = True
                             async for chunk in provider.complete_stream(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_stream_model,
                             ):
                                 if first_chunk:
                                     first_chunk = False
@@ -457,7 +594,7 @@ class ProviderRouter:
                                 req.set_attribute("tokens_per_second", round(tokens_per_second, 1))
                             tracer.add_metric("llm.tokens_generated", tokens)
                         self._last_provider = provider_name
-                        self._last_model = provider.model
+                        self._last_model = _request_model or provider.model
                         self._invalidate_chain()
                         metrics.counter(f"provider.ok.{provider_name}", 1)
                         if span is not None:
@@ -468,13 +605,9 @@ class ProviderRouter:
                         kind = self._classify_error(e)
                         # Before first token: safe to retry or fallback
                         if first_chunk:
-                            if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
-                                self._notify("provider.rate_limit",
-                                             provider=provider_name, message=kind.value,
-                                             kind="warning", switching=True)
-                                break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
+                                # Transient throttle with retry budget left:
+                                # record_rate_limit never feeds the breaker.
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
@@ -485,6 +618,26 @@ class ProviderRouter:
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()
                                 continue
+                            if kind == ErrorKind.RATE_LIMIT:
+                                # Retry budget exhausted: still transient by
+                                # design (cooldown, not breaker) — switch on.
+                                provider.record_rate_limit()
+                            else:
+                                # ANY other pre-first-token failure counts
+                                # toward provider health. Previously only
+                                # fallback-worthy classes (quota/auth/
+                                # invalid) were counted: hard-down servers
+                                # (500/502), dead networks, and exhausted
+                                # retryable classes (503/timeout) never
+                                # armed the breaker — every turn re-paid
+                                # the dead head, including the 1-3s retry
+                                # sleep, until process restart.
+                                provider.record_failure(str(e)[:200])
+                            self._notify("provider.rate_limit",
+                                         provider=provider_name, message=kind.value,
+                                         kind="warning", switching=True)
+                            self._invalidate_chain()  # latch takes effect NOW, not after the 1s cache
+                            break  # try next provider
                         # After first token: cannot replay, fall through to next provider
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
@@ -523,6 +676,13 @@ class ProviderRouter:
         tracer = get_tracer()
         metrics = get_metrics()
         chain = self._get_available_chain()
+        # Consume any half-open probes this chain build admitted: the probe
+        # must be spent by REAL traffic, never by read-only is_available
+        # observers (status endpoint, UI polling) — see LLMProvider.consume_probe.
+        for _probe_name in chain:
+            # getattr: minimal test fakes may not implement the optional
+            # probe contract (mirrors the captures_stream_tool_calls pattern).
+            getattr(self._providers[_probe_name], "consume_probe", lambda: None)()
         if not chain:
             raise RuntimeError("No LLM providers available.")
 
@@ -553,7 +713,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(response.tool_calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             self._last_stream_tool_calls = response.tool_calls
                             yield response.text, response.tool_calls
                             if span is not None:
@@ -566,8 +726,10 @@ class ProviderRouter:
                             chars = 0
                             first_chunk = True
                             provider._init_stream_tool_calls()
+                            _stream_model = _request_model if provider_name == "ollama" else None
                             async for chunk in provider.complete_stream(
                                 messages, system_prompt, max_tokens, temperature, tools_param,
+                                model=_stream_model,
                             ):
                                 if first_chunk:
                                     first_chunk = False
@@ -584,7 +746,7 @@ class ProviderRouter:
                             if name_map:
                                 restore_tool_names(calls, name_map)
                             self._last_provider = provider_name
-                            self._last_model = provider.model
+                            self._last_model = _request_model or provider.model
                             self._last_stream_tool_calls = calls
                             yield None, calls
                             elapsed_ms = (time.perf_counter() - start) * 1000
@@ -604,24 +766,39 @@ class ProviderRouter:
                         kind = self._classify_error(e)
                         # Before first token: safe to retry or fallback
                         if first_chunk:
-                            if self._should_fallback(e):
-                                provider.record_rate_limit() if kind == ErrorKind.RATE_LIMIT else provider.record_failure(str(e)[:200])  # noqa: E501
-                                self._notify("provider.rate_limit",
-                                             provider=provider_name, message=kind.value,
-                                             kind="warning", switching=True)
-                                break  # try next provider
                             if self._is_rate_limit(e) and retries < 1:
+                                # Transient throttle with retry budget left:
+                                # record_rate_limit never feeds the breaker.
                                 retries += 1
                                 provider.record_rate_limit()
                                 delay = self._rate_limit_delay(e)
                                 self._notify("provider.rate_limit",
                                              provider=provider_name, message="rate limited",
                                              kind="warning", retry_after=delay)
-                                logger.info("%s: stream_typed retry in %.1fs", provider_name, delay)
+                                logger.info(
+                                    "%s: stream_typed retry in %.1fs", provider_name, delay
+                                )
                                 await asyncio.sleep(delay)
                                 self._invalidate_chain()
                                 continue
-                        # After first token or non-retryable: cannot replay, fall through
+                            if kind == ErrorKind.RATE_LIMIT:
+                                # Retry budget exhausted: still transient by
+                                # design (cooldown, not breaker) — switch on.
+                                provider.record_rate_limit()
+                            else:
+                                # ANY other pre-first-token failure counts
+                                # toward provider health — mirrors the
+                                # complete_stream except-path so hard-down
+                                # servers, dead networks, and exhausted
+                                # retryable classes arm the breaker on the
+                                # agent (typed) path too.
+                                provider.record_failure(str(e)[:200])
+                            self._notify("provider.rate_limit",
+                                         provider=provider_name, message=kind.value,
+                                         kind="warning", switching=True)
+                            self._invalidate_chain()  # latch takes effect NOW, not after the 1s cache
+                            break  # try next provider
+                        # After first token: cannot replay, fall through
                         last_error = e
                         metrics.counter(f"provider.fail.{provider_name}", 1)
                         self._invalidate_chain()

@@ -1,0 +1,21 @@
+{
+  "name": "api_connector_builder",
+  "description": "Build a new API connector or provider by matching the target repo's existing integration pattern exactly. Use when adding one more integration without inventing a second architecture.",
+  "instructions": "skills/instructions/soc/api-connector-builder.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "shell.execute",
+    "patch.replace",
+    "git.log"
+  ],
+  "tags": [
+    "api",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

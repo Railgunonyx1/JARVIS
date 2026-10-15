@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script defer src="js/boot.js"></script>
+  <link rel="preload" href="fonts/Doto-Medium.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/Geist-Regular.woff2" as="font" type="font/woff2" crossorigin />
+  <title>JARVIS Orbit</title>
+  <link rel="stylesheet" href="css/orbit.css" />
+  <link rel="stylesheet" href="css/ui.css" />
+</head>
+<body>
+
+<div class="browser">
+
+  <!-- ============================================================
+       NEW ORBIT SHELL — browser-first
+       Layers:
+         1. Utility rail (48px) — browser context only
+         2. Contextual sidebar (220px) — pinned sites, tabs, folders,
+            library, history, downloads — the tab bar lives here
+         3. Web surface — the page gets almost all of the screen
+         4. AI drawer (right) — openable, never a permanent column
+       -->
+
+  <!-- ── 3-column grid shell ─────────────────────────────── -->
+
+  <div class="app">
+
+    <!-- 1. UTILITY RAIL — 48px, immutable browser controls -->
+    <aside class="rail" id="rail">
+
+      <div class="rail-brand">
+        <span class="orbit-mark">O</span>
+      </div>
+
+      <nav class="rail-nav">
+        <button class="space active" data-space="orbit" title="Orbit">
+          <span class="space-icon">◉</span>
+          <span class="space-label">Orbit</span>
+        </button>
+        <button class="space" data-space="work" title="Work">
+          <span class="space-icon">W</span>
+          <span class="space-label">Work</span>
+        </button>
+        <button class="space" data-space="research" title="Research">
+          <span class="space-icon">R</span>
+          <span class="space-label">Research</span>
+        </button>
+        <button class="space" data-space="personal" title="Personal">
+          <span class="space-icon">P</span>
+          <span class="space-label">Personal</span>
+        </button>
+      </nav>
+
+      <div class="rail-bottom">
+
+        <button class="rail-button" id="themeButton" title="Toggle theme">
+          <span class="rail-icon">◐</span>
+          <span class="rail-label">Theme</span>
+        </button>
+
+        <button class="rail-button" id="compactButton" title="Compact mode">
+          <span class="rail-icon">⤢</span>
+          <span class="rail-label">Compact</span>
+        </button>
+
+        <button class="rail-button" id="settingsRailBtn" title="Settings">
+          <span class="rail-icon">⚙</span>
+          <span class="rail-label">Settings</span>
+        </button>
+
+      </div>
+
+    </aside>
+
+    <!-- 2. CONTEXTUAL SIDEBAR — the actual tab bar (Arc/Zen model) -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="sidebar-head">
+        <span class="workspace-name" id="workspaceName">Orbit</span>
+        <button class="workspace-menu" id="sidebarMenuBtn" title="Workspace menu">
+          ⋯
+        </button>
+      </div>
+
+      <div class="sidebar-search">
+        <button class="search-small" id="searchButton">
+          <span class="search-icon">⌕</span>
+          <span class="search-label">Search or command</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+      </div>
+
+      <div class="section-title">Pinned</div>
+
+      <div class="pinned" id="pinnedList">
+        <button class="pinned-item" data-action="goodeye">
+          <span class="pin-icon">G</span>
+          <span>God's Eye</span>
+        </button>
+        <button class="pinned-item" data-action="f1">
+          <span class="pin-icon">F</span>
+          <span>F1 Live</span>
+        </button>
+        <button class="pinned-item" data-action="worldmon">
+          <span class="pin-icon">W</span>
+          <span>World Monitor</span>
+        </button>
+        <button class="pinned-item" data-action="tasks">
+          <span class="pin-icon">T</span>
+          <span>Tasks</span>
+        </button>
+        <button class="pinned-item" data-action="memory">
+          <span class="pin-icon">M</span>
+          <span>Memory</span>
+        </button>
+      </div>
+
+      <div class="section-title">Tabs</div>
+
+      <div class="tab-list" id="tabList">
+        <!-- Tabs injected by JS (vertical, Arc/Zen) -->
+      </div>
+
+      <button class="new-tab" id="newTabBtn">
+        + New tab
+      </button>
+
+      <div class="section-title">Library</div>
+
+      <div class="library" id="libraryList">
+        <button class="lib-item" data-action="bookmarks">
+          <span class="lib-icon">★</span>
+          <span>Bookmarks</span>
+        </button>
+        <button class="lib-item" data-action="history">
+          <span class="lib-icon">↺</span>
+          <span>History</span>
+        </button>
+        <button class="lib-item" data-action="downloads">
+          <span class="lib-icon">↓</span>
+          <span>Downloads</span>
+        </button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="status">
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">Orbit online</span>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- 3. WEB SURFACE — almost all of the main column -->
+    <main class="main" id="main">
+
+      <!-- Unified browser toolbar — the primary interaction -->
+      <header class="toolbar" id="toolbar">
+
+        <div class="toolbar-start">
+          <button class="nav-btn" id="backBtn" title="Back" disabled>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.4" />
+            </svg>
+          </button>
+          <button class="nav-btn" id="forwardBtn" title="Forward" disabled>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.4" />
+            </svg>
+          </button>
+          <button class="nav-btn" id="reloadBtn" title="Reload">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8a5 5 0 019-2.5M13 8a5 5 0 01-9 2.5" stroke="currentColor" stroke-width="1.4" />
+              <path d="M12 2.5V5.5H9" stroke="currentColor" stroke-width="1.4" />
+            </svg>
+          </button>
+          <button class="nav-btn" id="homeBtn" title="Home">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8l6-5 6 5" stroke="currentColor" stroke-width="1.4" />
+              <path d="M4 7v6h3v-3h2v3h3V7" stroke="currentColor" stroke-width="1.4" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Address / command is the primary interaction -->
+        <div class="address">
+          <span class="address-icon">◉</span>
+          <span class="address-text">
+            <strong id="addressTitle">New Tab</strong>
+          </span>
+        </div>
+
+        <div class="toolbar-end">
+          <button class="toolbar-control" id="splitViewBtn" title="Split view (Ctrl+Shift+Plus)">
+            ⛶
+          </button>
+          <button class="toolbar-control ai-trigger" id="aiTrigger" title="Ask Orbit (Ctrl+J)">
+            AI
+            <span class="ai-chevron">▾</span>
+          </button>
+          <button class="toolbar-control" id="menuBtn" title="Menu">
+            ⋮
+          </button>
+        </div>
+
+      </header>
+
+      <!-- Content area — the web surface -->
+      <section class="content" id="content">
+
+        <!-- New Tab home — dashboard with real empty states -->
+        <div class="newtab-page" id="newtabPage">
+
+          <div class="nt-header">
+            <div class="nt-wordmark">ORBIT</div>
+            <div class="nt-meta">
+              <span id="ntDateTime">Saturday · 3 October 2026</span>
+            </div>
+          </div>
+
+          <label class="nt-command">
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            <input type="text" id="ntpSearch" placeholder="Search or enter URL" autofocus />
+          </label>
+
+          <div class="nt-modules">
+            <div class="nt-module">
+              <div class="nt-module-head">
+                <span class="nt-module-icon">⏰</span>
+                <span>Continue</span>
+              </div>
+              <div class="nt-module-body" id="ntContinue">
+                <!-- Continuation cards rendered by JS -->
+              </div>
+            </div>
+
+            <div class="nt-module">
+              <div class="nt-module-head">
+                <span class="nt-module-icon">⚡</span>
+                <span>Recent</span>
+              </div>
+              <div class="nt-module-body" id="ntRecent">
+                <!-- Recent tabs rendered by JS -->
+              </div>
+            </div>
+          </div>
+
+          <div class="nt-empty-state" id="ntEmptyState">
+            <div class="nt-empty-icon">◉</div>
+            <div class="nt-empty-title">No open tasks</div>
+            <div class="nt-empty-sub">Open a tab or press Ctrl+T to start browsing.</div>
+          </div>
+
+        </div>
+
+        <!-- All internal orbit:// pages rendered by JS -->
+        <div class="internal-pages" id="internalPages">
+          <div class="page" id="settingsPage"></div>
+          <div class="page workspace-page" id="goodeyePage"></div>
+          <div class="page workspace-page" id="worldmonPage"></div>
+          <div class="page workspace-page" id="f1Page"></div>
+          <div class="page" id="historyPage"></div>
+          <div class="page" id="bookmarksPage"></div>
+          <div class="page" id="downloadsPage"></div>
+          <div class="page" id="tasksPage"></div>
+          <div class="page" id="permissionsPage"></div>
+          <div class="page" id="memoryPage"></div>
+          <div class="page" id="extensionsPage"></div>
+          <div class="page" id="watchPage"></div>
+          <div class="page" id="toolsPage"></div>
+          <div class="page" id="diagnosticsPage"></div>
+          <div class="page" id="securityPage"></div>
+          <div class="page" id="privacyPage"></div>
+        </div>
+
+      </section>
+
+      <!-- 4. AI DRAWER — right side, openable, not a permanent column -->
+      <aside class="assistant" id="assistant">
+
+        <header class="assistant-head">
+          <span class="assistant-title">Orbit AI</span>
+          <span class="assistant-state" id="assistantState">● Ready</span>
+          <button id="closeAssistant" title="Close">×</button>
+        </header>
+
+        <section class="assistant-context">
+          <div class="context-label">Current context</div>
+          <div class="context-page" id="contextPage">New Tab</div>
+        </section>
+
+        <section class="assistant-thread" id="assistantThread">
+          <!-- Messages rendered by JS -->
+        </section>
+
+        <section class="assistant-composer">
+          <div class="composer-box">
+            <textarea id="assistantInput" placeholder="Ask Orbit…"></textarea>
+            <div class="composer-bottom">
+              <div class="model-select">
+                <button class="model-button" id="modelButton" title="Model: auto (router default)">
+                  <span id="modelName">Auto</span>
+                  <span class="model-chevron">▾</span>
+                </button>
+                <div class="model-menu" id="modelMenu" role="menu" hidden></div>
+              </div>
+              <div class="composer-actions">
+                <button class="compose-button">+</button>
+                <button class="compose-button">◉</button>
+                <button class="compose-button" id="voiceButton" title="Voice → push-to-talk">◉</button>
+                <div class="model-select">
+                  <button class="model-button" id="voiceModelButton">
+                    <span id="voiceModelName">Auto</span>
+                    <span class="model-chevron">▾</span>
+                  </button>
+                  <div class="model-menu" id="voiceModelMenu" role="menu" hidden></div>
+                </div>
+                <button class="compose-button send">↑</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </aside>
+
+      <!-- Resize handle between sidebar and main -->
+      <div class="resize-handle" id="resizeHandle"></div>
+
+    </main>
+
+  </div>
+
+  <!-- ── COMMAND PALETTE overlay ─────────────────────────── -->
+  <div class="command-overlay" id="commandOverlay">
+    <div class="command">
+      <input class="command-input" id="commandInput" placeholder="Search tabs, commands, history or enter a URL…" autocomplete="off" />
+      <div class="command-list" id="commandList">
+        <div class="command-item selected" data-command="search">
+          <span>⌕</span>
+          <span>Search the web</span>
+          <span class="command-key">Enter</span>
+        </div>
+        <div class="command-item" data-command="newtab">
+          <span>＋</span>
+          <span>New tab</span>
+          <span class="command-key">Ctrl T</span>
+        </div>
+        <div class="command-item" data-command="ask">
+          <span>AI</span>
+          <span>Ask Orbit</span>
+          <span class="command-key">Ctrl J</span>
+        </div>
+        <div class="command-item" data-command="split">
+          <span>▣</span>
+          <span>Split view</span>
+          <span class="command-key">Ctrl Shift +</span>
+        </div>
+        <div class="command-item" data-command="compact">
+          <span>◐</span>
+          <span>Toggle compact mode</span>
+          <span class="command-key">Ctrl Shift S</span>
+        </div>
+        <div class="command-item" data-command="reopen">
+          <span>↺</span>
+          <span>Reopen closed tab</span>
+          <span class="command-key">Ctrl Shift T</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Window controls ──────────────────────────────────── -->
+  <div class="win-controls">
+    <button class="win-btn" id="winMinimize" title="Minimize">
+      <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+    </button>
+    <button class="win-btn" id="winMaximize" title="Maximize">
+      <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><rect x="0.5" y="0.5" width="8" height="8" stroke="currentColor"/></svg>
+    </button>
+    <button class="win-btn win-close" id="winClose" title="Close">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+  </div>
+
+  <!-- ── Back/Forward/Reload buttons (top-left of content) ── -->
+  <div class="nav-controls">
+    <button class="nav-btn" id="backBtn2" title="Back">←</button>
+    <button class="nav-btn" id="forwardBtn2" title="Forward">→</button>
+    <button class="nav-btn" id="reloadBtn2" title="Reload">↻</button>
+  </div>
+
+  <!-- ── JARVIS Sidebar (Opera GX-style icon rail + panel) ── -->
+  <aside class="sidebar" id="sidebar">
+    <!-- Already present in the file; the JS wires the rail. -->
+  </aside>
+
+  <!-- ── Bookmark Bar ──────────────────────────────────────── -->
+  <div class="bookmark-bar hidden" id="bookmarkBar">
+    <button class="bm-add" id="bmAddBtn" title="Add bookmark">+</button>
+    <div class="bm-sep"></div>
+  </div>
+
+  <!-- ── Find on Page Bar ──────────────────────────────────── -->
+  <div class="find-bar" id="findBar">
+    <input type="text" id="findInput" placeholder="Find in page..." />
+    <span class="find-count" id="findCount">0/0</span>
+    <button class="find-btn" id="findPrev" title="Previous">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 8l4-4 4 4" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
+    <button class="find-btn" id="findNext" title="Next">
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
+    <button class="find-btn" id="findClose" title="Close">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/></svg>
+    </button>
+  </div>
+
+  <!-- ── Tab Context Menu ──────────────────────────────────── -->
+  <div class="context-menu" id="tabContextMenu">
+    <button class="ctx-item" data-action="newTab">New tab</button>
+    <button class="ctx-item" data-action="reopenTab">Reopen closed tab <span class="sp">Ctrl+Shift+T</span></button>
+    <button class="ctx-item" data-action="duplicate">Duplicate</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-action="pinTab">Pin tab</button>
+    <button class="ctx-item" data-action="muteTab">Mute tab</button>
+    <button class="ctx-item" data-action="groupTab">Add tab to group</button>
+    <button class="ctx-item" data-action="ungroupTab">Remove from group</button>
+    <button class="ctx-item" data-action="reload">Reload</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-action="closeTab">Close tab</button>
+    <button class="ctx-item" data-action="closeOthers">Close other tabs</button>
+    <button class="ctx-item" data-action="closeRight">Close tabs to the right</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item" data-action="copyUrl">Copy URL</button>
+  </div>
+
+  <!-- ── Browser Menu ──────────────────────────────────────── -->
+  <div class="popover browser-menu" id="browserMenu">
+    <button class="menu-item" data-action="newTab">New tab <span class="sp">Ctrl+T</span></button>
+    <button class="menu-item" data-action="newWindow">New window</button>
+    <button class="menu-item" data-action="incognito">New private window</button>
+    <button class="menu-item" data-action="reopenTab">Reopen closed tab <span class="sp">Ctrl+Shift+T</span></button>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-action="find">Find in page <span class="sp">Ctrl+F</span></button>
+    <button class="menu-item" data-action="zoomIn">Zoom in <span class="sp">Ctrl++</span></button>
+    <button class="menu-item" data-action="zoomOut">Zoom out <span class="sp">Ctrl+-</span></button>
+    <button class="menu-item" data-action="zoomReset">Reset zoom <span class="sp">Ctrl+0</span></button>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-nav="orbit://history">History</button>
+    <button class="menu-item" data-nav="orbit://downloads">Downloads</button>
+    <button class="menu-item" data-nav="orbit://bookmarks">Bookmarks</button>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-nav="orbit://tasks">Tasks</button>
+    <button class="menu-item" data-nav="orbit://memory">Memory</button>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-nav="orbit://settings">Settings</button>
+    <button class="menu-item" data-nav="orbit://diagnostics">Diagnostics</button>
+    <button class="menu-item" data-nav="orbit://privacy">Privacy Report</button>
+    <div class="menu-sep"></div>
+    <button class="menu-item" id="aboutOrbit">About JARVIS Orbit</button>
+  </div>
+
+  <!-- ── System Popover ───────────────────────────────────── -->
+  <div class="popover system-popup" id="systemPopup">
+    <div class="pop-header">
+      <span class="pop-title">System</span>
+      <span class="sys-ver" id="sysVersion">v0.1.0</span>
+    </div>
+    <div class="sys-grid">
+      <div class="sys-row"><span>JARVIS</span><span class="sys-val" id="sysJarvis"><span class="perf-dot off"></span>OFF</span></div>
+      <div class="sys-row"><span>Tabs</span><span class="sys-val" id="sysTabs">0</span></div>
+      <div class="sys-row"><span>Zoom</span><span class="sys-val" id="sysZoom">100%</span></div>
+      <div class="sys-row"><span>FPS</span><span class="sys-val" id="sysFps">--</span></div>
+      <div class="sys-row"><span>Memory</span><span class="sys-val" id="sysMem">--</span></div>
+      <div class="sys-row"><span>DOM nodes</span><span class="sys-val" id="sysDom">--</span></div>
+    </div>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-nav="orbit://diagnostics">Open diagnostics</button>
+  </div>
+
+  <!-- ── Extension Popup ───────────────────────────────────── -->
+  <div class="popover ext-popup" id="extPopup">
+    <div class="pop-header">
+      <span class="pop-title">Extensions</span>
+    </div>
+    <div class="ext-row"><div class="ext-icon">J</div><div class="ext-info"><div class="ext-name">JARVIS</div><div class="ext-sub">Built into Orbit</div></div><span class="chip">Built in</span></div>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-nav="orbit://extensions">Manage extensions</button>
+  </div>
+
+  <!-- ── Profile Dropdown ───────────────────────────────────── -->
+  <div class="popover profile-popup" id="profilePopup">
+    <div class="pop-header">
+      <div class="profile-avatar">P</div>
+      <div><div class="pop-title">JARVIS Orbit</div><div class="pop-sub">Personal · Sync on</div></div>
+    </div>
+    <button class="menu-item">Switch profile</button>
+    <button class="menu-item">Add profile</button>
+    <button class="menu-item">Guest mode</button>
+    <div class="menu-sep"></div>
+    <button class="menu-item">Lock profile</button>
+    <button class="menu-item" data-nav="orbit://settings">Profile settings</button>
+  </div>
+
+  <!-- ── Site Settings Popup (lock icon) ───────────────────── -->
+  <div class="popover site-popup" id="sitePopup">
+    <div class="pop-header">
+      <span class="pop-title">Site settings</span>
+    </div>
+    <div class="site-current" id="siteCurrent">
+      <div class="site-host" id="siteHost">—</div>
+      <div class="site-sub" id="siteConn">Secure connection</div>
+    </div>
+    <div class="menu-sep"></div>
+    <div class="site-perms" id="sitePerms">
+      <div class="site-perm-row"><span>Permissions</span><span class="meta">Loading…</span></div>
+    </div>
+    <div class="menu-sep"></div>
+    <button class="menu-item danger" id="siteClearData">Clear site data</button>
+    <button class="menu-item" data-nav="orbit://permissions">Manage permissions</button>
+  </div>
+
+  <!-- ── Floating Glyph (when sidebar closed, agent active) ── -->
+  <div class="float-glyph" id="floatGlyph">
+    <div class="sb-matrix" id="floatMatrix" data-state="running"></div>
+    <div>
+      <b id="floatTitle">Researching</b>
+      <div id="floatSub">click to open</div>
+    </div>
+  </div>
+
+  <!-- ── Floating JARVIS Chat Window (draggable, movable) ──── -->
+  <div class="jarvis-float" id="jarvisFloat">
+    <div class="jarvis-float-head" id="jarvisFloatHead">
+      <div class="sb-matrix" id="jarvisFloatMatrix" data-state="idle"></div>
+      <b>JARVIS</b>
+      <span class="jarvis-float-badge" id="jarvisFloatBadge">FLOAT</span>
+      <div class="jarvis-float-grow"></div>
+      <button class="jarvis-float-btn" id="jarvisFloatMin" title="Minimize">
+        <svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="1" fill="currentColor"/></svg>
+      </button>
+      <button class="jarvis-float-btn" id="jarvisFloatClose" title="Close">
+        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1l-8 8" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+    <div class="jarvis-float-body" id="jarvisFloatBody">
+      <div class="jarvis-float-welcome">
+        <div class="jfw-title">JARVIS</div>
+        <div class="jfw-meta">FLOAT MODE · FOLLOWS YOU</div>
+        <div class="jfw-sub">Ask anything. Drag the header, resize from the corner.</div>
+      </div>
+    </div>
+    <div class="jarvis-float-input">
+      <input type="text" id="jarvisFloatInput" placeholder="Ask JARVIS..." spellcheck="false" />
+      <button id="jarvisFloatSend" title="Send">→</button>
+    </div>
+    <div class="jarvis-float-resize" id="jarvisFloatResize"></div>
+  </div>
+
+  <!-- ── Approval Modal ────────────────────────────────────── -->
+  <div class="modal-bg" id="modalBg">
+    <div class="modal critical" id="approvalModal">
+      <div class="modal-risk">Risk · High</div>
+      <h3 id="modalTitle">JARVIS wants to take an action</h3>
+      <p id="modalDesc">This action requires your approval.</p>
+      <dl class="modal-kv" id="modalKv"></dl>
+      <div class="modal-actions">
+        <button class="btn danger" id="modalDeny">Deny</button>
+        <button class="btn" id="modalAllowOnce">Allow once</button>
+        <button class="btn primary" id="modalAllowSite">Always for this site</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Command Palette ───────────────────────────────────── -->
+  <div class="cmd-palette-bg" id="cmdPaletteBg">
+    <div class="cmd-palette" id="cmdPalette">
+      <div class="cmd-search">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4"/></svg>
+        <input type="text" id="cmdInput" placeholder="Type a command or search tabs..." autocomplete="off" spellcheck="false" />
+        <kbd class="cmd-kbd">Esc</kbd>
+      </div>
+      <div class="cmd-results" id="cmdResults"></div>
+      <div class="cmd-footer">
+        <span><kbd>↑↓</kbd> Navigate</span>
+        <span><kbd>Enter</kbd> Select</span>
+        <span><kbd>Esc</kbd> Close</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast Container ───────────────────────────────────── -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ── Session Banner ────────────────────────────────────── -->
+  <div class="session-banner" id="sessionBanner">
+    <span id="sessionBannerMsg">Previous session found</span>
+    <button class="session-banner-btn" id="sessionDismiss">Dismiss</button>
+    <button class="session-banner-btn primary" id="sessionRestore">Restore</button>
+  </div>
+
+</div><!-- end .browser -->
+
+<!-- ── Scripts ─────────────────────────────────────────────── -->
+<script defer src="js/ui.js"></script>
+<script defer src="js/chat.js"></script>
+<script defer src="js/core.js"></script>
+<script defer src="js/tabs.js"></script>
+<script defer src="js/sidebar.js"></script>
+<script defer src="js/jarvis.js"></script>
+<script defer src="js/nav-tools.js"></script>
+<script defer src="js/menus.js"></script>
+<script defer src="js/pages.js"></script>
+<script defer src="js/settings-ux.js"></script>
+<script defer src="js/data-pages.js"></script>
+<link rel="stylesheet" href="css/f1-nothing.css" />
+<link rel="stylesheet" href="css/orbit-v2.css" />
+<link rel="stylesheet" href="css/orbit-v2-sidebar.css" />
+<link rel="stylesheet" href="css/orbit-v2-polish.css" />
+<link rel="stylesheet" href="css/minimal.css" />
+<script defer src="js/v2.js"></script>
+<script defer src="js/model-button.js"></script>
+<script defer src="js/v2-watch.js"></script>
+<script defer src="js/v2-sidebar.js"></script>
+<script defer src="js/needle-agent.js"></script>
+<script defer src="js/renderer.js"></script>
+<script defer src="js/module-loader.js"></script>
+
+<!-- ── Reader Mode Overlay ────────────────────────────────── -->
+<div class="reader-overlay" id="readerOverlay">
+  <button class="reader-close" id="readerClose" title="Close reader">✕</button>
+  <div class="reader-header"><h3>Reader Mode</h3></div>
+  <div class="reader-content" id="readerContent"></div>
+</div>
+
+<!-- ── Agent Status Bar ──────────────────────────────────── -->
+<div class="agent-bar" id="agentBar">
+  <div class="agent-bar-dot"></div>
+  <div class="agent-bar-text" id="agentBarText">Agent running...</div>
+  <button class="agent-bar-stop" id="agentBarStop">Stop</button>
+</div>
+
+</body>
+</html>

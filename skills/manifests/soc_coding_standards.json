@@ -1,0 +1,19 @@
+{
+  "name": "coding_standards",
+  "description": "Baseline cross-project coding conventions for naming, readability, immutability, and code-quality review. Use detailed frontend or backend skills for framework-specific patterns.",
+  "instructions": "skills/instructions/soc/coding-standards.md",
+  "tools": [
+    "filesystem.read",
+    "search.code",
+    "patch.replace",
+    "filesystem.write"
+  ],
+  "tags": [
+    "coding",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

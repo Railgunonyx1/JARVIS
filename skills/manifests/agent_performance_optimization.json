@@ -1,0 +1,14 @@
+{
+  "name": "performance_optimization",
+  "description": "Optimizes application performance across frontend, backend, queries, and databases. Use when performance requirements exist, when you suspect performance regressions, when Core Web Vitals or load times need improvement, when N+1 query patterns need fixing, or when profiling reveals bottlenecks.",
+  "tools": [],
+  "tags": [
+    "performance",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/performance_optimization.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\performance-optimization"
+}

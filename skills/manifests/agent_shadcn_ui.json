@@ -1,0 +1,19 @@
+{
+  "name": "shadcn_ui",
+  "description": "Expert guidance for integrating and building applications with shadcn/ui components, including component discovery, installation, customization, and best practices.",
+  "tools": [
+    "filesystem.read",
+    "search.code"
+  ],
+  "tags": [
+    "ui",
+    "react",
+    "frontend",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/shadcn_ui.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\shadcn-ui"
+}

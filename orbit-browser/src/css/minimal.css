@@ -1,0 +1,209 @@
+/* ══════════════════════════════════════════════════════════════════
+   ORBIT minimal theme layer — Premium Utilitarian Minimalism
+   Active only under html[data-theme="minimal"]. Tokens live in
+   tokens.css; this file carries component treatment:
+   - hairline 1px #EAEAEA borders on every card/divider
+   - editorial serif display type with tight tracking
+   - crisp 8px radii, ultra-diffuse shadows (<0.05), no gradients
+   - muted pastels only as spot color (tags, kbd, code, banners)
+   - quiet motion: transform/opacity only, IntersectionObserver reveals
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Chrome surfaces: warm bone, hairlines, no glass ──────────── */
+[data-theme="minimal"] .titlebar,
+[data-theme="minimal"] .toolbar {
+  background: var(--jb-bg);
+  border-bottom: 1px solid #EAEAEA;
+}
+[data-theme="minimal"] .titlebar { backdrop-filter: none; }
+
+/* Tabs: quiet document tabs — active = white sheet on bone rail */
+[data-theme="minimal"] .tab {
+  border-radius: 6px 6px 0 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+[data-theme="minimal"] .tab.active {
+  background: #FFFFFF;
+  border-top-color: transparent;
+  box-shadow: none;
+}
+[data-theme="minimal"] .tab.active::after {
+  background: #111111;               /* ink kerb, not neon */
+  box-shadow: none;
+}
+[data-theme="minimal"] .tab:hover:not(.active) {
+  background: #F1F0ED;
+  border-top-color: transparent;
+}
+
+/* Omnibox: white field, hairline, ink focus */
+[data-theme="minimal"] .omnibox:focus-within {
+  border-color: #111111;
+  box-shadow: none;
+  background: #FFFFFF;
+}
+
+/* ── 2. Editorial display type ───────────────────────────────────── */
+[data-theme="minimal"] .nt-wordmark,
+[data-theme="minimal"] .ge-title,
+[data-theme="minimal"] .sb-title,
+[data-theme="minimal"] .sheet h1 {
+  font-family: Newsreader, 'Instrument Serif', Georgia, serif;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-weight: 500;
+  color: #111111;
+}
+/* Doto's dot-matrix kerb reads as decoration in this language — replace
+   with a quiet hairline rule. */
+[data-theme="minimal"] .nt-wordmark::after {
+  height: 1px;
+  width: 64px;
+  background: #EAEAEA;
+}
+[data-theme="minimal"] .ge-title::after {
+  height: 1px;
+  background: #EAEAEA;
+}
+
+/* NTP: document hero — centered, generous whitespace, no dot grid */
+[data-theme="minimal"] .newtab-page {
+  background: var(--jb-void);
+}
+[data-theme="minimal"] .nt-greeting {
+  font-family: Newsreader, 'Instrument Serif', Georgia, serif;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: #787774;
+}
+
+/* ── 3. Bento cards: sheets on bone ──────────────────────────────── */
+[data-theme="minimal"] .nt-tile,
+[data-theme="minimal"] .nt-telemetry,
+[data-theme="minimal"] .nt-context-card,
+[data-theme="minimal"] .sheet .group,
+[data-theme="minimal"] .ge-log-wrap,
+[data-theme="minimal"] .sb-panel,
+[data-theme="minimal"] .ui-modal {
+  background: #FFFFFF;
+  border: 1px solid #EAEAEA;
+  border-radius: 8px;
+  box-shadow: none;
+}
+[data-theme="minimal"] .nt-tile {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+[data-theme="minimal"] .nt-tile:hover,
+[data-theme="minimal"] .nt-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: #DDD;
+  background: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+[data-theme="minimal"] .nt-tile::after {
+  background: #111111;
+}
+
+/* Telemetry cells: hairline dividers, mono meta */
+[data-theme="minimal"] .nt-tel-cell { border-right: 1px solid #F1F0ED; }
+[data-theme="minimal"] .nt-tel-value { color: #111111; }
+
+/* ── 4. Keystroke micro-UI ───────────────────────────────────────── */
+[data-theme="minimal"] kbd {
+  border: 1px solid #EAEAEA;
+  border-radius: 4px;
+  background: #F7F6F3;
+  color: #111111;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+/* ── 5. Buttons: ink primary, outline secondary, scale-on-press ──── */
+[data-theme="minimal"] .btn.primary,
+[data-theme="minimal"] .chip-btn {
+  background: #111111;
+  color: #FFFFFF;
+  border: 1px solid #111111;
+  border-radius: 6px;
+  box-shadow: none;
+}
+[data-theme="minimal"] .btn.primary:hover { background: #333333; }
+[data-theme="minimal"] .btn.primary:active { transform: scale(0.98); }
+[data-theme="minimal"] .chip-btn:not(.primary) {
+  background: #FFFFFF;
+  color: #2F3437;
+  border: 1px solid #EAEAEA;
+  border-radius: 6px;
+}
+[data-theme="minimal"] .ge-btn {
+  background: #111111;
+  color: #FFFFFF;
+  border-radius: 6px;
+  border: 1px solid #111111;
+}
+[data-theme="minimal"] .ge-btn:hover { background: #333333; }
+
+/* Tags & status chips: pastel pills, xs uppercase wide-tracked */
+[data-theme="minimal"] .chip,
+[data-theme="minimal"] .chip.ok { background: #EDF3EC; color: #346538; }
+[data-theme="minimal"] .chip.bad { background: #FDEBEC; color: #9F2F2D; }
+[data-theme="minimal"] .chip,
+[data-theme="minimal"] .chip.ok,
+[data-theme="minimal"] .chip.bad {
+  border-radius: 9999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── 6. Sidebar: paper panel, hairline rail ──────────────────────── */
+[data-theme="minimal"] .sidebar {
+  background: #FFFFFF;
+  border-right: 1px solid #EAEAEA;
+  box-shadow: none;
+}
+[data-theme="minimal"] .sb-rail { background: var(--jb-void); border-right: 1px solid #EAEAEA; }
+[data-theme="minimal"] .rail-btn { border-radius: 8px; }
+[data-theme="minimal"] .rail-btn.on {
+  background: #111111;
+  color: #FFFFFF;
+  box-shadow: none;
+}
+[data-theme="minimal"] .rail-btn.on::before { content: none; }
+[data-theme="minimal"] .sb-composer { box-shadow: none; border-top: 1px solid #F1F0ED; }
+[data-theme="minimal"] .sbx-row { border-radius: 8px; }
+
+/* ── 7. Workspace pages (God's Eye, F1, World Monitor) ───────────── */
+[data-theme="minimal"] .workspace-page { background: var(--jb-void); }
+[data-theme="minimal"] .ge-banner {
+  background: #FBF3DB;
+  color: #956400;
+  border: 1px solid rgba(149, 100, 0, 0.15);
+  border-radius: 8px;
+}
+[data-theme="minimal"] .ge-log-err { color: #9F2F2D; }
+
+/* ── 8. Quiet motion: scroll-entry reveals ───────────────────────── */
+/* Opt-in via .mn-reveal; the observer adds .mn-in. transform/opacity only. */
+[data-theme="minimal"] .mn-reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--mn-i, 0) * 80ms);
+}
+[data-theme="minimal"] .mn-reveal.mn-in {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="minimal"] .mn-reveal { transition: none; opacity: 1; transform: none; }
+}
+
+/* ── 9. Selection & focus: pastel ring, ink outline ──────────────── */
+[data-theme="minimal"] button:focus-visible,
+[data-theme="minimal"] input:focus-visible,
+[data-theme="minimal"] textarea:focus-visible {
+  outline: 2px solid #1F6C9F;
+  outline-offset: 2px;
+}

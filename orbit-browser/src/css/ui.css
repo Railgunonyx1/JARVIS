@@ -1,0 +1,180 @@
+/* ══════════════════════════════════════════════════════════════════
+   UI primitives — design tokens + component classes
+   (shadcn/ui conventions on the vanilla stack: semantic tokens,
+   variant-driven components, Radix-grade accessibility styling)
+
+   Consumes the existing --jb-* Nothing/F1 palette. Semantic aliases
+   below are the ONLY surface components may style against; retheming
+   means editing this one block.
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── semantic tokens (mapped from the Nothing/F1 palette) ──────── */
+  --ui-bg:            var(--jb-void, #0a0a0a);
+  --ui-fg:            var(--jb-text, #eaeaea);
+  --ui-muted:         var(--jb-mute, #8a8a8a);
+  --ui-surface:       var(--jb-surface-hover, #161616);
+  --ui-surface-strong: var(--jb-surface-active, #1f1f1f);
+  --ui-border:        var(--jb-border, rgba(255, 255, 255, 0.08));
+  --ui-border-strong: var(--jb-line-hard, rgba(255, 255, 255, 0.14));
+  --ui-accent:        var(--jb-accent, #d7fe47);
+  --ui-accent-fg:     var(--jb-void, #0a0a0a);
+  --ui-danger:        var(--jb-error, #ff5c5c);
+  --ui-ring:          var(--jb-accent, #d7fe47);
+  --ui-radius:        var(--radius-sharp, 2px);
+  --ui-radius-lg:     4px;
+  --ui-shadow:        0 10px 36px rgba(0, 0, 0, 0.5);
+  --ui-font-mono:     var(--jb-font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  --ui-speed:         120ms;
+}
+
+/* ═══ Button ══════════════════════════════════════════════════════ */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-fg);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--ui-speed) ease, border-color var(--ui-speed) ease,
+              color var(--ui-speed) ease, transform var(--ui-speed) ease;
+}
+.ui-btn:hover   { background: var(--ui-surface); }
+.ui-btn:active  { transform: translateY(0.5px); }
+.ui-btn:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 1px; }
+.ui-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ui-btn[aria-pressed="true"] { background: var(--ui-accent); color: var(--ui-accent-fg); border-color: var(--ui-accent); }
+
+/* variants */
+.ui-btn--primary { background: var(--ui-accent); color: var(--ui-accent-fg); border-color: var(--ui-accent); }
+.ui-btn--primary:hover { filter: brightness(1.08); background: var(--ui-accent); }
+.ui-btn--ghost   { border-color: transparent; }
+.ui-btn--ghost:hover { background: var(--ui-surface); border-color: transparent; }
+.ui-btn--outline { background: transparent; }
+.ui-btn--danger  { color: var(--ui-danger); border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent); }
+.ui-btn--danger:hover { background: color-mix(in srgb, var(--ui-danger) 14%, transparent); }
+
+/* sizes */
+.ui-btn--sm { height: 22px; padding: 0 8px; font-size: 11px; }
+.ui-btn--icon { width: 28px; padding: 0; }
+
+/* ═══ Popup (anchored popover — the model/menu container) ═════════ */
+.ui-popup {
+  position: fixed;
+  z-index: 900;
+  min-width: 180px;
+  max-width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--ui-surface-strong);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0;
+  box-shadow: var(--ui-shadow);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity var(--ui-speed) ease, transform var(--ui-speed) ease;
+}
+.ui-popup.open { opacity: 1; transform: translateY(0); }
+
+.ui-popup-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--ui-border);
+  margin-bottom: 4px;
+}
+.ui-popup-title { font-size: 12px; font-weight: 500; color: var(--ui-fg); letter-spacing: 0.03em; }
+.ui-popup-hint  { font-size: 10px; color: var(--ui-muted); font-family: var(--ui-font-mono); }
+
+/* ═══ Menu (menuitem list inside a popup) ═════════════════════════ */
+.ui-menu { display: flex; flex-direction: column; gap: 1px; }
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-fg);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-menu-item:hover:not([disabled]),
+.ui-menu-item:focus-visible { background: var(--ui-surface); outline: none; }
+.ui-menu-item[aria-checked="true"] { color: var(--ui-accent); }
+.ui-menu-item[disabled] { opacity: 0.35; cursor: not-allowed; }
+.ui-menu-item--danger { color: var(--ui-danger); }
+.ui-menu-item-icon { width: 16px; text-align: center; flex: none; font-size: 12px; }
+.ui-menu-item-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-menu-item-check { color: var(--ui-accent); font-size: 11px; flex: none; }
+.ui-menu-item-sub { display: block; font-size: 10.5px; color: var(--ui-muted); margin-top: 1px; }
+.ui-menu-sep { height: 1px; margin: 4px 2px; background: var(--ui-border); flex: none; }
+.ui-menu-shortcut { font-family: var(--ui-font-mono); font-size: 10px; color: var(--ui-muted); flex: none; }
+
+/* ═══ Modal ═══════════════════════════════════════════════════════ */
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity var(--ui-speed) ease;
+}
+.ui-overlay.open { opacity: 1; }
+
+.ui-modal {
+  width: min(440px, calc(100vw - 48px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 18px;
+  background: var(--ui-surface-strong);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0;
+  box-shadow: var(--ui-shadow);
+  transform: translateY(4px) scale(0.99);
+  transition: transform var(--ui-speed) ease;
+}
+.ui-overlay.open .ui-modal { transform: translateY(0) scale(1); }
+.ui-modal-title { font-size: 14px; font-weight: 500; color: var(--ui-fg); letter-spacing: 0.02em; }
+.ui-modal-desc { font-size: 12px; color: var(--ui-muted); margin-top: 4px; }
+.ui-modal-body { margin-top: 14px; font-size: 12.5px; color: var(--ui-fg); }
+.ui-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* ═══ Toast (aria-live region lives in index.html) ════════════════ */
+.toast-container { max-height: 60vh; overflow: hidden; }
+
+/* ═══ Motion / a11y ═══════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .ui-popup, .ui-overlay, .ui-modal, .ui-btn { transition: none; }
+}
+
+/* ═══ View transitions (native View Transition API) ═══════════ */
+/* Only the content region cross-fades — omnibox, rail, and tab strip stay
+   static: the right feel for lateral (no-depth) navigation. The ::view-
+   transition pseudo tree hangs off the document root, so scoping is done
+   by NAMING the content region: named elements are excluded from the root
+   snapshot, so chrome never participates in the fade. */
+#contentArea { view-transition-name: orbit-content; }
+::view-transition-old(orbit-content) { animation: orbit-vt-out 160ms ease both; }
+::view-transition-new(orbit-content) { animation: orbit-vt-in 160ms ease both; }
+@keyframes orbit-vt-out { to { opacity: 0; } }
+@keyframes orbit-vt-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(orbit-content),
+  ::view-transition-new(orbit-content) { animation: none !important; }
+}

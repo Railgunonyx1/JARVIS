@@ -1,0 +1,19 @@
+{
+  "name": "minimalist_ui",
+  "description": "Clean editorial-style interfaces. Warm monochrome palette, typographic contrast, flat bento grids, muted pastels. No gradients, no heavy shadows.",
+  "tools": [
+    "filesystem.write",
+    "filesystem.read"
+  ],
+  "tags": [
+    "ui",
+    "design",
+    "frontend",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/minimalist_ui.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\minimalist-ui"
+}

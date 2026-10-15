@@ -303,10 +303,13 @@ class MemoryAPI:
 
             # ── Layer 1: CORE MEMORY (always injected) ──
             # Identity, preferences, and priorities MUST appear in every conversation.
-            # These are fetched by category, not by recency.
+            # These are fetched by category, not by recency. Priorities and
+            # preferences carry the agent's marching orders, so they render
+            # FIRST — the budget truncation at the tail must never swallow them
+            # behind a long identity profile.
             if c._kv is not None:
                 core_lines = ["[CORE MEMORY]"]
-                core_categories = ["identity", "preferences", "priorities"]
+                core_categories = ["priorities", "preferences", "identity"]
                 core_found = False
                 for category in core_categories:
                     items = c._kv.recent(limit=20, category=category)
@@ -355,6 +358,38 @@ class MemoryAPI:
                 knowledge = c._knowledge.format_for_prompt(project, max_tokens=max_tokens)
                 if knowledge:
                     sections.append(knowledge)
+
+            # ── Layer 5: MEMORY INDEX (Mark-LIII pattern) ──
+            # The model cannot recall what it does not know exists. When the
+            # prompt carries only recent entries, anything older is invisible:
+            # "who is Ayşe?" gets "I don't know" while the fact sits on disk.
+            # Index the keys NOT already shown so memory.retrieve can find
+            # them. Interleave categories rather than sorting by recency so
+            # one dominant category cannot push others off the end.
+            if c._kv is not None:
+                try:
+                    shown = set()
+                    for section in sections:
+                        for line in section.split("\n"):
+                            if line.startswith("- "):
+                                shown.add(line.split(":")[0][2:])
+                    all_keys: list[str] = []
+                    for cat in ("identity", "preferences", "priorities", "notes", "general"):
+                        try:
+                            for item in c._kv.recent(limit=30, category=cat):
+                                k = str(item.get("key", ""))
+                                if k and k not in shown and k not in all_keys:
+                                    all_keys.append(k)
+                        except Exception:
+                            continue
+                    # Interleave: round-robin across categories already done by
+                    # the loop order above; cap the index so prompts stay lean.
+                    if all_keys:
+                        idx_lines = ["[MEMORY INDEX — keys not shown above; use memory.retrieve]"]
+                        idx_lines.extend(f"- {k}" for k in all_keys[:40])
+                        sections.append("\n".join(idx_lines))
+                except Exception:
+                    pass
 
             if not sections:
                 return ""

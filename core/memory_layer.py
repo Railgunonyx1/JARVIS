@@ -15,15 +15,14 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
-from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
+from typing import Any
 
 
 class MemoryEntity:
     """Represents a tracked entity in the memory layer."""
 
-    def __init__(self, name: str, properties: Dict[str, Any],
+    def __init__(self, name: str, properties: dict[str, Any],
                  first_seen: str = None, last_seen: str = None,
                  ttl_days: int = 30):
         self.name = name
@@ -32,7 +31,7 @@ class MemoryEntity:
         self.last_seen = last_seen or datetime.utcnow().isoformat()
         self.ttl_days = ttl_days
 
-    def update(self, new_properties: Dict[str, Any], ttl_days: int = None):
+    def update(self, new_properties: dict[str, Any], ttl_days: int = None):
         """Update entity properties and last_seen timestamp."""
         self.properties.update(new_properties)
         self.last_seen = datetime.utcnow().isoformat()
@@ -80,8 +79,8 @@ class MemoryLayer:
         self.facts_file = os.path.join(self.storage_path, "facts.json")
 
         # In-memory caches
-        self._entities: Dict[str, MemoryEntity] = {}
-        self._facts: List[MemoryFact] = []
+        self._entities: dict[str, MemoryEntity] = {}
+        self._facts: list[MemoryFact] = []
 
         # Load from disk
         self._load_from_disk()
@@ -94,7 +93,7 @@ class MemoryLayer:
         # Load entities
         if os.path.exists(self.memory_file):
             try:
-                with open(self.memory_file, "r") as f:
+                with open(self.memory_file) as f:
                     data = json.load(f)
                 for name, entity_data in data.get("entities", {}).items():
                     entity = MemoryEntity(
@@ -111,7 +110,7 @@ class MemoryLayer:
         # Load facts
         if os.path.exists(self.facts_file):
             try:
-                with open(self.facts_file, "r") as f:
+                with open(self.facts_file) as f:
                     data = json.load(f)
                 for fact_data in data.get("facts", []):
                     fact = MemoryFact(
@@ -160,7 +159,7 @@ class MemoryLayer:
     # Entity Management
     # -----------------------------------------------------------------
 
-    def remember_entity(self, name: str, properties: Dict[str, Any],
+    def remember_entity(self, name: str, properties: dict[str, Any],
                        ttl_days: int = 30) -> None:
         """Remember an entity with properties and TTL."""
         entity = self._entities.get(name)
@@ -171,7 +170,7 @@ class MemoryLayer:
             self._entities[name] = entity
         self._save_to_disk()
 
-    def recall_entity(self, name: str) -> Optional[Dict[str, Any]]:
+    def recall_entity(self, name: str) -> dict[str, Any] | None:
         """Recall entity properties by name."""
         entity = self._entities.get(name)
         if entity is None:
@@ -195,7 +194,7 @@ class MemoryLayer:
             "ttl_days": entity.ttl_days,
         }
 
-    def update_entity(self, name: str, properties: Dict[str, Any],
+    def update_entity(self, name: str, properties: dict[str, Any],
                       ttl_days: int = None) -> None:
         """Update entity properties."""
         self.remember_entity(name, properties, ttl_days or 30)
@@ -220,7 +219,7 @@ class MemoryLayer:
         self._prune_facts()
         self._save_to_disk()
 
-    def recall(self, query: str) -> Dict[str, Any]:
+    def recall(self, query: str) -> dict[str, Any]:
         """Recall relevant information for a query."""
         results = {
             "entities": {},
@@ -282,7 +281,7 @@ class MemoryLayer:
     # Public API
     # -----------------------------------------------------------------
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return memory layer statistics."""
         expired_entities = sum(
             1 for e in self._entities.values() if e.is_expired()

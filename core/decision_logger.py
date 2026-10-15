@@ -6,7 +6,7 @@ Bridges the two existing stores that were previously unwired:
   - AuditLog  (audit.db):  per-tool execution record (allowed / success / ms).
 
 Wiring points: core/jarvis.py (process_text, process_text_streaming,
-_handle_action) and core/executor.py (AgentExecutor).
+_handle_action) and the quarantined _quarantine/core/executor.py (AgentExecutor).
 """
 from __future__ import annotations
 
@@ -30,6 +30,21 @@ def _params_hash(params: dict[str, Any]) -> str:
     except Exception:
         raw = str(sorted((params or {}).items())).encode("utf-8", errors="ignore")
     return hashlib.sha256(raw).hexdigest()[:12]
+
+
+def _scrub_params_values(text: str, params: dict[str, Any]) -> str:
+    """Strip any argument values that leaked into a persisted message.
+
+    Defense-in-depth for the audit store: reasons, errors, and other
+    diagnostics may embed parameter values (e.g. a URL in a sensitive-site
+    denial). Raw values never reach the store — only the params_hash does.
+    """
+    if not text:
+        return text
+    for value in (params or {}).values():
+        if isinstance(value, str) and len(value) >= 3 and value in text:
+            text = text.replace(value, f"<redacted:{len(value)}>")
+    return text
 
 
 class DecisionLogger:
@@ -115,7 +130,9 @@ class DecisionLogger:
                 allowed=allowed,
                 duration_ms=round(duration_ms, 1),
                 success=success,
-                error=(error or "")[:300],
+                error=_scrub_params_values(
+                    (error or "")[:300], params or {},
+                ),
                 params_hash=_params_hash(params or {}),
                 mode=mode,
                 trace_id=trace_id,

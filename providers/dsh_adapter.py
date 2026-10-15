@@ -7,7 +7,7 @@ This module provides:
 
 Usage (when DSH is available):
     from providers.dsh_adapter import DSHRuntimeManager
-    
+
     dsh = DSHRuntimeManager()
     dsh.start()
     result = dsh.run_task("Fix the authentication bug")
@@ -35,7 +35,6 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger("jarvis.dsh")
 
@@ -69,11 +68,11 @@ class DSHResult:
 
 class DSHRuntimeManager:
     """Manages the DSH runtime subprocess.
-    
+
     The runtime is a Node.js process that communicates via JSON-RPC over stdio.
     It loads the Cordis plugin system and provides agent capabilities.
     """
-    
+
     def __init__(self, config: DSHConfig | None = None):
         self.config = config or DSHConfig()
         self._process: subprocess.Popen | None = None
@@ -83,26 +82,26 @@ class DSHRuntimeManager:
         self._request_id = 0
         self._pending: dict[int, threading.Event] = {}
         self._responses: dict[int, dict] = {}
-    
+
     @property
     def is_available(self) -> bool:
         """Check if DSH runtime is available and running."""
         return self._available and self._process is not None
-    
+
     def start(self) -> bool:
         """Start the DSH runtime subprocess.
-        
+
         Returns:
             True if started successfully, False otherwise.
         """
         if self._available:
             return True
-        
+
         # Check if DSH is installed
         if not DSH_RUNTIME.exists() and not self._find_dsh_binary():
             logger.warning("DSH runtime not found at %s", DSH_RUNTIME)
             return False
-        
+
         try:
             # Build environment
             env = {
@@ -110,12 +109,12 @@ class DSHRuntimeManager:
                 "NODE_ENV": "production",
                 **self.config.env_overrides,
             }
-            
+
             # Build command
             cmd = [str(DSH_RUNTIME), "--headless"]
             if self.config.cordis_config:
                 cmd.extend(["--cordis", self.config.cordis_config])
-            
+
             # Start process
             self._process = subprocess.Popen(
                 cmd,
@@ -126,7 +125,7 @@ class DSHRuntimeManager:
                 text=True,
                 bufsize=1,
             )
-            
+
             # Start reader thread
             self._reader_thread = threading.Thread(
                 target=self._read_loop,
@@ -134,7 +133,7 @@ class DSHRuntimeManager:
                 name="dsh-reader",
             )
             self._reader_thread.start()
-            
+
             # Wait for ready signal
             if self._wait_for_ready(timeout=10.0):
                 self._available = True
@@ -143,12 +142,12 @@ class DSHRuntimeManager:
             else:
                 self.stop()
                 return False
-                
+
         except Exception as e:
             logger.error("Failed to start DSH runtime: %s", e)
             self.stop()
             return False
-    
+
     def stop(self) -> None:
         """Stop the DSH runtime subprocess."""
         self._available = False
@@ -163,14 +162,14 @@ class DSHRuntimeManager:
                     pass
             self._process = None
         logger.info("DSH runtime stopped")
-    
+
     def run_task(self, task: str, timeout: float | None = None) -> DSHResult:
         """Run a task through the DSH agent.
-        
+
         Args:
             task: The task description/prompt.
             timeout: Timeout in seconds (uses config default if None).
-            
+
         Returns:
             DSHResult with the agent's response.
         """
@@ -180,9 +179,9 @@ class DSHRuntimeManager:
                 response="",
                 error="DSH runtime not available",
             )
-        
+
         timeout = timeout or self.config.timeout_seconds
-        
+
         try:
             # Send task via JSON-RPC
             request_id = self._next_request_id()
@@ -196,29 +195,29 @@ class DSHRuntimeManager:
                     "max_tokens": self.config.max_tokens,
                 },
             }
-            
+
             # Wait for response
             event = threading.Event()
             self._pending[request_id] = event
-            
+
             self._send_request(request)
-            
+
             if not event.wait(timeout=timeout):
                 return DSHResult(
                     success=False,
                     response="",
                     error=f"DSH task timed out after {timeout}s",
                 )
-            
+
             response = self._responses.pop(request_id, {})
-            
+
             if "error" in response:
                 return DSHResult(
                     success=False,
                     response="",
                     error=response["error"].get("message", "Unknown error"),
                 )
-            
+
             result = response.get("result", {})
             return DSHResult(
                 success=True,
@@ -227,14 +226,14 @@ class DSHRuntimeManager:
                 finish_reason=result.get("finish_reason", ""),
                 events=result.get("events", []),
             )
-            
+
         except Exception as e:
             return DSHResult(
                 success=False,
                 response="",
                 error=str(e),
             )
-    
+
     def _find_dsh_binary(self) -> bool:
         """Try to find DSH binary in common locations."""
         import shutil
@@ -244,7 +243,7 @@ class DSHRuntimeManager:
             DSH_RUNTIME.symlink_to(dsh_path)
             return True
         return False
-    
+
     def _wait_for_ready(self, timeout: float) -> bool:
         """Wait for DSH runtime to signal ready."""
         deadline = time.time() + timeout
@@ -253,45 +252,45 @@ class DSHRuntimeManager:
                 return False
             time.sleep(0.1)
         return self._process is not None and self._process.poll() is None
-    
+
     def _next_request_id(self) -> int:
         """Get next unique request ID."""
         with self._lock:
             self._request_id += 1
             return self._request_id
-    
+
     def _send_request(self, request: dict) -> None:
         """Send a JSON-RPC request to DSH."""
         if self._process and self._process.stdin:
             line = json.dumps(request) + "\n"
             self._process.stdin.write(line)
             self._process.stdin.flush()
-    
+
     def _read_loop(self) -> None:
         """Read responses from DSH in background thread."""
         if not self._process or not self._process.stdout:
             return
-        
+
         try:
             for line in self._process.stdout:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 try:
                     response = json.loads(line)
                     request_id = response.get("id")
-                    
+
                     if request_id and request_id in self._pending:
                         self._responses[request_id] = response
                         self._pending[request_id].set()
                     else:
                         # Notification or unknown response
                         logger.debug("DSH notification: %s", response)
-                        
+
                 except json.JSONDecodeError:
                     logger.warning("Invalid JSON from DSH: %s", line[:100])
-                    
+
         except Exception as e:
             logger.error("DSH reader error: %s", e)
         finally:
@@ -300,27 +299,27 @@ class DSHRuntimeManager:
 
 class DSHAgentClient:
     """High-level client for interacting with DSH agent.
-    
+
     Wraps DSHRuntimeManager with JARVIS-specific conveniences.
     """
-    
+
     def __init__(self, runtime: DSHRuntimeManager | None = None):
         self._runtime = runtime or DSHRuntimeManager()
         self._initialized = False
-    
+
     def initialize(self) -> bool:
         """Initialize the DSH connection."""
         if self._initialized:
             return True
-        
+
         if self._runtime.start():
             self._initialized = True
             return True
         return False
-    
+
     def execute(self, task: str, **kwargs) -> DSHResult:
         """Execute a task through DSH.
-        
+
         This is the main entry point for JARVIS to use DSH capabilities.
         """
         if not self._initialized:
@@ -330,9 +329,9 @@ class DSHAgentClient:
                     response="",
                     error="DSH initialization failed",
                 )
-        
+
         return self._runtime.run_task(task, **kwargs)
-    
+
     def shutdown(self) -> None:
         """Shutdown the DSH connection."""
         self._runtime.stop()

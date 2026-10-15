@@ -18,6 +18,7 @@ extend-exclude = [
     "agents",
     "systems",
     "legacy",
+    "_quarantine",
 ]
 
 [tool.ruff.lint]
@@ -43,5 +44,32 @@ known-first-party = [
     "core", "memory", "providers", "tools", "runtime", "cli", "security",
 ]
 
+[tool.ruff.lint.extend-per-file-ignores]
+# JS-expression templates deliberately use %/.format over f-strings (escaped
+# braces inside JS bodies). Line-length exceptions are long embedded strings.
+"orbit/cdp.py" = ["UP031", "UP032", "E501"]
+"memory/user_profile.py" = ["E501"]
+"tools/__init__.py" = ["E501"]
+"core/harness_selector.py" = ["E501"]
+
+# Benchmark argparse help strings run long; the timing callback lambda keeps
+# the controller reference in scope while _time() measures the raw call.
+"benchmark/gate.py" = ["E501"]
+"benchmark/orbit_timing.py" = ["PLW0108"]
+
+# One-off dev/audit tooling: cp1252 decode fallbacks (E722) and CLI progress
+# prints (E501) are intentional; subprocess probes check the rc explicitly.
+"scripts/*" = ["E501", "E722", "PLW1510"]
+
+# Eval system-prompt text is prose; line length is layout guidance, not a rule.
+"optimizer/run_eval.py" = ["E501"]
+
+# Tests intentionally use mock lambdas, one-line assert rows, long fixture
+# strings, and assert-False negative checks.
+"tests/*" = ["PLW0108", "E702", "E501", "E731", "B011"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: live Chromium/Playwright integration tests (opt-in via JARVIS_RUN_BROWSER_LIVE=1)",
+]

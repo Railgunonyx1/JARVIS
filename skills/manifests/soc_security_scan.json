@@ -1,0 +1,23 @@
+{
+  "name": "security_scan",
+  "description": "Scan your Claude Code configuration (.claude/ directory) for security vulnerabilities, misconfigurations, and injection risks using AgentShield. Checks CLAUDE.md, settings.json, MCP servers, hooks, and agent definitions.",
+  "instructions": "skills/instructions/soc/security-scan.md",
+  "tools": [
+    "security.scan_code",
+    "security.scan_secrets",
+    "security.check_permissions",
+    "filesystem.read",
+    "filesystem.write",
+    "shell.execute",
+    "search.code",
+    "patch.replace"
+  ],
+  "tags": [
+    "security",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

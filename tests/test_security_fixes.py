@@ -71,28 +71,28 @@ def test_sandbox_execute_blocks_blocked_command():
 # ── generated-code gate + static scan ────────────────────────────────────────
 
 def test_generated_code_gate_off_by_default(monkeypatch):
-    import core.executor as ex
+    from security.code_scan import generated_code_enabled, run_generated_code
     monkeypatch.delenv("JARVIS_ENABLE_GENERATED_CODE", raising=False)
-    assert ex._generated_code_enabled() is False
+    assert generated_code_enabled() is False
     with pytest.raises(RuntimeError, match="disabled by default"):
-        ex._run_generated_code("anything")
+        run_generated_code("anything")
 
 
 def test_generated_code_gate_on_via_env(monkeypatch):
-    import core.executor as ex
+    from security.code_scan import generated_code_enabled
     monkeypatch.setenv("JARVIS_ENABLE_GENERATED_CODE", "1")
-    assert ex._generated_code_enabled() is True
+    assert generated_code_enabled() is True
 
 
 def test_generated_code_scan_rejects_forbidden():
-    import core.executor as ex
+    from security.code_scan import check_generated_code
     with pytest.raises(RuntimeError, match="forbidden pattern"):
-        ex._check_generated_code("import os\nos.system('format c:')")
+        check_generated_code("import os\nos.system('format c:')")
 
 
 def test_generated_code_scan_allows_benign():
-    import core.executor as ex
-    ex._check_generated_code(
+    from security.code_scan import check_generated_code
+    check_generated_code(
         "print('hello')\nfor i in range(3):\n    print(i)"
     )
 

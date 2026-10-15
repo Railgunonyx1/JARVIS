@@ -1,0 +1,20 @@
+{
+  "name": "repo_mine_tools",
+  "description": "Build new JARVIS agent tools from the GitHub repo-mine list following house conventions: lazy imports, root-safe writes, registry registration, risk classification, hermetic tests, and the plan-not-execute orchestration boundary.",
+  "instructions": "skills/instructions/repo_mine_tools.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "search.find"
+  ],
+  "tags": [
+    "repo-mine",
+    "tools",
+    "agent-capabilities"
+  ],
+  "risk": "low",
+  "timeout": 300,
+  "version": "1.0.0"
+}

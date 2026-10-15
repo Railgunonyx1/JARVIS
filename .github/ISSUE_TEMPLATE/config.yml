@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Community Discussion
+    url: https://github.com/Railgunonyx1/JARVIS/discussions
+    about: Ask questions, share workflows, and discuss ideas with the JARVIS community.
+  - name: 📖 System Documentation
+    url: https://github.com/Railgunonyx1/JARVIS/tree/main/docs
+    about: Explore architecture specifications, API references, and setup guides.
+  - name: 🛡️ Report a Security Vulnerability
+    url: https://github.com/Railgunonyx1/JARVIS/security/policy
+    about: Privately report potential security vulnerabilities to maintainers.

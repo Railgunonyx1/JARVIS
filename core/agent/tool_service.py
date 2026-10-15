@@ -75,6 +75,7 @@ class ToolExecutionService:
         self._logger = _logger
         self._bus = bus
         self._mode = mode
+        self._session_id: str = ""  # session identity stamped on emitted events
 
     async def execute_tool(
         self,
@@ -94,14 +95,60 @@ class ToolExecutionService:
         not surface as task steps in the observation.
         """
         start = time.perf_counter()
+        if session_id:
+            self._session_id = session_id
         has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
+
+        # JSON-repair guard: unrepairable argument JSON flows here from the
+        # provider parse sites with __json_error set. Reject as MALFORMED_TOOL
+        # so the model retries — never execute a tool on guessed/empty args.
+        # The retry nudge includes the model's original raw JSON and the
+        # tool's real schema so the FIRST retry is usually correct.
+        from providers.json_repair import JSON_ERROR_KEY, JSON_RAW_KEY
+        if isinstance(call.arguments, dict) and call.arguments.get(JSON_ERROR_KEY):
+            parse_err = str(call.arguments[JSON_ERROR_KEY])
+            raw_snippet = str(call.arguments.get(JSON_RAW_KEY, ""))
+            schema_tool = self._registry.get(call.name)
+            error = f"Malformed tool arguments (unparseable JSON): {parse_err}"
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
+            if step is not None:
+                self._observer.step_finished(step, "error", 0.0, error)
+            if append_to_messages is not None:
+                lines = [
+                    f"ERROR: {error}",
+                    "",
+                    f"YOUR ORIGINAL ARGUMENTS (invalid JSON):",
+                    raw_snippet or "(not captured)",
+                    "",
+                    "Fix the JSON — close all quotes/brackets, escape newlines as \\n",
+                    "inside strings — and reissue the call with valid JSON arguments.",
+                ]
+                if schema_tool is not None:
+                    import json as _json
+                    try:
+                        lines += [
+                            "",
+                            f"EXPECTED SCHEMA for {call.name}:",
+                            _json.dumps(schema_tool.parameters)[:800],
+                        ]
+                    except (TypeError, ValueError):
+                        pass
+                append_to_messages.append({
+                    "role": "tool", "tool_call_id": call.id, "name": call.name,
+                    "content": "\n".join(lines),
+                })
+            return ToolExecutionResult(
+                tool_name=call.name, call_id=call.id, error=error,
+                failure_class=FailureClass.MALFORMED_TOOL,
+                duration_ms=(time.perf_counter() - start) * 1000,
+            )
 
         # Look up tool
         tool = self._registry.get(call.name)
         if tool is None:
             error = f"Tool '{call.name}' is not registered"
-            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "error", 0.0, error)
             if append_to_messages is not None:
@@ -116,13 +163,13 @@ class ToolExecutionService:
             )
 
         # Permission check
-        self._emit("tool.requested", {"tool": call.name}, trace_id)
+        self._emit("tool.requested", {"tool": call.name}, trace_id, session_id)
         allowed, reason = await self._permissions.check(
             tool, call.arguments, trace_id, session_id,
         )
         self._observer.observe_permission(call.name, allowed, reason) if has_obs else None
         if not allowed:
-            self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id)
+            self._emit("tool.denied", {"tool": call.name, "reason": reason}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "denied", 0.0, reason)
             if append_to_messages is not None:
@@ -130,6 +177,14 @@ class ToolExecutionService:
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
                     "content": f"PERMISSION DENIED: {reason}",
                 })
+            # Every verdict is auditable: a decision to deny is as important
+            # as an executed tool. The executor only records run tools, so the
+            # service records denials here (single boundary, no bypass).
+            self._logger.record_tool(
+                trace_id, tool.permission, call.arguments,
+                allowed=False, success=False, error=reason,
+                mode=self._mode, session_id=session_id,
+            )
             return ToolExecutionResult(
                 tool_name=call.name, call_id=call.id,
                 permission_denied=True, permission_reason=reason,
@@ -143,7 +198,7 @@ class ToolExecutionService:
             result = await asyncio.wait_for(
                 self._executor.execute(
                     call.name, call.arguments, trace_id,
-                    mode=self._mode, session_id=session_id,
+                    mode=self._mode, session_id=session_id, tool_call_id=call.id,
                 ),
                 timeout=_tool_timeout,
             )
@@ -159,7 +214,7 @@ class ToolExecutionService:
                 "Tool '%s' timed out — background thread abandoned (%d total abandoned)",
                 call.name, abandoned + 1,
             )
-            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
             if step is not None:
                 self._observer.step_finished(step, "error", _tool_timeout * 1000, error)
             if append_to_messages is not None:
@@ -190,9 +245,9 @@ class ToolExecutionService:
             })
 
         if result.success:
-            self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id)
+            self._emit("tool.executed", {"tool": call.name, "duration_ms": duration_ms}, trace_id, session_id)
         else:
-            self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id)
+            self._emit("tool.failed", {"tool": call.name, "error": result.error}, trace_id, session_id)
 
         # Record tool result in AgentState if provided
         if state is not None:
@@ -301,7 +356,7 @@ class ToolExecutionService:
         return self._permissions.set_mode(mode)
 
     def _emit(self, name: str, payload: dict[str, Any] | None = None,
-              trace_id: str = "") -> None:
+              trace_id: str = "", session_id: str = "") -> None:
         if self._bus is None:
             return
         try:
@@ -309,6 +364,7 @@ class ToolExecutionService:
             self._bus.publish(BusEvent(
                 name=name, payload=payload or {},
                 source="tool_execution_service", trace_id=trace_id,
+                session_id=session_id or self._session_id,
             ))
         except Exception:
             pass

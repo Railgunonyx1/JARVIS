@@ -305,12 +305,8 @@ def parse_openai_tool_calls(choice_message) -> list[ToolCall]:
         fn = getattr(entry, "function", None)
         if fn is None or not getattr(fn, "name", ""):
             continue
-        try:
-            arguments = json.loads(fn.arguments or "{}")
-            if not isinstance(arguments, dict):
-                arguments = {"value": arguments}
-        except (TypeError, ValueError):
-            arguments = {}
+        from providers.json_repair import arguments_with_error_marker
+        arguments, _ok = arguments_with_error_marker(fn.arguments or "")
         calls.append(ToolCall(name=fn.name, arguments=arguments, id=getattr(entry, "id", "") or ""))
     return calls
 
@@ -329,24 +325,19 @@ def parse_ollama_tool_calls(message) -> list[ToolCall]:
         tool_calls = message.get("tool_calls") or []
     for i, entry in enumerate(tool_calls or []):
         # Handle both dict entries and Pydantic ToolCall objects
+        from providers.json_repair import arguments_with_error_marker
         if isinstance(entry, dict):
             fn = entry.get("function", {})
             name = fn.get("name", "")
             args = fn.get("arguments") or {}
             if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except (TypeError, ValueError):
-                    args = {}
+                args, _ok = arguments_with_error_marker(args)
         else:
             fn = getattr(entry, "function", None)
             name = getattr(fn, "name", "") if fn else ""
             args = getattr(fn, "arguments", {}) if fn else {}
             if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except (TypeError, ValueError):
-                    args = {}
+                args, _ok = arguments_with_error_marker(args)
         if name:
             calls.append(ToolCall(name=name, arguments=args or {}, id=f"ollama_{i}"))
     return calls
@@ -402,9 +393,11 @@ def parse_gemini_function_calls(response) -> list[ToolCall]:
 
 
 def json_args(arguments_json: str) -> dict[str, Any]:
-    """Safely parse a JSON-encoded arguments string into a dict."""
-    try:
-        parsed = json.loads(arguments_json or "{}")
-        return parsed if isinstance(parsed, dict) else {"value": parsed}
-    except (TypeError, ValueError):
-        return {}
+    """Safely parse a JSON-encoded arguments string into a dict.
+
+    Uses tolerant repair; unrepairable JSON carries JSON_ERROR_KEY so the
+    tool service rejects the call as MALFORMED_TOOL rather than executing
+    with silently-empty arguments."""
+    from providers.json_repair import arguments_with_error_marker
+    args, _ok = arguments_with_error_marker(arguments_json or "")
+    return args

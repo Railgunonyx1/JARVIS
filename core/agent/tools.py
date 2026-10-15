@@ -38,11 +38,14 @@ class AgentToolExecutor:
     # Class-level set of abandoned background tasks (for monitoring/logging).
     _abandoned_tasks: set[str] = set()
     _abandoned_lock = threading.Lock()
+    # Class-level active cancellations keyed by tool_call_id so any executor
+    # instance and background thread can observe a cooperative cancellation.
+    _active_cancellations: dict[str, threading.Event] = {}
+    _cancellations_lock = threading.Lock()
 
     def __init__(self, registry: ToolRegistry, decision_logger: DecisionLogger) -> None:
         self.registry = registry
         self.logger = decision_logger
-        self._active_cancellations: dict[str, threading.Event] = {}
 
     @classmethod
     def abandoned_count(cls) -> int:
@@ -54,26 +57,31 @@ class AgentToolExecutor:
     def _run_with_cancel(handler, arguments: dict, cancel_event: threading.Event, tool_name: str):
         """Run a sync tool handler, checking the cancellation flag periodically.
 
-        For tools that do work in a loop (e.g. shell.execute with polling),
-        they can check ``AgentToolExecutor.current_cancellation()`` to stop early.
-        This wrapper provides an additional check at the call boundary.
+        Cooperative tools (those with ``cooperative=True`` on the handler) may
+        loop internally and check ``AgentToolExecutor.current_cancellation()``;
+        this wrapper still enforces a final check so a cancelled call returns
+        early. Non-cooperative handlers run once — the outer ``asyncio.wait_for``
+        enforces the hard timeout and the thread is abandoned on expiry.
         """
+        if cancel_event.is_set():
+            return {"success": False, "error": "cancelled"}
         return handler(arguments)
 
     @classmethod
-    def current_cancellation(cls, tool_name: str = "") -> threading.Event | None:
-        """Return the cancellation event for a running tool, or None.
+    def current_cancellation(cls, tool_call_id: str = "") -> threading.Event | None:
+        """Return the cancellation event for a running tool call, or None.
 
-        Tools that support cancellation can call this to check if they
-        should stop:
+        Tools that support cancellation can call this with their tool_call_id
+        to check if they should stop:
 
-            cancel = AgentToolExecutor.current_cancellation("shell.execute")
+            cancel = AgentToolExecutor.current_cancellation("tc_20240101_00001")
             if cancel and cancel.is_set():
                 return early_result
         """
-        # This is a simplified lookup; for production use, tools would
-        # receive the event via their handler arguments.
-        return None
+        if not tool_call_id:
+            return None
+        with cls._cancellations_lock:
+            return cls._active_cancellations.get(tool_call_id)
 
     async def execute(
         self,
@@ -82,8 +90,10 @@ class AgentToolExecutor:
         trace_id: str,
         mode: str = "",
         session_id: str = "",
+        tool_call_id: str = "",
     ) -> ToolResult:
         tool = self.registry.get(name)
+        key = tool_call_id or f"{name}:{trace_id}"
         start = time.time()
 
         if tool is None:
@@ -102,10 +112,12 @@ class AgentToolExecutor:
             if asyncio.iscoroutinefunction(tool.handler):
                 raw = await tool.handler(arguments)
             else:
-                # Create a cancellation event for this tool execution.
-                # Cooperative tools can check this to stop early.
+                # Create a cancellation event for this tool call, keyed by the
+                # unique tool_call_id so concurrent runs of the same tool don't
+                # collide. Cooperative tools can check this to stop early.
                 cancel_event = threading.Event()
-                self._active_cancellations[name] = cancel_event
+                with self._cancellations_lock:
+                    self._active_cancellations[key] = cancel_event
                 # Inner thread safety margin: up to 5s under the service timeout
                 # so the outer asyncio.wait_for (ToolExecutionService) fires first.
                 inner_timeout = max(0.5, float(getattr(tool, "timeout_seconds", 60.0)) - 5.0)
@@ -123,7 +135,8 @@ class AgentToolExecutor:
                     )
                     raise
                 finally:
-                    self._active_cancellations.pop(name, None)
+                    with self._cancellations_lock:
+                        self._active_cancellations.pop(key, None)
             duration_ms = (time.time() - start) * 1000
             result = self._normalize(raw, tool.name, duration_ms)
 

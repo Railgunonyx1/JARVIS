@@ -1,0 +1,21 @@
+{
+  "name": "repo_intake_and_plan",
+  "description": "Rigor Intake helper: README-first repository scanning for reproduction tasks. Scans repo structure, extracts documented commands from README and project files, conservatively classifies inference/evaluation/training candidates, and returns the smallest trustworthy reproduction plan. Planning only - never executes.",
+  "instructions": "skills/instructions/repo_intake_and_plan/SKILL.md",
+  "tools": [
+    "filesystem.read",
+    "filesystem.list",
+    "filesystem.tree",
+    "search.code",
+    "shell.execute"
+  ],
+  "tags": [
+    "repo-intake",
+    "reproduction",
+    "planning",
+    "agent"
+  ],
+  "risk": "low",
+  "timeout": 120,
+  "version": "1.0.0"
+}

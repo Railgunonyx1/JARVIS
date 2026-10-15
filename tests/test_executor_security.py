@@ -23,6 +23,13 @@ _skip_windows_exec = pytest.mark.skipif(
     reason="Security executor subprocess spawn fails on this Windows environment",
 )
 
+# Governed powershell/cmd hosts only exist on Windows; the tests below use
+# unresolvable first tokens so they deterministically reach the governed path.
+_skip_not_windows = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Governed powershell/cmd host is Windows-only",
+)
+
 
 def make_request(**kw):
     from security.executor import ExecRequest
@@ -70,7 +77,6 @@ def test_structured_run_uses_shell_false(monkeypatch):
 
 # ── 2. command chaining cannot execute ──────────────────────────────────────
 
-@_skip_windows_exec
 @pytest.mark.parametrize("cmd", [
     "echo hi & whoami",
     "echo hi && whoami",
@@ -80,9 +86,28 @@ def test_structured_run_uses_shell_false(monkeypatch):
     "echo hi; echo bye",
 ])
 def test_chaining_rejected(cmd):
+    # Blocked before any spawn: shell operators are rejected in raw commands
+    # even when the first token resolves (regression: Git Bash's echo.EXE on
+    # PATH used to divert this into the STRUCTURED path, which neither
+    # blocked nor ran).
     result = execute(command=cmd)
     assert result.blocked
-    assert "policy" in result.reason
+    assert "blocked" in result.reason.lower() or "policy" in result.reason
+
+
+def test_raw_chaining_blocked_even_when_first_token_resolves():
+    result = execute(command=f"{PYEXE} -c print(1); whoami")
+    assert result.blocked
+    assert "blocked" in result.reason.lower() or "policy" in result.reason
+
+
+def test_raw_command_with_resolvable_exe_runs_structured():
+    # Regression: raw commands classified STRUCTURED spawned an empty
+    # executable (argv=['']) because the resolved exe was never written back.
+    result = execute(command=f"{PYEXE} -c print('raw-ok')")
+    assert result.success
+    assert "raw-ok" in result.stdout
+    assert result.mode == "structured"
 
 
 # ── 3. executable allow/deny ────────────────────────────────────────────────
@@ -205,19 +230,22 @@ def test_kill_all_terminates_processes():
 
 # ── 11. governed PowerShell invocation ──────────────────────────────────────
 
-@_skip_windows_exec
+@_skip_not_windows
 def test_powershell_path_executes():
-    result = execute(command="echo hello-from-ps")
+    # "Write-Output" never resolves to a file, so the command deterministically
+    # reaches the governed powershell host on Windows.
+    result = execute(command="Write-Output hello-from-ps")
     assert result.success
     assert "hello-from-ps" in result.stdout
     assert result.mode == "powershell"
 
 
-@_skip_windows_exec
+@_skip_not_windows
 def test_cmd_path_executes():
-    result = execute(command="echo hello-from-cmd", shell="cmd")
+    # "ver" is a cmd builtin (no ver.exe), so it deterministically reaches
+    # the governed cmd host on Windows.
+    result = execute(command="ver", shell="cmd")
     assert result.success
-    assert "hello-from-cmd" in result.stdout
     assert result.mode == "cmd"
 
 
@@ -238,7 +266,6 @@ def test_shell_tool_raw_legit():
     assert "legit-raw" in out.output
 
 
-@_skip_windows_exec
 def test_shell_tool_blocked_injection():
     from tools.shell import shell_execute
     out = shell_execute({"command": "echo hi & calc"})

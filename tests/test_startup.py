@@ -76,7 +76,6 @@ def test_router_warm_preimports_sdks(monkeypatch):
     import providers.router as router_mod
 
     warmed = []
-    original_warm = router_mod.ProviderRouter.warm
 
     def patched_warm(self):
         # Instead of running the background thread, call _warm synchronously

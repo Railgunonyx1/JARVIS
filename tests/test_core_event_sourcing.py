@@ -9,9 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import tempfile
-import time
 from pathlib import Path
 
 import pytest
@@ -50,7 +48,6 @@ from core.types import (
     Message,
     Mode,
     Plan,
-    PlanStep,
     RiskLevel,
     SessionState,
     StepStatus,
@@ -59,7 +56,6 @@ from core.types import (
     VerificationStatus,
     VerificationStep,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Types

@@ -1,0 +1,9 @@
+{
+  "name": "data_analysis",
+  "description": "Load, clean, and analyze structured data (CSV/JSON/JSONL logs, benchmark results, telemetry): compute distributions and percentiles, find outliers and trends, cross-reference sources, and present a concise findings summary. Use when the user asks to analyze logs, compare benchmark runs, summarize metrics, or answer questions from a dataset.",
+  "tools": ["shell.execute", "filesystem.read", "filesystem.list", "search.find", "system.status"],
+  "tags": ["data", "analysis", "statistics", "logs", "metrics"],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

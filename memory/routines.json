@@ -1,0 +1,44 @@
+{
+  "safe": {
+    "steps": [
+      {
+        "tool": "web.search",
+        "args": {
+          "query": "q"
+        }
+      }
+    ],
+    "created": "2026-09-22T14:16:09",
+    "runs": 1
+  },
+  "counter": {
+    "steps": [
+      {
+        "tool": "system.status",
+        "args": {}
+      }
+    ],
+    "created": "2026-09-22T14:16:09",
+    "runs": 2
+  },
+  "broken": {
+    "steps": [
+      {
+        "tool": "not_a_real_tool",
+        "args": {}
+      }
+    ],
+    "created": "2026-09-22T14:16:09",
+    "runs": 0
+  },
+  "known": {
+    "steps": [
+      {
+        "tool": "system.status",
+        "args": {}
+      }
+    ],
+    "created": "2026-09-22T14:16:09",
+    "runs": 0
+  }
+}

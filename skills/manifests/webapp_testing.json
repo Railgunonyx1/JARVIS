@@ -1,0 +1,10 @@
+{
+  "name": "webapp_testing",
+  "description": "Interact with and test local web applications end-to-end: verify frontend functionality, debug UI behavior, capture browser screenshots, and read browser console logs. Use when a web UI change needs behavioral verification, a form/flow needs exercising, or a rendering bug needs reproducing. Ported from Anthropic's webapp-testing (Playwright-backed).",
+  "instructions": "skills/instructions/webapp-testing.md",
+  "tools": ["browser.open", "browser.click", "browser.type", "browser.read", "browser.screenshot", "browser.extract", "browser.status", "shell.execute"],
+  "tags": ["testing", "web", "browser", "playwright", "verification"],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

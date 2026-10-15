@@ -34,6 +34,14 @@ class MetadataStore:
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=10)
         self._conn.row_factory = sqlite3.Row
+        # Migration: older databases lack the superseded_by column (Zep-style
+        # fact invalidation). CREATE TABLE won't add it to an existing file.
+        cols = [r[1] for r in self._conn.execute("PRAGMA table_info(memory_metadata)").fetchall()]
+        if cols and "superseded_by" not in cols:
+            self._conn.execute(
+                "ALTER TABLE memory_metadata ADD COLUMN superseded_by TEXT DEFAULT ''"
+            )
+            self._conn.commit()
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA synchronous = NORMAL")
         self._conn.executescript("""
@@ -46,13 +54,28 @@ class MetadataStore:
                 created REAL NOT NULL,
                 last_used REAL NOT NULL,
                 access_count INTEGER DEFAULT 0,
-                source TEXT DEFAULT ''
+                source TEXT DEFAULT '',
+                superseded_by TEXT DEFAULT ''
             );
             CREATE INDEX IF NOT EXISTS idx_meta_project ON memory_metadata(project);
             CREATE INDEX IF NOT EXISTS idx_meta_type ON memory_metadata(type);
             CREATE INDEX IF NOT EXISTS idx_meta_importance ON memory_metadata(importance DESC);
         """)
         self._conn.commit()
+
+    def mark_superseded(self, memory_key: str, new_key: str) -> None:
+        """Invalidate a memory: it was replaced by ``new_key``, not deleted."""
+        now = time.time()
+        with self._lock:
+            self._conn.execute(
+                """INSERT INTO memory_metadata
+                       (memory_key, type, project, importance, confidence, created, last_used, source, superseded_by)
+                   VALUES (?, 'semantic', '', 0.1, 1.0, ?, ?, '', ?)
+                   ON CONFLICT(memory_key) DO UPDATE SET
+                       superseded_by = excluded.superseded_by""",
+                (memory_key, now, now, new_key),
+            )
+            self._conn.commit()
 
     def upsert(
         self,

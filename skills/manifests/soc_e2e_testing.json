@@ -1,0 +1,23 @@
+{
+  "name": "e2e_testing",
+  "description": "Playwright E2E testing patterns, Page Object Model, configuration, CI/CD integration, artifact management, and flaky test strategies.",
+  "instructions": "skills/instructions/soc/e2e-testing.md",
+  "tools": [
+    "browser.open",
+    "browser.click",
+    "browser.read",
+    "shell.execute",
+    "test.run",
+    "test.discover",
+    "test.coverage",
+    "filesystem.read"
+  ],
+  "tags": [
+    "e2e",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

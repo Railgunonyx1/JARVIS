@@ -1,0 +1,180 @@
+/* ══════════════════════════════════════════════════════════════════
+   ORBIT v2.2 — overhaul polish
+   Loads last (after orbit-v2.css and orbit-v2-sidebar.css).
+   Scope:
+   1. NTP retune — one identity line (JARVIS OS + UTC clock merged),
+      tighter rhythm, greeting demoted below the search field.
+   2. Focus ring retune — accent ring at lower alpha so omnibox focus
+      reads as calm glow, not neon flare.
+   3. Chat composer lift — subtle shadow so it floats over scrolled
+      history instead of sitting flat on it.
+   4. Tile hover ease — reduced travel (1.04 scale felt jittery).
+   Nothing here changes layout geometry of the shell chrome.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. NTP retune ─────────────────────────────────────────────── */
+/* One quiet identity line instead of pill + greeting + osline stack.
+   The wordmark keeps its kerb underline from the F1 layer. */
+.nt-wordmark { margin-bottom: 2px; }
+
+/* Let the page fill its container and shrink inside narrow windows
+   instead of being forced wide by the tile row (flex min-width:auto
+   overflow) or squeezed to nothing (default flex-shrink on auto width). */
+.internal-pages > .page { flex: 1 1 0%; min-width: 0; max-width: 100%; }
+.newtab-page .nt-search { width: min(560px, 100%); }
+
+/* Telemetry strip wraps instead of forcing the page wide on narrow
+   windows; on desktop all six cells still fit on one line. */
+.nt-telemetry { flex-wrap: wrap; max-width: 100%; justify-content: center; }
+.nt-tel-cell { min-width: 0; }
+
+/* OS line: now carries the UTC clock too (ntClock moved here) */
+.nt-osline {
+  margin-top: 12px;
+  gap: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+}
+.nt-os-sep { color: var(--jb-text-disabled); }
+.nt-osline .nt-clock {
+  color: var(--jb-text-secondary);
+  letter-spacing: 0.18em;
+  font-variant-numeric: tabular-nums;
+}
+.nt-os-dot.on {
+  background: var(--jb-accent, var(--jb-live));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--jb-accent, var(--jb-live)) 60%, transparent);
+}
+
+/* Greeting: demoted under the search field, quieter than the wordmark */
+.nt-greeting {
+  order: 3;
+  margin: 26px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--jb-text-secondary);
+  letter-spacing: 0;
+}
+.nt-search { order: 2; }
+.nt-tiles { order: 4; }
+.nt-telemetry { order: 5; }
+.nt-recent, .nt-sessions, .nt-context-card { order: 6; }
+
+/* ── 2. Focus retune: calm glow, not neon ──────────────────────── */
+.omnibox:focus-within {
+  border-color: color-mix(in srgb, var(--jb-accent) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--jb-accent) 10%, transparent),
+              0 0 18px color-mix(in srgb, var(--jb-accent) 7%, transparent);
+}
+
+/* ── 3. Chat composer lift ─────────────────────────────────────── */
+.sb-composer {
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* ── 4. Tile hover: less travel, faster settle ─────────────────── */
+.nt-tile:hover, .nt-tile:focus-visible {
+  transform: translateY(-2px) scale(1.02);
+  transition-duration: 0.25s;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .nt-tile, .omnibox, .nt-context-card { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB STRIP REDESIGN (v2.3)
+   One active-state language: accent underline flush with the toolbar
+   divider (Opera/GX signal), quiet inactive tabs, close-on-hover.
+   Group-color top borders (set inline by tabs.js) still compose.
+   ══════════════════════════════════════════════════════════════════ */
+
+.tab {
+  border-radius: var(--jb-radius-sm) var(--jb-radius-sm) 0 0;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.2s ease;
+}
+
+/* Active: detached feel + accent kerb UNDER the tab (bottom edge =
+   signal where tab meets content). Top border stays reserved for
+   group colors (inline style from tabs.js). */
+.tab.active {
+  background: var(--jb-surface-hover);
+  border-top-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 8px; right: 8px; bottom: 0;
+  height: 2px;
+  border-radius: 1px 1px 0 0;
+  background: var(--jb-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--jb-accent) 55%, transparent);
+}
+
+/* Hover: quiet lift, no top bar */
+.tab:hover:not(.active) {
+  background: var(--jb-surface);
+  border-top-color: transparent;
+}
+
+/* Close button: hidden until needed — kills the row of ×'s */
+.tab-close {
+  width: 20px; height: 20px;
+  border-radius: var(--jb-radius-sm);
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.tab:hover .tab-close,
+.tab.active .tab-close,
+.tab:focus-within .tab-close { opacity: 1; }
+.tab-close:hover {
+  background: rgba(255, 82, 82, 0.16);
+  color: #ff6b6b;
+}
+
+/* Pinned tabs: icon chip, Chrome-width (were 180px with one icon) */
+.tab.pinned {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* Agent-owned: the dot-matrix glyph goes accent — 'JARVIS is driving' */
+.tab.agent-owned .tab-glyph i { background: var(--jb-accent); opacity: 0.9; }
+
+/* Drag-over: accent insertion point (was paper) */
+.tab.drag-over { border-left: 2px solid var(--jb-accent); }
+
+/* New-tab button: match the toolbar button language */
+.new-tab-btn { border-radius: var(--jb-radius-md); }
+
+/* ── Vertical strip: same language, row form ─────────────────── */
+.tab-strip-vertical .tab {
+  height: 30px;
+  border-radius: var(--jb-radius-sm);
+  position: relative;
+  border-top: 0;
+}
+.tab-strip-vertical .tab.active {
+  background: var(--jb-surface-hover);
+  border-top-color: transparent;
+}
+.tab-strip-vertical .tab.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 7px; bottom: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--jb-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--jb-accent) 55%, transparent);
+}
+.tab-strip-vertical .tab .tab-close { opacity: 0; }
+.tab-strip-vertical .tab:hover .tab-close,
+.tab-strip-vertical .tab.active .tab-close { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tab, .tab-close { transition: none; }
+}

@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080B10" />
+      <stop offset="50%" stop-color="#0D131F" />
+      <stop offset="100%" stop-color="#05070A" />
+    </linearGradient>
+
+    <!-- Accent Gradients -->
+    <linearGradient id="cyan-blue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="50%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+
+    <linearGradient id="glow-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.25" />
+      <stop offset="50%" stop-color="#3B82F6" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Grid Pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1E293B" stroke-width="0.75" stroke-opacity="0.4" />
+    </pattern>
+
+    <!-- Filter for Neon Glow -->
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Layer -->
+  <rect width="1200" height="400" fill="url(#bg-grad)" />
+  <rect width="1200" height="400" fill="url(#grid)" />
+
+  <!-- Ambient Glow Circles -->
+  <circle cx="200" cy="120" r="160" fill="url(#glow-grad)" filter="url(#neon-glow)" />
+  <circle cx="1000" cy="280" r="180" fill="url(#glow-grad)" filter="url(#neon-glow)" />
+
+  <!-- Geometric Tech Frame Accents -->
+  <path d="M 40 60 L 40 40 L 60 40" stroke="#00F0FF" stroke-width="2.5" fill="none" />
+  <path d="M 1160 60 L 1160 40 L 1140 40" stroke="#00F0FF" stroke-width="2.5" fill="none" />
+  <path d="M 40 340 L 40 360 L 60 360" stroke="#8B5CF6" stroke-width="2.5" fill="none" />
+  <path d="M 1160 340 L 1160 360 L 1140 360" stroke="#8B5CF6" stroke-width="2.5" fill="none" />
+
+  <!-- Central Arc / Orbit Ring -->
+  <circle cx="600" cy="180" r="140" stroke="url(#cyan-blue)" stroke-width="1.2" stroke-dasharray="8 6" fill="none" opacity="0.35" />
+  <circle cx="600" cy="180" r="155" stroke="#3B82F6" stroke-width="1" stroke-dasharray="3 9" fill="none" opacity="0.25" />
+
+  <!-- Top Status Badge -->
+  <g transform="translate(600, 75)">
+    <rect x="-140" y="-14" width="280" height="28" rx="14" fill="#0F172A" stroke="#1E293B" stroke-width="1.5" />
+    <circle cx="-116" cy="0" r="4.5" fill="#00F0FF" filter="url(#neon-glow)" />
+    <text x="-98" y="4.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="700" fill="#94A3B8" letter-spacing="2">
+      MK-X ARCHITECTURE : SOVEREIGN
+    </text>
+  </g>
+
+  <!-- Main Hero Brand Name -->
+  <text x="600" y="185" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif" font-size="78" font-weight="900" letter-spacing="6" fill="#FFFFFF">
+    JARVIS <tspan fill="url(#cyan-blue)">MK-X</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="600" y="235" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="500" fill="#94A3B8" letter-spacing="1.2">
+    Autonomous Engineering Kernel &amp; Sovereign Chromium Platform
+  </text>
+
+  <!-- Micro-Feature Chips -->
+  <g transform="translate(600, 305)">
+    <!-- Chip 1 -->
+    <g transform="translate(-360, 0)">
+      <rect x="-95" y="-15" width="190" height="30" rx="15" fill="#0B132B" stroke="#00F0FF" stroke-width="1" stroke-opacity="0.4" />
+      <text x="0" y="4.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="600" fill="#00F0FF">
+        ⚡ 62ms STEADY TTFT
+      </text>
+    </g>
+
+    <!-- Chip 2 -->
+    <g transform="translate(-120, 0)">
+      <rect x="-95" y="-15" width="190" height="30" rx="15" fill="#0B132B" stroke="#3B82F6" stroke-width="1" stroke-opacity="0.4" />
+      <text x="0" y="4.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="600" fill="#60A5FA">
+        🛡️ SINGLE BOUNDARY
+      </text>
+    </g>
+
+    <!-- Chip 3 -->
+    <g transform="translate(120, 0)">
+      <rect x="-95" y="-15" width="190" height="30" rx="15" fill="#0B132B" stroke="#8B5CF6" stroke-width="1" stroke-opacity="0.4" />
+      <text x="0" y="4.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="600" fill="#A78BFA">
+        🔍 VERIFICATION GATE
+      </text>
+    </g>
+
+    <!-- Chip 4 -->
+    <g transform="translate(360, 0)">
+      <rect x="-95" y="-15" width="190" height="30" rx="15" fill="#0B132B" stroke="#10B981" stroke-width="1" stroke-opacity="0.4" />
+      <text x="0" y="4.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="600" fill="#34D399">
+        🌐 ORBIT CHROMIUM
+      </text>
+    </g>
+  </g>
+</svg>

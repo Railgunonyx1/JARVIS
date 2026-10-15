@@ -1,0 +1,15 @@
+{
+  "name": "systematic_debugging",
+  "description": "Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes",
+  "tools": [],
+  "tags": [
+    "debugging",
+    "methodology",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/systematic_debugging.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\systematic-debugging"
+}

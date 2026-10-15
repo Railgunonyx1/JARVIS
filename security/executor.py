@@ -180,6 +180,14 @@ class CommandPolicy:
         if not command:
             return ExecMode.BLOCKED
 
+        # Shell operators are never allowed in a raw command — even when the
+        # first token resolves to a real executable. Chaining, substitution
+        # and redirection must be rejected before any spawn attempt, and the
+        # verdict must not depend on PATH (e.g. Git Bash exposing echo.EXE).
+        for op in self._shell_operators:
+            if op in command:
+                return ExecMode.BLOCKED
+
         parts = shlex.split(command, posix=not _is_windows())
         if not parts:
             return ExecMode.BLOCKED
@@ -313,9 +321,25 @@ class SecureExecutor:
             return _blocked(reason)
 
         if mode == ExecMode.STRUCTURED:
-            argv = [req.executable, *req.args]
+            argv = self._structured_argv(req)
             return self._run(argv, req, mode)
         return self._run_shell(req, mode)
+
+    def _structured_argv(self, req: ExecRequest) -> list[str]:
+        """Build the shell=False argv for a structured request.
+
+        For raw commands classified STRUCTURED, ``req.executable`` is empty;
+        re-resolve the first token (same logic as ``classify``) so the spawn
+        uses the real executable instead of an empty application name (which
+        fails with WinError 87 on Windows / FileNotFoundError elsewhere).
+        """
+        if req.executable:
+            return [req.executable, *req.args]
+        parts = shlex.split(req.command, posix=not _is_windows())
+        if not parts:
+            return []
+        exe = _resolve_executable(parts[0]) or parts[0]
+        return [exe, *parts[1:]]
 
     def _explain_block(self, req: ExecRequest) -> str:
         """Return a specific human-readable reason why the request was blocked."""

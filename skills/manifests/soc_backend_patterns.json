@@ -1,0 +1,21 @@
+{
+  "name": "backend_patterns",
+  "description": "Backend architecture patterns, API design, database optimization, and server-side best practices for Node.js, Express, and Next.js API routes.",
+  "instructions": "skills/instructions/soc/backend-patterns.md",
+  "tools": [
+    "shell.execute",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "patch.replace",
+    "git.log"
+  ],
+  "tags": [
+    "backend",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

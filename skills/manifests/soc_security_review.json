@@ -1,0 +1,23 @@
+{
+  "name": "security_review",
+  "description": "Use this skill when adding authentication, handling user input, working with secrets, creating API endpoints, or implementing payment/sensitive features. Provides comprehensive security checklist and patterns.",
+  "instructions": "skills/instructions/soc/security-review.md",
+  "tools": [
+    "security.scan_code",
+    "security.scan_secrets",
+    "security.check_permissions",
+    "filesystem.read",
+    "filesystem.write",
+    "search.code",
+    "shell.execute",
+    "patch.replace"
+  ],
+  "tags": [
+    "security",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

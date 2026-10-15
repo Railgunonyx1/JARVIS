@@ -47,7 +47,8 @@ BENCHMARK_TASKS: list[dict[str, Any]] = [
         "goal": "What is the current Git branch?",
         "kind": "deterministic",
         "tools": ["shell.execute"],
-        "expected": "main",
+        # Branch name varies per checkout; None = any non-empty output.
+        "expected": None,
         "steps": [
             {"tool": "shell.execute", "args": {"executable": "git", "args": ["branch", "--show-current"]}},
         ],

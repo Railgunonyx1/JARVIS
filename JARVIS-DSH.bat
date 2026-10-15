@@ -2,6 +2,13 @@
 setlocal EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 cd /d "%~dp0"
+goto MAIN
+
+:PORT_LIVE
+netstat -ano 2>nul | findstr /R ":%1 " | findstr /C:"LISTENING" >nul 2>&1
+exit /b %errorlevel%
+
+:MAIN
 
 title JARVIS MK-X - DeepSeek Harness
 
@@ -76,7 +83,7 @@ if "!OLLAMA_FOUND!"=="0" (
 
 echo [INFO] Checking Ollama on 127.0.0.1:11434...
 
-powershell -NoProfile -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 11434); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+call :PORT_LIVE 11434
 if not errorlevel 1 goto OLLAMA_READY
 
 echo [INFO] Starting Ollama...
@@ -90,10 +97,8 @@ if !WAIT! GEQ 15 goto OLLAMA_TIMEOUT
 
 timeout /t 1 /nobreak >nul
 set /a WAIT+=1
-
-powershell -NoProfile -Command "try { $c = New-Object System.Net.Sockets.TcpClient; $c.Connect('127.0.0.1', 11434); $c.Close(); exit 0 } catch { exit 1 }" >nul 2>&1
+call :PORT_LIVE 11434
 if not errorlevel 1 goto OLLAMA_READY
-
 goto WAIT_OLLAMA
 
 :OLLAMA_READY

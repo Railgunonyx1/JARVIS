@@ -13,14 +13,6 @@ Proves that the 1.5B interrupt lane:
 
 from __future__ import annotations
 
-import asyncio
-import os
-import sys
-import time
-
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # 1. Allowed tools invariant
 # ---------------------------------------------------------------------------
@@ -125,6 +117,7 @@ def test_interrupt_executor_creates_separate_loop():
     executor = InterruptExecutor.__new__(InterruptExecutor)
     # The executor should have its own router reference, not share state
     assert hasattr(InterruptExecutor, '__init__')
+    del executor
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +142,6 @@ def test_interrupt_tools_are_subset_of_registry():
 
 def test_main_lane_has_no_tool_restriction():
     """Main lane should not artificially restrict tools (unlike interrupt lane)."""
-    from core.agent.lanes import ExecutionLane
 
     # The main lane is the default — it should not filter tools
     # Only the interrupt lane has restricted tool access
@@ -203,8 +195,9 @@ def test_multiple_classifier_calls_are_idempotent():
 
 def test_interrupt_executor_accepts_tool_service():
     """InterruptExecutor must accept a ToolExecutionService parameter."""
-    from core.agent.lanes import InterruptExecutor
     import inspect
+
+    from core.agent.lanes import InterruptExecutor
     sig = inspect.signature(InterruptExecutor.__init__)
     assert 'tool_service' in sig.parameters, (
         "InterruptExecutor.__init__ must accept 'tool_service' parameter "
@@ -216,8 +209,9 @@ def test_interrupt_executor_prefers_tool_service_over_direct():
     """When tool_service is provided, InterruptExecutor must use it
     instead of calling tool.execute() directly.
     """
-    from core.agent.lanes import InterruptExecutor
     import inspect
+
+    from core.agent.lanes import InterruptExecutor
 
     # The _execute_tool_safe method must exist and check self._tool_service
     source = inspect.getsource(InterruptExecutor._execute_tool_safe)
@@ -232,7 +226,6 @@ def test_interrupt_executor_prefers_tool_service_over_direct():
     # The fallback path (else branch) should be the only direct-call path
     lines = source.split('\n')
     in_else_block = False
-    found_direct_execute_in_else = False
     found_direct_execute_outside_else = False
     for line in lines:
         stripped = line.strip()

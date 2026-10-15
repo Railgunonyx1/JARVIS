@@ -1,0 +1,9 @@
+{
+  "name": "security_test",
+  "description": "Adversarial security testing of a running app or codebase: enumerate attack surface, probe for injection (SQL/XSS/command), auth bypass, IDOR, SSRF, insecure config, and secrets exposure; then produce a prioritized findings report with reproduction steps. Use when the user asks for a security test, pentest pass, or hardening review of the browser, bridge, or kernel. complements security_audit (static) with dynamic testing guidance.",
+  "tools": ["security.scan_code", "security.scan_secrets", "security.check_permissions", "shell.execute", "browser.open", "browser.read", "filesystem.read"],
+  "tags": ["security", "pentest", "adversarial", "hardening"],
+  "risk": "high",
+  "timeout": 600,
+  "version": "1.0.0"
+}

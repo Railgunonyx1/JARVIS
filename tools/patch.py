@@ -71,6 +71,13 @@ async def patch_replace(params: dict) -> ToolResult:
     except Exception as e:
         return tool_result(False, error=f"Write failed: {e}")
 
+    # Session undo (Mark-LIII pattern): the replace is reversible by
+    # swapping old/new back.
+    from core.agent.undo import push_undo_for_write
+    push_undo_for_write(
+        fpath, content, new_content, f"patch.replace in {fpath.name or fpath}",
+    )
+
     operation = f"Replace {'all ' if params.get('all') else ''}{count} occurrence(s)" if count > 1 else "Replace 1 occurrence"  # noqa: E501
     return tool_result(
         True,

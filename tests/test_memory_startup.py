@@ -15,14 +15,6 @@ Also tests:
 
 from __future__ import annotations
 
-import os
-import sys
-import tempfile
-import time
-
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # 1. Memory bootstrap: long_term.json -> KV store
 # ---------------------------------------------------------------------------
@@ -101,7 +93,7 @@ def test_priorities_appear_in_system_prompt():
 
         prompt = mem.format_for_prompt(project="", max_tokens=800)
         assert "Ship quality software" in prompt or "priority" in prompt.lower(), (
-            f"Priorities not found in memory prompt"
+            "Priorities not found in memory prompt"
         )
     finally:
         mem.close()

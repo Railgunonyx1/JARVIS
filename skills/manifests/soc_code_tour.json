@@ -1,0 +1,21 @@
+{
+  "name": "code_tour",
+  "description": "Create CodeTour `.tour` files \u2014 persona-targeted, step-by-step walkthroughs with real file and line anchors. Use for onboarding tours, architecture walkthroughs, PR tours, RCA tours, and structured \"explain how this works\" requests.",
+  "instructions": "skills/instructions/soc/code-tour.md",
+  "tools": [
+    "filesystem.read",
+    "search.code",
+    "git.log",
+    "filesystem.tree",
+    "filesystem.write",
+    "patch.replace"
+  ],
+  "tags": [
+    "code",
+    "soc",
+    "open-code"
+  ],
+  "risk": "low",
+  "timeout": 180,
+  "version": "1.0.0"
+}

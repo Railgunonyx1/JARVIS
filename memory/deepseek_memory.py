@@ -13,9 +13,9 @@ Features:
 """
 from __future__ import annotations
 
-from typing import Any, Optional
 import json
 import os
+from typing import Any
 
 # Path to persistent storage (user home directory)
 _STORAGE_PATH = os.path.expanduser("~/.deepseek_memory.json")
@@ -33,9 +33,9 @@ class DeepSeekMemory:
         """Load existing memory from disk."""
         if os.path.exists(self.storage_path):
             try:
-                with open(self.storage_path, "r", encoding="utf-8") as f:
+                with open(self.storage_path, encoding="utf-8") as f:
                     self._data = json.load(f)
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 self._data = {}
         else:
             self._data = {}
@@ -81,7 +81,7 @@ class DeepSeekMemory:
             return True
         return False
 
-    def recall(self, key: str) -> Optional[dict[str, Any]]:
+    def recall(self, key: str) -> dict[str, Any] | None:
         """Retrieve information from memory by key.
 
         Args:
@@ -133,7 +133,7 @@ class DeepSeekMemory:
 
 
 # Global memory instance (singleton pattern)
-_memory_instance: Optional[DeepSeekMemory] = None
+_memory_instance: DeepSeekMemory | None = None
 
 
 def get_memory() -> DeepSeekMemory:
@@ -150,7 +150,7 @@ def remember(key: str, value: Any, category: str = "general") -> bool:
     return get_memory().add(key, value, category=category)
 
 
-def recall(key: str) -> Optional[dict[str, Any]]:
+def recall(key: str) -> dict[str, Any] | None:
     """Retrieve information from memory (convenience function)."""
     return get_memory().recall(key)
 

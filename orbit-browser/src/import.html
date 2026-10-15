@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import from Chrome</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      padding: 32px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; color: #fff; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
+    .browser-card {
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .browser-card:hover { border-color: #666; background: #111; }
+    .browser-card.selected { border-color: #7c5cff; background: #14101f; }
+    .browser-name { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .browser-profiles { font-size: 12px; color: #888; }
+    .section { margin-top: 24px; }
+    .section-title { font-size: 13px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+    .import-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border: 1px solid #222;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .import-row .label { font-size: 13px; }
+    .import-row .count { font-size: 12px; color: #888; }
+    .import-row .status { font-size: 12px; }
+    .import-row .status.done { color: #4ade80; }
+    .import-row .status.error { color: #f87171; }
+    .import-row .status.pending { color: #888; }
+    .toggle {
+      width: 36px; height: 20px; border-radius: 10px;
+      background: #333; border: none; cursor: pointer;
+      position: relative; transition: background .2s;
+    }
+    .toggle.on { background: #7c5cff; }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; transition: transform .2s;
+    }
+    .toggle.on::after { transform: translateX(16px); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #7c5cff; color: #fff; }
+    .btn-secondary { background: #222; color: #e0e0e0; border: 1px solid #333; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .actions { margin-top: 24px; display: flex; gap: 10px; }
+    .progress-bar {
+      width: 100%; height: 4px; background: #222; border-radius: 2px;
+      margin-top: 16px; overflow: hidden; display: none;
+    }
+    .progress-bar .fill {
+      height: 100%; background: #7c5cff; border-radius: 2px;
+      transition: width .3s; width: 0%;
+    }
+    .result-summary {
+      margin-top: 20px; padding: 16px; border-radius: 10px;
+      background: #0f1a0f; border: 1px solid #1a3a1a;
+      display: none;
+    }
+    .result-summary h3 { font-size: 14px; color: #4ade80; margin-bottom: 8px; }
+    .result-row { font-size: 12px; color: #aaa; margin-bottom: 4px; }
+    .result-row span { color: #fff; font-weight: 500; }
+    .empty-state { text-align: center; padding: 40px 0; color: #666; font-size: 13px; }
+    .password-note {
+      margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+      background: #1a1500; border: 1px solid #3a3000;
+      font-size: 11px; color: #aaa;
+    }
+    .password-note strong { color: #fbbf24; }
+  </style>
+</head>
+<body>
+  <h1>Import from Chrome</h1>
+  <p class="subtitle">Bring your bookmarks, history, and extensions from Chrome, Edge, or Brave.</p>
+
+  <div id="browserList"></div>
+
+  <div class="section" id="importSection" style="display:none">
+    <div class="section-title">What to import</div>
+    <div class="import-row">
+      <div><span class="label">Bookmarks</span></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="count" id="bookmarkCount">—</span>
+        <button class="toggle on" id="toggleBookmarks" data-key="bookmarks"></button>
+      </div>
+    </div>
+    <div class="import-row">
+      <div><span class="label">Browsing History</span></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="count" id="historyCount">—</span>
+        <button class="toggle on" id="toggleHistory" data-key="history"></button>
+      </div>
+    </div>
+    <div class="import-row">
+      <div><span class="label">Extensions</span></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="count" id="extensionCount">—</span>
+        <button class="toggle on" id="toggleExtensions" data-key="extensions"></button>
+      </div>
+    </div>
+    <div class="password-note">
+      <strong>Note:</strong> Passwords and cookies are encrypted by Chrome and cannot be imported for security reasons.
+      You'll need to sign in to your accounts again in Orbit.
+    </div>
+
+    <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+
+    <div class="result-summary" id="resultSummary">
+      <h3>Import Complete</h3>
+      <div id="resultRows"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="importAllBtn" disabled>Import All</button>
+      <button class="btn btn-secondary" id="importSelectedBtn" disabled>Import Selected</button>
+      <button class="btn btn-secondary" id="backBtn">Back</button>
+    </div>
+  </div>
+
+  <script>
+    const { chrome: chromeApi } = window.orbit;
+    let selectedProfile = null;
+    let importData = null;
+    let toggleState = { bookmarks: true, history: true, extensions: true };
+
+    // ── Detect browsers ────────────────────────────────────────────
+    async function detect() {
+      const browsers = await chromeApi.detect();
+      const list = document.getElementById('browserList');
+
+      if (!browsers || browsers.length === 0) {
+        list.innerHTML = '<div class="empty-state">No Chrome, Edge, or Brave installation found.<br>Install a Chromium browser to import data from.</div>';
+        return;
+      }
+
+      let html = '<div class="section-title">Select a browser</div>';
+      for (const browser of browsers) {
+        for (const profile of browser.profiles) {
+          const label = browser.profiles.length > 1
+            ? browser.browser + ' — ' + profile.name
+            : browser.browser;
+          html += '<div class="browser-card" data-path="' + profile.path + '">';
+          html += '<div class="browser-name">' + label + '</div>';
+          html += '<div class="browser-profiles">' + profile.path + '</div>';
+          html += '</div>';
+        }
+      }
+      list.innerHTML = html;
+
+      list.querySelectorAll('.browser-card').forEach(card => {
+        card.addEventListener('click', () => {
+          list.querySelectorAll('.browser-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+          selectedProfile = card.dataset.path;
+          loadProfile(selectedProfile);
+        });
+      });
+    }
+
+    // ── Load profile data ──────────────────────────────────────────
+    async function loadProfile(profilePath) {
+      const section = document.getElementById('importSection');
+      section.style.display = 'block';
+
+      document.getElementById('bookmarkCount').textContent = 'Loading...';
+      document.getElementById('historyCount').textContent = 'Loading...';
+      document.getElementById('extensionCount').textContent = 'Loading...';
+
+      importData = await chromeApi.import(profilePath);
+
+      document.getElementById('bookmarkCount').textContent = importData.summary.bookmarkCount + ' bookmarks';
+      document.getElementById('historyCount').textContent = importData.summary.historyCount + ' pages';
+      document.getElementById('extensionCount').textContent = importData.summary.extensionCount + ' extensions';
+
+      document.getElementById('importAllBtn').disabled = false;
+      document.getElementById('importSelectedBtn').disabled = false;
+      document.getElementById('resultSummary').style.display = 'none';
+    }
+
+    // ── Toggle buttons ─────────────────────────────────────────────
+    document.querySelectorAll('.toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        toggleState[key] = !toggleState[key];
+        btn.classList.toggle('on', toggleState[key]);
+      });
+    });
+
+    // ── Import button ──────────────────────────────────────────────
+    document.getElementById('importBtn').addEventListener('click', async () => {
+      if (!importData) return;
+      const btn = document.getElementById('importBtn');
+      btn.disabled = true;
+      btn.textContent = 'Importing...';
+
+      const bar = document.getElementById('progressBar');
+      const fill = document.getElementById('progressFill');
+      bar.style.display = 'block';
+      fill.style.width = '10%';
+
+      const results = {};
+
+      if (toggleState.bookmarks && importData.bookmarks.length > 0) {
+        fill.style.width = '30%';
+        results.bookmarks = await chromeApi.applyBookmarks(importData.bookmarks);
+      }
+
+      if (toggleState.history && importData.history.length > 0) {
+        fill.style.width = '60%';
+        results.history = await chromeApi.applyHistory(importData.history);
+      }
+
+      fill.style.width = '100%';
+
+      // Show results
+      const summary = document.getElementById('resultSummary');
+      const rows = document.getElementById('resultRows');
+      let html = '';
+      if (results.bookmarks) {
+        html += '<div class="result-row">Bookmarks: <span>' + results.bookmarks.imported + ' imported</span> (' + results.bookmarks.total + ' total)</div>';
+      }
+      if (results.history) {
+        html += '<div class="result-row">History: <span>' + results.history.imported + ' imported</span> (' + results.history.total + ' total)</div>';
+      }
+      if (importData.summary.extensionCount > 0) {
+        html += '<div class="result-row">Extensions: <span>' + importData.summary.extensionCount + ' found</span> — install from Chrome Web Store</div>';
+      }
+      if (importData.summary.passwordCount > 0) {
+        html += '<div class="result-row">Passwords: <span>' + importData.summary.passwordCount + ' saved</span> — encrypted, cannot import</div>';
+      }
+      rows.innerHTML = html;
+      summary.style.display = 'block';
+
+      btn.textContent = 'Done';
+      setTimeout(() => { 
+        importBtn.disabled = false; 
+        importBtn.textContent = 'Import All'; 
+        selectedBtn.disabled = false; 
+        selectedBtn.textContent = 'Import Selected'; 
+      }, 2000);
+    }
+
+    // ── Import All button ──────────────────────────────────────
+    document.getElementById('importAllBtn').addEventListener('click', () => runImport({ all: true }));
+
+    // ── Import Selected button ──────────────────────────────────
+    document.getElementById('importSelectedBtn').addEventListener('click', () => runImport({ all: false }));
+
+    // ── Back button ────────────────────────────────────────────────
+    document.getElementById('backBtn').addEventListener('click', () => {
+      document.getElementById('importSection').style.display = 'none';
+      document.getElementById('browserList').querySelectorAll('.browser-card').forEach(c => c.classList.remove('selected'));
+      selectedProfile = null;
+    });
+
+    // ── Init ───────────────────────────────────────────────────────
+    detect();
+  </script>
+</body>
+</html>

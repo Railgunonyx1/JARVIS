@@ -1,0 +1,14 @@
+{
+  "name": "performance",
+  "description": "Optimize web performance for faster loading and better user experience. Use when asked to \"speed up my site\", \"optimize performance\", \"reduce load time\", \"fix slow loading\", \"improve page speed\", or \"performance audit\".",
+  "tools": [],
+  "tags": [
+    "performance",
+    "imported"
+  ],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/performance.md",
+  "source": "C:\\Users\\aayan\\.agents\\skills\\performance"
+}

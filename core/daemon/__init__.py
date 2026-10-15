@@ -12,24 +12,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import sys
 import threading
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
+import time
+from typing import Any
+
+# Import configuration
+from core.config import Config
 
 # Import event bus system (P0-4 architecture invariant)
-from core.daemon.events import _emit, BusEvent, SCHEMA_VERSION, make_session_id, make_trace_id
+from core.daemon.events import SCHEMA_VERSION, BusEvent, make_session_id, make_trace_id
 
+# Harness Selector (P0-3) — canonical harness selection authority lives in
+# core.harness (runtime.kernel owns the instance). The legacy cascade-tier
+# selector (core.harness_selector) was quarantined — it was never wired
+# beyond this re-export, which itself had no in-repo consumers.
 # Model Gateway (P0-2) — single model selection authority
-from core.model_gateway import ModelGateway
+from providers.model_gateway import ModelGateway
 
 # Import skill registry (P1 optimization - Cordis microkernel adaptation).
 # Backed by the manifest-driven skills/registry (skills/manifests/*.json).
-from skills.registry import SkillRegistry, SkillMetadata, SkillContract
-
-# Import configuration
-from core.config import Config, ModelCatalog
+from skills.registry import SkillContract, SkillMetadata, SkillRegistry
 
 # Export key symbols
 __all__ = [
@@ -44,7 +46,6 @@ __all__ = [
     "make_session_id",
     "make_trace_id",
     "ModelGateway",
-    "HarnessSelector",
 ]
 
 
@@ -59,7 +60,7 @@ class JARVISDaemon:
     - Plugin-based architecture for modular extensions
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(self, config: Config | None = None):
         # Initialize config
         self.config = config or Config()
 
@@ -71,18 +72,18 @@ class JARVISDaemon:
         # Initialize prefix cache plugin (P0 optimization).
         # Imported lazily so `import core.daemon` does not require optional
         # modules at package-load time.
-        from core.daemon.plugins.prefix_cache import get_prefix_cache, PrefixCachePlugin
+        from core.daemon.plugins.prefix_cache import PrefixCachePlugin, get_prefix_cache
         self.prefix_cache: PrefixCachePlugin = get_prefix_cache()
 
         # Initialize skill registry (P1 optimization)
-        skill_dirs: List[str] = getattr(
+        skill_dirs: list[str] = getattr(
             self.config, "skill_directories", ["core/skills", "plugins/skills"]
         )
         self.skill_registry: SkillRegistry = SkillRegistry(skill_dirs=skill_dirs)
         self._init_skills()
 
         # Initialize metrics tracking
-        self.metrics: Dict[str, Any] = {
+        self.metrics: dict[str, Any] = {
             "prefix_cache_savings": 0,
             "prefix_cache_hits": 0,
             "prefix_cache_misses": 0,
@@ -93,11 +94,11 @@ class JARVISDaemon:
 
         # Initialize event log — records every BusEvent emitted during
         # this daemon's lifetime, enabling session association and debugging.
-        self._event_log: List[BusEvent] = []
+        self._event_log: list[BusEvent] = []
 
         # Initialize session affinity TTL tracking (P0-6)
         # Maps session_id → (model_key, expires_at) with thread-safe lock
-        self._session_affinity: Dict[str, tuple[str, float]] = {}
+        self._session_affinity: dict[str, tuple[str, float]] = {}
         self._session_affinity_lock = threading.Lock()
 
         # Initialize ToolExecutionService — the single boundary for all tool execution
@@ -111,19 +112,7 @@ class JARVISDaemon:
         # All model routing, draft/verification selection, and capability-aware
         # model selection goes through this gateway, NOT via direct
         # `loop._preferred_model` or similar private state manipulation.
-        self.model_gateway: ModelGateway = ModelGateway(
-            config=self.config,
-            skill_registry=self.skill_registry,
-        )
-
-        # Initialize HarnessSelector (P0-3) — the canonical harness selection
-        # authority. All harness selection should go through this selector,
-        # NOT via direct CLI manipulation of loop state or private attributes.
-        # The Harness ≠ Model invariant is enforced: harness and model are
-        # independent axes; this selector manages only harness state.
-        self.harness_selector: HarnessSelector = HarnessSelector(
-            config=self.config,
-        )
+        self.model_gateway: ModelGateway = ModelGateway()
 
         # Log initialization
         logger = logging.getLogger("jarvis.daemon")
@@ -201,8 +190,8 @@ class JARVISDaemon:
                 del self._session_affinity[session_id]
 
     def get_session_affinity(
-        self, session_id: Optional[str] = None
-    ) -> Optional[tuple[str, float]]:
+        self, session_id: str | None = None
+    ) -> tuple[str, float] | None:
         """Get session affinity info for a given session.
 
         Returns (model_key, expires_at) or None if not found/expired.
@@ -241,7 +230,7 @@ class JARVISDaemon:
     # Async chat handling
     # -----------------------------------------------------------------
 
-    async def handle_chat(self, user_message: str, context: Optional[Dict] = None) -> str:
+    async def handle_chat(self, user_message: str, context: dict | None = None) -> str:
         """Handle an incoming chat message with full optimization pipeline.
 
         Pipeline order:
@@ -305,7 +294,7 @@ class JARVISDaemon:
     # Event emission — requires session_id (P0-4 invariant)
     # -----------------------------------------------------------------
 
-    def _emit(self, name: str, payload: Dict[str, Any], **kwargs: Any) -> None:
+    def _emit(self, name: str, payload: dict[str, Any], **kwargs: Any) -> None:
         """Emit a BusEvent with the daemon's session_id.
 
         This is the canonical event emission point. All meaningful
@@ -338,7 +327,7 @@ class JARVISDaemon:
     # Prompt caching (P0 optimization)
     # -----------------------------------------------------------------
 
-    def _cache_prompt_components(self, user_message: str, context: Dict) -> None:
+    def _cache_prompt_components(self, user_message: str, context: dict) -> None:
         """Cache system prompt, few-shot examples, and tool definitions."""
         # 1. Cache system prompt
         system_prompt = getattr(self.config, "system_prompt", "") or ""
@@ -365,9 +354,9 @@ class JARVISDaemon:
     # Skill identification & permission validation
     # -----------------------------------------------------------------
 
-    def _identify_needed_skills(self, user_message: str) -> List[str]:
+    def _identify_needed_skills(self, user_message: str) -> list[str]:
         """Identify which skills are needed for the user message."""
-        needed: List[str] = []
+        needed: list[str] = []
 
         message_lower = user_message.lower()
 
@@ -387,8 +376,8 @@ class JARVISDaemon:
         return needed
 
     def _validate_skill_permissions(
-        self, needed_skills: List[str]
-    ) -> Dict[str, Any]:
+        self, needed_skills: list[str]
+    ) -> dict[str, Any]:
         """Validate permissions for all needed skills.
 
         Returns dict with 'approved' boolean, 'violations' list,
@@ -396,7 +385,7 @@ class JARVISDaemon:
         """
         self.metrics["permission_validations"] += len(needed_skills)
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "approved": True,
             "violations": [],
             "warnings": [],
@@ -426,7 +415,7 @@ class JARVISDaemon:
 
         return result
 
-    def _extract_tool_names_for_skill(self, skill_name: str) -> List[str]:
+    def _extract_tool_names_for_skill(self, skill_name: str) -> list[str]:
         """Extract tool names associated with a skill."""
         mappings = {
             "browser": ["browser.open", "browser.navigate", "browser.snapshot"],
@@ -441,15 +430,15 @@ class JARVISDaemon:
     # -----------------------------------------------------------------
 
     async def _execute_skills(
-        self, needed_skills: List[str], user_message: str, context: Dict
-    ) -> List[Dict[str, Any]]:
+        self, needed_skills: list[str], user_message: str, context: dict
+    ) -> list[dict[str, Any]]:
         """Execute needed skills within sandbox limits.
 
         All tool execution passes through ToolExecutionService — the
         single boundary that enforces permission gating, sandbox limits,
         and event bus integration.
         """
-        results: List[Dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
 
         for skill_name in needed_skills:
             contract = self.skill_registry.get_skill(skill_name)
@@ -477,18 +466,14 @@ class JARVISDaemon:
                     "success": tel_result.success,
                     "permission_denied": tel_result.permission_denied,
                 })
-            except ToolExecutionError as e:
-                results.append(
-                    {"skill": skill_name, "error": e.message, "tool_call_id": e.tool_call_id}
-                )
             except Exception as e:
                 results.append({"skill": skill_name, "error": str(e), "error_type": type(e).__name__})
 
         return results
 
-    def _extract_skill_args(self, skill_name: str, user_message: str) -> Dict[str, Any]:
+    def _extract_skill_args(self, skill_name: str, user_message: str) -> dict[str, Any]:
         """Extract arguments for a skill from the user message."""
-        args: Dict[str, Any] = {}
+        args: dict[str, Any] = {}
 
         if skill_name == "browser":
             import re
@@ -518,11 +503,11 @@ class JARVISDaemon:
     def _build_response(
         self,
         user_message: str,
-        execution_results: List[Dict[str, Any]],
-        permission_result: Dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        permission_result: dict[str, Any],
     ) -> str:
         """Build the final response string."""
-        parts: List[str] = []
+        parts: list[str] = []
 
         # Add user message acknowledgment
         parts.append(f"> User: {user_message}")
@@ -563,12 +548,13 @@ class JARVISDaemon:
     def _track_metrics(
         self,
         user_message: str,
-        execution_results: List[Dict[str, Any]],
-        permission_result: Dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        permission_result: dict[str, Any],
         start_time: float,
     ) -> None:
         """Track daemon metrics for the executed request."""
         elapsed = asyncio.get_event_loop().time() - start_time
+        self.metrics["reply_latency_ms"] = round(elapsed * 1000, 2)
 
         # Track prefix cache stats
         stats = self.prefix_cache.get_stats()
@@ -592,7 +578,7 @@ class JARVISDaemon:
     # Status
     # -----------------------------------------------------------------
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Return current daemon status and metrics."""
         return {
             "model": getattr(self.config, "model_name", "gemini-2.5-pro"),
@@ -608,10 +594,10 @@ class JARVISDaemon:
 # Singleton daemon instance
 # -----------------------------------------------------------------
 
-_daemon_instance: Optional[JARVISDaemon] = None
+_daemon_instance: JARVISDaemon | None = None
 
 
-def get_daemon(config: Optional[Config] = None) -> JARVISDaemon:
+def get_daemon(config: Config | None = None) -> JARVISDaemon:
     """Get the singleton daemon instance."""
     global _daemon_instance
     if _daemon_instance is None:
