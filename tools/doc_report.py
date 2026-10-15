@@ -9,6 +9,7 @@ project root.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,11 @@ def _normalise_sections(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _is_windows_style_absolute(path_str: str) -> bool:
+    """True if the path looks like a Windows drive-letter absolute (e.g. C:/Users/...).\n    Such a path can never be inside a Linux project root and must be rejected\n    by callers that validate destination paths.\n    """
+    return bool(re.match(r"^[A-Za-z]:[\\\\/]", path_str))
+
+
 def doc_report(args: dict[str, Any]) -> ToolResult:
     """Build a .docx report: title page, headings, paragraphs and bullet lists."""
     try:
@@ -62,6 +68,8 @@ def doc_report(args: dict[str, Any]) -> ToolResult:
     dest = _resolve(dest_arg)
     if dest.suffix.lower() != ".docx":
         dest = dest.with_suffix(".docx")
+    if _is_windows_style_absolute(str(args.get("dest", ""))):
+        return ToolResult(success=False, error="Destination must be inside the project root: not a Windows-style absolute path")
     try:
         dest.resolve().relative_to(_root().resolve())
     except ValueError:

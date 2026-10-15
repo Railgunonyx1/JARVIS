@@ -8,6 +8,7 @@ raw files into context or shelling out. Read-only except data.convert.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,11 @@ MAX_ROWS_SHOWN = 50
 def _root() -> Path:
     from core.project import ProjectContext
     return ProjectContext.discover().root_path
+
+
+def _is_windows_style_absolute(path_str: str) -> bool:
+    """True if the path looks like a Windows drive-letter absolute (e.g. C:/Users/...).\n    Such a path can never be inside a Linux project root and must be rejected\n    by call sites that validate destination paths.\n    """
+    return bool(re.match(r"^[A-Za-z]:[\\\\/]", path_str))
 
 
 def _resolve(path_str: str) -> Path:
@@ -176,6 +182,8 @@ def data_convert(args: dict[str, Any]) -> ToolResult:
     dest = _resolve(str(args.get("dest", "")))
     if not str(args.get("dest", "")).strip():
         return ToolResult(success=False, error="dest is required (e.g. output.json)")
+    if _is_windows_style_absolute(str(args.get("dest", ""))):
+        return ToolResult(success=False, error="Destination must be inside the project root: not a Windows-style absolute path")
     try:
         dest.resolve().relative_to(_root().resolve())
     except ValueError:
