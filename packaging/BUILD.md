@@ -38,6 +38,10 @@ ISCC.exe packaging\installer.iss
    bridge to the kernel and back.
 4. `python -m pytest tests -q --ignore=tests/test_orbit_live.py --ignore=tests/test_jbrowser_live.py`
    is green on the same tree the binary was built from.
+5. `cd orbit-browser && npm test` is green and `npm run test:smoke` boots the
+   real Electron binary (under `xvfb-run` on a headless box). CI job `browser`
+   runs both on every push/PR; the smoke step is advisory until validated on a
+   headed machine.
 
 ## STOP conditions
 

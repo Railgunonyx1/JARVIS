@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Union
 
-ToolHandler = Callable[[dict[str, Any]], Awaitable["ToolResult"]]
+ToolHandler = Callable[[dict[str, Any]], Union[Awaitable["ToolResult"], "ToolResult"]]
 
 
 @dataclass
