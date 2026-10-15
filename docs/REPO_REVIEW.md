@@ -38,6 +38,154 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 ## A. Browser & CDP (Orbit, J-Browser)
 
+### moli (lexmount/moli, Apache-2.0)
+- **Ultra-lightweight headless browser** (102 MiB peak vs 348 MiB Chromium, 15% CPU time) → `jbrowser/backend/`, `orbit/cdp.py` · M/low if adopted as optional fast fetch sidecar.
+- **Native CDP + WebDriver Classic + WebDriver BiDi** from one binary; no separate Chrome/Playwright install → `jbrowser/backend/base.py` unified engine abstraction · M/low.
+- **On-demand layout/rendering** (skip GPU/compositor) — not a full GUI browser, but sufficient for DOM extraction & screenshots → `jbrowser/optimization.py` flags · S/low.
+- **Software screenshots + native CDP/CLI PDF with embedded fonts** → `jbrowser/tools.py` `screenshot`/`pdf` · S/low.
+- **Lexbench-Headless success 81.9%** (vs Chrome 99.85%) — trade pixel fidelity for resource savings; use only for `orbit.read`/`extract` paths, not `orbit.navigate` heavy interactions.
+- **Avoid:** no WebGL/Canvas parity, no GPU compositor — not a drop-in Orbit replacement.
+
+### nanobrowser (Apache-2.0)
+- **Multi-agent planner/validator architecture** (Planner + Navigator + Validator) → `core/agent/loop.py`, `core/harness/` · M/low.
+- **Side-panel UX with step confirmation** before destructive actions → `extensions/jbrowser`, `orbit/tools.py` `permission` metadata · M/low.
+- **chrome.debugger API + Puppeteer frame tracking** (not CDP) — works inside existing Chrome/Edge, no extra binary → `jbrowser/backend/playwright.py` alt path · S/low.
+- **Flexible LLM backends** (cloud + local Ollama/LM Studio via OpenAI-compat) → `providers/model_gateway.py` · S/low.
+- **Avoid:** `chrome.debugger` (forbidden invariant 7); Firefox/Safari/other Chromium untested; ToS risk if used for automation on protected sites.
+
+### rote (kedarvartak/rote, MIT)
+- **Memory manager for browser agents** — treats context window as a managed resource (budget, eviction policy, layout contract, trust gate) → `memory/`, `core/agent/tool_service.py` · M/low.
+- **Four efficiency planes:** Perception (distill CDP → stable IDs + diffs), Decision (context layout + cheaper model routing + skip model via memory/replay), Action (typed actions + settledness + self-healing + per-step assertions + speculative pre-exec), Learning (record runs → playbooks/site memory/transition models → replay/hints/resolution/prediction) → `core/agent/loop.py`, `orbit/tools.py`, `jbrowser/page_context.py` · M/low.
+- **Observation eviction** — keep what you *did*, not what you *saw*; missing earlier-page facts fail as `recall_unavailable`; fabricated comparisons fail verification (T18) → `memory/extractor.py`, `core/agent/verification.py` · M/low.
+- **Diff observations** — median diff 24 chars, 99.6% reduction vs grounded base (T10) → `jbrowser/page_context.py` `page.diff_snapshot()` · S/low.
+- **Cache layout / immutable-prefix routing** — SHA-256 `prompt_cache_key` for planner prefix; cuts WP-N25 mean cost 20.5%, clears Browser Use by 16.0% at 95% CI (T11) → `providers/model_gateway.py` · S/low.
+- **Verified replay executor + deterministic drift gate** — 100% recovery on selector-drifted replays (72/72), 0 silent failures, failed-closed on ambiguous control (T23) → `orbit/runtime.py`, `orbit/controller.py` · M/low.
+- **Exact oracle reproducibility** — 83.6% logical token reduction at 18/18 success (T25) → benchmark gates · S/low.
+- **Avoid:** history compaction not yet built (curve remains quadratic); early build — only tiers 0-1 working.
+
+### openbrowse (openbrowse-ai/openbrowse, MIT)
+- **Model-agnostic Chrome extension** — 130+ providers via live `models.dev` catalog (OpenAI, Anthropic, Google, xAI, Mistral, OpenRouter, Groq, Together, WebLLM/Ollama, Chrome Gemini Nano) → `providers/model_gateway.py` · S/low.
+- **Agent side panel + OPFS per-conversation workspace** (files, JS/Python execution) → `extensions/jbrowser`, `orbit/runtime.py` · S/low.
+- **MCP integration** (Notion, Slack, Linear, Vercel, Stripe, Supabase, etc.) → `runtime/protocols/` · S/low.
+- **Pyodide offscreen AI inference** (WebLLM, cloud APIs, local) → `voice/`, `orbit/runtime.py` · M/low.
+- **WXT + React + Vercel AI SDK** — modern extension stack → `extensions/jbrowser` migration reference · S/low.
+- **Vendored `models.dev` snapshot + refresh logic** → `providers/model_registry.py` · S/low.
+- **Command palette (Alt+K)** overlay injection → `extensions/jbrowser` · S/low.
+
+### WebFurl (WeaveMindAI/Webfurl, AGPL-3.0 → ideas only)
+- **Recursive compressible semantic tree** — 200k HTML → 20-50 tokens at top level; unfold on demand (query-driven, embedding similarity) → `jbrowser/page_context.py`, `memory/` · M/low.
+- **Cross-user content-hash cache** (MongoDB) — static layout chunks cached once; only dynamic subtrees recompressed → `memory/store.py`, `tools/doc_retrieval.py` · M/low.
+- **DOM-linked actions** — pre-computed CSS selectors for every interactive element; works against live CDP → `orbit/cdp.py`, `jbrowser/page_context.py` · S/low.
+- **Budget-based unfolding** (`WEBFURL_TOKEN_BUDGET`, `WEBFURL_MAX_BUDGET`) — agent spends context only on relevant branches → `core/agent/tool_service.py` budget · S/low.
+- **Pipeline:** HTML chunking → parallel LLM compression → structural parent summaries → interactive element extraction with stable CSS selectors → `tools/doc_retrieval.py`, `jbrowser/page_context.py` · M/low.
+- **Avoid:** AGPL core; MongoDB dependency; cross-user cache = data governance risk.
+
+### browser-memory (MIT)
+- **Reusable memory of web actions** — learn task once, replay deterministically → `orbit/memory.py`, `orbit/runtime.py` · M/low.
+- **MCP server** exposes tools → `runtime/protocols/` · S/low.
+- **Optional hosted registry** (configurable) → `runtime/protocols/` · S/low.
+
+### memorall (zrg-team/memorall, MIT)
+- **Local-first knowledge graph + hybrid search** (PGlite + vectors + Drizzle) — topics, conversations, sources, nodes/edges → `memory/graph.py`, `memory/store.py` · M/low.
+- **Flow Engine** (graph runtime, step/tool registry, flow builder catalog, middleware, streaming activity) → `core/agent/loop.py`, `core/harness/` · M/low.
+- **Multi-target** (MV3 extension, static web, Tauri desktop) — shared React workspace, PGlite DB, Flow Engine, sandbox container → `cli/`, `extensions/jbrowser` · L/low.
+- **Agent tools:** browser (extension tabs / bundled Chromium), filesystem, sandbox runtime (Node/pnpm/Vite) → `jbrowser/`, `cli/` · M/low.
+- **Local-first architecture** — Wllama/WebLLM/Transformers first-class; PGlite entire store in-browser; background jobs offscreen; Supabase optional → `memory/`, `voice/` · M/low.
+- **RuntimeProcessor** abstraction (MV3 offscreen / web worker / Tauri+Node sidecar) → `core/agent/tool_service.py` sandbox · M/low.
+- **Agent-harness package** (reusable execution contracts + environment adapters) → `core/agent/`, `runtime/protocols/` · M/low.
+
+### Clearcote (clearcotelabs/clearcote-browser, BSD-3)
+- **Open-source stealth Chromium** — 32 engine-level C++ patches (Blink/V8/BoringSSL) for coherent fingerprint spoofing down to TLS JA3/JA4/HTTP-2 → `orbit/cdp.py`, `jbrowser/backend/playwright.py` · M/low.
+- **Drop-in Playwright/Puppeteer** — swap executable, keep code; auto-downloads + SHA-256 verifies binary per OS → `jbrowser/backend/playwright.py` · S/low.
+- **No JS injection** — getters are native C++ (`toString` → `[native code]`) across main frame, iframes, workers; no self-revealing shims → `orbit/cdp.py` fingerprint section · S/low.
+- **JA3/JA4/HTTP-2 coherence** — TLS handshake matches Chrome version; no spoofed-JS-over-real-TLS seam → `orbit/cdp.py` · S/low.
+- **Reproducible builds** — GPG-signed, SHA-256 checksummed, verifiable from source; `docs/VERIFY.md`, `docs/STEALTH-COHERENCE.md` regression gate → CI/reproducibility · S/low.
+- **One `--fingerprint` seed** → stable identity across canvas, WebGL, audio, fonts, locale, hardware, TLS; `fingerprintNoise: false` disables noise while keeping identity → `orbit/cdp.py` · S/low.
+- **`geoip=True` auto-matches** timezone/locale/Accept-Language/WebRTC egress to proxy exit → `orbit/controller.py` · S/low.
+- **Free forever, BSD-3** — no paid tiers; npm/PyPI/NuGet packages auto-download binary → `jbrowser/backend/playwright.py` · S/low.
+
+### CloakBrowser (CloakHQ/CloakBrowser, MIT code / Pro gated)
+- **87 source-level C++ patches** (Chromium 154) — canvas, WebGL, audio, fonts, GPU, screen, WebRTC, network timing, automation signals, CDP input behavior → `orbit/cdp.py` · M/low.
+- **`humanize=True` behavioral layer** — Bézier mouse curves with overshoot+correction, per-char typing with typos+self-correction, accelerate/cruise/decelerate scroll, idle micro-movements, `careful` preset → `orbit/controller.py` · M/med.
+- **Passes 30+ detection sites** — reCAPTCHA v3 0.9 (human), Cloudflare Turnstile PASS, FingerprintJS PASS, BrowserScan NORMAL, `bot.incolumitas.com` 1 fail (WEBDRIVER spec only) → `jbrowser/optimization.py` stealth config · M/low.
+- **Per-session fingerprint seed** persisted in profile, deterministic on revisit → `jbrowser/sessions.py` · S/med.
+- **Actionability gating** — wait visible + enabled + stable before acting → `orbit/controller.py` · S/low.
+- **Proxy integration** — residential proxy + `geoip=True` + `headless=False` + `humanize=True` recommended → `orbit/controller.py` · S/low.
+- **Avoid:** Pro binary distribution (license keys, opaque builds); **CAPTCHA/anti-bot evasion framing** conflicts with default-deny network policy and consent invariant 9. Adopt behavioral consistency only.
+
+### antibrow (antibrow/antibrow, MIT)
+- **Kernel-level antidetect** — coherent real-device profiles (30+ categories, 500+ params from one real machine) → `orbit/cdp.py` · M/low.
+- **Coherent profiles** — canvas, WebGL, WebGPU, audio, fonts, WebRTC, protocol layer all agree (sampled from one real machine) → `orbit/cdp.py` · S/low.
+- **Timezone/locale follow proxy** — geo resolved from exit IP, written into fingerprint before launch → `orbit/controller.py` · S/low.
+- **Proxy auth in engine** — `http/https/socks5` inline on `--proxy-server`; engine answers challenge, no helper extension → `orbit/controller.py` · S/low.
+- **Encrypted relay transport** (`relay://...?key=`) — AES-256-GCM sealed WebSocket frames, HKDF-SHA256 keys, no CONNECT/SOCKS handshake → `orbit/controller.py`, `jbrowser/network.py` · M/low.
+- **Passkeys captured & replayed** per profile virtual authenticator → `jbrowser/sessions.py` · M/low.
+- **MCP server mode** — AI agent drives profile directly → `runtime/protocols/` · S/low.
+- **Standard Playwright API** — no proprietary API; `fanout` runs same command on N profiles → `jbrowser/backend/playwright.py` · S/low.
+- **Linux x64/arm64, macOS universal, Windows x64** — relay server MIT-licensed, self-hostable (Cloudflare Worker/Node) → CI/CD · S/low.
+
+### ProxyShard/ShardBrowser (MIT)
+- **Free open-source anti-detect launcher** — patched Chromium 152 with engine-level spoofing (WebGL/WebGPU/Client Hints/fonts/TLS) → `orbit/cdp.py` · M/low.
+- **220+ device profiles** (Mac M1-M5, Windows NVIDIA/Intel/AMD, Linux, Android) — each with complete device identity (GPU, screen, fonts, audio, TLS ClientHello, UA-CH, WebRTC, geolocation, cookies) → `jbrowser/sessions.py` · S/low.
+- **QUIC/HTTP-3 over SOCKS5 UDP relay** — end-to-end through proxy UDP relay, origin resolved by proxy → `jbrowser/network.py` · M/low.
+- **TLS ClientHello** — Chrome 152 cipher suites + extension shuffling; JA4/Akamai/Peetprint match Chrome version → `orbit/cdp.py` · S/low.
+- **Local HTTP API + MCP server** — Bearer JWT auth; `127.0.0.1:40325`; `Motion` CDP domain for pointer/keystrokes via browser input path → `runtime/protocols/`, `orbit/cdp.py` · M/low.
+- **Automation projects** — visual steps, recording, fleet runs, WASM modules, failure routing, recording → `orbit/runtime.py` · M/low.
+- **Python/Node/Rust SDKs** — same pre-launch pipeline (UDP probe, conditional QUIC, auto timezone/locale/geo, screen strategy, host-aware hardware randomization) → `cli/`, `orbit/controller.py` · S/low.
+
+### agentic-stealth-browser (shanewas/agentic-stealth-browser, MIT)
+- **Human-mimicking stealth** — passes Cloudflare, LinkedIn, Amazon, bot.sannysoft.com, pixelscan.net, CreepJS in headless → `orbit/controller.py` · M/low.
+- **Region-spoofed TLS profile** (JA3/JA4-ish) — process-level, not uTLS; attach mode degrades → `orbit/cdp.py` · M/low.
+- **Behavioral synthesis** — Bézier mouse curves with overshoot, variable typing speed, fatigue simulation, distraction → `orbit/controller.py` · M/low.
+- **Auto-recovery chain** — block detection → proxy/session rotation → retry → `orbit/controller.py` · M/low.
+- **14-day account warming** — graduated ramp-up per account → `orbit/runtime.py` · M/low.
+- **Workflow orchestrator** — queue, schedule, domain concurrency, retries, persistence → `orbit/runtime.py` · M/low.
+- **Security governance** — input validation, session isolation, policy engine, fail-closed MCP approval gate, per-user dashboard RBAC → `core/agent/permissions.py`, `runtime/protocols/` · M/med.
+- **Auditability** — tamper-evident HMAC audit chain, success-path records, log rotation/retention, recursive + token redaction → `runtime/event_bus.py` · M/low.
+- **Operator Dashboard** — live DevTools, CAPTCHA intervention, workflow recording → `extensions/jbrowser` · M/low.
+- **Attach mode** — CDP attach to existing browser, stealth degradation matrix documented → `orbit/cdp.py` · S/low.
+- **Fail-closed MCP approval gate** (default) — `STEALTH_APPROVAL_MODE=permissive` to restore auto-approve → `runtime/protocols/` · M/med.
+
+### mochi (0xchasercat/mochi, MIT)
+- **Relational fingerprint matrix (48-rule DAG)** — every surface derives from single `(profile, seed)` pair; deterministic, no cross-axis randomization (Mac UA never with Linux WebGL) → `orbit/cdp.py` · M/low.
+- **Zero-jitter spoofing** — single ~50KB inject payload at top-of-frame, JIT-friendly Proxy traps, no async round-trips → `orbit/cdp.py` · S/low.
+- **Behavioral synthesis** — `humanClick`/`humanType`/`humanScroll` via Bezier+Fitts+lognormal-digraph models, parameterized per profile (`hand`, `tremor`, `wpm`, `scrollStyle`) → `orbit/controller.py` · M/low.
+- **JA4/JA3/H2-coherent `session.fetch`** — routes through Chromium via CDP (`Network.loadNetworkResource` for GET, `page.evaluate("fetch")` for non-GET); real Chrome JA4 by construction; cookies inherit from page origin → `orbit/cdp.py`, `jbrowser/network.py` · M/low.
+- **Probe-Manifest harness** — `bun run harness:smoke` captures live session manifest, diffs against per-profile baselines; Zero-Diff CI gate → CI/benchmark · S/low.
+- **Turnstile auto-click** (`@mochi.js/challenges`) — opt-in visible-checkbox auto-click; escalations fire `onEscalation` → `orbit/controller.py` · S/low.
+- **Bun-only runtime** — single-runtime stack (no `pip` + `npm`), stock Chromium-for-Testing binary → CI/CD · S/low.
+- **Avoid:** Bun-only limits deployment flexibility; no Python SDK.
+
+### rebrowser/rebrowser-bot-detector (MIT)
+- **Modern bot detection test suite** — covers `Runtime.enable` leak, `sourceUrl` leak, `mainWorldExecution`, `navigator.webdriver`, `bypassCsp`, viewport defaults, `window.dummyFn`, user-agent, `pwInitScripts`, `exposeFunctionLeak` → `orbit/cdp.py`, `jbrowser/backend/playwright.py` · S/low.
+- **Fixes via `rebrowser-patches`** — disable `Runtime.enable`, custom source URLs, isolated contexts, `--disable-blink-features=AutomationControlled`, viewport `null`, avoid CSP bypass → `jbrowser/backend/playwright.py` · S/low.
+- **Use as regression gate** in CI to verify stealth configuration → CI/benchmark · S/low.
+
+### ShardX Launcher (ProxyShard/ShardBrowser, MIT)
+- **Chromium fork + agent platform** (C++ patches + TypeScript/Rust agent) — two products: neo (agent-driven) + BrowserOS (user-facing with AI tab) → `orbit/` + `extensions/jbrowser` concept · L/med.
+- **MCP endpoint (`claw-server`)** + dashboard extension (`claw-app`) for live session watch/replay → `jbrowser-bridge/server.py`, `extensions/jbrowser` · M/low.
+- **One-click login import from Chrome** (persistent profile) → `jbrowser/sessions.py`, `config/browser_profiles/` · S/low.
+- **Agent runs in parallel tabs, live replay like video** → `orbit/runtime.py`, `jbrowser/tabs.py` · M/low.
+- **Patches applied to Chromium source** (fingerprint, security, performance) — capture relevant patches only, avoid AGPL fork maintenance.
+- **Avoid:** AGPL code reuse; CAPTCHA/anti-bot evasion framing; full Chromium fork build chain (Python/gn/ninja) — extract patches/ideas, not the build.
+
+### openbrowser-ai (billy-enrizky/openbrowser-ai, MIT)
+- **CodeAgent architecture:** LLM writes Python in persistent namespace executed over CDP → `orbit/runtime.py`, `orbit/tools.py` `orbit.eval` · M/low.
+- **15 LLM providers + MCP server** (single `execute_code` tool) → `providers/model_gateway.py`, `runtime/protocols/` · S/low.
+- **3.2× fewer tokens than Playwright MCP, 6× fewer than Chrome DevTools MCP** (response size 7.8k vs 1.1M chars) → `orbit/tools.py` token-optimized returns · S/low.
+- **CLI daemon** (`-c` flag) with saved login state, auto-shutdown → `cli/`, `orbit/controller.py` · S/low.
+- **Auto-detects local Chromium (Chrome/Edge/Brave/Chromium) + uvx install fallback** → `orbit/cdp.py` `_find_chromium()` · S/low.
+- **Saved logins KMS-encrypted** (cloud) / local encrypted → `security/`, `jbrowser/sessions.py` · M/low.
+- **FastAPI + Next.js cloud platform** with VNC streaming, scheduled workflows — pattern for future hosted Orbit.
+
+### browser-control (keon/browser-control, MIT)
+- **Tiny Rust CDP CLI** (single static binary, no SDK/runtime) — shell-native subcommands (`snapshot`, `click`, `eval`, `cdp`) → `cli/`, `orbit/tools.py` · S/low.
+- **Provider-agnostic cloud** (Browser Use, Steel, Hyperbrowser, Browserbase, custom CDP URL) → `jbrowser-bridge/server.py`, `runtime/protocols/` · S/low.
+- **Raw CDP escape hatch** (`eval`, `cdp` subcommands) — never hit a wall; agent writes arbitrary JS when helpers insufficient → `orbit/tools.py` `orbit.eval` / `orbit.cdp` · S/low.
+- **Reproducible pinned toolchain** (`rust-toolchain.toml` + `Cargo.lock`) → CI reproducibility · S/low.
+- **Stable element refs via `snapshot`** (numbered `[elN]` style) — aligns with JARVIS page-context handles → `jbrowser/page_context.py`, `orbit/cdp.py` · S/low.
+- **Avoid:** no built-in permission model (inverse of invariant 1) — would need wrapper through `ToolExecutionService`.
+
 ### browser-use (MIT)
 - **Structured action batching** (`max_actions_per_step`) → one model turn fills a whole form, fewer round-trips. `core/agent/loop.py`, `orbit/tools.py` · M/med.
 - **`ActionResult` separates `long_term_memory` / `error` / `extracted_content`** → durable facts vs per-step observation in tool results. `core/agent/tool_service.py` · S/low.
@@ -318,8 +466,8 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
-| **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code | Read for patterns. Do **not** copy source, prompts, or configs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
 
@@ -344,6 +492,16 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | CloakBrowser | MIT code / Pro gated | Behavioral humanization (not evasion) |
 | Skyvern | AGPL | act/extract/validate/prompt + selector→NL fallback |
 | lightpanda | AGPL | Native AX-tree/markdown + secret placeholders + session-scoped MCP |
+| moli | Apache-2.0 | Ultra-lightweight CDP headless (15% Chrome memory) |
+| nanobrowser | Apache-2.0 | Multi-agent planner/validator + chrome.debugger layer |
+| rote | MIT | Memory manager: diff obs + cache layout + verified replay |
+| openbrowse | MIT | Model-agnostic extension + OPFS workspace + 130 providers |
+| WebFurl | AGPL | Recursive semantic tree + cross-user cache + budget unfolding |
+| browser-memory | MIT | Deterministic replay memory + MCP |
+| memorall | MIT | Local-first knowledge graph + Flow Engine + multi-target |
+| BrowserOS neo | AGPL | Chromium fork patches + MCP endpoint + login import |
+| openbrowser-ai | MIT | CodeAgent CDP + token-efficient MCP + 15 providers |
+| browser-control | MIT | Shell-native Rust CDP CLI + provider-agnostic cloud |
 | superpowers | MIT | SessionStart skill bootstrap + post-compaction re-inject |
 | agent-skills | MIT | SKILL.md anatomy + anti-rationalization + verification checklist |
 | pi | MIT | Agent Skills spec conformance + startup diagnostics |
@@ -372,3 +530,320 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | CraftJarvis/JARVIS-1 | No license | Dual-source precedent memory (observation only) |
 | JarvisHub | Apache-2.0 | Protocol Bridge + trajectory recording |
 | IRISX-AI/IRIS-AI | Non-commercial | UI-visible state machine + OS keychain keys |
+| clearcote | BSD-3 | Engine-level stealth (32 C++ patches, JA3/JA4 coherent, drop-in Playwright) |
+| cloakbrowser | MIT code / Pro gated | 87 C++ patches + humanize behavior (reCAPTCHA 0.9, Turnstile PASS) |
+| antibrow | MIT | Kernel-level antidetect + coherent profiles + encrypted relay + passkeys + MCP |
+| shardbrowser | MIT | 220+ profiles + QUIC over SOCKS5 UDP + local API/MCP + Motion CDP domain |
+| agentic-stealth-browser | MIT | Human-mimicking (Bézier, fatigue, TLS spoof) + auto-recovery + 14-day warming + fail-closed MCP |
+| mochi | MIT | Relational 48-rule fingerprint DAG + JA4/JA3 coherent fetch + behavioral synthesis + Probe-Manifest CI |
+| rebrowser-bot-detector | MIT | Modern bot detection test suite (Runtime.enable, sourceUrl, mainWorld, webdriver, CSP, viewport) |
+
+---
+
+# Round 2
+
+## J. Agent harness & orchestration
+
+### openclaw/openclaw (MIT)
+- **Trusted gateway / untrusted execution split**, policy enforced by code, tools run host unless sandboxed. → `core/agent/permissions.py` + sandbox · M/low.
+- **Harness and model as swappable plugins** → reinforces invariant 2 by making both registries plugin-based. `core/harness/`, `providers/model_gateway.py` · M/low.
+- **Inbound-as-untrusted + pairing/approval codes** for unknown senders. `core/agent/permissions.py` · S/low.
+- **Security-in-repo gates**: `security/`, semgrep, pre-commit, exposure runbook. `security/code_scan.py` · S/low.
+- *Avoid:* TS/pnpm monorepo surface; telemetry defaults.
+
+### NousResearch/hermes-agent (MIT)
+- **Turn-phase decomposition**: `iteration_prep / api_call / api_error / overflow / truncation / recovery` instead of one monolith. `core/agent/loop.py`, `core/agent/state.py` · M/med.
+- **`pre_tool_call` / `post_tool_call` hooks + dangerous-command approval** inside dispatch. `core/agent/tool_service.py`, `permissions.py` · S/med.
+- **Bidirectional iteration budgets**: independent parent/subagent caps + `max_spawn_depth`, `leaf` vs `orchestrator` roles, blocked-tool lists. `core/harness/` · M/med.
+- **Delegation context isolation**: child gets zero parent history; only final summary re-enters; parallel background handles. `core/harness/`, `runtime/event_bus.py` · M/med.
+- **`execute_code` programmatic tool-calling** (RPC to tools, no reasoning) = zero-context-cost turns. `core/agent/tool_service.py` · M/med.
+- **Prompt-stability invariant**: system prompt never mutates mid-turn; only ephemeral layers + cache breakpoints. `core/harness/`, `providers/model_gateway.py` · S/low.
+- **Skills as self-authored procedural memory** with advisory linter + `write_approval` staging gate. `memory/authority.py`, `permissions.py` · M/low.
+- *Avoid:* 25k tests/1,250 files context-hostile; `hermes_state_*.py` over-decomposition.
+
+### Significant-Gravitas/AutoGPT (classic MIT; `autogpt_platform/` = Polyform Shield)
+- **Block-level retry taxonomy** (plain / with-handler / with-feedback per node). `core/agent/tool_service.py` · M/med.
+- **`agbenchmark` regression suites** — challenge files + scored runs gating changes. `core/agent/verification.py` · M/low.
+- **Typed block I/O contracts** between steps. `tools/classification.py` · S/low.
+- **Forge SDK**: interface + component + protocol registry for authoring agents. `runtime/protocols/`, `core/harness/` · M/low.
+- *Avoid:* `autogpt_platform/` is non-compete license — no code from that subtree.
+
+### FoundationAgents/MetaGPT (MIT)
+- **SOP-as-code**: plan→execute→verify as an explicit ordered procedure. `core/harness/`, `state.py` · M/med.
+- **Schema-first actions** (every Action returns pydantic; roles subscribe to typed messages). `core/harness/`, `verification.py` · M/med.
+- **Shared message pool / pub-sub env** with role-level subscription. `runtime/event_bus.py` · M/low.
+- **Artifact-gated handoffs** (req doc / data model / API spec must exist first). `verification.py` · M/med.
+- *Avoid:* role inflation token cost; no sandbox/permission model; unbounded agent count.
+
+### ruvnet/ruflo (MIT)
+- **Meta-harness framing** — wraps external harnesses (Claude Code/Codex); strongest external validation of "harness != model". `core/harness/`, `providers/model_gateway.py` · M/low.
+- **Lifecycle hook system** with auto-routing. `tool_service.py`, `core/harness/` · M/med.
+- **Cost tracking / budgets / provider failover routing.** `model_gateway.py`, `event_bus.py` · M/low.
+- **Provenance verify** — cryptographically prove installed bytes match a signed manifest. `security/code_scan.py`, `verification.py` · M/med.
+- **MetaHarness readiness score + tool-config security scan.** `verification.py` · M/low.
+- *Avoid:* unreliable marketing metrics, 314-tool/35-plugin sprawl, **explicitly unsandboxed mods**; consensus algos are L/high — skip.
+
+### github/spec-kit (MIT)
+- **Converge as append-only verification gate (best fit):** reads spec/plan/tasks as sole intent, classifies gaps `missing/partial/contradicts/unrequested` with CRITICAL→LOW severity, appends traceable tasks, never rewrites. Near 1:1 with `core/agent/verification.py` → `RECOVERING` · S/M/low.
+- **Analyze = read-only cross-artifact consistency check** (task w/o requirement; plan contradicts spec). `verification.py` · S/low.
+- **Clarify gate**: ≤5 targeted questions on underspecified intent before planning. Intent router / harness · S/med.
+- **Constitution as immutable authority** — violations are CRITICAL findings. `memory/authority.py` · S/low.
+- **Phased dependency-ordered task list** (Setup → Foundational → per-story by priority → Polish, `[P]` parallel markers) ready-made task-fan-out grammar. `core/harness/`, `state.py` · M/med.
+- *Avoid:* Markdown-only, no executable enforcement — scaffolding for JARVIS's deterministic gate, not a replacement.
+
+## K. Workflow / RAG platforms
+
+### langgenius/dify (Dify Open Source License — Apache-based + extra conditions)
+- **AOP-style execution layers** (`on_node_run_start/end`, `on_event`) for quota, step/time limits, OTel, pause-persistence without touching node code. `core/harness/`, `runtime/event_bus.py` · M/low.
+- **Rich tool schema** — `llm_description` vs `human_description`, `form: llm|form`, typed params (`secret-input`, `file`, `select`), `output_schema`, manifest `permission` block (tool/model/endpoint/storage scopes). `tools/classification.py`, `skills/` · M/low.
+- **Declarative node error strategies** (`fail` / `default-value` / `fail-branch`) + handled-vs-fatal event split with `error_type`/`error_message`. `verification.py`, `state.py` · S/low.
+- **Pause/resume persists serialized graph state** + child-safe layer subset. `event_bus.py`, `state.py` · M/low.
+- **Iteration error modes** (`terminated` / `continue-on-error` / `remove-abnormal-output`) + partial-success event. `core/agent/loop.py` · S/low.
+- *Avoid:* extra license conditions (never vendor code); `pkgutil.walk_packages` self-registration is implicit/magic — unfit for a security-sensitive tool loader.
+
+### langflow-ai/langflow (MIT)
+- **Component tool metadata** (`display_name`, `description`, `priority`, `tool_mode`, per-tool `status` enabled/disabled persisted). `tools/classification.py`, `skills/` · S/low.
+- **Component→Tool promotion** with `to_toolkit()` + status filter. `tools/` registry · M/low.
+- **Flow-as-MCP-server / REST endpoint**. `runtime/protocols/` · M/med.
+- **Single-node "Execute step"** debugging. `cli/` · S/low.
+- **Load-time schema validation** (reserved-name / name-overlap). `tools/` · S/low.
+- *Avoid:* backend schema coupled to React-Flow frontend; inline editable Python `code` field = code-exec risk.
+
+### langchain-ai/langchain (MIT)
+- **Middleware ordering is load-bearing** — HITL must wrap before retry/error middleware or a retried call re-asks approval. `core/agent/tool_service.py`, `permissions.py` · S/med.
+- **Per-tool approval policy** — `interrupt_on={tool:{allowed_decisions}}, when=predicate`, batched vs per-call, resume validated against `response_schema`. `permissions.py` · M/low.
+- **Fault policies per node** — `RetryPolicy` (backoff+jitter, `retry_on`), `TimeoutPolicy` (`run_timeout` **and** progress-based `idle_timeout` + heartbeat), atomic `error_handler`, SAGA compensation via `completed` accumulator. `core/agent/loop.py`, `verification.py` · M/low.
+- **Checkpointer vs Store split** + **pending-writes recovery** (don't re-run nodes that already succeeded). `memory/`, `state.py` · M/med.
+- **Tool output shaping** — `return_direct`, `content_and_artifact`, `handle_tool_error`, reserved arg names. `tools/classification.py` · S/low.
+- *Avoid:* `interrupt()` re-runs the node from the top (needs idempotency); don't adopt LCEL wholesale.
+
+### open-webui/open-webui (Open WebUI License — branding clause, relicensed)
+- **Pipeline stage ordering** — `inlet` → `request` (sees injected RAG chunks) → `stream` → `outlet`; `file_handler=True` opts out of built-in RAG. `core/harness/`, `memory/` · M/med.
+- **Tool approval UX** — per-chat access mode persisted per-user *and* per-chat; pending call stored **on the assistant message so it survives reload**; 120s timeout → deny; multi-call approved one at a time; denial returned to the model as an error. `permissions.py`, `cli/` · M/low.
+- **Deferred tool search** — `deferral_threshold` by schema char length, `always_loaded` glob allowlist, `search_tools`/`call_tool` meta-tools. `tools/classification.py`, `core/harness/` · M/med.
+- **RAG pipeline** — query rewriting, hybrid BM25+dense (`hybrid_bm25_weight`), reranking, `relevance_threshold`, full-context mode. `memory/` · M/med.
+- **RBAC + per-user Valves + sub-agent delegation.** `permissions.py` · M/med.
+- *Avoid:* upstream HITL had an **ownership-check hole** and **no timeout on `await`** — JARVIS must enforce session ownership and bounded waits; don't keep approval state in-memory-only.
+
+### n8n-io/n8n (Sustainable Use License — NOT OSI)
+- **Crash recovery from the event log** — `ExecutionRecoveryService` replays the message bus, marks started-but-unfinished nodes `NodeCrashedError`; each event written to a local rollover log **before** propagation. `runtime/event_bus.py`, `state.py` · L/med.
+- **Execution data modes + redaction policies** (db vs blob; per-node progress save; production/manual redaction). `event_bus.py` persistence · M/med.
+- **Error-workflow pattern** — structured error context (`lastNodeExecuted`, `error.context.itemIndex`), `continueOnFail`/`alwaysOutputData`, `retryOnFail`/`maxTries`. `verification.py` · S/low.
+- **Tombstone reclamation** for dedup after crash. `core/locks`, `state.py` · M/med.
+- **Pinned data + partial execution** (freeze a node's output, run the tail). `cli/` · S/low.
+- *Avoid:* license not open source; heavy queue-per-node worker model.
+
+### mastra-ai/mastra (Apache-2.0 core; `ee/` = Enterprise License)
+- **Typed graph steps** `.then/.branch/.parallel/.foreach` with per-step `input/output/resume/suspendSchema` + retries. `core/harness/` · M/med.
+- **Suspend/resume snapshots** — `suspend(payload)` / `resume(resumeData)`, `suspended` vs `waiting`, **`bail()` = human rejection completes as success**, `suspendData` carries why. `state.py`, `event_bus.py` · M/low.
+- **Atomic resume claim** — `suspended→running` atomically, `WORKFLOW_RESUME_ALREADY_CLAIMED`/409 on double-click or multi-instance races; adapters self-report `supportsConcurrentUpdates()`. Parallels `core/locks` / Orbit ownership. `core/locks`, `permissions.py` · S/low.
+- **Trace continuity across suspend/resume** — persist `traceId/spanId/parentSpanId` so the resumed span nests under the suspended one. `event_bus.py` · M/med.
+- **Evals + live observability** — scorers, async sampling rate, datasets/experiments, CI gating, OTel; workflow-step spans capture inputs/outputs/branching. `verification.py`, `benchmark/` · L/med.
+- *Avoid:* `ee/` needs a license; unfinished "evented" engine; validate trace IDs before nesting (upstream bug mixed caller `traceId` with persisted `spanId`).
+
+## L. Skills & prompt engineering
+
+### Leonxlnx/taste-skill (MIT)
+- **Machine-checked skill exit criteria** — `lint.mjs` banned-pattern scan + `inspect.mjs` real-browser measurement → FAIL/WARN, then a screenshot critique loop capped at 3 rounds. Encode skill exit criteria as *measurable* checks. → `core/agent/verification.py` extend the gate with `checks[]` (command/metric + threshold) run post-execution; failures feed RECOVERING · S/low.
+- **Drawn-variation prompt pattern** — deal 3 researched directions, agent picks the one matching the subject (fights mode-collapse). `core/harness/` · M/low.
+- **"Competitor test" anti-generic rubric** — if the idea sentence still works with the nearest competitor substituted, it's category-generic. `core/harness/` · S/low.
+- **Progressive disclosure by reference files** — SKILL.md is the spine, 9 `references/*.md` loaded on demand, `library/` data read only via script. `skills/registry.py`, `skills/instructions/` · M/low.
+- **Structured end-of-run report contract** (decisions, checks run — *never claim unrun checks* — asset credits). `core/harness/` · S/low.
+- *Avoid:* Node/Chrome hard dependency (keep JARVIS gates hermetic-first, live opt-in); opinionated house rules belong in a skill, never kernel policy.
+
+### nextlevelbuilder/ui-ux-pro-max-skill (MIT)
+- **Declarative `skill.json` manifest** — name, version, license, keywords, platforms, install command; machine-readable packaging separate from prose. `skills/manifests/` · S/low.
+- **Master + page-override hierarchical persistence** — global `MASTER.md` + per-page deviations, retrieval checks override first. Maps to `skills/instructions/` + `memory/keyspace` ownership (`user.*` vs `system.*`) · M/low.
+- **Catalog status lifecycle** (active / supplemental / deprecated with redirects, excluded from ranking) prevents stale-skill invocation. `skills/catalog/` · M/low.
+- **Offline-first stdlib-only search scripts; agents must ask before installing anything.** → encode as classification rule: dependency-free skill scripts; agent-install = HIGH risk. `tools/classification.py`, `permissions.py` · S/low.
+- **Pre-delivery checklist as skill output** (contrast 4.5:1, focus states, reduced-motion, responsive widths). `verification.py` · M/med.
+- *Avoid:* freemium upsell; 20+ per-host `.claude/`/`.cursor/` dirs — keep one canonical `skills/`; don't inline catalog data into prompts.
+
+### shanraisshan/claude-code-best-practice (MIT)
+- **Rich subagent frontmatter schema** (16 fields: `tools` allowlist, `disallowedTools`, `maxTurns`, `model`, `permissionMode`, `effort`, `isolation`, `memory`, `color`). → manifest carries per-skill tool allowlist/denylist + max-turns, enforced at `ToolExecutionService` (extends invariant 1) · M/med.
+- **Command → Agent → Skill orchestration chain** — thin command triggers agent that delegates to a skill. `core/harness/` · L/med.
+- **Memory scoping `user` / `project` / `local`** → map onto `memory/keyspace.py` (`user.*` cross-session, `agent.<id>.*` project, `system.*` local) · S/low.
+- **Hooks as scoped lifecycle events** (`PreToolUse`/`PostToolUse`/`Stop`) attachable per-agent — must run *inside* the tool service post-phase, never as a bypass. `event_bus.py`, `tool_service.py` · L/high.
+- **`preload` vs `available` skills** — preload injected into the system prompt, others discovered on demand. `skills/registry.py` · S/low.
+- *Avoid:* `permissionMode: bypassPermissions`/`dontAsk` defaults (violates invariant 9); `isolation: worktree` without git-safety analysis; the repo tracks fast-churning betas.
+
+### dair-ai/Prompt-Engineering-Guide (MIT)
+- **ReAct + self-consistency** in the loop template (N samples + vote as an optional verify strategy). `core/harness/` · M/low.
+- **Prompt chaining with typed handoffs** — planner emits chained sub-goals with explicit I/O contracts; verification gates each stage boundary. `core/harness/` · M/low.
+- **Adversarial-prompting hardening at the consent boundary** — instruction-override, role-play jailbreak, tool-exfiltration patterns into the code-scan/sensitive-input gate; untrusted web/email content is *data, never instructions*. Directly relevant now that Orbit browses the live web. `permissions.py`, `security/` · M/med.
+- **Factuality / citation discipline** as research-skill exit criteria. `verification.py` · S/low.
+- **Task-typed prompt collections** (classification, extraction, evaluation, summarization) with a lookup key instead of one monolithic system prompt. `core/harness/` · S/low.
+- *Avoid:* technique sprawl (ToT, APE, Active-Prompt) in the default harness; model-specific advice must not leak into gateway-agnostic templates (invariant 2).
+
+### f/prompts.chat (MIT code + CC0 data)
+- **Single canonical data file** (`prompts.csv`) with website + CLI + MCP views over one source. `skills/catalog/` · M/low.
+- **Dual-license split**: CC0 for prompt/instruction *content*, MIT for executable scripts; per-skill license metadata in manifests. repo policy · S/low.
+- **Persona-role template grammar** — role + constraints + output-format blocks composable. `core/harness/` · S/low.
+- **MCP exposure of a prompt library as read-only tool** — expose metadata only, never execution. `runtime/protocols/` · L/med.
+- *Avoid:* chat-era persona corpus (jailbreak-adjacent entries) — do not bulk-import; unvetted user prompts are an injection vector.
+
+### Shubhamsaboo/awesome-llm-apps (Apache-2.0)
+- **Skills ship with a security + eval CI gate** — per-skill smoke evals (golden input → expected tool-call shape) failing PRs. `skills/`, CI · M/low.
+- **Self-improving skills** — rewrite skill text against eval deltas, gated by approval + `ROLLED_BACK` if evals regress. `verification.py`, `skills/` · L/high.
+- **Scope-creep detector** — compare plan scope vs actual tool-call set; excess surface flagged WARN. `verification.py` · S/low.
+- **Always-on scheduled scouts** emitting proactive BusEvents into the TUI (needs budget caps per period). `event_bus.py`, `cli/cockpit.py` · L/med.
+- **Hash-chained append-only audit trail** for HIGH-risk actions + optional multi-model blind review via ModelGateway. `runtime/`, `verification.py` · L/med.
+- *Avoid:* single-file Streamlit style (bypasses `ToolExecutionService` by design); self-rewriting agents without eval+approval gates; domain-risk templates must stay HIGH + approval-gated.
+
+## M. Research, vision & voice
+
+### Panniantong/Agent-Reach (MIT)
+- **Ordered fallback backend routing per channel** — candidate list probed live, first working wins, failure emits a "repair prescription" as a structured BusEvent. `tools/feeds.py`, `external/web_scraper.py` · M/low.
+- **`research.doctor` health-check tool** (read-only, registered through the tool service). `tools/diagnostics.py` · S/low.
+- **Capability-layer, not a wrapper-tool doctrine** — keep discovery/routing in the skill registry; never wrap reads in a proxy that bypasses classification. `jbrowser/skills.py` · S/low.
+- **`zero_config` vs `login_state` tool tiers** — gated channels require explicit approval like HIGH-risk browser mutations. `jbrowser/permissions.py`, `tools/classification.py` · M/low.
+- **0600 credential perms + dry-run install** (preview all writes before mutating config). `memory/keyspace.py` · S/low.
+- *Avoid:* agent running `pip install`/shell CLIs (bypasses the tool boundary and code-scan); cookie auth via agent shell.
+
+### koala73/worldmonitor (AGPL-3.0 → ideas only)
+- **AI-synthesized briefs from multi-source feed convergence** (`feeds.synthesize_brief(sources[], window)` → one BusEvent). `tools/feeds.py`, `event_bus.py` · M/low.
+- **Freshness-tracked source metadata** (`last_ok`, `staleness_band`, `license_posture`) so the agent can decide re-fetch vs trust. `tools/feeds.py` · S/low.
+- **Derived attention index with 24h movement bands** consolidated into `memory/store.py`. `memory/consolidation.py` · M/low.
+- **`llms.txt` / tool manifest generated from the classification registry** for agent discovery. `tools/` · S/low.
+- **Watch-topic parameterized dashboard panel streamed from BusEvents** (Orbit as situational dashboard). `orbit/` · L/med.
+- *Avoid:* AGPL code; Tauri renderer→sidecar IPC had 3 trust-boundary disclosures — keep loopback+auth discipline.
+
+### GetStream/Vision-Agents (Apache-2.0)
+- **Processor pipeline before the LLM** (OCR region highlighting / UI-element detection on screenshot output) to cut small-text hallucination. `jbrowser/page_context.py` · M/low.
+- **Turn detection as its own `TurnDetector`** (VAD + end-utterance-silence threshold) separate from transcription. `voice/` · M/low.
+- **Text back-channel BusEvent** — inject operator hints into a running agent loop without breaking TTS. `event_bus.py` · S/low.
+- **Native provider API passthrough** for realtime/multimodal methods instead of lowest-common-denominator. `providers/model_gateway.py` · M/med.
+- **Cheap deterministic pass triggers, vision LLM only on novelty** (DOM diff / `[elN]` handles first). `orbit/` tool cost · M/low.
+- *Avoid:* vendor edge-network dependency; K8s/Prometheus layer at current scale.
+
+### calesthio/OpenMontage (AGPL-3.0 → ideas only)
+- **Three-layer knowledge architecture** — tools ("what exists") / skills ("how we use it") / tech packs ("how it works") with declared tool→skill dependency edges so the tool service auto-attaches relevant skill context. `jbrowser/skills.py`, `skills/` · M/low.
+- **Scored provider selection across 7 dimensions** with an auditable decision log surfaced as a BusEvent. `providers/model_gateway.py` · M/med.
+- **Budget as a permission dimension** — estimated cost over threshold auto-upgrades to HIGH even for otherwise-LOW tools. `core/agent/permissions.py` · M/low.
+- **Output-shape validators per tool family** in the existing post-execution gate (not per-call). `core/agent/verification.py` · M/low.
+- **Run-tape dashboard** — BusEvent subscriber rendering tool start/done/cost/ownership as a replayable timeline. `event_bus.py`, `orbit/` · L/low.
+- **Checkpoint/resume via run-state snapshots** so a crashed session resumes mid-task. `core/agent/loop.py` · L/med.
+- *Avoid:* AGPL code; "agent IS the orchestrator" contradicts the single-boundary invariant; 700+ markdown skill files would bloat a curated `skills/`.
+
+### smithakolan/AssemblyAI-AI-Voice-Bot (MIT)
+- **`end_utterance_silence_threshold` (1000ms) as explicit endpointing config.** `voice/` · S/low.
+- **Partial vs final transcript discrimination** — `voice.transcript.partial` (display only) vs `voice.transcript.final` (enters agent context; prevents mid-word tool triggers). `voice/`, `event_bus.py` · S/low.
+- **Half-duplex turn handling** — `listening=False` during TTS playback with a tail-guard before reopening the mic. `voice/` · S/med.
+- **Append-only role-tagged transcript** persisted in the `agent.*` keyspace for post-session consolidation. `memory/keyspace.py` · S/low.
+- *Avoid:* hardcoded API keys; reconnect-per-turn churn at scale; voice-initiated HIGH-risk actions must still hit `permissions.py` (invariant 9).
+
+### jev-chat/jev-chat-jarvis (MIT)
+- **"Judge before write" two-phase pipeline** — intent + risk + recommended action computed *before* any draft, then drafts checked against that judgment. `core/agent/loop.py` (maps to VERIFYING→RECOVERING) · M/low.
+- **`read_only_screen_context` tool mode** — screenshots/OCR stay on-device; no tool in this mode may emit click/type/submit. `jbrowser/`, `orbit/` · M/low.
+- **`approval_style: fill_only`** — agent prepares exact payload but the final click/type still needs HIGH-risk approval; makes invariant 9 a visible UX. `permissions.py`, `orbit/tools.py` · S/low.
+- **`drafts[]` array** (text + score + rationale) instead of a single opaque string. `orbit/tools.py` · S/low.
+- **Local OCR pre-pass before shipping screenshots to a vision LLM** — cheaper and keeps sensitive pixels out of provider calls. `jbrowser/page_context.py` · M/med.
+- *Avoid:* don't port accessibility-hook into the Orbit extension (violates G6 "no `chrome.debugger`"); never automate sends inside third-party clients.
+
+### Round 2 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Converge gap taxonomy feeding the post-execution gate | `core/agent/verification.py` | S/M | low |
+| Durable, owned, time-bounded tool approval state | `core/agent/permissions.py` | M | low |
+| Deferred/tiered tool schemas (`search_tools` meta-tool) | `tools/classification.py`, `core/harness/` | M | med |
+| Event log as the durability primitive (crash recovery + redaction) | `runtime/event_bus.py` | L | med |
+| Progress-based timeout + idempotent resumable steps | `core/agent/loop.py`, `state.py` | M | low |
+| Endpointing + partial/final transcript events | `voice/`, `event_bus.py` | S | low |
+| Budget-as-permission-dimension | `core/agent/permissions.py` | M | low |
+| Untrusted-content hardening at the consent boundary | `security/`, `permissions.py` | M | med |
+| Per-skill CI evals gated on merge | `skills/`, CI | M | low |
+| Measurable skill exit criteria (`checks[]`) | `core/agent/verification.py` | S | low |
+
+---
+
+# Round 3
+
+## N. Ultron-named repos (curated — most of the paste was game/blockchain/ultrasound noise)
+
+### modelscope/ultron (Apache-2.0) — *best in batch*
+- **L0/L1/full memory context levels** — search returns `summary_l0` (one line) or `+overview_l1`; full text fetched by id in a second call. Direct prompt-token savings. `memory/store.py` · S/low.
+- **HOT/WARM/COLD tier rebalance** — percentile split by `hit_count` + `hotness = exp(-α·days)` decay + COLD TTL → `archived` (never deleted); adoption signals weighted. `memory/consolidation.py` · M/low.
+- **Skill crystallization with an upgrade gate** — memories → cosine cluster (≥0.75) → at ≥5 memories an LLM synthesizes a multi-step skill (trigger, ≥3 steps, edge cases); re-crystallize at +3 new memories; publish only if a weighted **structure score strictly improves**; a **separate verifier LLM** labels each claim `grounded/hallucinated/contradicted` (pass ≥0.8 grounded, zero contradictions). `skills/`, `core/agent/verification.py` · M/med.
+- **Near-dup merge + redaction on ingest** — cosine >0.85 within type → LLM merge (fallback: keep original if LLM down); Presidio + regex redaction of API keys/tokens/PII *before* persistence. `memory/consolidation.py`, `security/code_scan.py` · M/low.
+- *Avoid:* `curl | bash` blueprint import; MBTI/zodiac "soul presets"; server-side trajectory self-training loop.
+
+### NomaDamas/Ultron (MIT) — self-building harness ecology
+- **Evidence-gated promotion with no-poisoning rollback** — promote only with benchmark provenance + actor audit; canary runs isolated; one bounded change at a time. Adopt the *gate discipline* for `core/harness/` changes (ledger + one-change rule: S/low; full evolution loop: L/high).
+- **Secret store precedence** (`runtime secret store > env > .env`), owner-only `secrets.json`, `set --stdin` (no echo), reads expose only `SecretRef` (fingerprint/last4). `providers/model_gateway.py`, `cli/` · S/low — high hygiene value, cheap.
+- **Fail-closed live seam** — configured live path with missing creds errors; never substitutes fake/stub results. `model_gateway` fallback discipline · S/low.
+- **Signed RunManifest** — actor-attributed provenance, side-effect ledger, quarantine. `runtime/event_bus.py` field + `tool_service` audit · M/med.
+- *Avoid:* thumbs-up/down-driven module atrophy (harness drift).
+
+### SAGAR-TAMANG/ultron-by-sagar-builds (MIT, 982★)
+- **Nothing worth adopting.** Three.js/MediaPipe holographic orb renderer for a separate closed project; 5 commits, zero agent logic. Star count ≠ substance. Marginal: gesture *hysteresis* if `voice/` ever adds gesture control.
+
+### maharab549/ultron-ai
+- **Local-provider presets as an OpenAI-compatible triple** (`API_BASE`/`API_KEY`/`MODEL_NAME`; LM Studio `:1234/v1`, Ollama `:11434/v1`, dummy key accepted) + function-calling capability probe at connect. `providers/model_gateway.py` · S/low.
+- **Mock LLM server as the default dev endpoint** for hermetic tests without keys. Gateway test seam · S/low.
+- **Disposable per-task sandbox container with auto-cleanup** — verify `tool_service` sandbox truly tears down per task. · M/med.
+- *Avoid:* DDD layering, Baidu-default search, multi-user auth stack.
+
+### smallporridge/WebUltron (MIT, paper artifact)
+- **Nothing directly adoptable** (training pipelines, PQ/URL docid encodings, Google Drive data).
+- Two transferable ideas: **pseudo-query generation** (DocTTTTTQuery-style, 10 synthetic queries per doc) to build recall-eval pairs; **ranking-metric regression gate** (MRR/nDCG) for search-quality changes instead of eyeballing. `memory/` eval harness · S/low.
+- *Avoid:* actually training a seq2seq docid indexer.
+
+### povzayd/ultron (MIT)
+- **Key-format signature table** (`ghp_`, `glpat-`, `AKIA…20ch`, `sk_live_`/`sk_test_`, Slack webhook, Twilio `AC`+32hex, JWT/Bearer, Discord webhook URL) → extend `security/code_scan.py FORBIDDEN_CODE_PATTERNS` to catch credential-shaped strings in tool outputs **before** BusEvent persistence. `security/` · S/low — top takeaway.
+- **Optional read-only whoami probe** as an operator-only `security.verify_secret` tool, HIGH risk + approval-gated. · S/med.
+- *Avoid:* plaintext key files as input; `mv … /usr/bin` install; validating real keys from a shared file is itself a leak vector.
+
+## O. UI, workflow & data
+
+### AUTOMATIC1111/stable-diffusion-webui (AGPL-3.0 → ideas only)
+- **Declarative options registry** — `OptionInfo(key, default, widget, args)` chained with `.info()` / `.needs_reload_ui()` / `.link()` / `.restrict_api()`, grouped via `options_section(category)`; one table drives the settings panel, docs, and API exposure flags. `tools/classification.py`, `cli/cockpit.py` · M/low.
+- **Extension `metadata.ini` with dependency graph** — `Requires`/`Before`/`After` callback ordering, duplicate canonical-name rejection, disabled-list honored at load. `jbrowser/skills.py`, `tools/` catalog · M/med.
+- **`restricted_opts` denylist** — path/secret keys hidden from UI and API (`restrict_api=True`). `core/agent/permissions.py`, bridge config · S/low.
+- *Avoid:* AGPL code; auto `git fetch + reset --hard` extension updates (supply chain); global mutable `shared.opts` singleton.
+
+### Comfy-Org/ComfyUI (GPL-3.0 → ideas only)
+- **Partial graph re-execution** — only nodes whose inputs changed re-run; results cached; graph executes only where all inputs are valid. `core/harness/` node/graph pipelines · L/med.
+- **Declarative node spec + pre-queue validation** — `INPUT_TYPES`/`RETURN_TYPES`/`VALIDATE_INPUTS` checked *before* execution; malformed graphs rejected at queue time. `core/agent/tool_service.py`, `verification.py` · M/low.
+- **Node packaging via `pyproject.toml` `[tool.comfy]`** — `PublisherId`, `requires-comfyui = ">=1.0.0"` semver, license, icon. `scripts/download_dependencies.py` + tool catalog: each plugin declares a `requires-jarvis` range · M/low.
+- **Offline-by-default** — core downloads nothing unless requested; `--offline` forces local-only. `providers/model_gateway.py` · S/low.
+- *Avoid:* GPL code; ComfyUI-Manager-style git auto-install of unvetted custom nodes (bypasses the code-scan gate).
+
+### shadcn-ui/ui (MIT)
+- **Semantic token pairs + derived scale** — `background/foreground`, `primary/primary-foreground` under `:root`/`.dark`; radius scale computed from a single `--radius` via `calc()`. → `cli/theme.py` + `extensions/jbrowser/src/lib/tokens.css`: paired fg/bg tokens + one base radius/spacing deriving the whole scale; dark mode = override same tokens only · M/low.
+- **Registry as distribution** — `registry.json`/`registry-item.json` declares files, deps, css vars per component; CLI installs items. → jbrowser UI blocks install with declared token deps · M/low.
+- **oklch perceptually-uniform palette + dedicated `ring` focus token** — equal lightness steps; every focusable uses `ring`. → `tokens.css` + `cli/renderer.py`: WCAG-stepped ramps and mandatory visible focus for TUI widgets · S/low.
+- *Avoid:* Tailwind-specific plumbing; keep tokens in their own layer so regeneration never overwrites hand edits.
+
+### thedaviddias/Front-End-Checklist (MIT)
+- **Rules as structured single source** — each rule = id/category/priority (Critical→Low)/remediation/verification step; `validate:rule-structure` CI check; README + MCP generated from the same table. → `core/agent/verification.py` declarative exit criteria as rule objects · M/low.
+- **Priority-ordered triage + queryable rules** (`search_rules`/`get_workflow`) — agent fetches highest-confidence checks *before* acting. `tools/` catalog, `cli/cockpit.py` · M/med.
+- **Skill entry points** — one global audit skill + per-rule focused skills (a11y, security, perf). `skills/` · S/low.
+- *Avoid:* importing the web-specific rule corpus wholesale; checklists that become unenforced prose.
+
+### harry0703/MoneyPrinterTurbo (MIT)
+- **Resumable staged pipeline** — `--stop-at <stage>` checkpoints; batch manifest (≤100 tasks) fully pre-validated before the first task; per-task failure doesn't block others; unified JSON summary. `core/harness/` · L/med.
+- **Config layering** — `config.example.toml` auto-copied on first run; precedence `CLI args > saved UI settings > built-in defaults`. `cli/`, `providers/model_gateway.py` · S/low.
+- **Pluggable stage providers chosen by config** with per-provider TOML subsections; local models cached with manual-download fallback. `scripts/download_dependencies.py` · M/med.
+- *Avoid:* plaintext API keys in `config.toml`.
+
+### supabase/supabase (Apache-2.0)
+- **Local-first dev stack + migration discipline** — `supabase start`, single `config.toml`, ordered SQL migrations with recorded schema history, `seed.sql` fixtures. → `memory/store.py` + orbit persistence: versioned migration dir + idempotent seed for hermetic test DBs · M/low.
+- **Modular feature-clients behind a facade** — per-provider clients isolated and testable, composed under one gateway. `providers/model_gateway.py` · M/med.
+- **Fail-closed authz** — JWT + RLS default-deny. Mirror in `jbrowser-bridge` bearer auth + invariant 9 · S/low.
+- *Avoid:* hosted SaaS/dashboard assumptions; don't vendor the whole docker stack — minimal local Postgres path.
+
+### Round 3 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Redaction-at-ingest + credential-signature scan before persistence | `security/code_scan.py`, `memory/consolidation.py` | S/M | low |
+| L0/L1 memory summaries + HOT/WARM/COLD decay | `memory/`, `memory/consolidation.py` | S/M | low |
+| Secret store + redacted `SecretRef` + fail-closed live seam | `providers/model_gateway.py`, `cli/` | S | low |
+| Skill structure-score upgrade gate + verifier-model check | `skills/`, `core/agent/verification.py` | M | med |
+| Local-provider presets + mock-LLM hermetic test seam | `providers/model_gateway.py` | S | low |
+| Rule/exit-criteria table as single source | `core/agent/verification.py`, `tools/classification.py` | M | low |
+| Semantic paired tokens + derived scales + `ring` focus | `cli/theme.py`, `extensions/jbrowser/src/lib/tokens.css` | M | low |
+| Pre-execution declarative arg/graph validation | `core/agent/tool_service.py` | M | low |
+| Stage checkpoints + pre-validated batch manifest | `core/harness/` | L | med |
+| Versioned migrations + seeds | `memory/store.py` | M | low |

@@ -1,7 +1,7 @@
 [
   {
     "content": "Review openclaw/openclaw and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -11,12 +11,12 @@
   },
   {
     "content": "Review NousResearch/hermes-agent and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review n8n-io/n8n and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -26,17 +26,17 @@
   },
   {
     "content": "Review Significant-Gravitas/AutoGPT and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review f/prompts.chat and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review AUTOMATIC1111/stable-diffusion-webui and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -56,22 +56,22 @@
   },
   {
     "content": "Review langgenius/dify and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review open-webui/open-webui and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review langflow-ai/langflow and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review langchain-ai/langchain and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -81,32 +81,32 @@
   },
   {
     "content": "Review Shubhamsaboo/awesome-llm-apps and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review github/spec-kit and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review Comfy-Org/ComfyUI and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review nextlevelbuilder/ui-ux-pro-max-skill and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review harry0703/MoneyPrinterTurbo and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review shadcn-ui/ui and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -131,7 +131,7 @@
   },
   {
     "content": "Review supabase/supabase and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -151,7 +151,7 @@
   },
   {
     "content": "Review smithakolan/AssemblyAI-AI-Voice-Bot and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -216,7 +216,7 @@
   },
   {
     "content": "Review mastra-ai/mastra and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -366,7 +366,7 @@
   },
   {
     "content": "Review GetStream/Vision-Agents and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -416,12 +416,12 @@
   },
   {
     "content": "Review Panniantong/Agent-Reach and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review Leonxlnx/taste-skill and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -436,7 +436,7 @@
   },
   {
     "content": "Review koala73/worldmonitor and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -456,7 +456,7 @@
   },
   {
     "content": "Review dair-ai/Prompt-Engineering-Guide and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -481,12 +481,12 @@
   },
   {
     "content": "Review ruvnet/ruflo and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review thedaviddias/Front-End-Checklist and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -496,17 +496,17 @@
   },
   {
     "content": "Review FoundationAgents/MetaGPT and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review calesthio/OpenMontage and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
     "content": "Review shanraisshan/claude-code-best-practice and extract useful ideas/features for JARVIS",
-    "status": "pending",
+    "status": "completed",
     "priority": "high"
   },
   {
@@ -626,6 +626,41 @@
   },
   {
     "content": "Review IRISX-AI/IRIS-AI and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review jev-chat/jev-chat-jarvis and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review modelscope/ultron and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review NomaDamas/Ultron and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review SAGAR-TAMANG/ultron-by-sagar-builds and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review maharab549/ultron-ai and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review smallporridge/WebUltron and extract useful ideas/features for JARVIS",
+    "status": "completed",
+    "priority": "high"
+  },
+  {
+    "content": "Review povzayd/ultron and extract useful ideas/features for JARVIS",
     "status": "completed",
     "priority": "high"
   }
