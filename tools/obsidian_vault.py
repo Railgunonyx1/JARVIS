@@ -138,7 +138,8 @@ def vault_write(args: dict[str, Any]) -> ToolResult:
     content = str(args.get("content", "") or "")
     overwrite = bool(args.get("overwrite", True))
     if path.exists() and not overwrite:
-        return ToolResult(success=False, error=f"Note already exists: {path.relative_to(_VAULT_ROOT)} (set overwrite=true)")
+        return ToolResult(success=False, error=(f"Note already exists: {path.relative_to(_VAULT_ROOT)} "
+                                               "(set overwrite=true)"))
     if path.exists() and path.is_dir():
         return ToolResult(success=False, error=f"Is a directory: {path}")
     try:
@@ -264,7 +265,8 @@ def vault_delete(args: dict[str, Any]) -> ToolResult:
         except OSError as e:
             return ToolResult(success=False, error=f"Cannot inspect {path}: {e}")
         else:
-            return ToolResult(success=False, error=f"Directory not empty: {path.relative_to(_VAULT_ROOT)}; refusing to delete")
+            return ToolResult(success=False, error=(f"Directory not empty: {path.relative_to(_VAULT_ROOT)}; "
+                                                   "refusing to delete"))
         try:
             path.rmdir()
         except OSError as e:
@@ -307,12 +309,14 @@ def vault_move(args: dict[str, Any]) -> ToolResult:
         dest = dest / source.name
     overwrite = bool(args.get("overwrite", False))
     if dest.exists() and not overwrite:
-        return ToolResult(success=False, error=f"Destination exists: {dest.relative_to(_VAULT_ROOT)} (set overwrite=true)")
+        return ToolResult(success=False, error=(f"Destination exists: {dest.relative_to(_VAULT_ROOT)} "
+                                               "(set overwrite=true)"))
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         source.rename(dest)
     except (OSError, ValueError) as e:
-        return ToolResult(success=False, error=f"Failed to move {source.relative_to(_VAULT_ROOT)} to {dest.relative_to(_VAULT_ROOT)}: {e}")
+        return ToolResult(success=False, error=(f"Failed to move {source.relative_to(_VAULT_ROOT)} to "
+                                               f"{dest.relative_to(_VAULT_ROOT)}: {e}"))
     return ToolResult(
         success=True,
         output=f"Moved {source.relative_to(_VAULT_ROOT)} to {dest.relative_to(_VAULT_ROOT)}",
@@ -426,7 +430,8 @@ def vault_search(args: dict[str, Any]) -> ToolResult:
     return ToolResult(
         success=True,
         output="\n".join(
-            f"{r['path']}  ({r['hits']} hit{'s' if r['hits'] != 1 else ''})" + ("\n" + r["snippet"] if r["snippet"] else "")
+            (f"{r['path']}  ({r['hits']} hit{'s' if r['hits'] != 1 else ''})"
+             + (f"\n{r['snippet']}" if r["snippet"] else ""))
             for r in results
         ) or f"No matches for '{query}'",
         metadata={"query": query, "hits": sum(r["hits"] for r in results), "files": [r["path"] for r in results]},
@@ -457,7 +462,10 @@ def vault_rebuild_index(args: dict[str, Any]) -> ToolResult:
             })
         data = {"vault": str(_VAULT_ROOT), "notes": notes}
         IDX.parent.mkdir(parents=True, exist_ok=True)
-        IDX.write_text(repr(data) if False else __import__("json", fromlist=["json"]).dumps(data, indent=2), encoding="utf-8")
+        IDX.write_text(
+            (__import__("json", fromlist=["json"]).dumps(data, indent=2)),
+            encoding="utf-8",
+        )
     except OSError as e:
         return ToolResult(success=False, error=f"Failed to rebuild vault index: {e}")
     return ToolResult(

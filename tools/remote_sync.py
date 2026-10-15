@@ -96,7 +96,8 @@ def remote_transfer(args: dict[str, Any]) -> ToolResult:
     source = str(args.get("source", "")).strip()
     dest = str(args.get("dest", "")).strip()
     if not source or not dest:
-        return ToolResult(success=False, error="source and dest are required (rclone path specs, e.g. 'gdrive:backups' or 'D:/data')")
+        return ToolResult(success=False, error=("source and dest are required (rclone path specs, "
+                                               "e.g. 'gdrive:backups' or 'D:/data')"))
 
     confirm = bool(args.get("confirm", False))
     dry_run = bool(args.get("dry_run", False))

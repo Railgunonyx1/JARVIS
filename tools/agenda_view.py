@@ -352,6 +352,7 @@ def agenda_remove(args: dict[str, Any]) -> ToolResult:
 def agenda_list(args: dict[str, Any]) -> ToolResult:
     sources = _load_sources()
     if not sources:
-        return ToolResult(success=True, output="No registered calendar sources (workspace .ics files are still picked up automatically).")
+        return ToolResult(success=True, output=("No registered calendar sources "
+                                             "(workspace .ics files are still picked up automatically)."))
     lines = [f"- {s}" for s in sources]
     return ToolResult(success=True, output="Calendar sources:\n" + "\n".join(lines))

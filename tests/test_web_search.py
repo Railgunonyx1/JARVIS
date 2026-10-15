@@ -113,7 +113,6 @@ def test_repeated_query_hits_cache(monkeypatch):
 
 
 def test_score_results_reorders_relevance(monkeypatch):
-    calls = {"n": 0}
     monkeypatch.setattr(
         ws,
         "_html_search",

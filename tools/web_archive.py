@@ -127,7 +127,8 @@ def web_archive(args: dict[str, Any]) -> ToolResult:
     note = f" ({len(dropped)} oldest pruned)" if dropped else ""
     return ToolResult(
         success=True,
-        output=f"Archived: {title or url}\nhash {content_hash} · {len(text)} chars · snapshot {n}/{_MAX_SNAPSHOTS_PER_URL}{note}",
+        output=(f"Archived: {title or url}\nhash {content_hash} · {len(text)} chars · "
+                f"snapshot {n}/{_MAX_SNAPSHOTS_PER_URL}{note}"),
     )
 
 

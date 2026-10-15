@@ -45,7 +45,10 @@ def _lazy_orjson_dumps(d: dict) -> str:
         import orjson
     except Exception:
         return json.dumps(d)
-    _json_dumps = lambda x: orjson.dumps(x, default=str).decode()
+    def _orjson_dumps(x):
+        return orjson.dumps(x, default=str).decode()
+
+    _json_dumps = _orjson_dumps
     return _json_dumps(d)
 
 

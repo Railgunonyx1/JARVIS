@@ -53,6 +53,13 @@ benchmark/results/
 audit.log
 audit_*.txt
 audit_*.json
+audits/ruff_*.txt
+audits/*_output.txt
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
 
 # IDE / session metadata
 .kilocode/

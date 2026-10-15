@@ -184,8 +184,8 @@ def page_watch(args: dict[str, Any]) -> ToolResult:
     entry["changes"] = int(entry.get("changes", 0)) + 1
     entry["last_text"] = text
     _save(state)
-    added = sum(1 for l in body if l.startswith("+") and not l.startswith("+++"))
-    removed = sum(1 for l in body if l.startswith("-") and not l.startswith("---"))
+    added = sum(1 for line in body if line.startswith("+") and not line.startswith("+++"))
+    removed = sum(1 for line in body if line.startswith("-") and not line.startswith("---"))
     return ToolResult(
         success=True,
         output=truncate(f"CHANGED ({added}+ / {removed}-):\n{diff_text}", MAX_OUTPUT),

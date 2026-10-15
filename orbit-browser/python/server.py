@@ -525,7 +525,9 @@ async def handler(websocket):
     try:
         async for message in websocket:
             if isinstance(message, bytes):
-                await websocket.send(json.dumps({"type": "error", "payload": {"message": "binary frames not accepted"}}))
+                await websocket.send(
+                    json.dumps({"type": "error", "payload": {"message": "binary frames not accepted"}})
+                )
                 continue
             if len(message) > _MAX_TEXT:
                 await websocket.send(json.dumps({"type": "error", "payload": {"message": "message too large"}}))
@@ -591,4 +593,4 @@ if __name__ == "__main__":
         print("\n[BRIDGE] Shutting down")
     except Exception as exc:  # noqa: BLE001 — fail loudly, not silently
         print(f"[BRIDGE] Fatal error: {exc}")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc

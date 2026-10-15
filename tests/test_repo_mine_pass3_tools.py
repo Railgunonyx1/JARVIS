@@ -102,7 +102,7 @@ class TestTaskPulse:
         from tools.schema import ToolResult
 
         sent = []
-        tp = importlib.import_module("tools.task_pulse")
+        importlib.import_module("tools.task_pulse")
         fake_notify = types.SimpleNamespace(
             send_notification=lambda args: (
                 sent.append(args),

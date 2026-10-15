@@ -107,7 +107,7 @@ def main() -> None:
 
     # core: file start -> tabs marker; others are slices between markers.
     regions["core"] = lines[: pos["tabs"]]
-    for a, b in zip(order[1:], order[2:] + ["tail"]):
+    for a, b in zip(order[1:], order[2:] + ["tail"], strict=False):
         regions[a] = lines[pos[a] : pos[b]]
     regions["tail"] = lines[pos["tail"] :]
 

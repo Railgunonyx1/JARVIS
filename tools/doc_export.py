@@ -61,7 +61,8 @@ def doc_to_markdown(args: dict[str, Any]) -> ToolResult:
         elif ext == ".xlsx":
             md, meta = _xlsx_to_md(path)
         else:
-            return ToolResult(success=False, error=f"Unsupported type '{ext}' (try docx/html/pdf/ipynb/txt/csv/json/xlsx).")
+            return ToolResult(success=False, error=(f"Unsupported type '{ext}' "
+                                                   "(try docx/html/pdf/ipynb/txt/csv/json/xlsx)."))
     except ImportError as e:
         return ToolResult(success=False, error=f"Missing dependency: {e}")
     except Exception as e:  # noqa: BLE001

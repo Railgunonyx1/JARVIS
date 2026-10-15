@@ -257,7 +257,8 @@ def doc_search(args: dict[str, Any]) -> ToolResult:
     except Exception as exc:
         return ToolResult(success=False, error=f"index failed: {exc}")
     if not refs:
-        return ToolResult(success=True, output="No indexable documents found in the workspace (.md/.txt/.pdf/.csv/.json).")
+        return ToolResult(success=True, output=("No indexable documents found in the workspace "
+                                               "(.md/.txt/.pdf/.csv/.json)."))
 
     qvec = _query_vector(query)
     qterms = list(qvec)

@@ -27,7 +27,11 @@ def _root() -> Path:
 
 
 def _is_windows_style_absolute(path_str: str) -> bool:
-    """True if the path looks like a Windows drive-letter absolute (e.g. C:/Users/...).\n    Such a path can never be inside a Linux project root and must be rejected\n    by call sites that validate destination paths.\n    """
+    """True if the path looks like a Windows drive-letter absolute.
+
+    Such a path can never be inside a Linux project root and must be
+    rejected by call sites that validate destination paths.
+    """
     return bool(re.match(r"^[A-Za-z]:[\\\\/]", path_str))
 
 
@@ -183,7 +187,8 @@ def data_convert(args: dict[str, Any]) -> ToolResult:
     if not str(args.get("dest", "")).strip():
         return ToolResult(success=False, error="dest is required (e.g. output.json)")
     if _is_windows_style_absolute(str(args.get("dest", ""))):
-        return ToolResult(success=False, error="Destination must be inside the project root: not a Windows-style absolute path")
+        return ToolResult(success=False, error=("Destination must be inside the project root: "
+                                               "not a Windows-style absolute path"))
     try:
         dest.resolve().relative_to(_root().resolve())
     except ValueError:

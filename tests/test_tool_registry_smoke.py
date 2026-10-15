@@ -145,7 +145,7 @@ def test_no_undefined_names_in_repo():
     proc = subprocess.run(
         ["ruff", "check", "--select", "F821", "--no-cache",
          "--output-format", "concise", "."],
-        cwd=_REPO_ROOT, capture_output=True, text=True, timeout=180,
+        cwd=_REPO_ROOT, capture_output=True, text=True, timeout=180, check=False,
     )
     offenders = [ln for ln in proc.stdout.splitlines() if "F821" in ln]
     assert not offenders, "undefined names (F821):\n  " + "\n  ".join(offenders)

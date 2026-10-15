@@ -28,7 +28,10 @@ def _lazy_orjson_dumps(data: dict[str, Any]) -> str:
         import orjson
     except Exception:
         return json.dumps(data)
-    _json_dumps = lambda d: orjson.dumps(d).decode()
+    def _orjson_dumps(d):
+        return orjson.dumps(d).decode()
+
+    _json_dumps = _orjson_dumps
     return _json_dumps(data)
 
 _EVENT_STORE_SIZE = 5000

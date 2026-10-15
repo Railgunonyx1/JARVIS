@@ -85,7 +85,8 @@ def infer_section_category(section: str | None) -> str | None:
         r"\b(?:test|tests|testing)\b", lowered
     ):
         return "evaluation"
-    if any(word in lowered for word in ["inference", "usage", "demo", "example", "text-to-image", "image-to-image", "transcribe"]):
+    if any(word in lowered for word in ["inference", "usage", "demo", "example",
+                                       "text-to-image", "image-to-image", "transcribe"]):
         return "inference"
     return None
 
@@ -98,7 +99,9 @@ def infer_section_kind(section: str | None) -> str | None:
         return "setup"
     if any(word in lowered for word in ["download", "checkpoint", "weights", "dataset", "data preparation"]):
         return "asset"
-    if any(word in lowered for word in ["usage", "demo", "example", "inference", "evaluation", "training", "text-to-image", "image-to-image", "quick start", "quickstart", "getting started"]):
+    if any(word in lowered for word in ["usage", "demo", "example", "inference", "evaluation",
+                                       "training", "text-to-image", "image-to-image", "quick start",
+                                       "quickstart", "getting started"]):
         return "run"
     return None
 

@@ -215,7 +215,8 @@ def convert_unit(args: dict[str, Any]) -> ToolResult:
     if category == "temperature":
         src, dst = _resolve_temp(from_u), _resolve_temp(to_u)
         if not src or not dst:
-            return ToolResult(success=False, error=f"unknown temperature unit (use C, F, or K): {from_u if not src else to_u}")
+            return ToolResult(success=False, error=(f"unknown temperature unit (use C, F, or K): "
+                                                   f"{from_u if not src else to_u}"))
         celsius = {"c": value, "f": (value - 32) * 5 / 9, "k": value - 273.15}[src]
         result = {"c": celsius, "f": celsius * 9 / 5 + 32, "k": celsius + 273.15}[dst]
     else:
