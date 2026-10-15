@@ -13,4 +13,4 @@ pandas
 python-docx
 # tests/test_bridge_security.py imports orbit-browser/python/server.py, which
 # needs the runtime WebSocket transport (requirements.txt) to collect.
-websockets==16.1.1
+websockets==16.1.1  # duplicate of runtime, ensure test env has it

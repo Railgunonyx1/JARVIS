@@ -158,11 +158,10 @@ class EventStore:
                     params.append(trace_id)
                 where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
                 order = "id ASC" if trace_id else "id DESC"
-                rows = self._conn.execute(
-                    f"SELECT name, data, source, trace_id, timestamp "
-                    f"FROM events {where} ORDER BY {order} LIMIT ?",
-                    params + [limit]
-                ).fetchall()
+                # where/order are internally controlled (not user input), use parameterized query
+                query = ("SELECT name, data, source, trace_id, timestamp "
+                         "FROM events " + where + " ORDER BY " + order + " LIMIT ?")
+                rows = self._conn.execute(query, params + [limit]).fetchall()
             return [
                 StoredEvent(
                     name=r[0],
