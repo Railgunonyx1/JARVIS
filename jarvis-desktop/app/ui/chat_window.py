@@ -1,6 +1,7 @@
 """Minimal PySide6 chat window for JARVIS Desktop.
 
 Layout follows the master plan §2: header, chat area, input bar, bottom toolbar.
+All subsystems are managed by AppCoordinator (Phase 6 integration).
 """
 
 from __future__ import annotations
@@ -14,13 +15,9 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
-from app.integration.jarvis_backend import JarvisBackend, AgentResponse
-from app.voice.voice_manager import VoiceManager, VoiceState
-from app.gestures.camera import Camera
-from app.gestures.tracking import HandTracker
-from app.gestures.recognition import GestureRecognizer, GestureEvent, GestureType
-from app.gestures.mappings import GestureMapper
-from app.desktop.actions import DesktopActionLayer
+from app.integration.coordinator import AppCoordinator, AppState
+from app.integration.jarvis_backend import AgentResponse
+from app.voice.voice_manager import VoiceState
 
 
 class ChatWindow(QMainWindow):
@@ -30,20 +27,13 @@ class ChatWindow(QMainWindow):
     response_received = Signal(object)
     status_changed = Signal(str)
     voice_state_changed = Signal(object)
+    app_state_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JARVIS")
         self.setMinimumSize(900, 650)
-        self._backend: JarvisBackend | None = None
-        self._voice: VoiceManager | None = None
-        self._camera: Camera | None = None
-        self._tracker: HandTracker | None = None
-        self._recognizer: GestureRecognizer | None = None
-        self._mapper: GestureMapper | None = None
-        self._actions: DesktopActionLayer | None = None
-        self._workspace = None
-        self._gesture_active = False
+        self._coordinator: AppCoordinator | None = None
         self._init_ui()
         self._connect_signals()
         self._apply_theme()
@@ -135,6 +125,7 @@ class ChatWindow(QMainWindow):
         self.response_received.connect(self._on_response)
         self.status_changed.connect(self._on_status)
         self.voice_state_changed.connect(self._on_voice_state)
+        self.app_state_changed.connect(self._on_app_state)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet("""
@@ -164,242 +155,74 @@ class ChatWindow(QMainWindow):
         """)
 
     def start_backend(self, mode: str = "agent") -> None:
-        """Initialize and start the agent backend."""
-        self._backend = JarvisBackend(
+        """Initialize and start the agent backend via coordinator."""
+        self._coordinator = AppCoordinator(
             mode=mode,
-            on_chunk=self.chunk_received.emit,
-            on_response=self.response_received.emit,
-            on_status=self.status_changed.emit,
+            on_state_change=self.app_state_changed.emit,
+            on_chat_message=self._on_chat_message,
+            on_voice_transcription=self._on_voice_transcription,
+            on_gesture_action=self._on_gesture_action,
+            on_workspace_update=self._on_workspace_update,
         )
-        self._backend.start()
-        self._init_voice()
-
-    def _init_voice(self) -> None:
-        """Initialize the voice manager (push-to-talk + TTS)."""
-        if not self._backend:
-            return
-        self._voice = VoiceManager(
-            agent_backend=self._backend,
-            on_state_change=self.voice_state_changed.emit,
-            on_transcription=self._on_voice_transcription,
-            on_response=self._on_voice_response,
-        )
-        self._voice.warmup()
+        self._coordinator.start()
         self.mic_btn.setEnabled(True)
-
-    def _init_gestures(self) -> None:
-        """Initialize gesture pipeline components (camera starts on demand)."""
-        from app.gestures.camera import Camera
-        from app.gestures.tracking import HandTracker
-        from app.gestures.recognition import GestureRecognizer
-        from app.gestures.mappings import GestureMapper
-        from app.desktop.actions import DesktopActionLayer
-
-        self._actions = DesktopActionLayer()
-        self._recognizer = GestureRecognizer(on_gesture=self._on_gesture)
-        self._mapper = GestureMapper(on_action=self._on_action)
-        self._camera = Camera()
-        self._tracker = HandTracker()
-        self._tracker.set_frame_source(lambda: self._camera.latest_frame)
-        self._gesture_btn.setEnabled(True)
-
-    def _on_gesture_toggle(self) -> None:
-        if self._gesture_active:
-            self._stop_gestures()
-        else:
-            self._start_gestures()
-
-    def _start_gestures(self) -> None:
-        if not self._camera or not self._tracker:
-            self._init_gestures()
-        if self._camera.start() and self._tracker.start():
-            self._gesture_active = True
-            self._gesture_btn.setChecked(True)
-            self._gesture_btn.setText("Stop Gestures")
-            self.status_label.setText("● Gestures Active")
-            self.status_label.setStyleSheet("color: #a371f7;")
-        else:
-            self._stop_gestures()
-
-    def _stop_gestures(self) -> None:
-        if self._tracker:
-            self._tracker.stop()
-        if self._camera:
-            self._camera.stop()
-        self._gesture_active = False
-        self._gesture_btn.setChecked(False)
-        self._gesture_btn.setText("Gesture Mode")
-        self.status_label.setText("● Ready")
-
-    def _on_hands(self, hands) -> None:
-        if self._recognizer:
-            self._recognizer.process(hands)
-
-    def _on_gesture(self, event) -> None:
-        if self._mapper:
-            self._mapper.handle(event)
-
-    def _on_action(self, action: str, event) -> None:
-        if self._actions:
-            self._actions.execute(action)
+        self.gesture_btn.setEnabled(True)
+        self.workspace_btn.setEnabled(True)
 
     def _on_send(self) -> None:
         text = self.input_field.text().strip()
-        if not text or not self._backend:
+        if not text or not self._coordinator:
             return
         self._append_message("user", text)
         self.input_field.clear()
-        self._backend.send_message(text)
+        self._coordinator.send_message(text)
 
     def _on_mic_toggle(self) -> None:
-        """Push-to-talk: toggle recording on/off."""
-        if not self._voice:
-            return
-        self._voice.toggle_listening()
+        if self._coordinator:
+            self._coordinator.toggle_voice()
 
     def _on_gesture_toggle(self) -> None:
-        """Toggle gesture mode on/off."""
-        if self._gesture_active:
-            self._stop_gestures()
-        else:
-            self._start_gestures()
+        if self._coordinator:
+            self._coordinator.toggle_gestures()
 
     def _on_workspace_toggle(self) -> None:
-        """Toggle 3D workspace on/off."""
-        if not self._workspace:
-            self._init_workspace()
-        if self._workspace.is_visible:
-            self._workspace.hide()
-            self.workspace_btn.setChecked(False)
-            self.workspace_btn.setText("3D Workspace")
-        else:
-            self._workspace.show()
-            self.workspace_btn.setChecked(True)
-            self.workspace_btn.setText("Close 3D")
+        if self._coordinator:
+            self._coordinator.toggle_workspace()
 
-    def _init_workspace(self) -> None:
-        """Initialize the 3D workspace."""
-        from app.workspace3d.workspace3d import Workspace3D
-        self._workspace = Workspace3D()
-        self._workspace.load()
-        self.workspace_btn.setEnabled(True)
-
-    def _start_gestures(self) -> None:
-        """Initialize and start the gesture pipeline."""
-        self._actions = DesktopActionLayer()
-        self._recognizer = GestureRecognizer(on_gesture=self._on_gesture)
-        self._mapper = GestureMapper(on_action=self._on_gesture_action)
-        self._camera = Camera()
-        self._tracker = HandTracker(on_hands=self._on_hands)
-        self._tracker.set_frame_source(lambda: self._camera.latest_frame if self._camera else None)
-
-        if not self._camera.start():
-            self.status_label.setText("● Camera Error")
-            self.status_label.setStyleSheet("color: #f85149;")
-            return
-        if not self._tracker.start():
-            self._camera.stop()
-            self.status_label.setText("● Tracking Error")
-            self.status_label.setStyleSheet("color: #f85149;")
-            return
-
-        self._gesture_active = True
-        self.gesture_btn.setChecked(True)
-        self.gesture_btn.setText("Stop Gestures")
-        self.status_label.setText("● Gestures Active")
-        self.status_label.setStyleSheet("color: #a371f7;")
-
-    def _stop_gestures(self) -> None:
-        """Stop gesture pipeline and release camera."""
-        if self._tracker:
-            self._tracker.stop()
-            self._tracker = None
-        if self._camera:
-            self._camera.stop()
-            self._camera = None
-        self._recognizer = None
-        self._gesture_active = False
-        self.gesture_btn.setChecked(False)
-        self.gesture_btn.setText("Gesture Mode")
-        if self._backend and self._backend.is_running:
-            self.status_label.setText("● Ready")
-            self.status_label.setStyleSheet("color: #3fb950;")
-
-    def _on_hands(self, hands) -> None:
-        """Process tracked hands through the recognizer."""
-        if self._recognizer:
-            self._recognizer.process(hands)
-
-    def _on_gesture(self, event: GestureEvent) -> None:
-        """Handle a recognized gesture event."""
-        if self._mapper:
-            self._mapper.handle(event)
-
-    def _on_gesture_action(self, action: str, event: GestureEvent) -> None:
-        """Execute a desktop action from a gesture."""
-        if self._actions:
-            self._actions.execute(action)
+    def _on_chat_message(self, role: str, text: str) -> None:
+        if role == "user":
+            self._append_message("user", text)
+        elif role == "jarvis":
+            self._append_message("jarvis", text)
+        elif role == "chunk":
+            self._append_chunk(text)
 
     def _on_voice_transcription(self, text: str) -> None:
-        """Handle transcribed speech from push-to-talk."""
         self._append_message("user", text)
         self.input_field.clear()
 
-    def _on_voice_response(self, text: str) -> None:
-        """Handle voice response (TTS or error)."""
-        if text.startswith("[Voice error"):
-            self._append_message("jarvis", text)
-        else:
-            self._append_message("jarvis", text)
-            if self._voice:
-                self._voice.speak(text)
+    def _on_gesture_action(self, action: str) -> None:
+        self._append_message("system", f"[Gesture: {action}]")
 
-    def _on_voice_state(self, state) -> None:
-        """Update UI based on voice state."""
-        state_val = state.value if hasattr(state, "value") else str(state)
-        if state_val == "listening":
-            self.mic_btn.setChecked(True)
-            self.mic_btn.setText("Listening...")
-            self.status_label.setText("● Listening")
-            self.status_label.setStyleSheet("color: #f0883e;")
-        elif state_val == "speaking":
-            self.mic_btn.setChecked(False)
-            self.mic_btn.setText("Mic")
-            self.status_label.setText("● Speaking")
-            self.status_label.setStyleSheet("color: #a371f7;")
-        elif state_val == "thinking":
-            self.status_label.setText("● Thinking")
-            self.status_label.setStyleSheet("color: #4fc3f7;")
-        elif state_val == "error":
-            self.mic_btn.setChecked(False)
-            self.mic_btn.setText("Mic")
-            self.status_label.setText("● Voice Error")
-            self.status_label.setStyleSheet("color: #f85149;")
-        else:
-            self.mic_btn.setChecked(False)
-            self.mic_btn.setText("Mic")
-            if self._backend and self._backend.is_running:
-                self.status_label.setText("● Ready")
-                self.status_label.setStyleSheet("color: #3fb950;")
+    def _on_workspace_update(self, panel: str, text: str) -> None:
+        pass
 
     def _append_message(self, role: str, text: str) -> None:
         if role == "user":
             self.chat_area.append(f'<p style="color:#4fc3f7;margin:4px 0;"><b>You:</b> {self._escape(text)}</p>')
         elif role == "jarvis":
             self.chat_area.append(f'<p style="color:#c9d1d9;margin:4px 0;"><b>JARVIS:</b> {self._escape(text)}</p>')
+        elif role == "system":
+            self.chat_area.append(f'<p style="color:#8b949e;margin:4px 0;font-style:italic;">{self._escape(text)}</p>')
         self.chat_area.moveCursor(QTextCursor.End)
 
     def _append_chunk(self, chunk: str) -> None:
-        # Append streaming text inline (simplified: just append)
         self.chat_area.insertPlainText(chunk)
         self.chat_area.moveCursor(QTextCursor.End)
 
     def _on_response(self, response: AgentResponse) -> None:
         if response.success:
             self._append_message("jarvis", response.text)
-            # Speak response if voice manager is active
-            if self._voice and response.text:
-                self._voice.speak(response.text)
         else:
             self._append_message("jarvis", f"[Error: {response.error}]")
         self.status_label.setText("● Ready")
@@ -411,19 +234,48 @@ class ChatWindow(QMainWindow):
         else:
             self.status_label.setText(f"● {status}")
 
+    def _on_voice_state(self, state) -> None:
+        state_val = state.value if hasattr(state, "value") else str(state)
+        if state_val == "listening":
+            self.mic_btn.setChecked(True)
+            self.mic_btn.setText("Listening...")
+            self.status_label.setText("● Listening")
+            self.status_label.setStyleSheet("color: #f0883e;")
+        elif state_val == "speaking":
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+            self.status_label.setText("● Speaking")
+            self.status_label.setStyleSheet("color: #a371f7;")
+        elif state_val == "error":
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+            self.status_label.setText("● Voice Error")
+            self.status_label.setStyleSheet("color: #f85149;")
+        else:
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+
+    def _on_app_state(self, state) -> None:
+        state_val = state.value if hasattr(state, "value") else str(state)
+        if state_val == "gesture_active":
+            self.gesture_btn.setChecked(True)
+            self.gesture_btn.setText("Stop Gestures")
+        elif state_val == "workspace_open":
+            self.workspace_btn.setChecked(True)
+            self.workspace_btn.setText("Close 3D")
+        else:
+            self.gesture_btn.setChecked(False)
+            self.gesture_btn.setText("Gesture Mode")
+            self.workspace_btn.setChecked(False)
+            self.workspace_btn.setText("3D Workspace")
+
     @staticmethod
     def _escape(text: str) -> str:
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def closeEvent(self, event) -> None:
-        if self._gesture_active:
-            self._stop_gestures()
-        if self._voice:
-            self._voice.stop_speaking()
-        if self._workspace:
-            self._workspace.shutdown()
-        if self._backend:
-            self._backend.stop()
+        if self._coordinator:
+            self._coordinator.shutdown()
         event.accept()
 
 

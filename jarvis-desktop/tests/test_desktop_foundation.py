@@ -69,7 +69,9 @@ def test_chat_window_backend_integration():
     QTimer.singleShot(2000, loop.quit)
     loop.exec()
 
-    assert w._backend.is_running
+    assert w._coordinator is not None
+    assert w._coordinator.backend is not None
+    assert w._coordinator.backend.is_running
 
     w.input_field.setText("Hello")
     w._on_send()
