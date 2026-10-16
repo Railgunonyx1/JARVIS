@@ -191,6 +191,7 @@
           <span class="address-text">
             <strong id="addressTitle">New Tab</strong>
           </span>
+          <button class="address-star" id="omniStar" title="Bookmark this page (Ctrl+D)" aria-label="Bookmark this page"></button>
         </div>
 
         <div class="toolbar-end">
@@ -328,7 +329,63 @@
     <div id="watchList"></div>
   </div>
         </div>
-          <div class="page" id="toolsPage"></div>
+          <div class="page" id="toolsPage">
+  <div class="sheet">
+    <h1>Tools</h1>
+    <p class="sheet-lede">Local utilities &mdash; everything runs in the renderer, nothing leaves the app.</p>
+    <div class="tools-grid">
+      <div class="tool-card">
+        <h3><span class="tool-ico">{ }</span>JSON</h3>
+        <textarea id="toolJsonIn" rows="5" placeholder='{"hello": "world"}'></textarea>
+        <div class="tool-row">
+          <input type="text" id="toolJsonQ" placeholder="Path (a.b[0].c)" style="flex:1;min-width:120px" />
+          <button class="tool-btn" id="toolJsonQuery">Query</button>
+          <button class="tool-btn" id="toolJsonFmt">Format</button>
+          <button class="tool-btn" id="toolJsonMin">Minify</button>
+        </div>
+        <div class="tool-out" id="toolJsonOut"></div>
+      </div>
+      <div class="tool-card">
+        <h3><span class="tool-ico">b64</span>Base64</h3>
+        <textarea id="toolB64In" rows="3" placeholder="text or base64&hellip;"></textarea>
+        <div class="tool-row">
+          <button class="tool-btn" id="toolB64Enc">Encode</button>
+          <button class="tool-btn" id="toolB64Dec">Decode</button>
+        </div>
+        <div class="tool-out" id="toolB64Out"></div>
+      </div>
+      <div class="tool-card">
+        <h3><span class="tool-ico">%</span>URL Codec</h3>
+        <input type="text" id="toolUrlIn" placeholder="https://example.com/a b" />
+        <div class="tool-row">
+          <button class="tool-btn" id="toolUrlEnc">Encode</button>
+          <button class="tool-btn" id="toolUrlDec">Decode</button>
+        </div>
+        <div class="tool-out" id="toolUrlOut"></div>
+      </div>
+      <div class="tool-card">
+        <h3><span class="tool-ico">id</span>Generators</h3>
+        <div class="tool-row">
+          <button class="tool-btn" id="toolUuid">UUID v4</button>
+          <button class="tool-btn" id="toolTsNowBtn">Refresh now</button>
+        </div>
+        <div class="tool-out" id="toolUuidOut"></div>
+        <div class="tool-out" id="toolTsNow"></div>
+        <div class="tool-row">
+          <input type="text" id="toolTsIn" placeholder="unix seconds or ms" style="flex:1;min-width:120px" />
+          <button class="tool-btn" id="toolTsToDate">To Date</button>
+        </div>
+        <div class="tool-out" id="toolTsOut"></div>
+      </div>
+      <div class="tool-card">
+        <h3><span class="tool-ico">#</span>SHA-256</h3>
+        <input type="text" id="toolShaIn" placeholder="Text to hash" />
+        <div class="tool-row"><button class="tool-btn" id="toolSha">Hash</button></div>
+        <div class="tool-out" id="toolShaOut"></div>
+      </div>
+    </div>
+  </div>
+</div>
           <div class="page" id="diagnosticsPage">
   <div class="sheet">
     <h1>Diagnostics</h1>
@@ -354,8 +411,54 @@
     <div class="group" id="diagErrorList" style="display:none"></div>
   </div>
         </div>
-          <div class="page" id="securityPage"></div>
-          <div class="page" id="privacyPage"></div>
+          <div class="page" id="securityPage">
+  <div class="sheet">
+    <h1>Security</h1>
+    <p class="sheet-lede">Run the built-in security test suite against this browser build.</p>
+    <div class="security-tester">
+      <div class="security-score">
+        <div class="security-score-value" id="securityScoreValue">—</div>
+        <div class="security-score-label">Security Score</div>
+      </div>
+      <div class="security-stats">
+        <div class="security-stat"><div class="security-stat-value" id="statTotal">0</div><div class="security-stat-label">Tests</div></div>
+        <div class="security-stat"><div class="security-stat-value" id="statPassed">0</div><div class="security-stat-label">Passed</div></div>
+        <div class="security-stat"><div class="security-stat-value" id="statFailed">0</div><div class="security-stat-label">Failed</div></div>
+        <div class="security-stat"><div class="security-stat-value" id="statWarnings">0</div><div class="security-stat-label">Warnings</div></div>
+      </div>
+      <div class="tool-row" style="margin-bottom:16px">
+        <button class="tool-btn" id="runSecurityTests">Run Tests</button>
+        <button class="tool-btn" id="exportSecurityReport">Export Report</button>
+      </div>
+      <div class="security-test-list" id="securityTestList"></div>
+    </div>
+  </div>
+</div>
+          <div class="page" id="privacyPage">
+  <div class="sheet">
+    <h1>Privacy</h1>
+    <p class="sheet-lede">Shields, tracker activity, and data controls for this profile.</p>
+    <div class="group">
+      <h2>Shields</h2>
+      <div id="shieldToggles">
+        <div class="row"><span class="name" style="flex:1">Ad blocking</span><button class="toggle on" id="toggleAdBlock" data-shield="adBlocking" title="Ad blocking" aria-label="Ad blocking"></button></div>
+        <div class="row"><span class="name" style="flex:1">Tracker blocking</span><button class="toggle on" id="toggleTrackerBlock" data-shield="trackerBlocking" title="Tracker blocking" aria-label="Tracker blocking"></button></div>
+        <div class="row"><span class="name" style="flex:1">Fingerprint protection</span><button class="toggle on" id="toggleFingerprint" data-shield="fingerprintProtection" title="Fingerprint protection" aria-label="Fingerprint protection"></button></div>
+        <div class="row"><span class="name" style="flex:1">HTTPS upgrade</span><button class="toggle on" id="toggleHttps" data-shield="httpsUpgrade" title="HTTPS upgrade" aria-label="HTTPS upgrade"></button></div>
+        <div class="row"><span class="name" style="flex:1">Do Not Track</span><button class="toggle on" id="toggleDnt" data-shield="doNotTrack" title="Do Not Track" aria-label="Do Not Track"></button></div>
+      </div>
+    </div>
+    <div class="group">
+      <h2>Activity</h2>
+      <div class="row"><span class="name" style="flex:1">Trackers blocked</span><span class="meta" id="privacyBlocked">0</span></div>
+      <div class="row"><button class="chip-btn" id="clearBrowsingData">Clear browsing data</button></div>
+    </div>
+    <div class="group">
+      <h2>Recent activity</h2>
+      <div class="privacy-activity" id="privacyActivity"></div>
+    </div>
+  </div>
+</div>
         </div>
 
       </section>

@@ -107,7 +107,10 @@
   });
 
   // ── Toolbar ─────────────────────────────────────────────────────────
-  bind($('.address'), 'click', openCommandPalette);
+  bind($('.address'), 'click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#omniStar')) return;
+    openCommandPalette();
+  });
   bind($('#splitViewBtn'), 'click', function () { if (typeof window.toggleSplitView === 'function') window.toggleSplitView(); });
   bind($('#aiTrigger'), 'click', function () { toggleAssistant(); });
 
@@ -120,9 +123,10 @@
     if (!el) return;
     var tab = null;
     try { if (typeof tabs !== 'undefined' && activeTabId != null) tab = tabs.get(activeTabId); } catch (_) {}
-    if (!tab) { el.textContent = 'New Tab'; el.title = ''; return; }
+    if (!tab) { el.textContent = 'New Tab'; el.title = ''; if (typeof window.updateStarIcon === 'function') window.updateStarIcon(''); return; }
     el.textContent = tab.title || tab.url || 'New Tab';
     el.title = tab.url || '';
+    if (typeof window.updateStarIcon === 'function') window.updateStarIcon(tab.url);
   }
   window.syncAddress = syncAddress;
   ['navigateTo', 'activateTab', 'closeTab', 'createTab', 'reopenClosedTab'].forEach(function (fn) {

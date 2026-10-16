@@ -320,7 +320,7 @@
     }
     bind('toolTsToDate', function () {
       var v = parseInt(document.getElementById('toolTsIn').value, 10);
-      if (!v) { out('toolTsOut', 'Enter a unix timestamp (s or ms)', true); return; }
+      if (isNaN(v)) { out('toolTsOut', 'Enter a unix timestamp (s or ms)', true); return; }
       if (v < 1e12) v *= 1000;
       out('toolTsOut', new Date(v).toISOString());
     });

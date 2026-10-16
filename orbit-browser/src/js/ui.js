@@ -306,6 +306,7 @@
     });
     return { el: overlay, close: close };
   }
+  Modal.open = Modal;
 
   // ── Prompt: text input dialog ────────────────────────────────────
   // Electron's renderer does NOT implement window.prompt() (it throws
