@@ -6,8 +6,8 @@ Lightweight desktop AI assistant for Bazzite Linux, built on the existing
 ## Status
 
 - [x] Phase 1 — Backend audit
-- [x] Phase 2 — Desktop foundation (minimal chat)
-- [ ] Phase 3 — Voice (STT/TTS)
+- [x] Phase 2 — Desktop foundation (minimal chat) — 4 tests passing
+- [x] Phase 3 — Voice (push-to-talk STT + TTS) — 10 tests passing
 - [ ] Phase 4 — Gestures + desktop actions
 - [ ] Phase 5 — 3D workspace
 - [ ] Phase 6 — Integration
