@@ -358,7 +358,18 @@ class CDPBackend(BrowserBackend):
             return s.getsockname()[1]
 
     def launch(self, launch_url: str = "about:blank") -> None:
-        """Launch/attach Chromium. Idempotent."""
+        """Launch/attach Chromium. Idempotent.
+
+        The browser always starts at about:blank: a command-line URL loads
+        before Fetch interception can be enabled, so live destinations must
+        only be opened through create_tab()/navigate().
+        """
+        if launch_url not in ("", "about:blank"):
+            raise ValueError(
+                "launch() only starts the browser at about:blank; open URLs "
+                "through create_tab()/navigate() so interception is active"
+            )
+        launch_url = launch_url or "about:blank"
         with self._launch_lock:
             if self._started and self._base:
                 return
@@ -619,15 +630,20 @@ class CDPBackend(BrowserBackend):
     def create_tab(self, session_id: str, url: str = "") -> TabInfo:
         self.launch()
         with self._proc_lock:
+            # The target is ALWAYS created at about:blank, never at the
+            # requested URL: Chromium starts loading a Target.createTarget
+            # URL immediately, before this backend can attach a page
+            # connection and enable Fetch interception, so a live URL here
+            # would let the first navigation bypass the network policy.
             res = self.browser_call("Target.createTarget", {
-                "url": url or "about:blank",
+                "url": "about:blank",
                 "newWindow": False,
                 "background": False,
             })
             target_id = res["targetId"]
             t = self._registry.register(
                 target_id, session_id, OWNER_SYSTEM,
-                url=url, title="",
+                url="", title="",
             )
             self._session_of[t.tab_id] = session_id
             self._registry.activate(t.tab_id)
@@ -635,12 +651,23 @@ class CDPBackend(BrowserBackend):
             if t.tab_id in self._pages:
                 self._pages[t.tab_id].close()
                 del self._pages[t.tab_id]
-            emit_browser_event(TAB_CREATED, {"tab_id": t.tab_id, "url": url},
-                               session_id=session_id)
+        emit_browser_event(TAB_CREATED, {"tab_id": t.tab_id, "url": url},
+                           session_id=session_id)
+        if not url:
             return TabInfo(
-                tab_id=t.tab_id, session_id=session_id, url=url or "about:blank",
+                tab_id=t.tab_id, session_id=session_id, url="about:blank",
                 title="", active=True,
             )
+        try:
+            # navigate() validates the URL and builds the intercepted page
+            # connection (Fetch.enable) BEFORE Page.navigate is issued, so
+            # the first external request is governed like every later one.
+            return self.navigate(url, tab_id=t.tab_id)
+        except Exception:
+            # Fail closed: a tab whose first navigation was denied, or whose
+            # interception could not be enabled, is not left dangling.
+            self.close_tab(t.tab_id)
+            raise
 
     def close_tab(self, tab_id: str) -> bool:
         t = self._registry.lookup(tab_id)

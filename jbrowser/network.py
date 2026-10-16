@@ -14,6 +14,15 @@ machine-local or private networks by default:
 This runs *before* ``page.goto``/navigation, not after the page loads, so an
 agent can never pivot a browse into localhost services, internal dashboards,
 development servers, or other machine-local endpoints.
+
+Residual boundary (assessed): validation resolves hostnames with the system
+resolver, while Chromium resolves independently when it dials. The engines
+re-check every request at the request boundary (CDP Fetch pause / Playwright
+route), which narrows the time-of-check/time-of-use window to pause->connect
+but cannot close it: a hostile resolver could still flip an answer inside
+that window. Closing it requires connection-boundary enforcement (a
+controlled, validating egress proxy in front of the browser); the residual
+is accepted and documented until such a proxy is introduced.
 """
 
 from __future__ import annotations
