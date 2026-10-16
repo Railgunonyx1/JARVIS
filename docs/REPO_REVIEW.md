@@ -33,7 +33,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | 13 | MCP single authenticated entry point mirroring the single tool boundary | `runtime/protocols/` | L | med | pending |
 | 14 | UI-visible agent state machine (Thinking/Speaking/Standby) as BusEvents | `core/agent/state.py` | S | low | pending |
 | 15 | Wake-word voice state machine over one OpenAI-compatible STT/TTS base URL | `voice/` | M | med | pending |
-| 16 | Optimization-evidence receipts (hotspot → measured delta → verification gate) | `core/agent/verification.py`, `benchmark/` | M | med | pending |
+| 16 | Optimization-evidence receipts (hotspot → measured delta → verification gate) | `core/agent/verification.py`, `benchmark/` | M | med | **Done** — `benchmark/receipts.py` + `verify_optimization_evidence` |
 | 17 | MCP read-only auto-approval trust enforcement + permission path canonicalization (symlink/`..`) | `runtime/protocols/`, `core/agent/permissions.py` | M | low | **Done** — canonical-path gate + two-key MCP trust (`bd2d310`) |
 | 18 | Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med | pending |
 | 19 | Retry-safe settlement + post-compaction record-conflict detection | `memory/*`, `core/agent/tool_service.py` | M | med | pending |
