@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.integration.jarvis_backend import JarvisBackend, AgentResponse
+from app.voice.voice_manager import VoiceManager, VoiceState
 
 
 class ChatWindow(QMainWindow):
@@ -23,12 +24,14 @@ class ChatWindow(QMainWindow):
     chunk_received = Signal(str)
     response_received = Signal(object)
     status_changed = Signal(str)
+    voice_state_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JARVIS")
         self.setMinimumSize(900, 650)
         self._backend: JarvisBackend | None = None
+        self._voice: VoiceManager | None = None
         self._init_ui()
         self._connect_signals()
         self._apply_theme()
@@ -113,9 +116,11 @@ class ChatWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.send_btn.clicked.connect(self._on_send)
         self.input_field.returnPressed.connect(self._on_send)
+        self.mic_btn.clicked.connect(self._on_mic_toggle)
         self.chunk_received.connect(self._append_chunk)
         self.response_received.connect(self._on_response)
         self.status_changed.connect(self._on_status)
+        self.voice_state_changed.connect(self._on_voice_state)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet("""
@@ -153,6 +158,20 @@ class ChatWindow(QMainWindow):
             on_status=self.status_changed.emit,
         )
         self._backend.start()
+        self._init_voice()
+
+    def _init_voice(self) -> None:
+        """Initialize the voice manager (push-to-talk + TTS)."""
+        if not self._backend:
+            return
+        self._voice = VoiceManager(
+            agent_backend=self._backend,
+            on_state_change=self.voice_state_changed.emit,
+            on_transcription=self._on_voice_transcription,
+            on_response=self._on_voice_response,
+        )
+        self._voice.warmup()
+        self.mic_btn.setEnabled(True)
 
     def _on_send(self) -> None:
         text = self.input_field.text().strip()
@@ -161,6 +180,54 @@ class ChatWindow(QMainWindow):
         self._append_message("user", text)
         self.input_field.clear()
         self._backend.send_message(text)
+
+    def _on_mic_toggle(self) -> None:
+        """Push-to-talk: toggle recording on/off."""
+        if not self._voice:
+            return
+        self._voice.toggle_listening()
+
+    def _on_voice_transcription(self, text: str) -> None:
+        """Handle transcribed speech from push-to-talk."""
+        self._append_message("user", text)
+        self.input_field.clear()
+
+    def _on_voice_response(self, text: str) -> None:
+        """Handle voice response (TTS or error)."""
+        if text.startswith("[Voice error"):
+            self._append_message("jarvis", text)
+        else:
+            self._append_message("jarvis", text)
+            if self._voice:
+                self._voice.speak(text)
+
+    def _on_voice_state(self, state) -> None:
+        """Update UI based on voice state."""
+        state_val = state.value if hasattr(state, "value") else str(state)
+        if state_val == "listening":
+            self.mic_btn.setChecked(True)
+            self.mic_btn.setText("Listening...")
+            self.status_label.setText("● Listening")
+            self.status_label.setStyleSheet("color: #f0883e;")
+        elif state_val == "speaking":
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+            self.status_label.setText("● Speaking")
+            self.status_label.setStyleSheet("color: #a371f7;")
+        elif state_val == "thinking":
+            self.status_label.setText("● Thinking")
+            self.status_label.setStyleSheet("color: #4fc3f7;")
+        elif state_val == "error":
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+            self.status_label.setText("● Voice Error")
+            self.status_label.setStyleSheet("color: #f85149;")
+        else:
+            self.mic_btn.setChecked(False)
+            self.mic_btn.setText("Mic")
+            if self._backend and self._backend.is_running:
+                self.status_label.setText("● Ready")
+                self.status_label.setStyleSheet("color: #3fb950;")
 
     def _append_message(self, role: str, text: str) -> None:
         if role == "user":
@@ -177,6 +244,9 @@ class ChatWindow(QMainWindow):
     def _on_response(self, response: AgentResponse) -> None:
         if response.success:
             self._append_message("jarvis", response.text)
+            # Speak response if voice manager is active
+            if self._voice and response.text:
+                self._voice.speak(response.text)
         else:
             self._append_message("jarvis", f"[Error: {response.error}]")
         self.status_label.setText("● Ready")
