@@ -370,7 +370,14 @@
       safeFn();
       return;
     }
-    try { document.startViewTransition(safeFn); }
+    try {
+      var transition = document.startViewTransition(safeFn);
+      if (transition) {
+        if (transition.ready && transition.ready.catch) transition.ready.catch(function () {});
+        if (transition.updateCallbackDone && transition.updateCallbackDone.catch) transition.updateCallbackDone.catch(function () {});
+        if (transition.finished && transition.finished.catch) transition.finished.catch(function () {});
+      }
+    }
     catch (_) { safeFn(); }
   }
 

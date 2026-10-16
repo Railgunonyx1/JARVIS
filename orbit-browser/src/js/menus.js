@@ -102,11 +102,16 @@ if (tabContextMenu) tabContextMenu.addEventListener("click", (e) => {
 // ── Browser Menu ──────────────────────────────────────────────
 const browserMenu = $("#browserMenu");
 const menuBtn = $("#menuBtn");
-if (menuBtn) menuBtn.addEventListener("click", (e) => {
+function placePopup(el) {
+  const tb = document.getElementById("toolbar");
+  const top = tb ? Math.round(tb.getBoundingClientRect().bottom + 6) : 52;
+  el.style.right = "10px";
+  el.style.top = top + "px";
+}
+if (menuBtn && browserMenu) menuBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
-  browserMenu.style.right = "10px";
-  browserMenu.style.top = "84px";
+  placePopup(browserMenu);
   browserMenu.classList.toggle("on");
 });
 
@@ -121,36 +126,33 @@ if (aboutOrbit) aboutOrbit.addEventListener("click", (e) => {
 // ── Extension Popup ───────────────────────────────────────────
 const extPopup = $("#extPopup");
 const extBtn = $("#extBtn");
-if (extBtn) extBtn.addEventListener("click", (e) => {
+if (extBtn && extPopup) extBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
   renderExtPopup();
-  extPopup.style.right = "50px";
-  extPopup.style.top = "84px";
+  placePopup(extPopup);
   extPopup.classList.toggle("on");
 });
 
 // ── System Popup (status formerly in the bottom HUD) ─────────
 const systemPopup = $("#systemPopup");
 const sysBtn = $("#sysBtn");
-if (sysBtn) sysBtn.addEventListener("click", (e) => {
+if (sysBtn && systemPopup) sysBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
   updatePerfHud();
-  systemPopup.style.right = "130px";
-  systemPopup.style.top = "84px";
+  placePopup(systemPopup);
   systemPopup.classList.toggle("on");
 });
 
 // ── Profile Popup ─────────────────────────────────────────────
 const profilePopup = $("#profilePopup");
 const profileBtn = $("#profileBtn");
-if (profileBtn) profileBtn.addEventListener("click", (e) => {
+if (profileBtn && profilePopup) profileBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   closeAllPopups();
   renderProfilePopup();
-  profilePopup.style.right = "80px";
-  profilePopup.style.top = "84px";
+  placePopup(profilePopup);
   profilePopup.classList.toggle("on");
 });
 
