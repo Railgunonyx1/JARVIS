@@ -185,12 +185,13 @@ function switchProfile(id) {
   closeAllPopups();
 }
 function addProfile() {
-  const name = prompt("New profile name:", "");
-  if (!name || !name.trim()) return;
-  const p = getProfiles();
-  p.push({ id: "p" + Date.now().toString(36), name: name.trim().slice(0, 24), color: PROFILE_COLORS[p.length % PROFILE_COLORS.length], active: false });
-  saveProfiles(p);
-  switchProfile(p[p.length - 1].id);
+  UI.prompt("New profile name:", "", function (name) {
+    if (!name || !name.trim()) return;
+    const p = getProfiles();
+    p.push({ id: "p" + Date.now().toString(36), name: name.trim().slice(0, 24), color: PROFILE_COLORS[p.length % PROFILE_COLORS.length], active: false });
+    saveProfiles(p);
+    switchProfile(p[p.length - 1].id);
+  }, { title: "New profile", okLabel: "Create" });
 }
 function toggleGuestMode() {
   const p = getProfiles();

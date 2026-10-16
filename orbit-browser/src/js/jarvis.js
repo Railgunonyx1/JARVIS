@@ -767,13 +767,14 @@ function renderBookmarkBar() {
 function addBookmark() {
   const tab = tabs.get(activeTabId);
   if (!tab) return;
-  const title = prompt("Bookmark name:", tab.title);
-  if (!title) return;
-  bookmarks.push({ title: title, url: tab.url });
-  localStorage.setItem("orbit-bookmarks", JSON.stringify(bookmarks));
-  renderBookmarkBar();
-  updateStarIcon(tab.url);
-  showToast("ok", "Bookmark Added", title);
+  UI.prompt("Bookmark name:", tab.title, function (title) {
+    if (!title) return;
+    bookmarks.push({ title: title, url: tab.url });
+    localStorage.setItem("orbit-bookmarks", JSON.stringify(bookmarks));
+    renderBookmarkBar();
+    updateStarIcon(tab.url);
+    showToast("ok", "Bookmark Added", title);
+  }, { title: "Add bookmark", okLabel: "Add" });
 }
 
 function updateStarIcon(url) {

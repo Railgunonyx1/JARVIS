@@ -414,8 +414,9 @@ if (ntpSearch) {
 // ── Zoom Indicator Click ──────────────────────────────────────
 if (zoomIndicator) {
   zoomIndicator.addEventListener("click", function() {
-    const input = prompt("Zoom level (25-500):", Math.round(currentZoom * 100));
-    if (input) { var val = parseFloat(input); if (!isNaN(val)) setZoom(val / 100); }
+    UI.prompt("Zoom level (25-500):", Math.round(currentZoom * 100), function (input) {
+      if (input) { var val = parseFloat(input); if (!isNaN(val)) setZoom(val / 100); }
+    }, { title: "Zoom", type: "number", okLabel: "Apply" });
   });
 }
 

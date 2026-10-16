@@ -133,7 +133,7 @@ function updateJarvisStatusUI(online) {
   jarvisBtn.title = online ? 'JARVIS online — click to toggle sidebar' : 'Start JARVIS';
 }
 
-on(sbClose, "click", () => {
+if (sbClose) on(sbClose, "click", () => {
   sidebarOpen = false;
   try { localStorage.setItem("orbit-sidebar-open", "0"); } catch (_) {}
   sidebar.classList.add("hidden");
@@ -414,18 +414,19 @@ function renderWorkspacesPanel() {
   });
   var createBtn = document.getElementById('wsCreate');
   if (createBtn) createBtn.addEventListener('click', function() {
-    var name = prompt('Space name:', '');
-    if (!name) return;
-    var icons = ['\u{1F3F0}', '\u{1F30A}', '\u{1F3AF}', '\u{1F4D6}', '\u{1F3B5}'];
-    var colors = ['#8ab4f8', '#f28b82', '#81c995', '#fdd663', '#d7aefb'];
-    _workspaces.push({
-      id: 'ws-' + Date.now(),
-      name: name,
-      icon: icons[Math.floor(Math.random() * icons.length)],
-      color: colors[Math.floor(Math.random() * colors.length)],
-      active: false,
-    });
-    renderWorkspacesPanel();
+    UI.prompt('Space name:', '', function (name) {
+      if (!name) return;
+      var icons = ['\u{1F3F0}', '\u{1F30A}', '\u{1F3AF}', '\u{1F4D6}', '\u{1F3B5}'];
+      var colors = ['#8ab4f8', '#f28b82', '#81c995', '#fdd663', '#d7aefb'];
+      _workspaces.push({
+        id: 'ws-' + Date.now(),
+        name: name,
+        icon: icons[Math.floor(Math.random() * icons.length)],
+        color: colors[Math.floor(Math.random() * colors.length)],
+        active: false,
+      });
+      renderWorkspacesPanel();
+    }, { title: "New Space", okLabel: "Create" });
   });
 }
 
@@ -495,20 +496,22 @@ function renderCompanionsPanel() {
 }
 
 function createCompanion() {
-  var name = prompt('Companion name:', 'Research Agent ' + (_companionIdSeq + 1));
-  if (!name) return;
-  var task = prompt('What should this companion do?', '');
-  if (!task) return;
-  _companions.push({
-    id: ++_companionIdSeq,
-    name: name,
-    task: task,
-    status: 'idle',
-    tabs: [],
-    log: [],
-    created: Date.now(),
-  });
-  renderCompanionsPanel();
+  UI.prompt('Companion name:', 'Research Agent ' + (_companionIdSeq + 1), function (name) {
+    if (!name) return;
+    UI.prompt('What should this companion do?', '', function (task) {
+      if (!task) return;
+      _companions.push({
+        id: ++_companionIdSeq,
+        name: name,
+        task: task,
+        status: 'idle',
+        tabs: [],
+        log: [],
+        created: Date.now(),
+      });
+      renderCompanionsPanel();
+    }, { title: "Companion task", okLabel: "Create" });
+  }, { title: "New Companion", okLabel: "Next" });
 }
 
 function startCompanion(cid) {

@@ -60,17 +60,17 @@ function createBoostUI() {
   } catch (e) {}
   if (!domain) { showToast('err', 'No site', 'Navigate to a site first'); return; }
   var existing = getBoostForDomain(domain);
-  var css = prompt('Custom CSS for ' + domain + ':', existing ? existing.css || '' : '');
-  if (css === null) return;
-  var js = prompt('Custom JS for ' + domain + ':', existing ? existing.js || '' : '');
-  if (js === null) return;
-  saveBoost(domain, { css: css, js: js, created: Date.now() });
-  showToast('ok', 'Boost saved', 'Applied to ' + domain);
-  // Re-apply to current tab
-  var tab = tabs.get(activeTabId);
-  if (tab && tab.webview && tab.url && tab.url.includes(domain)) {
-    applyBoostToWebview(tab.webview, tab.url);
-  }
+  UI.prompt('Custom CSS for ' + domain + ':', existing ? existing.css || '' : '', function (css) {
+    UI.prompt('Custom JS for ' + domain + ':', existing ? existing.js || '' : '', function (js) {
+      saveBoost(domain, { css: css, js: js, created: Date.now() });
+      showToast('ok', 'Boost saved', 'Applied to ' + domain);
+      // Re-apply to current tab
+      var tab = tabs.get(activeTabId);
+      if (tab && tab.webview && tab.url && tab.url.includes(domain)) {
+        applyBoostToWebview(tab.webview, tab.url);
+      }
+    }, { title: "Custom JS", okLabel: "Save" });
+  }, { title: "Custom CSS", okLabel: "Next" });
 }
 
 // ── Privacy Report Page (Safari-style) ────────────────────

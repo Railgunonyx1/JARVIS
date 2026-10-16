@@ -208,15 +208,16 @@ const CMD_ITEMS = [
   { l: "Floating JARVIS Chat", d: "Small movable JARVIS window", s: "Ctrl+Shift+K", i: "\u{1F4AC}", a: function() { toggleJarvisFloat(); } },
   { l: "Pop out Video", d: "Float the active tab's video (PiP)", s: "Ctrl+Shift+P", i: "\u25b6", a: function() { popoutVideo(); } },
   { l: "Run Agent Task", d: "Headless agent execution (kernel path)", i: "\u{1F916}", a: function() {
-    var task = prompt('Agent task:');
-    if (task && typeof runAgentTask === 'function') {
-      // A-04: routed through the JARVIS kernel (permission engine + audit),
-      // not the quarantined local loop.
-      showAgentBar('Starting...');
-      runAgentTask(task).then(function() { hideAgentBar(); });
-    } else if (task) {
-      showToast('err', 'Agent unavailable', 'JARVIS kernel path not loaded');
-    }
+    UI.prompt('Agent task:', '', function (task) {
+      if (task && typeof runAgentTask === 'function') {
+        // A-04: routed through the JARVIS kernel (permission engine + audit),
+        // not the quarantined local loop.
+        showAgentBar('Starting...');
+        runAgentTask(task).then(function() { hideAgentBar(); });
+      } else if (task) {
+        showToast('err', 'Agent unavailable', 'JARVIS kernel path not loaded');
+      }
+    }, { title: "Run Agent Task", okLabel: "Run" });
   }},
 ];
 
@@ -257,8 +258,8 @@ function filterCmd(q) {
   cmdFiltered.forEach(function(c, i) {
     html += '<div class="cmd-item' + (i === cmdIdx ? ' active' : '') + '" data-ci="' + i + '"><div class="cmd-item-icon">' + c.i + '</div><div class="cmd-item-label">' + c.l + '<div class="cmd-item-desc">' + c.d + '</div></div>' + (c.s ? '<div class="cmd-item-shortcut">' + c.s + '</div>' : '') + '</div>';
   });
-  res.innerHTML = html;
-  res.querySelectorAll(".cmd-item").forEach(function(el) {
+  cmdResults.innerHTML = html;
+  cmdResults.querySelectorAll(".cmd-item").forEach(function(el) {
     el.addEventListener("click", function() {
       const idx = parseInt(el.getAttribute("data-ci"));
       if (cmdFiltered[idx]) { cmdFiltered[idx].a(); closeCmdPalette(); }

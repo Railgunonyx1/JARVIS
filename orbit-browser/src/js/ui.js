@@ -307,6 +307,45 @@
     return { el: overlay, close: close };
   }
 
+  // ── Prompt: text input dialog ────────────────────────────────────
+  // Electron's renderer does NOT implement window.prompt() (it throws
+  // "prompt() is not supported"), so anything needing a text value must go
+  // through this modal. Callback-based: onOk(value) runs on OK/Enter;
+  // onCancel() runs on Cancel/Escape/backdrop.
+  function Prompt(message, defaultValue, onOk, opts) {
+    opts = opts || {};
+    var input = document.createElement("input");
+    input.type = opts.type || "text";
+    input.className = "ui-input";
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+    input.value = (defaultValue == null) ? "" : String(defaultValue);
+    input.style.cssText = "width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--jb-border);border-radius:8px;background:var(--jb-void);color:var(--jb-paper);font:inherit;outline:none";
+    var submitted = false;
+    function submit() {
+      if (submitted) return;
+      submitted = true;
+      if (onOk) { try { onOk(input.value); } catch (err) { logErr("prompt-onok", err); } }
+    }
+    var m = Modal({
+      title: opts.title || "Input",
+      description: message || "",
+      body: input,
+      actions: [
+        { label: opts.cancelLabel || "Cancel", variant: "ghost", onClick: function () {} },
+        { label: opts.okLabel || "OK", variant: "primary", onClick: submit },
+      ],
+      onClose: function () {
+        if (!submitted && opts.onCancel) { try { opts.onCancel(); } catch (err) { logErr("prompt-oncancel", err); } }
+      },
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); submit(); m.close(); }
+      else { e.stopPropagation(); }
+    });
+    requestAnimationFrame(function () { try { input.focus(); input.select(); } catch (_) {} });
+    return m;
+  }
+
   // ── Toast: delegates to the existing core.showToast ──────────────
   function Toast(type, title, msg, dur) {
     try {
@@ -335,7 +374,7 @@
   }
 
   // ── exports ──────────────────────────────────────────────────────
-  window.UI = { cn: cn, escapeHtml: escapeHtml, Button: Button, Popup: Popup, Modal: Modal, Toast: Toast, viewTransition: viewTransition };
+  window.UI = { cn: cn, escapeHtml: escapeHtml, Button: Button, Popup: Popup, Modal: Modal, prompt: Prompt, Toast: Toast, viewTransition: viewTransition };
   // escapeHtml becomes globally available here (before settings-ux.js loads),
   // so the de-facto global contract is satisfied from first paint.
   if (typeof window.escapeHtml !== "function") window.escapeHtml = escapeHtml;
