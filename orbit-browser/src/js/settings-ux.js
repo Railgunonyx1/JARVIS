@@ -95,23 +95,10 @@ document.addEventListener("keydown", (e) => {
   }
   // Ctrl+H: History
   if (ctrl && e.key.toLowerCase() === "h") { e.preventDefault(); navigateTo("orbit://history"); return; }
-  // Ctrl+J: Downloads
-  if (ctrl && e.key.toLowerCase() === "j") { e.preventDefault(); navigateTo("orbit://downloads"); return; }
-  // Ctrl+L: Focus omnibox
-  if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); omniInput.focus(); omniInput.select(); return; }
+  // Ctrl+L: Address / command palette (the shell has no inline omnibox)
+  if (ctrl && e.key.toLowerCase() === "l") { e.preventDefault(); openCmdPalette(); return; }
   // Ctrl+J: Ask Orbit (AI drawer)
   if (ctrl && e.key.toLowerCase() === "j") { e.preventDefault(); toggleAssistantDrawer(); return; }
-  // Ctrl+K: Command palette
-  if (ctrl && e.key.toLowerCase() === "k") { e.preventDefault(); openCommandPalette(); return; }
-  // Ctrl+T: New tab
-  if (ctrl && e.key.toLowerCase() === "t") { e.preventDefault(); createTab(); return; }
-  // Ctrl+W: Close tab; with no tabs left, close the browser window
-  if (ctrl && e.key.toLowerCase() === "w") {
-    e.preventDefault();
-    if (activeTabId) { closeTab(activeTabId); return; }
-    try { window.orbit?.window?.close?.(); } catch (err) {}
-    return;
-  }
   // Ctrl+Shift+T: Reopen closed tab (Chrome)
   if (ctrl && e.shiftKey && e.key.toLowerCase() === "t") { e.preventDefault(); reopenClosedTab(); return; }
   // Ctrl+Shift+Plus: Split view
@@ -244,7 +231,7 @@ document.addEventListener("keydown", (e) => {
   if (ctrl && e.key === "/") { e.preventDefault(); toggleShortcutsOverlay(); return; }
   // Escape: Close things
   if (e.key === "Escape") {
-    if (cmdPaletteBg && cmdPaletteBg.classList.contains("on")) { closeCmdPalette(); return; }
+    if (cmdPaletteBg && cmdPaletteBg.classList.contains("open")) { closeCmdPalette(); return; }
     if (modalBg) modalBg.classList.remove("on");
     closeAllPopups();
     if (findBar && findBar.classList.contains("on")) findBar.classList.remove("on");

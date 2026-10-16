@@ -482,3 +482,28 @@
   z-index: 60;
 }
 .toolbar-end { margin-right: 146px; }
+
+/* ── shell.js wiring support ──────────────────────────────────────── */
+.app.sidebar-collapsed { grid-template-columns: 48px 0 1fr; }
+.app.sidebar-collapsed .sidebar { display: none; }
+.address { cursor: pointer; }
+.command-icon { flex: 0 0 auto; width: 18px; text-align: center; opacity: 0.8; }
+.command-label { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.command-desc {
+  font-size: 10px;
+  color: var(--jb-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.assistant-msg {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.assistant-msg.user { background: var(--jb-surface-active); color: var(--jb-paper); }
+.assistant-msg.assistant { background: var(--jb-surface); color: var(--jb-text); border: 1px solid var(--jb-border); }

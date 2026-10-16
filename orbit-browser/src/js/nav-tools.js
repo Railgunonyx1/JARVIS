@@ -226,7 +226,7 @@ let cmdFiltered = [];
 
 function openCmdPalette() {
   if (!cmdPaletteBg) return;
-  cmdPaletteBg.classList.add("on");
+  cmdPaletteBg.classList.add("open");
   cmdInput.value = "";
   cmdIdx = 0;
   filterCmd("");
@@ -234,37 +234,68 @@ function openCmdPalette() {
 }
 
 function closeCmdPalette() {
-  if (cmdPaletteBg) cmdPaletteBg.classList.remove("on");
+  if (cmdPaletteBg) cmdPaletteBg.classList.remove("open");
 }
 
 function filterCmd(q) {
-  q = (q || "").toLowerCase().trim();
+  q = (q || "").trim();
+  const ql = q.toLowerCase();
   cmdFiltered = [];
   if (!cmdResults) return;
-  let html = "";
-  if (q) {
+  if (ql) {
     for (const [id, tab] of tabs) {
-      if (tab.title.toLowerCase().indexOf(q) >= 0 || tab.url.toLowerCase().indexOf(q) >= 0) {
-        cmdFiltered.push({ l: tab.title, d: tab.url, i: "T", a: function(tid) { return function() { activateTab(tid); }; }(id) });
+      if ((tab.title || "").toLowerCase().indexOf(ql) >= 0 || (tab.url || "").toLowerCase().indexOf(ql) >= 0) {
+        cmdFiltered.push({ l: tab.title || tab.url, d: tab.url, i: "T", a: function(tid) { return function() { activateTab(tid); }; }(id) });
       }
+    }
+    // Chrome-style: a URL/domain goes straight there, anything else searches.
+    const url = (typeof omniUrlFor === "function") ? omniUrlFor(q) : null;
+    const looksUrl = /^https?:\/\//i.test(q) || /^orbit:\/\//i.test(q) ||
+      /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(q) || /^localhost(:\d+)?(\/|$)/i.test(q);
+    if (url) {
+      cmdFiltered.unshift({ l: looksUrl ? "Go to " + q : "Search for \u201c" + q + "\u201d", d: url, i: looksUrl ? "\u2192" : "\u2315", a: function() { navigateTo(url); } });
     }
   }
   CMD_ITEMS.forEach(function(c) {
-    if (!q || c.l.toLowerCase().indexOf(q) >= 0 || c.d.toLowerCase().indexOf(q) >= 0) {
+    if (!ql || c.l.toLowerCase().indexOf(ql) >= 0 || c.d.toLowerCase().indexOf(ql) >= 0) {
       cmdFiltered.push(c);
     }
   });
-  if (cmdFiltered.length) html += '<div class="cmd-group-label">Results</div>';
+  cmdIdx = Math.min(cmdIdx, Math.max(0, cmdFiltered.length - 1));
+  let html = "";
   cmdFiltered.forEach(function(c, i) {
-    html += '<div class="cmd-item' + (i === cmdIdx ? ' active' : '') + '" data-ci="' + i + '"><div class="cmd-item-icon">' + c.i + '</div><div class="cmd-item-label">' + c.l + '<div class="cmd-item-desc">' + c.d + '</div></div>' + (c.s ? '<div class="cmd-item-shortcut">' + c.s + '</div>' : '') + '</div>';
+    html += '<div class="command-item' + (i === cmdIdx ? ' selected' : '') + '" data-ci="' + i + '">' +
+      '<span class="command-icon">' + (c.i || "") + '</span>' +
+      '<span class="command-label">' + c.l + (c.d ? '<span class="command-desc">' + c.d + '</span>' : '') + '</span>' +
+      (c.s ? '<span class="command-key">' + c.s + '</span>' : '') + '</div>';
   });
   cmdResults.innerHTML = html;
-  cmdResults.querySelectorAll(".cmd-item").forEach(function(el) {
+  cmdResults.querySelectorAll(".command-item").forEach(function(el) {
     el.addEventListener("click", function() {
       const idx = parseInt(el.getAttribute("data-ci"));
-      if (cmdFiltered[idx]) { cmdFiltered[idx].a(); closeCmdPalette(); }
+      if (cmdFiltered[idx]) { closeCmdPalette(); cmdFiltered[idx].a(); }
     });
   });
+}
+
+function updateCmdSel() {
+  if (!cmdResults) return;
+  const els = cmdResults.querySelectorAll(".command-item");
+  els.forEach(function(el, i) { el.classList.toggle("selected", i === cmdIdx); });
+  if (els[cmdIdx]) { try { els[cmdIdx].scrollIntoView({ block: "nearest" }); } catch (_) {} }
+}
+
+if (cmdInput) {
+  cmdInput.addEventListener("input", function() { cmdIdx = 0; filterCmd(cmdInput.value); });
+  cmdInput.addEventListener("keydown", function(e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); if (cmdFiltered.length) { cmdIdx = (cmdIdx + 1) % cmdFiltered.length; updateCmdSel(); } }
+    else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); if (cmdFiltered.length) { cmdIdx = (cmdIdx - 1 + cmdFiltered.length) % cmdFiltered.length; updateCmdSel(); } }
+    else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); const it = cmdFiltered[cmdIdx]; if (it) { closeCmdPalette(); it.a(); } }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeCmdPalette(); }
+  });
+}
+if (cmdPaletteBg) {
+  cmdPaletteBg.addEventListener("click", function(e) { if (e.target === cmdPaletteBg) closeCmdPalette(); });
 }
 
 // ── Find on Page ──────────────────────────────────────────────
