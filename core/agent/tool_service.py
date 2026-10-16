@@ -106,12 +106,35 @@ class ToolExecutionService:
 
         Pass ``internal=True`` for internal/verification tool calls so they do
         not surface as task steps in the observation.
+
+        Session identity is scoped to this call: an explicit ``session_id`` is
+        installed in ``_CURRENT_SESSION`` (visible to nested internal calls
+        made while the tool runs) and restored on exit -- success, denial, or
+        exception -- so a reused asyncio task cannot leak one session's
+        identity into later calls.
         """
-        start = time.perf_counter()
-        if session_id:
-            _CURRENT_SESSION.set(session_id)
-        else:
+        token = _CURRENT_SESSION.set(session_id) if session_id else None
+        if not session_id:
             session_id = _CURRENT_SESSION.get() or self._session_id
+        try:
+            return await self._execute_tool_in_context(
+                call, trace_id, session_id, append_to_messages, state, internal,
+            )
+        finally:
+            if token is not None:
+                _CURRENT_SESSION.reset(token)
+
+    async def _execute_tool_in_context(
+        self,
+        call: ToolCall,
+        trace_id: str,
+        session_id: str,
+        append_to_messages: list[dict[str, Any]] | None,
+        state: Any | None,
+        internal: bool,
+    ) -> ToolExecutionResult:
+        """Execution body -- session context is already resolved and installed."""
+        start = time.perf_counter()
         has_obs = self._observer.observation is not None and not internal
         step = self._observer.step_started(call.name, call.arguments, call.id) if has_obs else None
 

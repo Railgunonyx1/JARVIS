@@ -88,5 +88,40 @@ def test_consent_handler_allow_and_deny():
     assert "denied" in reason.lower()
 
 
+@pytest.mark.parametrize("start,mode,expected", [
+    ("agent", "controlled", True),
+    ("agent", "smart", True),
+    ("agent", "plan", False),
+    ("controlled", "agent", False),
+    ("controlled", "smart", True),
+    ("smart", "plan", False),
+    ("plan", "controlled", True),
+])
+def test_mode_transition_recomputes_default_posture(start, mode, expected):
+    engine = _engine(start)
+    engine.set_mode(mode)
+    assert engine.fail_closed_risky is expected
+
+
+def test_mode_transition_to_controlled_fails_closed():
+    engine = _engine("agent")
+    engine.set_mode("controlled")
+    allowed, reason = engine._apply_risk_gate(_risky_tool(), {}, "t", "s")
+    assert allowed is False
+    assert "explicit operator approval" in reason
+
+
+def test_explicit_override_survives_mode_transitions():
+    engine = _engine("agent", fail_closed=True)
+    engine.set_mode("controlled")
+    engine.set_mode("agent")
+    assert engine.fail_closed_risky is True
+
+    engine = _engine("controlled", fail_closed=False)
+    engine.set_mode("agent")
+    engine.set_mode("controlled")
+    assert engine.fail_closed_risky is False
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

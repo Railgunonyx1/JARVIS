@@ -53,6 +53,8 @@ def backend() -> PlaywrightBackend:
     "http://192.168.1.1/",
     "http://169.254.169.254/latest/meta-data/",
     "http://metadata.google.internal/",
+    "http://[::ffff:127.0.0.1]/",   # IPv4-mapped loopback
+    "http://example.com:99999/",    # malformed port -> policy denial
 ])
 def test_denied_requests_are_aborted(backend, url):
     route = _FakeRoute(url)

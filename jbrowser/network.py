@@ -139,12 +139,23 @@ class BrowserNetworkPolicy:
 
     def validate(self, url: str) -> str:
         """Return a normalized, validated URL or raise :class:`NetworkPolicyError`."""
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError as exc:
+            raise NetworkPolicyError(f"malformed URL: {url!r} ({exc})") from None
         scheme = (parsed.scheme or "").lower()
         if scheme not in ("http", "https"):
             raise NetworkPolicyError(f"unsupported scheme: {scheme or '(none)'}")
-        host = parsed.hostname or ""
-        port = parsed.port
+        # Malformed authorities (unparseable IPv6 brackets, non-numeric or
+        # out-of-range ports) must fail as a policy denial, never as a raw
+        # ValueError that a caller might treat as "not our problem".
+        try:
+            host = parsed.hostname or ""
+            port = parsed.port
+        except ValueError as exc:
+            raise NetworkPolicyError(
+                f"malformed authority/port in URL: {url!r} ({exc})"
+            ) from None
         netloc = f"{host}:{port}" if port else host
 
         if self._allowed(netloc) or self._allowed(host):

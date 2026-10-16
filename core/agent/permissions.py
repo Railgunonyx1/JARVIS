@@ -46,7 +46,9 @@ class PermissionEngine:
         # Consent matrix (audit Phase 1): in consent-first modes (Controlled,
         # Smart) a destructive/high-risk tool with no wired consent channel is
         # DENIED. Agent mode keeps its autonomous posture; Orbit passes True
-        # explicitly. An explicit argument always wins.
+        # explicitly. An explicit argument always wins -- including across
+        # later set_mode() transitions (see _fail_closed_explicit).
+        self._fail_closed_explicit = fail_closed_risky is not None
         if fail_closed_risky is None:
             fail_closed_risky = self.mode in _FAIL_CLOSED_MODES
         self.fail_closed_risky = fail_closed_risky
@@ -77,6 +79,11 @@ class PermissionEngine:
     def set_mode(self, mode: str) -> bool:
         self.mode = self._resolve_mode(mode)
         self.security.set_mode(_CONFIRMABLE_SECURITY_MODE[self.mode])
+        # Audit fix (P1): the mode-derived default risk posture must follow the
+        # mode, or Agent -> Controlled would keep fail_closed_risky=False and
+        # silently stop failing closed. An explicit constructor override stays.
+        if not self._fail_closed_explicit:
+            self.fail_closed_risky = self.mode in _FAIL_CLOSED_MODES
         return True
 
     @staticmethod

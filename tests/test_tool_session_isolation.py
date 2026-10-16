@@ -45,12 +45,14 @@ async def _flow(svc: ToolExecutionService, sid: str, tag: str) -> None:
         ToolCall(name="echo", arguments={}, id=f"{tag}-outer"),
         trace_id=tag, session_id=sid,
     )
-    # Yield so the sibling session can run and (with the old shared-state
-    # implementation) clobber the session id before this internal call.
+    # Yield so the sibling session can run between this session's calls; with
+    # the old shared-instance-state implementation the sibling would clobber
+    # the session id before the second call. Session context is scoped to the
+    # call (audit fix), so every top-level call passes its session explicitly.
     await asyncio.sleep(0)
     await svc.execute_tool(
         ToolCall(name="echo", arguments={}, id=f"{tag}-inner"),
-        trace_id=tag, session_id="",
+        trace_id=tag, session_id=sid,
     )
 
 

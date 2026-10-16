@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import socket
+
 import pytest
 
 from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError, _is_private_ip
@@ -92,3 +94,71 @@ class TestNonGlobalAddressSpace:
     def test_allow_private_still_permits_localhost(self):
         p = BrowserNetworkPolicy(allow_private=True)
         assert p.validate("http://127.0.0.1:8000") == "http://127.0.0.1:8000"
+
+
+class TestMalformedAuthority:
+    @pytest.mark.parametrize("url", [
+        "http://example.com:notaport/",   # non-numeric port
+        "http://example.com:99999/",      # out-of-range port
+        "http://[::1/",                   # unterminated IPv6 bracket
+        "http:///path",                   # empty authority
+    ])
+    def test_malformed_urls_raise_policy_error_not_valueerror(self, url):
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate(url)
+
+
+class TestDnsRebindingHermetic:
+    """getaddrinfo is stubbed -- these never touch live DNS."""
+
+    @staticmethod
+    def _stub(monkeypatch, answers=None, error=None):
+        def fake_getaddrinfo(host, *args, **kwargs):
+            if error is not None:
+                raise error
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))
+                for ip in (answers or [])
+            ]
+        monkeypatch.setattr("jbrowser.network.socket.getaddrinfo", fake_getaddrinfo)
+
+    def test_public_host_resolving_to_loopback_is_denied(self, monkeypatch):
+        self._stub(monkeypatch, answers=["127.0.0.1"])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://rebind.example.com/")
+
+    def test_public_host_resolving_to_rfc1918_is_denied(self, monkeypatch):
+        self._stub(monkeypatch, answers=["10.1.2.3"])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://rebind.example.com/")
+
+    def test_dns_failure_denies_by_default(self, monkeypatch):
+        self._stub(monkeypatch, error=socket.gaierror("no such host"))
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://nope.example.com/")
+
+    def test_public_host_resolving_public_ip_is_allowed(self, monkeypatch):
+        self._stub(monkeypatch, answers=["93.184.216.34"])
+        p = BrowserNetworkPolicy.default()
+        assert p.validate("https://example.com/x") == "https://example.com/x"
+
+    def test_allow_private_mode_skips_resolution(self, monkeypatch):
+        def explode(host, *args, **kwargs):
+            raise AssertionError("getaddrinfo must not run when allow_private")
+        monkeypatch.setattr("jbrowser.network.socket.getaddrinfo", explode)
+        p = BrowserNetworkPolicy(allow_private=True)
+        assert p.validate("http://devbox.internal/") == "http://devbox.internal/"
+
+    def test_ip_literals_classified_hermetically(self, monkeypatch):
+        def literal_only(host, *args, **kwargs):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (host, 0))]
+        monkeypatch.setattr("jbrowser.network.socket.getaddrinfo", literal_only)
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("http://[::ffff:10.0.0.1]/")
+        assert (BrowserNetworkPolicy.default().validate("https://93.184.216.34/")
+                == "https://93.184.216.34/")
+
+    def test_obfuscated_numeric_host_denied_via_resolution(self, monkeypatch):
+        self._stub(monkeypatch, answers=["127.0.0.1"])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("http://2130706433/")
