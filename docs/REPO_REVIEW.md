@@ -35,7 +35,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | 15 | Wake-word voice state machine over one OpenAI-compatible STT/TTS base URL | `voice/` | M | med | pending |
 | 16 | Optimization-evidence receipts (hotspot → measured delta → verification gate) | `core/agent/verification.py`, `benchmark/` | M | med | **Done** — `benchmark/receipts.py` + `verify_optimization_evidence` |
 | 17 | MCP read-only auto-approval trust enforcement + permission path canonicalization (symlink/`..`) | `runtime/protocols/`, `core/agent/permissions.py` | M | low | **Done** — canonical-path gate + two-key MCP trust (`bd2d310`) |
-| 18 | Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med | pending |
+| 18 | Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med | **Done** — `providers/credential_pool.py` (hermes FailoverReason + strategies) |
 | 19 | Retry-safe settlement + post-compaction record-conflict detection | `memory/*`, `core/agent/tool_service.py` | M | med | pending |
 | 20 | Subagent registry resurrection prevention + heartbeat under commitment queues | `core/agent/state.py`, `runtime/event_bus.py` | S | low | **Done** — `core/agent/subagent_registry.py` + `heartbeat.py` |
 | 21 | Token-budgeted code retrieval tool (tree-sitter, counted budgets) via MCP | `core/harness/*` | M | low | pending |
