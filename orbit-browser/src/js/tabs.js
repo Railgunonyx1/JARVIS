@@ -281,7 +281,7 @@ function attachWebviewEvents(wv) {
     omniInput.placeholder = "Search or enter URL";
     wv.classList.remove("hidden");
     internalPages.classList.remove("visible");
-    $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+    $$(".page, .newtab-page", internalPages).forEach(p => p.classList.remove("on"));
     try {
       backBtn.disabled = !wv.canGoBack();
       forwardBtn.disabled = !wv.canGoForward();
@@ -577,7 +577,7 @@ function activateTab(id) {
     omniInput.placeholder = (tab.url || "orbit://newtab").replace("orbit://", "orbit://");
   } else {
     internalPages.classList.remove("visible");
-    $$(".page", internalPages).forEach((p) => p.classList.remove("on"));
+    $$(".page, .newtab-page", internalPages).forEach((p) => p.classList.remove("on"));
     const wv = activeWebview();
     if (wv) wv.classList.remove("hidden");
     omniInput.value = tab.url.replace(/^https?:\/\//, "");
@@ -644,13 +644,14 @@ function showInternalPage(pageId) {
   // navigation communicates no depth, so no directional slide). Instant
   // swap without the View Transition API or under reduced-motion.
   UI.viewTransition(function () {
-    $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+    $$(".page, .newtab-page", internalPages).forEach(p => p.classList.remove("on"));
     const target = document.getElementById(pageId);
     if (target) target.classList.add("on");
     if (pageId === "diagnosticsPage") refreshDiagnostics();
     if (pageId === "historyPage") renderHistoryPage();
     if (pageId === "bookmarksPage") renderBookmarksPage();
     if (pageId === "extensionsPage") renderExtensionsPage();
+    if (pageId === "settingsPage") renderSettingsPage();
     if (pageId === "newtabPage") {
       renderSessionThumbnails();
       // Fresh New Tab pages open with an empty search box; revisiting an
@@ -868,7 +869,7 @@ function navigateTo(url) {
     omniInput.value = url.replace(/^https?:\/\//, "");
     omniInput.placeholder = "Search Google or enter URL";
     internalPages.classList.remove("visible");
-    $$(".page", internalPages).forEach(p => p.classList.remove("on"));
+    $$(".page, .newtab-page", internalPages).forEach(p => p.classList.remove("on"));
     const wv = activeWebview();
     if (!wv) { console.error("[NAV] No webview for active tab"); showToast("err", "No webview", "Tab has no webview attached. Try creating a new tab."); return; }
     wv.classList.remove("hidden");

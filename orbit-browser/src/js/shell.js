@@ -111,6 +111,33 @@
   bind($('#splitViewBtn'), 'click', function () { if (typeof window.toggleSplitView === 'function') window.toggleSplitView(); });
   bind($('#aiTrigger'), 'click', function () { toggleAssistant(); });
 
+  // ── Address display ─────────────────────────────────────────────────
+  // The shell address is display-only (navigation goes through the palette),
+  // but it was never updated, so it always read "New Tab". Mirror the active
+  // tab's title/URL on every tab change.
+  function syncAddress() {
+    var el = $('#addressTitle');
+    if (!el) return;
+    var tab = null;
+    try { if (typeof tabs !== 'undefined' && activeTabId != null) tab = tabs.get(activeTabId); } catch (_) {}
+    if (!tab) { el.textContent = 'New Tab'; el.title = ''; return; }
+    el.textContent = tab.title || tab.url || 'New Tab';
+    el.title = tab.url || '';
+  }
+  window.syncAddress = syncAddress;
+  ['navigateTo', 'activateTab', 'closeTab', 'createTab', 'reopenClosedTab'].forEach(function (fn) {
+    var orig = window[fn];
+    if (typeof orig !== 'function') return;
+    window[fn] = function () { var r = orig.apply(this, arguments); setTimeout(syncAddress, 0); return r; };
+  });
+  var tabListEl = $('#tabList');
+  if (tabListEl && typeof MutationObserver === 'function') {
+    var syncTimer = null;
+    new MutationObserver(function () { clearTimeout(syncTimer); syncTimer = setTimeout(syncAddress, 50); })
+      .observe(tabListEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  setTimeout(syncAddress, 120);
+
   // ── Assistant drawer ────────────────────────────────────────────────
   bind($('#closeAssistant'), 'click', function () { toggleAssistant(false); });
 

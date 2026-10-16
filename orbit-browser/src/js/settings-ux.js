@@ -631,3 +631,106 @@ if (window.enhancedSecurity) {
 // Security Tester integration
 if (window.securityTester) {
 }
+
+// ── Settings Page (orbit://settings) ─────────────────────────
+// The shell's .page divs ship empty; every internal page renderer is
+// called from showInternalPage. This one builds its own DOM so the rail
+// gear and menu destinations are real, and wires only features that
+// exist elsewhere in the app (theme, density, sidebar, clear data).
+function settingsChip(group, value, label, active) {
+  return '<button class="chip-btn' + (active ? ' active' : '') + '" data-setting="' + group +
+    '" data-value="' + value + '">' + label + '</button>';
+}
+
+function renderSettingsPage() {
+  var page = document.getElementById('settingsPage');
+  if (!page) return;
+  var html = document.documentElement;
+  var app = document.querySelector('.app');
+  var theme = html.dataset.theme || 'dark';
+  var compact = html.dataset.density === 'compact';
+  var collapsed = !!(app && app.classList.contains('sidebar-collapsed'));
+  var bridge = false;
+  try { bridge = !!(window.dshNative || (window.orbit && window.orbit.jarvis)); } catch (_) {}
+  var out = '';
+  out += '<div class="sheet">';
+  out += '<h1>Settings</h1>';
+  out += '<div class="group"><h2>Appearance</h2>';
+  out += '<div class="row"><div style="flex:1"><div class="name">Theme</div>' +
+    '<div class="sub">Dark, light or minimal — the agent layer follows too.</div></div>' +
+    settingsChip('theme', 'dark', 'Dark', theme === 'dark') +
+    settingsChip('theme', 'light', 'Light', theme === 'light') +
+    settingsChip('theme', 'minimal', 'Minimal', theme === 'minimal') + '</div>';
+  out += '<div class="row"><div style="flex:1"><div class="name">Density</div>' +
+    '<div class="sub">Compact trims paddings across the chrome.</div></div>' +
+    settingsChip('density', 'comfortable', 'Comfortable', !compact) +
+    settingsChip('density', 'compact', 'Compact', compact) + '</div>';
+  out += '</div>';
+  out += '<div class="group"><h2>Layout</h2>';
+  out += '<div class="row"><div style="flex:1"><div class="name">Sidebar</div>' +
+    '<div class="sub">Collapse the tabs and library rail.</div></div>' +
+    settingsChip('sidebar', 'expanded', 'Expanded', !collapsed) +
+    settingsChip('sidebar', 'collapsed', 'Collapsed', collapsed) + '</div>';
+  out += '</div>';
+  out += '<div class="group"><h2>Privacy</h2>';
+  out += '<div class="row"><div style="flex:1"><div class="name">Clear browsing data</div>' +
+    '<div class="sub">Removes cookies, cache and site data. History is kept.</div></div>' +
+    '<button class="chip-btn" data-setting="clear" data-value="now">Clear</button></div>';
+  out += '</div>';
+  out += '<div class="group"><h2>About</h2>';
+  out += '<div class="row"><div style="flex:1"><div class="name">Orbit</div>' +
+    '<div class="sub">Agent-first browser — Chromium owns browsing, JARVIS owns agency.</div></div></div>';
+  out += '<div class="row"><div style="flex:1"><div class="name">JARVIS bridge</div>' +
+    '<div class="sub">' + (bridge ? 'Connected' : 'Offline — start the JARVIS services to enable the agent.') + '</div></div></div>';
+  out += '</div>';
+  out += '</div>';
+  page.innerHTML = out;
+}
+
+function clearBrowsingDataFlow() {
+  var api = window.orbit && window.orbit.system && window.orbit.system.security && window.orbit.system.security.clearBrowsingData;
+  if (!api) { showToast('err', 'Unavailable', 'Bridge not ready'); return; }
+  var doClear = function () {
+    api({ history: false, cookies: true, cache: true, siteData: true }).then(function (r) {
+      if (r && r.ok) showToast('ok', 'Browsing data cleared', 'Cookies, cache and site data removed');
+      else showToast('err', 'Clear failed', (r && r.error) || 'Unknown error');
+    }).catch(function (e) { showToast('err', 'Clear failed', String(e)); });
+  };
+  if (window.UI && window.UI.Modal) {
+    window.UI.Modal.open({
+      title: 'Clear browsing data',
+      description: 'Clear cookies, cache and site data for this profile? History is kept.',
+      actions: [
+        { label: 'Cancel', onClick: function () {} },
+        { label: 'Clear', variant: 'danger', onClick: doClear }
+      ]
+    });
+  } else {
+    doClear();
+  }
+}
+
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest && e.target.closest('#settingsPage [data-setting]');
+  if (!btn) return;
+  var group = btn.dataset.setting;
+  var value = btn.dataset.value;
+  if (group === 'theme') {
+    document.documentElement.dataset.theme = value;
+    try { localStorage.setItem('orbit-theme', value); } catch (_) {}
+    showToast('info', 'Theme', 'Switched to ' + value);
+    renderSettingsPage();
+  } else if (group === 'density') {
+    var html = document.documentElement;
+    if (value === 'compact') html.dataset.density = 'compact';
+    else html.removeAttribute('data-density');
+    try { localStorage.setItem('orbit-density', value === 'compact' ? 'compact' : ''); } catch (_) {}
+    showToast('info', 'Density', value === 'compact' ? 'Compact' : 'Comfortable');
+    renderSettingsPage();
+  } else if (group === 'sidebar') {
+    if (typeof window.toggleSidebar === 'function') window.toggleSidebar(value === 'expanded');
+    renderSettingsPage();
+  } else if (group === 'clear') {
+    clearBrowsingDataFlow();
+  }
+});

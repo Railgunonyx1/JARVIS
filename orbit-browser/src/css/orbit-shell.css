@@ -317,6 +317,18 @@
   z-index: 10;
 }
 
+/* The newtab page lives inside #internalPages (with the other .page
+   divs) so the visible overlay's opaque background keeps covering the
+   still-attached webview. Gate it on .on exactly like .page. */
+#internalPages > .newtab-page { display: none; }
+#internalPages > .newtab-page.on { display: flex; }
+
+#settingsPage .chip-btn.active {
+  color: var(--jb-paper);
+  border-color: var(--jb-line-hard);
+  background: var(--jb-surface-hover);
+}
+
 /* New-tab additions (the base .newtab-page / .nt-wordmark / .nt-search
    styling lives in orbit.css; these are the class names the new markup
    uses that were never defined). */
@@ -507,3 +519,31 @@
 }
 .assistant-msg.user { background: var(--jb-surface-active); color: var(--jb-paper); }
 .assistant-msg.assistant { background: var(--jb-surface); color: var(--jb-text); border: 1px solid var(--jb-border); }
+
+/* Rail labels must never bleed into the sidebar (48px rail). */
+.space,
+.rail-button { overflow: hidden; }
+.space-label,
+.rail-label { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Sidebar search is a single line, not a wrapped two-liner. */
+.search-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* Assistant header: state text truncates, close button never overlaps it. */
+.assistant-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.assistant-head #closeAssistant {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  margin-left: 4px;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--jb-mute);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.assistant-head #closeAssistant:hover { background: var(--jb-surface-hover); color: var(--jb-text); }
