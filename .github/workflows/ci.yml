@@ -5,8 +5,8 @@
 #                 executor boundary, Orbit G8–G13 gates, memory store, and
 #                 the offline performance gate (timing deltas warn-only;
 #                 committed baseline is captured on the developer machine).
-#   browser       on push/PR: orbit-browser source-level tests (blocking) +
-#                 the real-Electron runtime smoke under xvfb (advisory).
+#   browser       on push/PR: orbit-browser source-level tests + the
+#                 real-Electron runtime smoke under xvfb; both blocking.
 #   full          on PR + main: the entire pytest suite (live-browser tests
 #                 self-skip unless JARVIS_RUN_BROWSER_LIVE=1) on both OSes.
 #   security      on PR + main + weekly: dependency audit + secret scan.
@@ -104,7 +104,6 @@ jobs:
         run: npm test
       - name: Electron runtime smoke (real binary, xvfb)
         working-directory: orbit-browser
-        continue-on-error: true
         run: xvfb-run -a npm run test:smoke
 
   full:

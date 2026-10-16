@@ -1534,17 +1534,26 @@ app.on("web-contents-created", (_event, contents) => {
 // Hard-fail any webview attach: strip foreign preloads and force the secure
 // guest profile, regardless of what the embedder HTML tried to set
 // (e.g. index.html's legacy disablewebsecurity / contextIsolation=no).
-app.on("will-attach-webview", (_event, webPreferences, _params) => {
-  if (webPreferences.preload && webPreferences.preload !== GUEST_PRELOAD) {
-    delete webPreferences.preload; // block injected preloads
-  }
-  if (!webPreferences.preload) webPreferences.preload = GUEST_PRELOAD;
-  webPreferences.nodeIntegration = false;
-  webPreferences.nodeIntegrationInSubFrames = false;
-  webPreferences.contextIsolation = true;
-  webPreferences.sandbox = true;
-  webPreferences.webSecurity = true;
-  webPreferences.spellcheck = false;
+// <webview> guest hardening. will-attach-webview is emitted on the WebContents
+// that EMBEDS the webview, not on `app` -- registering it on app never fired,
+// which silently left every guest without this preload injection, without the
+// forced preferences below, and without the injected-preload block. The
+// preload must be injected here (not just via the element attribute): Electron
+// 44 rejects a bare absolute-path `preload` attribute on <webview> -- the
+// guest loses its preload and can hang before ever attaching.
+app.on("web-contents-created", (_event, contents) => {
+  contents.on("will-attach-webview", (_attachEvent, webPreferences, _params) => {
+    if (webPreferences.preload && webPreferences.preload !== GUEST_PRELOAD) {
+      delete webPreferences.preload; // block injected preloads
+    }
+    if (!webPreferences.preload) webPreferences.preload = GUEST_PRELOAD;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+    webPreferences.spellcheck = false;
+  });
 });
 
 // ── Custom Protocol (orbit://) ────────────────────────────────────

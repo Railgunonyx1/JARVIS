@@ -10,7 +10,7 @@
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
-    "test": "node test/ipc-guard.test.cjs && node test/preload-surface.test.cjs && node test/electron-compat.test.cjs && node test/model-button.test.cjs && node test/license-metadata.test.cjs",
+    "test": "node test/ipc-guard.test.cjs && node test/preload-surface.test.cjs && node test/electron-compat.test.cjs && node test/model-button.test.cjs && node test/license-metadata.test.cjs && node test/preload-disposers.test.cjs",
     "test:smoke": "electron test/electron-smoke.cjs"
   },
   "author": "JARVIS Orbit",

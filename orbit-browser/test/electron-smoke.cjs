@@ -3,9 +3,9 @@
  * electron-compat.test.cjs can only reason about source. This one boots the
  * real Electron binary and exercises the parts the upgrade could plausibly
  * break: <webview> + webviewTag, the sandboxed preload, the sandboxed guest
- * preload behind its own partition session, the orbit:// custom protocol, and
- * -- the thing that had zero runtime coverage before -- the IPC sender guard
- * actually refusing a second, unlisted window.
+ * preload behind its own partition session, the injected-preload block, the
+ * orbit:// custom protocol, and -- the thing that had zero runtime coverage
+ * before -- the IPC sender guard actually refusing a second, unlisted window.
  *
  * Run:  npx electron test/electron-smoke.cjs        (from orbit-browser/)
  * Exits 0 on success, 1 on the first failed check.
@@ -53,11 +53,29 @@ contextBridge.exposeInMainWorld('probe', {
 });
 `;
 const untrustedPreloadPath = path.join(__dirname, '.smoke-untrusted-preload.js');
+const GUEST_PRELOAD = path.join(ROOT, 'guest-preload.js');
+const evilPreloadPath = path.join(__dirname, '.smoke-evil-preload.js');
 
 async function main() {
   console.log('\nElectron runtime smoke');
   console.log('  electron=%s chromium=%s node=%s\n',
     process.versions.electron, process.versions.chrome, process.versions.node);
+
+  // Mirror of main.js's guest wiring (keep the two in sync):
+  // will-attach-webview is emitted on the WebContents that embeds the guest,
+  // and it is what injects the real guest preload while blocking injected
+  // ones. Registered before any window exists.
+  app.on('web-contents-created', (_wcEvent, contents) => {
+    contents.on('will-attach-webview', (_attachEvent, webPreferences) => {
+      if (webPreferences.preload && webPreferences.preload !== GUEST_PRELOAD) {
+        delete webPreferences.preload;
+      }
+      if (!webPreferences.preload) webPreferences.preload = GUEST_PRELOAD;
+      webPreferences.nodeIntegration = false;
+      webPreferences.contextIsolation = true;
+      webPreferences.sandbox = true;
+    });
+  });
 
   // ── 1. Orbit's exact custom-protocol shape (Windows-safe since 33) ──────
   const orbitHandler = async (request) => {
@@ -112,12 +130,42 @@ async function main() {
     `renderer receives an absolute guest preload path (${guestPreloadArg})`);
   ok(fs.existsSync(guestPreloadArg), 'that guest preload path exists on disk');
 
+  // ── 2b. An injected preload attribute cannot replace the real preload ──
+  // will-attach-webview must delete a preload the renderer supplied and inject
+  // the real one. (Electron 44 guests only accept file:// URLs here, which is
+  // what a hostile renderer would use, so this is exactly the injection form.)
+  fs.writeFileSync(evilPreloadPath, `
+const { contextBridge } = require('electron');
+contextBridge.exposeInMainWorld('__SMOKE_EVIL', true);
+`);
+  const evilProbe = await Promise.race([
+    win.webContents.executeJavaScript(`(async () => {
+      const wv = document.createElement('webview');
+      wv.setAttribute('src', 'about:blank');
+      wv.setAttribute('partition', 'persist:orbit');
+      wv.setAttribute('preload', 'file://' + ${JSON.stringify(evilPreloadPath.replace(/\\/g, '/'))});
+      document.body.appendChild(wv);
+      await new Promise((res, rej) => {
+        wv.addEventListener('did-attach', res, { once: true });
+        wv.addEventListener('did-fail-load', (e) => rej(new Error('did-fail-load')), { once: true });
+        setTimeout(() => rej(new Error('evil-preload guest never attached')), 15000);
+      });
+      await new Promise((res) => wv.addEventListener('dom-ready', res, { once: true }));
+      const flags = await wv.executeJavaScript('JSON.stringify({ evil: !!window.__SMOKE_EVIL, hardened: !!(window.__ORBIT_GUEST__ && window.__ORBIT_GUEST__.hardened) })');
+      wv.remove();
+      return JSON.parse(flags);
+    })()`),
+    deadline(25000, 'injected-preload probe'),
+  ]);
+  ok(evilProbe.evil === false, 'an injected preload attribute is blocked by will-attach-webview');
+  ok(evilProbe.hardened === true, 'the real guest preload runs despite the injected attribute');
+
   // ── 3. A <webview> guest: attach, sandbox, guest preload ─────────────────
   const guestReady = win.webContents.executeJavaScript(`(async () => {
     const wv = document.createElement('webview');
     wv.setAttribute('src', 'about:blank');
     wv.setAttribute('partition', 'persist:orbit');
-    wv.setAttribute('preload', ${JSON.stringify(path.join(ROOT, 'guest-preload.js'))});
+    wv.setAttribute('preload', 'file://' + ${JSON.stringify(GUEST_PRELOAD.replace(/\\/g, '/'))});
     wv.setAttribute('webpreferences',
       'contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false');
     document.body.appendChild(wv);
@@ -227,6 +275,7 @@ async function main() {
 
   // ── done ────────────────────────────────────────────────────────────────
   fs.unlinkSync(untrustedPreloadPath);
+  try { fs.unlinkSync(evilPreloadPath); } catch (_) { /* ignore */ }
   console.log('\n' + (checks - failures) + '/' + checks + ' passed');
   app.exit(failures === 0 ? 0 : 1);
 }
@@ -236,6 +285,7 @@ function webContentsOf(w) { return w.webContents; }
 process.on('uncaughtException', (e) => {
   console.error('\nSMOKE ERROR: ' + (e && e.stack || e));
   try { fs.unlinkSync(untrustedPreloadPath); } catch (_) { /* ignore */ }
+  try { fs.unlinkSync(evilPreloadPath); } catch (_) { /* ignore */ }
   app.exit(1);
 });
 

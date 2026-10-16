@@ -39,7 +39,7 @@ JARVIS MK-X is engineered as an operating system kernel for agency:
 | **Tool Execution Boundary** | ❌ Fragmented per plugin | ⚠️ Ad-hoc callbacks | 🛡️ **Single Invariant Boundary (`ToolExecutionService`)** |
 | **Verification Strategy** | ❌ Blind assumption | ❌ Hallucinatory loop | 🔍 **Post-Execution Environmental Verification Gate** |
 | **Browser Architecture** | ❌ Headless Selenium stubs | ⚠️ Brittle extensions | 🌐 **Native Sovereign Chromium (CDP WebSocket + ResourceLocks)** |
-| **Cold-Start TTFT** | ⏱️ 2,000ms – 4,000ms | ⏱️ 1,500ms – 3,000ms | ⚡ **62ms – 102ms (Keepalive Pooling + Speculative Prewarm)** |
+| **Steady-State TTFT** | ⏱️ 2,000ms – 4,000ms | ⏱️ 1,500ms – 3,000ms | ⚡ **62ms – 102ms (Keepalive Pooling + Speculative Prewarm)** |
 | **Sensitive Origin Shield** | ❌ None (blind browse) | ❌ None | 🔒 **Fail-Closed Domain & Origin Firewall** |
 | **Offline Privacy** | ❌ Cloud-only API lock | ⚠️ Partial Ollama | 💻 **100% Offline Air-Gapped Mode via Ollama** |
 | **State Machine Precedence** | ❌ Unhandled exceptions | ⚠️ Unordered retry | ⚖️ **Deterministic Precedence (`CANCELLED > TIMEOUT > …`)** |

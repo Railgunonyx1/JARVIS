@@ -40,8 +40,9 @@ ISCC.exe packaging\installer.iss
    is green on the same tree the binary was built from.
 5. `cd orbit-browser && npm test` is green and `npm run test:smoke` boots the
    real Electron binary (under `xvfb-run` on a headless box). CI job `browser`
-   runs both on every push/PR; the smoke step is advisory until validated on a
-   headed machine.
+   runs both on every push/PR as blocking gates. The smoke was validated
+   end-to-end on Electron 44 (guest preload injection, injected-preload
+   block, IPC sender guard) before the advisory flag was removed.
 
 ## STOP conditions
 

@@ -3,6 +3,10 @@
  *
  * Exposes a safe, contextIsolated API to the renderer process.
  * No Node.js access in renderer — all communication via IPC.
+ *
+ * Every event subscription (jarvis.on*, on.*, downloads.onUpdated) returns a
+ * disposer that removes exactly its own wrapped listener, so repeated mounts
+ * cannot accumulate duplicate callbacks.
  */
 
 const { contextBridge, ipcRenderer } = require("electron");
@@ -32,19 +36,29 @@ contextBridge.exposeInMainWorld("orbit", {
 
     // Event listeners
     onStatus: (callback) => {
-      ipcRenderer.on("jarvis-status", (_, status) => callback(status));
+      const listener = (_, status) => callback(status);
+      ipcRenderer.on("jarvis-status", listener);
+      return () => ipcRenderer.removeListener("jarvis-status", listener);
     },
     onChat: (callback) => {
-      ipcRenderer.on("jarvis-chat", (_, payload) => callback(payload));
+      const listener = (_, payload) => callback(payload);
+      ipcRenderer.on("jarvis-chat", listener);
+      return () => ipcRenderer.removeListener("jarvis-chat", listener);
     },
     onAgentEvent: (callback) => {
-      ipcRenderer.on("jarvis-agent-event", (_, event) => callback(event));
+      const listener = (_, event) => callback(event);
+      ipcRenderer.on("jarvis-agent-event", listener);
+      return () => ipcRenderer.removeListener("jarvis-agent-event", listener);
     },
     onApproval: (callback) => {
-      ipcRenderer.on("jarvis-approval", (_, request) => callback(request));
+      const listener = (_, request) => callback(request);
+      ipcRenderer.on("jarvis-approval", listener);
+      return () => ipcRenderer.removeListener("jarvis-approval", listener);
     },
     onMessage: (callback) => {
-      ipcRenderer.on("jarvis-message", (_, msg) => callback(msg));
+      const listener = (_, msg) => callback(msg);
+      ipcRenderer.on("jarvis-message", listener);
+      return () => ipcRenderer.removeListener("jarvis-message", listener);
     },
   },
 
@@ -102,29 +116,43 @@ contextBridge.exposeInMainWorld("orbit", {
   // ── Window Events ───────────────────────────────────────────────
   on: {
     tabCreated: (callback) => {
-      ipcRenderer.on("tab-created", (_, tab) => callback(tab));
+      const listener = (_, tab) => callback(tab);
+      ipcRenderer.on("tab-created", listener);
+      return () => ipcRenderer.removeListener("tab-created", listener);
     },
     tabClosed: (callback) => {
-      ipcRenderer.on("tab-closed", (_, id) => callback(id));
+      const listener = (_, id) => callback(id);
+      ipcRenderer.on("tab-closed", listener);
+      return () => ipcRenderer.removeListener("tab-closed", listener);
     },
     tabActivated: (callback) => {
-      ipcRenderer.on("tab-activated", (_, tab) => callback(tab));
+      const listener = (_, tab) => callback(tab);
+      ipcRenderer.on("tab-activated", listener);
+      return () => ipcRenderer.removeListener("tab-activated", listener);
     },
     navigateTo: (callback) => {
-      ipcRenderer.on("navigate-to", (_, url) => callback(url));
+      const listener = (_, url) => callback(url);
+      ipcRenderer.on("navigate-to", listener);
+      return () => ipcRenderer.removeListener("navigate-to", listener);
     },
     // REMOVED: agent-read / agent-click / agent-type. These answered tool
     // round-trips from the quarantined Electron agent loop. Browser actions
     // now execute in the JARVIS kernel, which drives Chromium over CDP
     // (jbrowser/BrowserController) instead of driving the renderer.
     tabSleep: (callback) => {
-      ipcRenderer.on("tab-sleep", (_, id) => callback(id));
+      const listener = (_, id) => callback(id);
+      ipcRenderer.on("tab-sleep", listener);
+      return () => ipcRenderer.removeListener("tab-sleep", listener);
     },
     tabWake: (callback) => {
-      ipcRenderer.on("tab-wake", (_, id) => callback(id));
+      const listener = (_, id) => callback(id);
+      ipcRenderer.on("tab-wake", listener);
+      return () => ipcRenderer.removeListener("tab-wake", listener);
     },
     spaceChanged: (callback) => {
-      ipcRenderer.on("space-changed", (_, payload) => callback(payload));
+      const listener = (_, payload) => callback(payload);
+      ipcRenderer.on("space-changed", listener);
+      return () => ipcRenderer.removeListener("space-changed", listener);
     },
   },
 
@@ -171,7 +199,11 @@ contextBridge.exposeInMainWorld("orbit", {
     clear: () => ipcRenderer.invoke("downloads:clear"),
     cancel: (id) => ipcRenderer.invoke("downloads:cancel", id),
     show: (id) => ipcRenderer.invoke("downloads:show", id),
-    onUpdated: (cb) => ipcRenderer.on("downloads-updated", (_e, list) => cb(list)),
+    onUpdated: (cb) => {
+      const listener = (_e, list) => cb(list);
+      ipcRenderer.on("downloads-updated", listener);
+      return () => ipcRenderer.removeListener("downloads-updated", listener);
+    },
   },
 
   // ── Spaces ─────────────────────────────────────────────────────

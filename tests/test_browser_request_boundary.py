@@ -82,6 +82,10 @@ def test_enforce_request_raises_on_private_and_allows_public(backend):
         backend._enforce_request("http://10.0.0.5/")
     # Public IP literal: no external DNS required.
     backend._enforce_request("https://93.184.216.34/")
+    # WS(S) is validated under its HTTP(S) form (literals only: hermetic).
+    with pytest.raises(NetworkPolicyError):
+        backend._enforce_request("ws://127.0.0.1:9222/devtools")
+    backend._enforce_request("wss://93.184.216.34/socket")
     # Non-HTTP schemes are not egress.
     backend._enforce_request("data:text/plain,x")
 

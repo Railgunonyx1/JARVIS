@@ -6,7 +6,12 @@ import socket
 
 import pytest
 
-from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError, _is_private_ip
+from jbrowser.network import (
+    BrowserNetworkPolicy,
+    NetworkPolicyError,
+    _is_private_ip,
+    enforce_request_url,
+)
 
 
 class TestAllowPublic:
@@ -162,3 +167,40 @@ class TestDnsRebindingHermetic:
         self._stub(monkeypatch, answers=["127.0.0.1"])
         with pytest.raises(NetworkPolicyError):
             BrowserNetworkPolicy.default().validate("http://2130706433/")
+
+    def test_empty_dns_answers_denied(self, monkeypatch):
+        self._stub(monkeypatch, answers=[])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://empty.example.com/")
+
+    def test_mixed_public_and_private_answers_denied(self, monkeypatch):
+        self._stub(monkeypatch, answers=["93.184.216.34", "10.10.10.10"])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://mixed.example.com/")
+
+    def test_mixed_answers_denied_regardless_of_order(self, monkeypatch):
+        self._stub(monkeypatch, answers=["10.10.10.10", "93.184.216.34"])
+        with pytest.raises(NetworkPolicyError):
+            BrowserNetworkPolicy.default().validate("https://mixed2.example.com/")
+
+
+class TestEnforceRequestUrl:
+    def test_http_private_denied_public_allowed(self):
+        p = BrowserNetworkPolicy.default()
+        with pytest.raises(NetworkPolicyError):
+            enforce_request_url(p, "http://10.0.0.5/")
+        enforce_request_url(p, "https://93.184.216.34/")
+
+    def test_ws_and_wss_validated_under_http_form(self):
+        p = BrowserNetworkPolicy.default()
+        with pytest.raises(NetworkPolicyError):
+            enforce_request_url(p, "ws://127.0.0.1:9222/devtools")
+        with pytest.raises(NetworkPolicyError):
+            enforce_request_url(p, "wss://192.168.1.5/socket")
+        enforce_request_url(p, "wss://93.184.216.34/socket")
+
+    def test_non_network_schemes_pass_through(self):
+        p = BrowserNetworkPolicy.default()
+        for url in ("data:text/plain,x", "blob:https://example.com/1",
+                    "about:blank", "devtools://devtools/x"):
+            enforce_request_url(p, url)

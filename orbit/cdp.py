@@ -11,7 +11,7 @@ thread-safe request/response + event wrapper; ``CDPBackend`` implements the
 existing BrowserController + tool handlers plug in unchanged.
 
 Everything here reuses canonical JARVIS subsystems:
-  navigation policy   -> jbrowser.network.BrowserNetworkPolicy
+  network policy      -> jbrowser.network (navigation + per-request interception)
   tab identities      -> jbrowser.tabs  (stable uuid tab ids)
   event emission      -> jbrowser.events (browser.* bus events)
   ownership           -> TargetRegistry (orbit.registry) over core.locks
@@ -41,7 +41,7 @@ from jbrowser.events import (
     TAB_CREATED,
     emit_browser_event,
 )
-from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError
+from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError, enforce_request_url
 from jbrowser.tabs import TabManager
 from orbit.registry import OWNER_AGENT, TargetRegistry
 
@@ -98,6 +98,7 @@ class CDPConnection:
         self._ws = connect(ws_url, timeout=timeout)
         self._op_lock = threading.RLock()
         self._events: list[dict] = []
+        self._event_handler = None
         self._closed = False
         self._id = 0
 
@@ -147,12 +148,55 @@ class CDPConnection:
                     return msg.get("result", {})
             raise CDPError(f"CDP {method} timed out after {(timeout or self._timeout):.0f}s")
 
+    def set_event_handler(self, handler) -> None:
+        """Install a callback for received events (runs under the transport lock).
+
+        Called as ``handler(method, params)`` for every event message; return
+        True to mark it consumed (not kept in the event buffer) — per-request
+        interception emits one event per network request, so buffering them all
+        would grow without bound. The handler must not block and must not call
+        :meth:`call` (that would re-enter the receive loop); use :meth:`notify`.
+        """
+        with self._op_lock:
+            self._event_handler = handler
+
     def _route_message(self, msg: dict) -> dict | None:
         """Buffer events / foreign responses; return the message for inspection."""
         if "id" not in msg and "method" in msg:
-            with self._op_lock:
-                self._events.append(msg)
+            handled = False
+            handler = self._event_handler
+            if handler is not None:
+                try:
+                    handled = bool(handler(msg.get("method", ""),
+                                           msg.get("params", {})))
+                except Exception:
+                    # Never break the receive loop on a handler bug; treat the
+                    # event as consumed — an unanswered interception stays
+                    # blocked (fail closed), it cannot fail open.
+                    handled = True
+                    logger.warning("CDP event handler failed for %s",
+                                   msg.get("method"), exc_info=True)
+            if not handled:
+                with self._op_lock:
+                    self._events.append(msg)
         return msg
+
+    def notify(self, method: str, params: dict | None = None) -> None:
+        """Send a CDP command without waiting for its response.
+
+        Used by event handlers (e.g. answering ``Fetch.requestPaused``) where
+        blocking for a response would stall the receive loop already holding
+        the transport lock. Responses are ignored by subsequent reads.
+        """
+        with self._op_lock:
+            if self._closed:
+                raise CDPError(f"CDP connection closed for {method}")
+            payload = json.dumps({"id": self._next_id(), "method": method,
+                                  "params": params or {}})
+            try:
+                self._ws.send(payload)
+            except Exception as e:
+                raise CDPError(f"CDP send {method} failed: {e}") from e
 
     def events_since(self, marker: int) -> list[dict]:
         with self._op_lock:
@@ -511,9 +555,59 @@ class CDPBackend(BrowserBackend):
             raise RuntimeError(f"tab not found: {tab_id}")
         ws = t.ws_url or self._target_ws(t.target_id)
         conn = CDPConnection(ws, timeout=self._timeout)
+        conn.set_event_handler(self._make_request_handler(conn))
+        # Request-boundary egress enforcement: per-request interception must
+        # be active BEFORE any navigation so redirects and subresources cannot
+        # reach private networks through URLs the initial check never saw.
+        # Fail closed: a page connection without interception is not usable.
+        try:
+            conn.call("Fetch.enable", {
+                "patterns": [{"urlPattern": "*", "requestStage": "Request"}],
+            })
+        except Exception as exc:
+            conn.close()
+            raise NetworkPolicyError(
+                "CDP request interception could not be enabled; refusing to "
+                "operate without per-request network policy"
+            ) from exc
         self._pages[tab_id] = conn
         t.started_ws = True
         return conn
+
+    def _make_request_handler(self, conn: CDPConnection):
+        """Event handler serviced from every receive loop (see CDPConnection)."""
+        def handler(method: str, params: dict) -> bool:
+            if method != "Fetch.requestPaused":
+                return False
+            self._handle_paused_request(conn, params)
+            return True
+        return handler
+
+    def _handle_paused_request(self, conn: CDPConnection, params: dict) -> None:
+        """Apply the network policy to one intercepted request (fail closed)."""
+        request_id = str(params.get("requestId") or "")
+        url = str((params.get("request") or {}).get("url") or "")
+        try:
+            if not url:
+                raise NetworkPolicyError("intercepted request without a URL")
+            enforce_request_url(self._network, url)
+        except Exception as exc:
+            try:
+                if request_id:
+                    conn.notify("Fetch.failRequest", {
+                        "requestId": request_id,
+                        "errorReason": "BlockedByClient",
+                    })
+            except Exception:
+                pass
+            logger.warning("orbit cdp blocked request %r: %s", url, exc)
+            return
+        try:
+            if request_id:
+                conn.notify("Fetch.continueRequest", {"requestId": request_id})
+        except Exception as exc:
+            # The request stays paused — blocked, never fail-open.
+            logger.warning("orbit cdp could not continue request %r: %s", url, exc)
 
     def _resolve_page(self, tab_id: str | None) -> str:
         key = tab_id or self._active

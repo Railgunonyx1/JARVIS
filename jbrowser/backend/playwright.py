@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from jbrowser.backend.base import BrowserBackend, TabInfo
-from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError
+from jbrowser.network import BrowserNetworkPolicy, NetworkPolicyError, enforce_request_url
 from jbrowser.optimization import DEFAULT_TAB_LIMIT, build_launch_kwargs
 from jbrowser.page_context import build_page_context
 from jbrowser.sessions import profile_dir
@@ -191,14 +191,11 @@ class PlaywrightBackend(BrowserBackend):
     def _enforce_request(self, url: str) -> None:
         """Raise NetworkPolicyError when an intercepted request URL is denied.
 
-        Non-HTTP(S) schemes (``data:``, ``blob:``, ``about:``, devtools) are
-        not egress and pass through. HTTP(S) URLs — including those produced by
-        redirects and subresource loads — are validated against the policy.
+        Delegates to the shared request-boundary helper so the Playwright and
+        CDP backends enforce identical semantics (HTTP(S) and WS(S) validated,
+        non-network schemes pass through).
         """
-        scheme = (url or "").split(":", 1)[0].lower()
-        if scheme not in ("http", "https"):
-            return
-        self._network.validate(url)
+        enforce_request_url(self._network, url)
 
     def _network_route_handler(self, route: Any, request: Any = None) -> None:
         """Playwright route callback enforcing the network policy per request."""

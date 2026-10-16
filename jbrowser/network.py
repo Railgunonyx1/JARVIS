@@ -62,6 +62,12 @@ def _check_dns_resolution(host: str, netloc: str, allow_private: bool) -> None:
         raise NetworkPolicyError(
             f"DNS resolution failed for {netloc}; denying by default"
         ) from None
+    if not results:
+        # A resolver that yields no addresses is not evidence of a public
+        # destination; deny by default like any other resolution failure.
+        raise NetworkPolicyError(
+            f"DNS returned no addresses for {netloc}; denying by default"
+        )
     for family, _type, _proto, _canonname, sockaddr in results:
         ip_str = sockaddr[0]
         if _is_private_ip(ip_str):
@@ -182,3 +188,21 @@ class BrowserNetworkPolicy:
                 f"plain-HTTP destination blocked by network policy: {netloc}"
             )
         return url
+
+
+def enforce_request_url(policy: BrowserNetworkPolicy, url: str) -> None:
+    """Gate one intercepted request URL (redirect / subresource / XHR / WS).
+
+    Shared by every browser backend at the request boundary so the engines
+    cannot drift: HTTP(S) URLs are validated against the policy, WS(S) URLs
+    are validated under their equivalent HTTP(S) form, and other schemes
+    (``data:``, ``blob:``, ``about:``, devtools) are not network egress and
+    pass through. Raises :class:`NetworkPolicyError` when denied.
+    """
+    raw = str(url or "").strip()
+    scheme = raw.split(":", 1)[0].lower()
+    if scheme in ("ws", "wss"):
+        raw = ("http" if scheme == "ws" else "https") + raw[len(scheme):]
+    elif scheme not in ("http", "https"):
+        return
+    policy.validate(raw)

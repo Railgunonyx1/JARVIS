@@ -181,5 +181,21 @@ ok(uncovered.length === 0,
 // file must ship too even though main.js never requires it.
 ok(globCovers('guest-preload.js'), 'guest-preload.js is inside the packaged files[]');
 
+// ── 5. Guest preload wiring ──────────────────────────────────────────────
+// will-attach-webview is emitted on the WebContents that embeds the guest --
+// registering it on `app` never fires, which silently left the guest-preload
+// injection and the injected-preload block as dead code. Electron 44 guests
+// also reject a bare absolute-path `preload` attribute, so both webview
+// creators must hand over a file:// URL.
+ok(!/app\.on\(\s*["']will-attach-webview/.test(mainSrc),
+  'main.js does not register will-attach-webview on app (that never fires)');
+ok(/web-contents-created[\s\S]{0,400}will-attach-webview/.test(mainSrc),
+  'main.js wires will-attach-webview on web-contents-created');
+const tabsSrc = fs.readFileSync(path.join(root, 'src/js/tabs.js'), 'utf8');
+const poolSrc = fs.readFileSync(path.join(root, 'src/webview-pool.js'), 'utf8');
+const FILE_URL_PRELOAD = /['"]file:\/\/['"]\s*\+\s*guestPreload\.replace/;
+ok(FILE_URL_PRELOAD.test(tabsSrc), 'tabs.js builds the preload attribute as a file:// URL');
+ok(FILE_URL_PRELOAD.test(poolSrc), 'webview-pool.js builds the preload attribute as a file:// URL');
+
 console.log('\n' + (checks - failures) + '/' + checks + ' passed');
 process.exit(failures === 0 ? 0 : 1);

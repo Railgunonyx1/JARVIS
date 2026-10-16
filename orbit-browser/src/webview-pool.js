@@ -67,11 +67,12 @@ class WebviewPool {
     // Copy attributes from seed element
     if (this.seedElement) {
       webview.setAttribute('partition', this.seedElement.getAttribute('partition') || 'persist:orbit');
-      // Same absolute-path rule as tabs.js: an empty preload means the guest
-      // runs with no preload, losing the hardened marker and the first-party
-      // orbit:// bridge.
-      webview.setAttribute('preload',
-        this.seedElement.getAttribute('preload') || window.orbit?.guestPreload || '');
+      // Same file://-URL rule as tabs.js: a bare absolute path is rejected
+      // by Electron 44 guests (silently losing the hardened marker and the
+      // first-party orbit:// bridge); main.js's will-attach-webview also
+      // re-injects the real path on every guest.
+      const guestPreload = window.orbit?.guestPreload || this.seedElement.getAttribute('preload');
+      webview.setAttribute('preload', guestPreload ? 'file://' + guestPreload.replace(/\\/g, '/') : '');
       webview.setAttribute('webpreferences', this.seedElement.getAttribute('webpreferences') || '');
     }
     

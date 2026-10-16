@@ -109,11 +109,14 @@ function createWebview() {
   // it with about:blank so the guest is alive before the first navigation.
   wv.setAttribute("src", "about:blank");
   wv.setAttribute("partition", currentPartition());
-  // Absolute path supplied by main.js. A relative one resolves against
-  // src/index.html and silently loads nothing (verified: __ORBIT_GUEST__ never
-  // appeared, so guests ran unhardened and the first-party orbit:// bridge in
-  // guests was dead).
-  wv.setAttribute("preload", seed?.getAttribute("preload") || window.orbit?.guestPreload || "../guest-preload.js");
+  // Absolute path supplied by main.js, wrapped as a file:// URL: Electron 44
+  // rejects a bare absolute-path `preload` attribute on <webview> (the guest
+  // silently loses its preload, and can fail to attach at all). A relative
+  // path is equally dead -- it resolves against src/index.html, not the app
+  // root. main.js's will-attach-webview re-injects this exact path on every
+  // guest, so this attribute is the fallback -- but a valid one.
+  const guestPreload = window.orbit?.guestPreload || seed?.getAttribute("preload");
+  wv.setAttribute("preload", guestPreload ? "file://" + guestPreload.replace(/\\/g, "/") : "../guest-preload.js");
   wv.setAttribute("webpreferences", seed?.getAttribute("webpreferences") || "contextIsolation=yes,nodeIntegration=no,webSecurity=yes,spellcheck=false");
   contentArea.appendChild(wv);
   return wv;
