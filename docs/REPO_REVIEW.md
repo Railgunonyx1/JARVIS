@@ -33,6 +33,12 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | 13 | MCP single authenticated entry point mirroring the single tool boundary | `runtime/protocols/` | L | med | pending |
 | 14 | UI-visible agent state machine (Thinking/Speaking/Standby) as BusEvents | `core/agent/state.py` | S | low | pending |
 | 15 | Wake-word voice state machine over one OpenAI-compatible STT/TTS base URL | `voice/` | M | med | pending |
+| 16 | Optimization-evidence receipts (hotspot → measured delta → verification gate) | `core/agent/verification.py`, `benchmark/` | M | med | pending |
+| 17 | MCP read-only auto-approval trust enforcement + permission path canonicalization (symlink/`..`) | `runtime/protocols/`, `core/agent/permissions.py` | M | low | pending |
+| 18 | Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med | pending |
+| 19 | Retry-safe settlement + post-compaction record-conflict detection | `memory/*`, `core/agent/tool_service.py` | M | med | pending |
+| 20 | Subagent registry resurrection prevention + heartbeat under commitment queues | `core/agent/state.py`, `runtime/event_bus.py` | S | low | pending |
+| 21 | Token-budgeted code retrieval tool (tree-sitter, counted budgets) via MCP | `core/harness/*` | M | low | pending |
 
 ---
 
@@ -1456,5 +1462,156 @@ These map onto the voice-engine / agent pattern set already documented; adopting
 | **Copyleft** | coqui-ai/TTS (MPL-2.0 code), voice-pro (GPL-3.0), pyvideotrans (GPL-3.0) |
 | **Weight-restricted / Non-standard** | Coqui XTTS weights (CPML, non-commercial), moonshine legacy non-English (Community License) |
 | **Dual poison (avoid)** | ChatTTS (AGPL-3.0 + CC BY-NC) |
+
+---
+
+# Round 7 — Morluto contribution graph (agent infra, evidence tooling, DSH/Cordis ecosystem)
+
+Source: Morluto's project/contribution list (own repos + upstream contributions). Licenses verified from repo roots. The six `morluto/*` agent tools are DSH-ecosystem plugins (topics `dsh-plugin`, `cordis`) and ship as MCP servers — if adopted they enter **only** through the MCP catalog behind ToolExecutionService (single tool boundary, no side doors). Nothing is vendored; patterns + optional MCP registration only.
+
+## AA. Code intelligence & contribution research (morluto/*)
+
+### morluto/leantoken (MIT OR Apache-2.0, Rust; MCP server)
+- **Token-budgeted code retrieval** — "find the code that matters, keep the context window lean": tree-sitter indexing + token counting as first-class outputs, not vibes. → `core/harness/*` (context assembly), `tools/*` · M/low.
+- **In-tree benchmarks for retrieval quality** — eval harness for context selection, replayable. → `benchmark/` · S/low.
+- **Multi-host packaging** (`.agents/`, `.codex/`, AGENTS.md) — one tool, many agent hosts → `skills/*` packaging pattern · S/low.
+- *Avoid:* Rust runtime dep in core; register via MCP if adopted.
+
+### morluto/gitcontribute (MIT, Go; MCP server)
+- **Pre-patch contribution research** — repo guidance, related work, code context, and validation *before* writing a patch; a deterministic pre-execution checklist. → `core/agent/verification.py` (pre-execution evidence), `skills/*` · M/low.
+- Research receipts (guidance files read, related PRs/issues, validation run) attach to the post-execution gate context. → `core/agent/loop.py` · S/low.
+
+### morluto/smokinggun (MIT, TypeScript; emits SARIF)
+- **Optimization evidence before acting** — complexity hotspots + "is this change worth making", machine-readable (SARIF). → `security/code_scan.py` (SARIF interchange), `core/agent/verification.py` · M/low.
+- Deterministic hotspot ranking surfaced as a BusEvent observation. → `runtime/event_bus.py` · S/low.
+
+### morluto/flameox (MIT, Python; MCP server; local-first)
+- **Runtime evidence that traces hotspots** (app/native/GPU/inference) with performance-regression detection. → `benchmark/` (orbit timing gate), `core/agent/verification.py` · M/med.
+- **Evidence receipts**: tie a proposed optimization to measured before/after deltas. → `core/agent/verification.py` · S/low.
+
+### morluto/jacobian (MIT, Python; MCP server; SymPy/Lean4)
+- **"Compute exactly, then independently check what a result proves"** — the math-domain form of JARVIS's verification invariant (checker != producer). → `core/agent/verification.py`, `tools/*` · M/low.
+- Example/counterexample search as a tool contract: structured result + proof artifact in ToolResult metadata. → `core/agent/tool_service.py` · S/low.
+- *Avoid:* bundling a Lean toolchain by default; register as optional MCP capability.
+
+### morluto/rea (MIT, TypeScript; agent-skills pack)
+- **Domain skill-pack packaging across hosts** (Claude Code, Codex, Cursor, OpenCode, Gemini CLI…) — mirrors and extends the `skills/*` cross-host pattern. → `skills/*` · S/low.
+- Binary/app reverse engineering is a HIGH-risk capability class: sandbox + explicit approval, never default-on. → `core/agent/permissions.py`, `security/*` · S/low.
+
+### morluto/generate-social-preview — **no license file (patterns only)**
+- Skill grounded in repo-local assets/examples (never generic templates) → `skills/*` skill-authoring pattern · S/low.
+
+### morluto/internalcot (license unverified — treat as no-reuse)
+- Chain-of-thought surfacing for hosts: observation value vs model-privacy trade-off; capture as a design note only.
+
+## AB. Harness improvement, evaluation & peer platforms
+
+### Human-Agent-Society/reef (Apache-2.0)
+- **Receipts across overlapping runs** — provenance that survives concurrent/overlapping execution → `memory/*` · M/low.
+- **Constant-time commit-history bookkeeping** (cached history) → `memory/store.py` · M/low.
+- **Record-conflict detection after compaction** → `memory/keyspace.py` · S/low.
+- **Retry-safe settlement** — rollback/commit idempotent under retries → `core/agent/tool_service.py` (retry semantics) · M/med.
+
+### patrick-toulme/harnessgym (Apache-2.0)
+- **Harness-improvement loop**: run the agent on a hard task → generate the missing reusable tooling → qualify it → replay fresh sessions with it activated. → `core/harness/*`, `skills/*` · M/med.
+- **Artifact quarantine + result-parsing validation** for benchmark correctness → `security/code_scan.py`, `benchmark/` · S/low.
+- **Activation reporting** — prove generated tooling actually loaded (no silent no-op). → `core/agent/verification.py` · S/low.
+
+### harbor-framework/harbor (Apache-2.0; Terminal-Bench lineage)
+- **create-task / publish skills** for agent evaluation — task packaging + publishing as host-loadable skills → `skills/*`, `benchmark/` · S/low.
+
+### UsefulSoftwareCo/executor (MIT)
+- **One MCP catalog with per-tool policies** — reference design for a single tool catalog where auth/retry/approval live per tool — the product problem JARVIS's single boundary + declarative metadata already solves; steal the policy-table shape. → `tools/classification.py`, `core/agent/tool_service.py` · S/low.
+
+### QwenLM/qwen-code (Apache-2.0)
+- **MCP read-only auto-approval trust enforcement** — read-only tools may auto-approve, but trust must be verified, not assumed → MCP permission matrix. → `runtime/protocols/`, `core/agent/permissions.py` · M/low.
+- **Restrictive permission path canonicalization** — canonicalize (symlinks, `..`) before allow/deny checks. → `core/agent/permissions.py`, `security/*` · S/low.
+- Config validation for fractional session/tool-call limits; malformed tool-result display resilience. → `core/agent/tool_service.py` · S/low.
+
+### NousResearch/hermes-agent (MIT)
+- **Cron scheduler double-execution prevention** — fire-once guarantees across restart/overlap → `runtime/*` scheduler · S/low.
+- **Credential-pool failover + provider auto-detection** — deterministic rotation/failover → `providers/model_gateway.py` · M/med.
+
+### openclaw/openclaw (MIT)
+- **Channel identity canonicalization** (phone/e-mail across Signal/iMessage/WhatsApp) → `runtime/protocols/` identity mapping · M/med.
+- **Subagent registry resurrection prevention** — a torn-down subagent must not silently reappear → `core/agent/state.py`, `core/locks.py` · S/low.
+- **Heartbeat responsiveness under large commitment queues** — queue depth must not starve liveness → `runtime/event_bus.py` · M/low.
+- **Transport teardown before gateway shutdown** — drain/close channels first; no write-after-close storms. → `runtime/protocols/` · S/low.
+
+## AC. Context, composition, orchestration
+
+### repoprompt/repoprompt-ce (Apache-2.0)
+- **Context-builder model selection** — pick the model per context-building task → `providers/model_gateway.py` `select()` by capability · S/low.
+- **Bounded LRU diff caching + diff-chunk reconstruction without repeated array shifts** → `cli/*`, `memory/*` · S/low.
+- Replace-all matching with reused full-file indexes (one index, many replacements). → `tools/*` · S/low.
+
+### cordiverse/cordis (MIT) — plugin meta-framework (DSH's substrate)
+- **Symbol/prototype-named event dispatch + ordered concurrent async interval reads** — event identity beyond strings; delivery ordering guarantees. → `runtime/event_bus.py` subscriber identity/ordering · M/med.
+- **Spatiotemporal composability** — plugin context lifecycle (load/scope/dispose) as a first-class contract → `runtime/protocols/` plugin discovery · M/med.
+
+### scaleapi/agentenv-framework (Apache-2.0)
+- **Avoid quadratic response-history diffs**; reduce implicit scheduler graphs; batch Explorer reads; index latest-version lookups. → `core/harness/*`, `memory/store.py` · M/med.
+- **Journal keys** for environment state → `memory/store.py` · S/low.
+
+### kvcache-ai/AgentENV (MIT)
+- Distributed agent-environment execution (sandboxed envs at scale) — isolation-posture reference → `security/*` sandbox · S/low.
+- OverlayBD truncated-mapped-read rejection: partial reads must fail, never silently corrupt → artifact integrity checks in `memory/store.py` · S/low.
+
+### stablyai/orca (MIT), HKUDS/Vibe-Trading (MIT), openclaw/crabbox (MIT), openclaw/gitcrawl (MIT)
+- Orca: fleet-of-agents ADE (parallel-agent orchestration UX); graceful degradation when a helper app is missing (skip feature, never crash onboarding) → `cli/*`, `orbit/*` startup · S/low.
+- Vibe-Trading: **CLI resume preserves typed-but-unsubmitted prompt input** (pairs with roadmap #9) → `cli/input.py` · S/low.
+- Crabbox: "warm a box, sync the diff, run the suite" — remote execution pattern for agent test runs → CI/`benchmark/` · S/low.
+- gitcrawl: guard local stores against stray Git-metadata misclassification → path-classification guard in `memory/store.py` · S/low.
+
+### magpie-lang/magpie (MIT)
+- **Fallible JSON parsing in every layer** (FFI/runtime/codegen/analysis/lowering) — decode errors as values, never exceptions that abort a pipeline → `runtime/protocols/`, malformed tool-result handling · M/low.
+
+### garrytan/gstack (MIT), garrytan/gbrain (MIT)
+- gstack: 23 opinionated role tools (CEO/Designer/EM/Release/Docs/QA) — curated per-role tool bundles → `skills/*` role packs · S/low.
+- gbrain: persona/identity "brain" for messaging agents; **metric sign correctness** (negative trajectory metrics must not invert the signal) → `memory/*`, `benchmark/` scoring · S/low.
+
+## AD. Triage — reviewed, deferred (outside agent-runtime relevance)
+
+| Repo | Category | Triage rationale |
+|---|---|---|
+| triton-lang/triton | GPU compiler | Kernel-level; no GPU inference stack in the agent runtime. |
+| tile-ai/tilelang | GPU DSL | Same. |
+| fla-org/flash-linear-attention | Attention kernels | Model layer, not agent layer. |
+| THUDM/slime | RL post-training | Training-side; RL patterns already captured (Rounds 4–5). |
+| NVIDIA-NeMo/labs-molt | RL framework | Training-side. |
+| Tencent-Hunyuan/UniRL | RL training | Training-side. |
+| lucidrains/x-JEPA | JEPA world models | Research architecture; no agent-platform adoption. |
+| kvcache-ai/Mooncake | KV-cache serving | Serving infra; no local LLM serving in JARVIS. |
+| modelcontextprotocol/typescript-sdk | MCP TS SDK | JARVIS consumes MCP from Python; the CJS packaging fix is not portable. |
+| deepseek-ai/awesome-deepseek-agent | integration guides | Docs-only; provider integration already abstracted behind the gateway. |
+| QwenLM/qwen-code-docs | docs tooling | Translation pipeline; no runtime relevance. |
+| sympy/sympy | CAS | Pattern captured via the jacobian bullets above. |
+
+### Ecosystem note — DSH / Cordis
+
+DSH = **DeepSeek Harness** (`deepseek-ai/deepseek-harness`), an "everything is a plugin" agent harness built on **Cordis** (`cordiverse/cordis`, MIT), a TS meta-framework for spatiotemporal composability. The `dsh` / `dsh-plugin` / `cordis` topics on morluto's repos mark them as DSH-ecosystem plugins; JARVIS already speaks DSH-style commands (Phase C bridge). Any wiring of these tools must go through the MCP catalog behind ToolExecutionService — one boundary, no side doors.
+
+### Round 7 cross-cutting
+
+| Idea | Modules | Effort | Risk |
+|---|---|---|---|
+| Token-budgeted code retrieval (tree-sitter + counted budgets) | `core/harness/*` | M | low |
+| Optimization-evidence receipts (hotspot → delta → gate) | `core/agent/verification.py`, `benchmark/` | M | med |
+| Independent-check math tool (exact compute + proof artifact) | `tools/*`, `core/agent/verification.py` | M | low |
+| MCP read-only auto-approval trust enforcement | `runtime/protocols/`, `core/agent/permissions.py` | M | low |
+| Permission path canonicalization (symlink/`..` bypass) | `core/agent/permissions.py` | S | low |
+| Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med |
+| Retry-safe settlement + post-compaction conflict detection | `memory/*`, `core/agent/tool_service.py` | M | med |
+| Artifact quarantine for untrusted outputs | `security/*`, `benchmark/` | S | low |
+| Subagent registry resurrection prevention | `core/agent/state.py` | S | low |
+| Linear response-history diffs + batched store reads | `core/harness/*`, `memory/store.py` | M | low |
+| Fallible JSON decoding as values across protocol boundaries | `runtime/protocols/` | M | low |
+| Heartbeat under commitment queues + teardown ordering | `runtime/event_bus.py`, `runtime/protocols/` | M | med |
+
+**License tiers (Round 7):**
+| Tier | Repos |
+|---|---|
+| **Permissive** | morluto/leantoken (MIT OR Apache-2.0), morluto/jacobian (MIT), morluto/flameox (MIT), morluto/gitcontribute (MIT), morluto/smokinggun (MIT), morluto/rea (MIT), reef (Apache-2.0), harnessgym (Apache-2.0), harbor (Apache-2.0), executor (MIT), qwen-code (Apache-2.0), hermes-agent (MIT), openclaw (MIT), repoprompt-ce (Apache-2.0), cordis (MIT), agentenv-framework (Apache-2.0), AgentENV (MIT), orca (MIT), Vibe-Trading (MIT), crabbox (MIT), gitcrawl (MIT), magpie (MIT), gstack (MIT), gbrain (MIT) |
+| **No license (do not reuse code)** | morluto/generate-social-preview, morluto/internalcot (unverified), deepseek-ai/awesome-deepseek-agent |
 
 **Round 6 index (12 deep + 26 triaged):** coqui-ai/TTS, chatterbox, Zonos, ChatTTS, moonshine, OmniVoice, voice-pro, PaddleSpeech, OpenBB, pyvideotrans, ebook2audiobook, OpenCreator — plus triage table above.
