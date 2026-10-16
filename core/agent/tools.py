@@ -53,19 +53,29 @@ class AgentToolExecutor:
         with cls._abandoned_lock:
             return len(cls._abandoned_tasks)
 
-    @staticmethod
-    def _run_with_cancel(handler, arguments: dict, cancel_event: threading.Event, tool_name: str):
+    @classmethod
+    def _run_with_cancel(cls, handler, arguments: dict, cancel_event: threading.Event,
+                         tool_name: str, key: str = ""):
         """Run a sync tool handler, checking the cancellation flag periodically.
 
         Cooperative tools (those with ``cooperative=True`` on the handler) may
         loop internally and check ``AgentToolExecutor.current_cancellation()``;
         this wrapper still enforces a final check so a cancelled call returns
-        early. Non-cooperative handlers run once — the outer ``asyncio.wait_for``
-        enforces the hard timeout and the thread is abandoned on expiry.
+        early. Non-cooperative handlers run once — the outer timeout envelope
+        enforces the hard boundary and the thread is abandoned on expiry.
+
+        The registration is popped here (thread-side) rather than by the
+        awaiting executor coroutine: on timeout the thread is still alive, and
+        its (now set) cancellation event must stay observable through
+        ``current_cancellation`` until the thread actually exits.
         """
-        if cancel_event.is_set():
-            return {"success": False, "error": "cancelled"}
-        return handler(arguments)
+        try:
+            if cancel_event.is_set():
+                return {"success": False, "error": "cancelled"}
+            return handler(arguments)
+        finally:
+            with cls._cancellations_lock:
+                cls._active_cancellations.pop(key, None)
 
     @classmethod
     def current_cancellation(cls, tool_call_id: str = "") -> threading.Event | None:
@@ -91,6 +101,7 @@ class AgentToolExecutor:
         mode: str = "",
         session_id: str = "",
         tool_call_id: str = "",
+        timeout_budget: float | None = None,
     ) -> ToolResult:
         tool = self.registry.get(name)
         key = tool_call_id or f"{name}:{trace_id}"
@@ -118,15 +129,26 @@ class AgentToolExecutor:
                 cancel_event = threading.Event()
                 with self._cancellations_lock:
                     self._active_cancellations[key] = cancel_event
-                # Inner thread safety margin: up to 5s under the service timeout
-                # so the outer asyncio.wait_for (ToolExecutionService) fires first.
-                inner_timeout = max(0.5, float(getattr(tool, "timeout_seconds", 60.0)) - 5.0)
+                # Inner thread margin: up to 5s under the granted backend
+                # budget (itself the wall deadline minus delivery/teardown
+                # leases, see ToolExecutionService), so the executor surfaces
+                # its own classified timeout before the outer wall fires.
+                base_timeout = (
+                    timeout_budget if timeout_budget is not None
+                    else float(getattr(tool, "timeout_seconds", 60.0))
+                )
+                inner_timeout = max(0.5, base_timeout - 5.0)
                 try:
                     raw = await asyncio.wait_for(
-                        asyncio.to_thread(self._run_with_cancel, tool.handler, arguments, cancel_event, name),
+                        asyncio.to_thread(self._run_with_cancel, tool.handler, arguments,
+                                          cancel_event, name, key),
                         timeout=inner_timeout,
                     )
                 except TimeoutError:
+                    # Signal cooperative cancellation before abandoning: the
+                    # event stays observable to the still-running thread (the
+                    # registration is popped thread-side on exit).
+                    cancel_event.set()
                     # Thread is still running — mark as abandoned
                     with self._abandoned_lock:
                         self._abandoned_tasks.add(name)
@@ -134,9 +156,6 @@ class AgentToolExecutor:
                         "Tool '%s' abandoned after timeout — background thread may still be running", name,
                     )
                     raise
-                finally:
-                    with self._cancellations_lock:
-                        self._active_cancellations.pop(key, None)
             duration_ms = (time.time() - start) * 1000
             result = self._normalize(raw, tool.name, duration_ms)
 

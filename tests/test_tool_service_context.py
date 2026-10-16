@@ -15,7 +15,7 @@ import asyncio
 
 import pytest
 
-from core.agent.tool_service import ToolExecutionService, _CURRENT_SESSION
+from core.agent.tool_service import _CURRENT_SESSION, ToolExecutionService
 from providers.types import ToolCall
 from tools.schema import Tool, ToolResult
 
@@ -46,7 +46,7 @@ class _StubExecutor:
         self.raise_exc: Exception | None = None
 
     async def execute(self, name, arguments, trace_id="", mode="agent",
-                      session_id="", tool_call_id=""):
+                      session_id="", tool_call_id="", timeout_budget=None):
         self.seen.append(session_id)
         if self.raise_exc is not None:
             raise self.raise_exc

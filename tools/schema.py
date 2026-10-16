@@ -34,6 +34,11 @@ class Tool:
     outcome depends on state/network), NON (re-running changes state again).
     ``concurrency``: "parallel" (safe to run concurrently) or "serialized"
     (must not run in parallel with other writes on the same resource).
+
+    ``source``: provenance of the tool. Empty for native tools; MCP-sourced
+    tools use ``"mcp:<server-name>"`` so the permission engine can enforce the
+    two-key MCP trust gate (trusted server + trusted workspace) before a
+    server's claimed read-only status is allowed to auto-approve.
     """
 
     name: str
@@ -50,6 +55,7 @@ class Tool:
     max_output_chars: int = 8000
     retry_semantics: str = "non_idempotent"
     concurrency: str = "parallel"
+    source: str = ""
 
     def to_openai(self) -> dict[str, Any]:
         """Serialize to an OpenAI-style function tool definition."""
@@ -77,6 +83,7 @@ class Tool:
             "max_output_chars": self.max_output_chars,
             "retry_semantics": self.retry_semantics,
             "concurrency": self.concurrency,
+            "source": self.source,
         }
 
 

@@ -29,6 +29,21 @@ from security.redaction import redact_sensitive
 
 logger = logging.getLogger("jarvis.tool_execution_service")
 
+# ── Timeout envelope (jacobian-style phase leases) ──────────────────────────
+# The wall deadline (tool.timeout_seconds) is split BEFORE execution: a
+# delivery lease and a teardown lease are reserved out of the wall, and the
+# executor is granted only the remainder as its backend budget. A timed-out
+# backend therefore still has reserved time to set its cancellation signal,
+# log abandonment, and surface a classified result instead of being killed
+# mid-delivery by the outer wall.
+_TIMEOUT_OWNER_BACKEND = "backend_timeout"
+_TIMEOUT_OWNER_WALL = "operation_wall"
+_DELIVERY_BASE_S = 0.02            # fixed delivery lease
+_DELIVERY_BYTES_PER_S = 20_000_000  # calibrated delivery rate (bytes/s)
+_TEARDOWN_BASE_S = 0.02            # fixed teardown lease
+_TEARDOWN_WALL_FRACTION = 0.02     # teardown scales with the wall...
+_TEARDOWN_MAX_S = 1.0              # ...bounded so long tools keep their budget
+
 # Task-local session identity. A shared ToolExecutionService can serve several
 # sessions concurrently; storing the session on ``self`` races. The contextvar
 # is copied per asyncio task, so a call's session (and any internal call it
@@ -230,31 +245,42 @@ class ToolExecutionService:
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
 
-        # Execute (with a per-tool timeout from declarative metadata)
-        _tool_timeout = max(1.0, float(getattr(tool, "timeout_seconds", 60.0)))
+        # Execute with the timeout envelope: the wall deadline minus the
+        # delivery/teardown leases is granted to the executor as its backend
+        # budget. The outer asyncio.timeout is the hard bound; its expiry is
+        # attributed as OPERATION_WALL, while a TimeoutError raised from inside
+        # the executor (its own inner timeout) is a BACKEND_TIMEOUT.
+        wall, budget, reserves = self._timeout_envelope(tool)
+        timeout_cm = asyncio.timeout(wall)
         try:
-            result = await asyncio.wait_for(
-                self._executor.execute(
+            async with timeout_cm:
+                result = await self._executor.execute(
                     call.name, call.arguments, trace_id,
                     mode=self._mode, session_id=session_id, tool_call_id=call.id,
-                ),
-                timeout=_tool_timeout,
-            )
+                    timeout_budget=budget,
+                )
         except TimeoutError:
-            error = f"Tool '{call.name}' timed out after {_tool_timeout:.0f}s"
-            # Signal cancellation to the background thread (cooperative tools check this)
-            cancel_event = self._executor._active_cancellations.get(call.name)
+            owner = (_TIMEOUT_OWNER_WALL if timeout_cm.expired()
+                     else _TIMEOUT_OWNER_BACKEND)
+            error = f"Tool '{call.name}' timed out after {wall:.0f}s ({owner})"
+            # Signal cancellation to the background thread (cooperative tools
+            # check this). Keyed exactly like the executor registers it so the
+            # live event is actually found (a leftover thread also observes a
+            # backend-set event even after the service call returns).
+            cancel_event = self._executor._active_cancellations.get(
+                call.id or f"{call.name}:{trace_id}"
+            )
             if cancel_event is not None:
                 cancel_event.set()
             # Log abandoned task for monitoring
             abandoned = self._executor.abandoned_count()
             logger.warning(
-                "Tool '%s' timed out — background thread abandoned (%d total abandoned)",
-                call.name, abandoned + 1,
+                "Tool '%s' timed out (%s) — background thread abandoned (%d total abandoned)",
+                call.name, owner, abandoned + 1,
             )
             self._emit("tool.failed", {"tool": call.name, "error": error}, trace_id, session_id)
             if step is not None:
-                self._observer.step_finished(step, "error", _tool_timeout * 1000, error)
+                self._observer.step_finished(step, "error", wall * 1000, error)
             if append_to_messages is not None:
                 append_to_messages.append({
                     "role": "tool", "tool_call_id": call.id, "name": call.name,
@@ -263,6 +289,12 @@ class ToolExecutionService:
             return ToolExecutionResult(
                 tool_name=call.name, call_id=call.id, error=error,
                 failure_class=FailureClass.TIMEOUT,
+                metadata={
+                    "timeout_owner": owner,
+                    "timeout_wall_s": round(wall, 4),
+                    "timeout_budget_s": round(budget, 4),
+                    **reserves,
+                },
                 duration_ms=(time.perf_counter() - start) * 1000,
             )
         duration_ms = result.metadata.get("duration_ms", 0.0)
@@ -365,6 +397,29 @@ class ToolExecutionService:
                     "name": res.tool_name, "content": content,
                 })
         return list(results)
+
+    @staticmethod
+    def _timeout_envelope(tool) -> tuple[float, float, dict[str, float]]:
+        """Split the wall deadline into reserves + backend budget.
+
+        Returns ``(wall, budget, reserves)`` where ``wall`` honours the tool's
+        declared ``timeout_seconds`` (floor 1s, as before), the delivery lease
+        scales with the tool's bounded output size (``max_output_chars``, ×4
+        for the utf-8 worst case) at the calibrated rate, and the teardown
+        lease scales with the wall (bounded). ``budget`` is what the executor
+        is allowed to spend — strictly less than ``wall``.
+        """
+        wall = max(1.0, float(getattr(tool, "timeout_seconds", 60.0)))
+        expected_bytes = max(1, int(getattr(tool, "max_output_chars", 8000))) * 4
+        delivery = _DELIVERY_BASE_S + expected_bytes / _DELIVERY_BYTES_PER_S
+        teardown = _TEARDOWN_BASE_S + min(
+            _TEARDOWN_MAX_S, wall * _TEARDOWN_WALL_FRACTION,
+        )
+        budget = max(0.05, wall - delivery - teardown)
+        return wall, budget, {
+            "delivery_reserve_s": round(delivery, 4),
+            "teardown_reserve_s": round(teardown, 4),
+        }
 
     def _max_concurrency(self) -> int:
         """Concurrency cap for parallel tool execution from the security policy."""

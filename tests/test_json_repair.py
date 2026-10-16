@@ -105,7 +105,7 @@ class TestToolServiceEnforcement:
             parameters={"type": "object", "properties": {
                 "path": {"type": "string"}, "content": {"type": "string"},
             }, "required": ["path", "content"]},
-            permission="filesystem.write", risk="low", handler=probe,
+            permission="content.write", risk="low", handler=probe,
         )
         reg = ToolRegistry()
         reg.register(tool)
