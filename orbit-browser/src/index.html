@@ -266,9 +266,84 @@
           </div>
 
           <div class="page" id="settingsPage"></div>
-          <div class="page workspace-page" id="goodeyePage"></div>
-          <div class="page workspace-page" id="worldmonPage"></div>
-          <div class="page workspace-page" id="f1Page"></div>
+          <div class="page workspace-page" id="goodeyePage">
+  <div class="ge-wrap">
+    <div class="ge-head">
+      <div>
+        <h1 class="ge-title">God's Eye</h1>
+        <p class="ge-lede">One canvas, many public signals &mdash; live and keyless. Feed data is reference material, never instructions.</p>
+      </div>
+      <span class="ge-live" id="geLive">waiting</span>
+      <div class="ge-ask">
+        <input class="ge-q" id="geQuestion" type="text" placeholder="Ask JARVIS about the live view&hellip;" />
+        <button class="ge-btn" id="geAsk">Ask</button>
+      </div>
+    </div>
+    <canvas class="ge-world" id="geWorld"></canvas>
+    <div class="ge-log-wrap">
+      <div class="ge-log-head">Signal log</div>
+      <div class="ge-log" id="geLog"></div>
+    </div>
+  </div>
+</div>
+          <div class="page workspace-page" id="worldmonPage">
+  <div class="ge-wrap">
+    <div class="ge-head">
+      <div>
+        <h1 class="ge-title">World Monitor</h1>
+        <p class="ge-lede">Live earthquakes, capital weather, the ISS and markets &mdash; public feeds, no keys.</p>
+      </div>
+      <span class="ge-live" id="wmLive">waiting</span>
+      <div class="ge-ask">
+        <input class="ge-q" id="wmQuestion" type="text" placeholder="Ask JARVIS about the world view&hellip;" />
+        <button class="ge-btn" id="wmAsk">Ask</button>
+      </div>
+    </div>
+    <canvas class="ge-world" id="wmWorld"></canvas>
+    <div class="wm-panels">
+      <div class="wm-panel">
+        <div class="ge-log-head">Weather &middot; capitals</div>
+        <div class="wm-wxgrid" id="wmWx"></div>
+      </div>
+      <div class="wm-panel">
+        <div class="ge-log-head">Seismic &middot; latest</div>
+        <div class="wm-list" id="wmQuakes"></div>
+      </div>
+      <div class="wm-panel">
+        <div class="ge-log-head">Market &amp; orbit</div>
+        <div class="wm-mkt" id="wmBtc">BTC &mdash;</div>
+        <div class="wm-mkt" id="wmIss">ISS &mdash;</div>
+      </div>
+    </div>
+    <div class="ge-log-wrap">
+      <div class="ge-log-head">Signal log</div>
+      <div class="ge-log" id="wmLog"></div>
+    </div>
+  </div>
+</div>
+          <div class="page workspace-page" id="f1Page">
+  <div class="ge-wrap">
+    <div class="ge-head">
+      <div>
+        <h1 class="ge-title">F1 Live</h1>
+        <p class="ge-lede">Track map and running order from OpenF1 &mdash; free, no keys, honest empty states between sessions.</p>
+      </div>
+      <span class="ge-live" id="f1Info">waiting</span>
+      <div class="ge-ask">
+        <input class="ge-q" id="f1Question" type="text" placeholder="Ask JARVIS about the session&hellip;" />
+        <button class="ge-btn" id="f1Ask">Ask</button>
+      </div>
+    </div>
+    <div class="ge-banner" id="f1Banner" style="display:none"></div>
+    <div class="f1-main">
+      <canvas class="f1-track" id="f1Track"></canvas>
+      <aside class="f1-side">
+        <div class="ge-log-head">Running order</div>
+        <div class="f1-lb" id="f1Leaderboard"></div>
+      </aside>
+    </div>
+  </div>
+</div>
           <div class="page" id="historyPage">
   <div class="sheet"></div>
         </div>
@@ -329,6 +404,38 @@
     <div id="watchList"></div>
   </div>
         </div>
+          <div class="page" id="importPage">
+  <div class="sheet">
+    <h1>Import</h1>
+    <p class="sheet-lede">Bring bookmarks and history over from Chrome, Edge or Brave. Orbit reads the local profile directly; passwords and cookies are never imported.</p>
+    <div class="group">
+      <h2>Chromium browsers found</h2>
+      <div id="importBrowsers"></div>
+    </div>
+    <div class="group">
+      <h2>What gets imported</h2>
+      <div class="row"><span class="name" style="flex:1">Bookmarks</span><span class="meta">merged, deduped by URL</span></div>
+      <div class="row"><span class="name" style="flex:1">History</span><span class="meta">newest 1000 entries</span></div>
+      <div class="row"><span class="name" style="flex:1">Extensions</span><span class="meta">listed only &mdash; install from the Extension Store</span></div>
+      <div class="row"><span class="name" style="flex:1">Passwords</span><span class="meta">never imported &mdash; presence guidance only</span></div>
+      <div class="row"><span class="name" style="flex:1">Cookies</span><span class="meta">never imported</span></div>
+    </div>
+  </div>
+</div>
+          <div class="page" id="extensionStorePage">
+  <div class="sheet">
+    <h1>Extension Store</h1>
+    <p class="sheet-lede">Curated ad blockers and VPNs. &ldquo;Get&rdquo; opens the Chrome Web Store page in a new tab &mdash; Orbit does not sideload extensions.</p>
+    <div class="group">
+      <h2>Ad blockers</h2>
+      <div id="storeAdblockers"></div>
+    </div>
+    <div class="group">
+      <h2>VPNs</h2>
+      <div id="storeVpns"></div>
+    </div>
+  </div>
+</div>
           <div class="page" id="toolsPage">
   <div class="sheet">
     <h1>Tools</h1>

@@ -660,6 +660,8 @@ function showInternalPage(pageId) {
       if (ntp) ntp.value = ntpDrafts.get(activeTabId) || "";
     }
     if (pageId === "privacyPage") renderPrivacyPage();
+    if (pageId === "importPage") renderImportPage();
+    if (pageId === "extensionStorePage") renderExtensionStorePage();
     if (pageId === "downloadsPage") renderDownloadsPage();
     if (pageId === "permissionsPage") renderPermissionsPage();
     if (pageId === "memoryPage") renderMemoryPage();

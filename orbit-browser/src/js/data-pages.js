@@ -258,3 +258,138 @@ function renderBookmarksPage() {
     r.addEventListener("click", () => navigateTo(r.dataset.url));
   });
 }
+
+// ── Import (orbit://import) ─────────────────────────────────────
+function renderImportPage() {
+  var host = document.getElementById('importBrowsers');
+  if (!host) return;
+  var api = window.orbit && window.orbit.chrome;
+  if (!api || typeof api.detect !== 'function') {
+    host.innerHTML = '<div class="empty-state">Import runs in the desktop app \u2014 the bridge is not available here.</div>';
+    return;
+  }
+  host.innerHTML = '<div class="empty-state">Scanning for Chromium profiles\u2026</div>';
+  Promise.resolve()
+    .then(function () { return api.detect(); })
+    .then(function (found) {
+      if (!Array.isArray(found) || !found.length) {
+        host.innerHTML = '<div class="empty-state">No Chromium profiles found (Chrome, Edge, Brave).</div>';
+        return;
+      }
+      var html = '';
+      found.forEach(function (b) {
+        (b.profiles || []).forEach(function (p) {
+          html += '<div class="row"><div style="flex:1;min-width:0"><div class="name">' + escapeHtml(b.browser || 'Chromium') +
+            '</div><div class="sub">' + escapeHtml(p.name || 'Default') + '</div></div>' +
+            '<button class="chip-btn import-go" data-path="' + escapeHtml(p.path || '') + '">Import</button></div>';
+        });
+      });
+      host.innerHTML = html || '<div class="empty-state">No importable profiles found.</div>';
+    })
+    .catch(function (e) {
+      host.innerHTML = '<div class="empty-state">Scan failed: ' + escapeHtml(String(e)) + '</div>';
+    });
+  if (!host.dataset.wired) {
+    host.dataset.wired = '1';
+    host.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.import-go') : null;
+      if (!btn || btn.disabled) return;
+      var path = btn.getAttribute('data-path') || '';
+      btn.disabled = true;
+      btn.textContent = 'Importing\u2026';
+      Promise.resolve()
+        .then(function () { return window.orbit.chrome.import(path); })
+        .then(function (r) {
+          var bm = (r && r.bookmarks) || [];
+          var hist = (r && r.history) || [];
+          var haveBm = {};
+          bookmarks.forEach(function (b) { haveBm[b.url] = 1; });
+          var addedBm = 0;
+          bm.forEach(function (b) {
+            if (!b.url || haveBm[b.url]) return;
+            haveBm[b.url] = 1;
+            bookmarks.push({ title: b.title || b.url, url: b.url });
+            addedBm++;
+          });
+          if (addedBm) {
+            localStorage.setItem('orbit-bookmarks', JSON.stringify(bookmarks));
+            if (typeof renderBookmarkBar === 'function') renderBookmarkBar();
+          }
+          var oldHist = [];
+          try { oldHist = JSON.parse(localStorage.getItem('orbit-history') || '[]'); } catch (_) {}
+          var haveH = {};
+          oldHist.forEach(function (h) { haveH[h.url] = 1; });
+          var fresh = [];
+          hist.forEach(function (h) {
+            if (!h.url || haveH[h.url]) return;
+            haveH[h.url] = 1;
+            fresh.push({ title: h.title || h.url, url: h.url, ts: Date.parse(h.lastVisitTime) || Date.now() });
+          });
+          localStorage.setItem('orbit-history', JSON.stringify(fresh.concat(oldHist).slice(0, 1000)));
+          var s = (r && r.summary) || {};
+          showToast('ok', 'Import complete',
+            addedBm + ' bookmarks \u00b7 ' + fresh.length + ' history entries' +
+            (s.extensionCount ? ' \u00b7 ' + s.extensionCount + ' extensions listed' : '') +
+            ' \u00b7 passwords not imported');
+          btn.textContent = 'Imported';
+        })
+        .catch(function (e) {
+          btn.disabled = false;
+          btn.textContent = 'Import';
+          showToast('err', 'Import failed', String(e && e.message || e));
+        });
+    });
+  }
+}
+
+// ── Extension Store (orbit://extension-store) ───────────────────
+function renderExtensionStorePage() {
+  var adHost = document.getElementById('storeAdblockers');
+  var vpnHost = document.getElementById('storeVpns');
+  if (!adHost || !vpnHost) return;
+  var api = window.orbit && window.orbit.extensions;
+  if (!api || typeof api.list !== 'function') {
+    adHost.innerHTML = '<div class="empty-state">The Extension Store runs in the desktop app \u2014 the bridge is not available here.</div>';
+    vpnHost.innerHTML = '';
+    return;
+  }
+  function rows(list) {
+    if (!Array.isArray(list) || !list.length) return '<div class="empty-state">Nothing to show.</div>';
+    var html = '';
+    list.forEach(function (ext) {
+      html += '<div class="row"><div style="flex:1;min-width:0"><div class="name">' +
+        escapeHtml((ext.icon ? ext.icon + ' ' : '') + (ext.name || ext.key || 'Extension')) +
+        '</div><div class="sub">' + escapeHtml(ext.description || '') + '</div></div>' +
+        (ext.free ? '<span class="chip ok">Free</span>' : '') +
+        '<button class="chip-btn store-get" data-key="' + escapeHtml(ext.key || '') + '">Get</button></div>';
+    });
+    return html;
+  }
+  Promise.all([api.adblockers(), api.vpn()])
+    .then(function (res) {
+      adHost.innerHTML = rows(res[0]);
+      vpnHost.innerHTML = rows(res[1]);
+    })
+    .catch(function (e) {
+      adHost.innerHTML = '<div class="empty-state">Store failed to load: ' + escapeHtml(String(e)) + '</div>';
+    });
+  function wire(host) {
+    if (host.dataset.wired) return;
+    host.dataset.wired = '1';
+    host.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.store-get') : null;
+      if (!btn) return;
+      var key = btn.getAttribute('data-key') || '';
+      Promise.resolve()
+        .then(function () { return window.orbit.extensions.install(key); })
+        .then(function (r) {
+          if (r && r.ok) showToast('ok', 'Chrome Web Store', 'Opening the store page in a new tab');
+          else showToast('err', 'Install failed', (r && r.error) || 'Unknown error');
+        })
+        .catch(function (e) { showToast('err', 'Install failed', String(e && e.message || e)); });
+    });
+  }
+  wire(adHost);
+  wire(vpnHost);
+}
+
