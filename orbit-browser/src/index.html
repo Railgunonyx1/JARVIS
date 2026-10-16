@@ -268,16 +268,92 @@
           <div class="page workspace-page" id="goodeyePage"></div>
           <div class="page workspace-page" id="worldmonPage"></div>
           <div class="page workspace-page" id="f1Page"></div>
-          <div class="page" id="historyPage"></div>
-          <div class="page" id="bookmarksPage"></div>
-          <div class="page" id="downloadsPage"></div>
-          <div class="page" id="tasksPage"></div>
-          <div class="page" id="permissionsPage"></div>
-          <div class="page" id="memoryPage"></div>
-          <div class="page" id="extensionsPage"></div>
-          <div class="page" id="watchPage"></div>
+          <div class="page" id="historyPage">
+  <div class="sheet"></div>
+        </div>
+          <div class="page" id="bookmarksPage">
+  <div class="sheet"></div>
+        </div>
+          <div class="page" id="downloadsPage">
+  <div class="sheet">
+    <h1>Downloads</h1>
+    <p class="sheet-lede">Files downloaded in this profile.</p>
+    <div class="group"></div>
+  </div>
+        </div>
+          <div class="page" id="tasksPage">
+  <div class="sheet">
+    <h1>Tasks</h1>
+    <p class="sheet-lede">Autonomous browsing tasks run by your JARVIS companions.</p>
+    <div class="group" id="tasksList"></div>
+  </div>
+        </div>
+          <div class="page" id="permissionsPage">
+  <div class="sheet">
+    <h1>Permissions</h1>
+    <p class="sheet-lede">Sites must ask, and you approve via the omnibox lock icon.</p>
+    <div class="group" id="permissionsList"></div>
+  </div>
+        </div>
+          <div class="page" id="memoryPage">
+  <div class="sheet">
+    <h1>Memory</h1>
+    <p class="sheet-lede">Facts JARVIS keeps across sessions.</p>
+    <div class="group">
+      <div class="row">
+        <input type="text" class="chat-search" id="memoryInput" placeholder="Remember something…" style="flex:1" />
+        <button class="chip-btn" id="memorySaveBtn">Save</button>
+      </div>
+    </div>
+    <div class="group" id="memoryList"></div>
+  </div>
+        </div>
+          <div class="page" id="extensionsPage">
+  <div class="sheet">
+    <h1>Extensions</h1>
+    <p class="sheet-lede">Built-in intelligence and installed modules.</p>
+    <div class="group" id="extensionsList"></div>
+  </div>
+        </div>
+          <div class="page" id="watchPage">
+  <div class="sheet">
+    <h1>Watch</h1>
+    <p class="sheet-lede">Monitor pages for changes; JARVIS re-checks them and reports diffs.</p>
+    <div class="watch-controls">
+      <input type="text" id="watchNewUrl" placeholder="https://example.com/page" />
+      <button class="tool-btn" id="watchArmBtn">Arm</button>
+      <button class="tool-btn" id="watchRefreshBtn">Refresh</button>
+    </div>
+    <div class="empty-state" id="watchEmpty" style="display:none">No watched pages. Arm a URL to start monitoring.</div>
+    <div id="watchList"></div>
+  </div>
+        </div>
           <div class="page" id="toolsPage"></div>
-          <div class="page" id="diagnosticsPage"></div>
+          <div class="page" id="diagnosticsPage">
+  <div class="sheet">
+    <h1>Diagnostics</h1>
+    <p class="sheet-lede">Live subsystem status for this browser.</p>
+    <div class="group"><h2>JARVIS bridge</h2>
+      <div class="row"><div style="flex:1"><div class="name">Kernel bridge</div><div class="sub">DSH connection to the JARVIS kernel</div></div><span class="chip" id="diagDsh">…</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Provider backend</div><div class="sub">Model gateway the kernel routes through</div></div><span class="chip" id="diagBackend">…</span></div>
+    </div>
+    <div class="group"><h2>Performance</h2>
+      <div class="row"><div style="flex:1"><div class="name">Efficiency mode</div></div><span class="chip" id="diagEfficiency">…</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Frozen tabs</div></div><span class="meta" id="diagFrozen">None</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Memory (guests)</div></div><span class="meta" id="diagMem">Measuring…</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Sleeping tabs</div></div><span class="meta" id="diagSleeping">None</span></div>
+    </div>
+    <div class="group"><h2>Errors</h2>
+      <div class="row"><div style="flex:1"><div class="name">Total events</div></div><span class="meta" id="diagErrorCount">0</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Errors</div></div><span class="meta" id="diagErrorTotal">0</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Warnings</div></div><span class="meta" id="diagWarnTotal">0</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Main-process log</div></div><span class="meta" id="diagMainErrors">0</span></div>
+      <div class="row"><div style="flex:1"><div class="name">Last error</div><div class="sub" id="diagLastError">None</div></div></div>
+      <div class="row"><button class="chip-btn" id="diagViewErrors">View Log</button><button class="chip-btn" id="diagExportErrors">Export</button><button class="chip-btn" id="diagClearErrors">Clear</button></div>
+    </div>
+    <div class="group" id="diagErrorList" style="display:none"></div>
+  </div>
+        </div>
           <div class="page" id="securityPage"></div>
           <div class="page" id="privacyPage"></div>
         </div>
