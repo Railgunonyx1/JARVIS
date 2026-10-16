@@ -18,7 +18,15 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from benchmark.receipts import (
+    EvidenceReceipt,
+    ReceiptConflict,
+    load_receipt,
+    verify_receipt,
+)
 
 logger = logging.getLogger("jarvis.verification")
 
@@ -219,3 +227,69 @@ class VerificationEngine:
                 summary=f"{step.name} error: {str(e)[:200]}",
                 duration_ms=duration_ms,
             )
+
+
+EVIDENCE_STEP_NAME = "optimization_evidence"
+
+
+def verify_optimization_evidence(receipt: EvidenceReceipt | str | Path,
+                                 min_improvement: float = 0.0) -> VerificationResult:
+    """Post-execution gate for optimization claims (flameox receipt rule).
+
+    An optimization claim must carry a sealed receipt tying it to a hotspot
+    and a measured before/after delta.  Missing, tampered, refuted, or
+    below-threshold evidence fails the step with bounded recovery context;
+    a supported receipt passes and reports the measured improvement.
+    """
+    start = time.perf_counter()
+
+    def _fail(error: str, summary: str) -> VerificationResult:
+        return VerificationResult(
+            step_name=EVIDENCE_STEP_NAME, passed=False, exit_code=1,
+            error=error[:500], summary=summary[:300],
+            duration_ms=(time.perf_counter() - start) * 1000,
+        )
+
+    if isinstance(receipt, (str, Path)):
+        try:
+            loaded = load_receipt(receipt)
+        except FileNotFoundError:
+            return _fail(
+                f"no evidence receipt at {receipt}",
+                f"{EVIDENCE_STEP_NAME}: no evidence receipt at {receipt} — "
+                "optimization claims require hotspot -> measured delta -> receipt",
+            )
+        except ReceiptConflict as exc:
+            return _fail(f"receipt integrity failure: {exc}",
+                         f"{EVIDENCE_STEP_NAME}: receipt integrity failure — {exc}")
+        except (OSError, ValueError) as exc:
+            return _fail(f"unreadable receipt: {exc}",
+                         f"{EVIDENCE_STEP_NAME}: unreadable receipt — {exc}")
+    else:
+        loaded = receipt
+        try:
+            verify_receipt(loaded)
+        except ReceiptConflict as exc:
+            return _fail(f"receipt integrity failure: {exc}",
+                         f"{EVIDENCE_STEP_NAME}: receipt integrity failure — {exc}")
+
+    if loaded.verdict != "supported":
+        detail = (f"hotspot {loaded.hotspot} verdict={loaded.verdict} "
+                  f"improvement={loaded.improvement:+.2%} ratio={loaded.ratio:.3f} "
+                  f"receipt={loaded.receipt_id}")
+        return _fail(detail, f"{EVIDENCE_STEP_NAME}: optimization {loaded.verdict} — {detail}")
+
+    if loaded.improvement < min_improvement:
+        detail = (f"hotspot {loaded.hotspot} improvement {loaded.improvement:.2%} below "
+                  f"required {min_improvement:.2%} (receipt={loaded.receipt_id})")
+        return _fail(detail, f"{EVIDENCE_STEP_NAME}: {detail}")
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    summary = (f"{EVIDENCE_STEP_NAME}: hotspot {loaded.hotspot} improved "
+               f"{loaded.improvement:.2%} (ratio {loaded.ratio:.3f}, "
+               f"n={loaded.baseline.n}->{loaded.candidate.n}); "
+               "association, not causal proof")
+    return VerificationResult(
+        step_name=EVIDENCE_STEP_NAME, passed=True, exit_code=0,
+        summary=summary, duration_ms=duration_ms,
+    )
