@@ -37,7 +37,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | 17 | MCP read-only auto-approval trust enforcement + permission path canonicalization (symlink/`..`) | `runtime/protocols/`, `core/agent/permissions.py` | M | low | **Done** — canonical-path gate + two-key MCP trust (`bd2d310`) |
 | 18 | Credential-pool failover + provider auto-detection | `providers/model_gateway.py` | M | med | pending |
 | 19 | Retry-safe settlement + post-compaction record-conflict detection | `memory/*`, `core/agent/tool_service.py` | M | med | pending |
-| 20 | Subagent registry resurrection prevention + heartbeat under commitment queues | `core/agent/state.py`, `runtime/event_bus.py` | S | low | pending |
+| 20 | Subagent registry resurrection prevention + heartbeat under commitment queues | `core/agent/state.py`, `runtime/event_bus.py` | S | low | **Done** — `core/agent/subagent_registry.py` + `heartbeat.py` |
 | 21 | Token-budgeted code retrieval tool (tree-sitter, counted budgets) via MCP | `core/harness/*` | M | low | pending |
 | 22 | Timeout envelope: phase leases + BACKEND/WALL attribution + cancellation propagation (jacobian) | `core/agent/tool_service.py`, `core/agent/tools.py` | S | low | **Done** (`bd2d310`) |
 
