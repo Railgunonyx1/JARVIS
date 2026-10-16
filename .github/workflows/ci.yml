@@ -57,6 +57,8 @@ jobs:
         run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_benchmark.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_executor_e2e.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g8_vertical_slice.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
       - name: Orbit latency gate (P50/P95/P99)
         run: python -m benchmark.orbit_timing
+      - name: Normalized performance ledger
+        run: python -m benchmark.ledger
       - name: Performance gate (offline; CI mode)
         run: python -m benchmark.gate --baseline benchmark/baseline.json --ci
       - name: Upload benchmark results
