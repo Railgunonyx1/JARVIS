@@ -219,18 +219,18 @@ window.addEventListener('unhandledrejection', (e) => {
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-const tabStrip = $("#tabStrip");
+const tabStrip = $("#tabStrip") || $("#tabList");
 const newTabBtn = $("#newTabBtn");
 const webview = $("#webview");
-const contentArea = $("#contentArea");
+const contentArea = $("#contentArea") || $("#content");
 const internalPages = $("#internalPages");
 const newtabPage = $("#newtabPage");
-const omnibox = $("#omnibox");
-const omniInput = $("#omniInput");
+const omnibox = $("#omnibox") || document.createElement("input");
+const omniInput = $("#omniInput") || document.createElement("input");
 const backBtn = $("#backBtn");
 const forwardBtn = $("#forwardBtn");
 const reloadBtn = $("#reloadBtn");
-const jarvisBtn = $("#jarvisBtn");
+const jarvisBtn = $("#jarvisBtn") || $("#aiTrigger");
 const sidebar = $("#sidebar");
 const sbClose = $("#sbClose");
 const sbBody = $("#sbBody");

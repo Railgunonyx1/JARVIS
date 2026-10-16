@@ -470,3 +470,15 @@
 /* The unified toolbar owns navigation; the legacy floating nav group
    (#backBtn2/#forwardBtn2/#reloadBtn2) duplicates it. */
 .nav-controls { display: none; }
+
+/* Window caption controls — pinned out of the .browser flex flow. Left in
+   flow they stretch (align-items:stretch + height:100%) and steal the whole
+   column height, collapsing .app to ~300px. */
+.win-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 44px;
+  z-index: 60;
+}
+.toolbar-end { margin-right: 146px; }

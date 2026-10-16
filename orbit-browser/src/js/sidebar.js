@@ -133,7 +133,7 @@ function updateJarvisStatusUI(online) {
   jarvisBtn.title = online ? 'JARVIS online — click to toggle sidebar' : 'Start JARVIS';
 }
 
-sbClose.addEventListener("click", () => {
+on(sbClose, "click", () => {
   sidebarOpen = false;
   try { localStorage.setItem("orbit-sidebar-open", "0"); } catch (_) {}
   sidebar.classList.add("hidden");

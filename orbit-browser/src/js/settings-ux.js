@@ -188,13 +188,6 @@ document.addEventListener("keydown", (e) => {
     activateTab(ids[next]);
     return;
   }
-    e.preventDefault();
-    const ids = Array.from(tabs.keys());
-    const idx = ids.indexOf(activeTabId);
-    const next = shift ? (idx - 1 + ids.length) % ids.length : (idx + 1) % ids.length;
-    activateTab(ids[next]);
-    return;
-  }
   // Ctrl+=/-/0: Zoom
   if (ctrl && (e.key === "=" || e.key === "+")) { e.preventDefault(); zoomIn(); return; }
   if (ctrl && e.key === "-") { e.preventDefault(); zoomOut(); return; }
