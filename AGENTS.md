@@ -226,7 +226,9 @@ Priority B:
 ```
 
 Research runs in parallel but cannot destabilize the active sprint.
-See `jarvis-research-tags.md` for full analysis.
+See `jarvis-research-tags.md` for full analysis. Full roster:
+`jarvis-research-roster.md` (4,828 repos collected / 2,089 listed, top picks
+annotated). Regenerate: `python3 scripts/research_roster.py` (~11 min, 71 queries, no auth).
 
 ## Windows Notes
 

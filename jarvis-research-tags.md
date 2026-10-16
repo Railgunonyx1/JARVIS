@@ -413,3 +413,77 @@ local-first + low-RAM invariants.
 4. **Reference only:** OpenWork `ee/` Den control plane, OpenWorker governance loop, Rowboat internals, TUIOS code (Go), Kronos internals, Nanocoder internals.
 
 ---
+
+## Research Round 4 (2026-10-16) — 1000-Repo Sweep
+
+Full roster: `jarvis-research-roster.md` (3,272 repos collected via 46 GitHub Search API queries; 1,345 listed with stars/license/last-push; top picks annotated in-file). Regenerate: `python3 scripts/research_roster.py`. Highlights promoted from the sweep:
+
+| Project | URL | What it is | Stack / License | Verdict for JARVIS |
+|---------|-----|------------|-----------------|--------------------|
+| ECC (affaan-m) | github.com/affaan-m/ECC | "Agent harness performance optimization system — skills, instincts, memory, security, research-first development" | JS / MIT (281k★) | **HIGH (study).** Public analog of the harness brief: mine skills/instinct triggering + security loop against `core/harness`. |
+| DeepSeek Harness | github.com/deepseek-ai/deepseek-harness | "Everything is a Plugin" agent harness | TS / MIT (251k★) | **HIGH (pattern).** Plugin boundary design → harness extension seams without loop edits. |
+| hermes-agent (NousResearch) | github.com/NousResearch/hermes-agent | Self-growing agent ("the agent that grows with you") | Python / MIT (254k★) | **MEDIUM-HIGH.** Growth/write-back policies for `memory/authority.py`. |
+| claude-mem (thedotmack) | github.com/thedotmack/claude-mem | Captures agent sessions, AI-compresses them into persistent per-project context | (101k★) | **HIGH (pattern).** Session→compressed→authority-memory pipeline; merges with Round-2/3 memory work. |
+| graphify (Graphify-Labs) | github.com/Graphify-Labs/graphify | Codebase + docs + SQL + PDFs → queryable knowledge graph (skill) | (127k★) | **MEDIUM-HIGH.** Constellation-keyspace presentation (Rowboat family). |
+| OmniRoute (diegosouzapw) | github.com/diegosouzapw/OmniRoute | One endpoint / 359 providers (150+ free) / 1200+ models | MIT (77k★) | **MEDIUM.** Provider-registry + failover metadata for `providers/router.py`; pairs with Switchyard routing. |
+| cc-switch (farion1231) | github.com/farion1231/cc-switch | Desktop all-in-one switcher across Claude Code/Codex/opencode/etc. | (145k★) | **MEDIUM (UX).** Provider/account switching pattern for the Orbit settings rail. |
+| playwright-mcp (microsoft) | github.com/microsoft/playwright-mcp | Canonical Playwright MCP server (browser tool schema) | TS / Apache-2.0 (38k★) | **MEDIUM-HIGH (interop).** Align `orbit.*` tool names/args so MCP clients drive Orbit via a familiar contract. |
+| ponytail (DietrichGebert) | github.com/DietrichGebert/ponytail | "Laziest senior dev" minimal-code skill | MIT (165k★) | **MEDIUM (candidate skill).** Matches repo ethos (minimal diffs); evaluate for bundled `skills/`. |
+| taste-skill (Leonxlnx) | github.com/Leonxlnx/taste-skill | Art-direction taste skill with browser check | (98k★) | **MEDIUM (candidate skill).** UI-quality layer for Orbit design tasks. |
+| Scrapling (D4Vinci) | github.com/D4Vinci/Scrapling | Adaptive scraping — selectors survive site changes | (88k★) | **MEDIUM (pattern).** Element-fingerprint resilience for `jbrowser/page_context.py`. |
+| crawl4ai (unclecode) | github.com/unclecode/crawl4ai | Any page → clean LLM-ready markdown | (86k★) | **MEDIUM (pattern).** Extraction reference for `browser.read`. |
+| daytona (daytonaio) | github.com/daytonaio/daytona | Secure elastic infra for running AI-generated code | NOASSERTION (72k★) | **MEDIUM (pattern).** Isolation model for `run_generated_code`; audit license before reuse. |
+| awesome-claude-skills (ComposioHQ) | github.com/ComposioHQ/awesome-claude-skills | Curated skill catalog | (77k★) | **MEDIUM (survey).** Format survey feeding `skills/` registry. |
+| Agent-Reach (Panniantong) | github.com/Panniantong/Agent-Reach | Agent "eyes" for social platforms (read/search across networks) | (98k★) | **LOW-MEDIUM (workspace idea).** Research-feed workspace on the goodeye pattern. |
+
+### Round-4 Takeaways
+
+1. Harness convergence: ECC, deepseek-harness, hermes-agent, learn-claude-code all converge on skills/plugins/instincts — validate Phase A seams (harness≠model, single tool boundary) against these public designs.
+2. Memory cluster (claude-mem, graphify, mem0, Rowboat) points one way: compress sessions → structured constellations; feed the `memory/authority.py` roadmap.
+3. Cheapest interop win: playwright-mcp schema alignment so external agents can drive Orbit with a familiar browser-tool contract.
+4. Candidate bundled skills: ponytail (minimal-code) + taste-skill (art direction) under the existing `skills/` format; MIT — verify per-repo license before bundling.
+5. Licensing care (patterns only, never code): firecrawl + warp (AGPL-3.0), uBlock (GPL-3.0), daytona (NOASSERTION).
+
+---
+
+
+## Research Round 5 (2026-10-16) — platform sweep (71 queries)
+
+Sweep: 46 → 71 queries (+25 categories: browsers, userscripts, archiving, RSS,
+chat UI/AI SDK, code intelligence/search, local-first, search engines, TTS, OCR,
+PDF, maps, viz, market data, awesome meta-lists, agentic AI, Claude Code /
+opencode ecosystems, MCP registries, self-hosted, structured output).
+Corpus: 3,272 → 4,828 collected / 2,089 listed. Top picks 29 → 47 borrow targets.
+
+| Project | Repo | What | License | Verdict |
+|---|---|---|---|---|
+| headroom (headroomlabs-ai) | github.com/headroomlabs-ai/headroom | Compress tool outputs/logs before the model (20–95% token cuts) | Apache-2.0 (76k★) | **HIGH (pattern).** Observation-compression stage before ModelGateway context assembly. |
+| changedetection.io (dgtlmoon) | github.com/dgtlmoon/changedetection.io | Website change detection + alerts | Apache-2.0 (35k★) | **HIGH (pattern).** Watch/diff model for Orbit rail watch + `orbit://worldmon`. |
+| codegraph (colbymchenry) | github.com/colbymchenry/codegraph | Pre-indexed code knowledge graph, auto-syncs on change | MIT (74k★) | **MEDIUM-HIGH.** Entity-granular code memory for agent perception. |
+| sem + weave (Ataraxy-Labs) | github.com/Ataraxy-Labs/sem · /weave | Entity-level diffs/blame; git merge driver (~95% fewer false conflicts) | Apache-2.0 | **MEDIUM-HIGH.** Fewer bogus merge conflicts when parallel agents edit one file. |
+| markitdown + docling | github.com/microsoft/markitdown · /docling-project/docling | Office/PDF → markdown/JSON for agents | MIT (190k★/69k★) | **MEDIUM-HIGH (pattern).** Document-ingest pipeline behind read/files. |
+| CLIProxyAPI (router-for-me) | github.com/router-for-me/CLIProxyAPI | Wrap agent CLIs as OpenAI/Gemini/Claude-compatible API | MIT (55k★) | **MEDIUM.** Protocol-adapter layer for gateway interop. |
+| claude-code-router (musistudio) | github.com/musistudio/claude-code-router | Local control plane routing across models | MIT (38k★) | **MEDIUM.** Per-task routing + fusion rules. |
+| hindsight (vectorize-io) | github.com/vectorize-io/hindsight | Agent memory that learns/consolidates | MIT (50k★) | **MEDIUM.** Consolidation pass over `memory/authority.py`. |
+| pdf-inspector + tesseract.js | github.com/firecrawl/pdf-inspector · /naptha/tesseract.js | Scanned-vs-text PDF routing; in-browser OCR | MIT/Apache-2.0 | **MEDIUM.** Tiered read routing + in-extension OCR fallback. |
+| json_repair (mangiucugna) | github.com/mangiucugna/json_repair | Repair malformed LLM JSON | MIT (5k★) | **MEDIUM.** MALFORMED_TOOL recovery hardening in tool-arg parsing. |
+| difftastic (Wilfred) | github.com/Wilfred/difftastic | Structural (syntax-aware) diff | MIT (26k★) | **MEDIUM.** Meaningful change summaries in VerificationEngine output. |
+| assistant-ui | github.com/assistant-ui/assistant-ui | React AI-chat component library | MIT (13k★) | **MEDIUM (UX).** Extension sidebar chat surface. |
+| obsidian-skills (kepano) | github.com/kepano/obsidian-skills | Agent skills for open formats (Markdown/Bases/JSON Canvas) | MIT (50k★) | **MEDIUM.** Format-handling skills for memory/notes files. |
+| piper + Kokoro-FastAPI | github.com/rhasspy/piper · /remsky/Kokoro-FastAPI | Local neural TTS | MIT/Apache-2.0 | **LOW-MEDIUM.** Opt-in local voice (Orbit speaker mode). |
+| orca / dsh-smooth-stream | github.com/stablyai/orca · /Laplace-bit/dsh-smooth-stream | Parallel-agent ADE; DSH streaming-UI plugin | MIT | **MIRROR.** Namesake twins of `orbit/` and “DeepSeek Harness” — UX comparison only. |
+
+### Round-5 Takeaways
+
+1. Token economics became its own layer in 2026 (headroom, rtk, dynamic context
+   pruning, jcodemunch): add an observation-compression point at the
+   AgentLoop → ModelGateway seam instead of shaving prompts ad hoc.
+2. Entity-level semantics (sem/weave/codegraph, tree-sitter) is how current
+   agents beat line-based git/blame — adopt entity-granular diffs and code
+   memory after Phase A freezes.
+3. Watch/diff (changedetection.io) is the missing primitive behind Orbit's rail
+   watch and `orbit://worldmon`; schedule as a `browser.*` capability when the
+   Orbit tool catalog next grows.
+4. Licensing held: all 20 new pick bullets are MIT/Apache-2.0; AGPL/GPL/
+   NOASSERTION finds (searxng, immich, karakeep, firecrawl, Stirling-PDF,
+   worldmonitor, SigNoz) remain patterns-only and are annotated as such.
