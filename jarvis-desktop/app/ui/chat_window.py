@@ -42,6 +42,7 @@ class ChatWindow(QMainWindow):
         self._recognizer: GestureRecognizer | None = None
         self._mapper: GestureMapper | None = None
         self._actions: DesktopActionLayer | None = None
+        self._workspace = None
         self._gesture_active = False
         self._init_ui()
         self._connect_signals()
@@ -129,6 +130,7 @@ class ChatWindow(QMainWindow):
         self.input_field.returnPressed.connect(self._on_send)
         self.mic_btn.clicked.connect(self._on_mic_toggle)
         self.gesture_btn.clicked.connect(self._on_gesture_toggle)
+        self.workspace_btn.clicked.connect(self._on_workspace_toggle)
         self.chunk_received.connect(self._append_chunk)
         self.response_received.connect(self._on_response)
         self.status_changed.connect(self._on_status)
@@ -261,6 +263,26 @@ class ChatWindow(QMainWindow):
             self._stop_gestures()
         else:
             self._start_gestures()
+
+    def _on_workspace_toggle(self) -> None:
+        """Toggle 3D workspace on/off."""
+        if not self._workspace:
+            self._init_workspace()
+        if self._workspace.is_visible:
+            self._workspace.hide()
+            self.workspace_btn.setChecked(False)
+            self.workspace_btn.setText("3D Workspace")
+        else:
+            self._workspace.show()
+            self.workspace_btn.setChecked(True)
+            self.workspace_btn.setText("Close 3D")
+
+    def _init_workspace(self) -> None:
+        """Initialize the 3D workspace."""
+        from app.workspace3d.workspace3d import Workspace3D
+        self._workspace = Workspace3D()
+        self._workspace.load()
+        self.workspace_btn.setEnabled(True)
 
     def _start_gestures(self) -> None:
         """Initialize and start the gesture pipeline."""
@@ -398,6 +420,8 @@ class ChatWindow(QMainWindow):
             self._stop_gestures()
         if self._voice:
             self._voice.stop_speaking()
+        if self._workspace:
+            self._workspace.shutdown()
         if self._backend:
             self._backend.stop()
         event.accept()
