@@ -1,0 +1,62 @@
+{
+  "app-id": "com.jarvis.desktop",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.6",
+  "sdk": "org.kde.Sdk",
+  "command": "jarvis-desktop",
+  "finish-args": [
+    "--device=dri",
+    "--device=all",
+    "--talk-name=org.freedesktop.Flatpak.DevicePortal",
+    "--socket=wayland",
+    "--socket=x11",
+    "--socket=session-dbus",
+    "--socket=fallback-dbus",
+    "--device=video0",
+    "--device=snd",
+    "--share=network",
+    "--persist=.jarvis-desktop"
+  ],
+  "build-options": {
+    "append-ld-library-path": "/app/lib"
+  },
+  "modules": [
+    {
+      "name": "jarvis-desktop",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -D app/main.py /app/lib/jarvis-desktop/app/main.py",
+        "install -D app/ui/chat_window.py /app/lib/jarvis-desktop/app/ui/chat_window.py",
+        "install -D app/integration/jarvis_backend.py /app/lib/jarvis-desktop/app/integration/jarvis_backend.py",
+        "install -D app/integration/coordinator.py /app/lib/jarvis-desktop/app/integration/coordinator.py",
+        "install -D app/voice/tts.py /app/lib/jarvis-desktop/app/voice/tts.py",
+        "install -D app/voice/stt.py /app/lib/jarvis-desktop/app/voice/stt.py",
+        "install -D app/voice/voice_manager.py /app/lib/jarvis-desktop/app/voice/voice_manager.py",
+        "install -D app/gestures/camera.py /app/lib/jarvis-desktop/app/gestures/camera.py",
+        "install -D app/gestures/tracking.py /app/lib/jarvis-desktop/app/gestures/tracking.py",
+        "install -D app/gestures/recognition.py /app/lib/jarvis-desktop/app/gestures/recognition.py",
+        "install -D app/gestures/mappings.py /app/lib/jarvis-desktop/app/gestures/mappings.py",
+        "install -D app/desktop/actions.py /app/lib/jarvis-desktop/app/desktop/actions.py",
+        "install -D app/workspace3d/workspace3d.py /app/lib/jarvis-desktop/app/workspace3d/workspace3d.py",
+        "install -D app/workspace3d/scene.qml /app/lib/jarvis-desktop/app/workspace3d/scene.qml",
+        "install -D app/diagnostics/monitor.py /app/lib/jarvis-desktop/app/diagnostics/monitor.py",
+        "install -D app/diagnostics/__init__.py /app/lib/jarvis-desktop/app/diagnostics/__init__.py",
+        "ln -s /app/lib/jarvis-desktop/app/main.py /app/bin/jarvis-desktop"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "app"
+        }
+      ]
+    },
+    {
+      "name": "pyside6",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip install --no-index --find-links=/app/pyside6-wheels PySide6"
+      ],
+      "sources": []
+    }
+  ]
+}

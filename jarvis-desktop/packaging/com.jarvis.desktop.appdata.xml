@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>com.jarvis.desktop</id>
+  <name>JARVIS Desktop Companion</name>
+  <summary>Lightweight AI desktop assistant</summary>
+  <description>
+    <p>A lightweight standalone desktop AI assistant for Bazzite Linux,
+    reusing the existing JARVIS agent core. Features chat, voice (STT/TTS),
+    hand-gesture control, controlled desktop actions, and an optional
+    3D holographic workspace.</p>
+    <p>Privacy-first: camera and microphone are off until explicitly
+    activated. No unrestricted shell execution from AI text.</p>
+  </description>
+  <developer>
+    <name>JARVIS Project</name>
+  </developer>
+  <launchable type="desktop-id">com.jarvis.desktop.desktop</launchable>
+  <url type="homepage">https://github.com/Railgunonyx1/JARVIS</url>
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+    <category>AI</category>
+  </categories>
+  <keywords>
+    <keyword>jarvis</keyword>
+    <keyword>assistant</keyword>
+    <keyword>ai</keyword>
+    <keyword>voice</keyword>
+    <keyword>gesture</keyword>
+  </keywords>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/Railgunonyx1/JARVIS/main/assets/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.1.0" date="2026-10-17">
+      <description>
+        <p>Initial release: chat, voice, gestures, desktop actions, 3D workspace.</p>
+      </description>
+    </release>
+  </releases>
+</component>
