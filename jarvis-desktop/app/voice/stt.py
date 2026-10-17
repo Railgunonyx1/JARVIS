@@ -147,20 +147,20 @@ class WhisperSTT:
             logger.warning("whisper-cli error: %s", e)
             return STTResult("", 0.0, "whisper.cpp", (time.time() - start_time) * 1000)
 
-    def record_and_transcribe(self, duration: float = 5.0,
-                              silence_timeout: float = 2.0) -> STTResult:
-        """Record from microphone and transcribe.
+    def record_audio(self, duration: float = 5.0,
+                     stop_event: threading.Event | None = None) -> bytes | None:
+        """Record from microphone and return WAV bytes.
 
         Args:
             duration: Max recording duration in seconds.
-            silence_timeout: Stop after this many seconds of silence.
+            stop_event: Optional event that, when set, stops recording early.
         """
         try:
             import sounddevice as sd
             import numpy as np
         except ImportError:
             logger.warning("sounddevice not available — cannot record")
-            return STTResult("", 0.0, "no-sounddevice", 0.0)
+            return None
 
         duration = min(duration, RECORD_SECONDS_MAX)
         frames = []
@@ -177,6 +177,9 @@ class WhisperSTT:
                 logger.info("Recording... (max %.0fs)", duration)
                 while recording and (time.time() - start) < duration:
                     time.sleep(0.05)
+                    if stop_event and stop_event.is_set():
+                        recording = False
+                        break
                     # Simple VAD: check if audio is silent
                     if frames and len(frames) > 10:
                         recent = np.concatenate(frames[-10:])
@@ -184,10 +187,10 @@ class WhisperSTT:
                             break
         except Exception as e:
             logger.warning("Recording failed: %s", e)
-            return STTResult("", 0.0, "record-error", 0.0)
+            return None
 
         if not frames:
-            return STTResult("", 0.0, "no-audio", 0.0)
+            return None
 
         # Convert to WAV
         import io
@@ -203,7 +206,15 @@ class WhisperSTT:
             wf.setframerate(SAMPLE_RATE)
             wf.writeframes(audio_int16.tobytes())
 
-        return self.transcribe(wav_buffer.getvalue(), "audio/wav")
+        return wav_buffer.getvalue()
+
+    def record_and_transcribe(self, duration: float = 5.0,
+                              silence_timeout: float = 2.0) -> STTResult:
+        """Record from microphone and transcribe."""
+        audio_bytes = self.record_audio(duration)
+        if not audio_bytes:
+            return STTResult("", 0.0, "no-audio", 0.0)
+        return self.transcribe(audio_bytes, "audio/wav")
 
 
 class CloudSTT:
@@ -263,18 +274,72 @@ class STTManager:
         return result
 
     def record_and_transcribe(self, duration: float = 5.0) -> STTResult:
-        """Record and transcribe, trying local first."""
-        if self._prefer_local and self._local and self._local.is_ready:
-            result = self._local.record_and_transcribe(duration)
-            if result:
+        """Record and transcribe, trying local first, then cloud fallback."""
+        # Record audio once
+        if self._local:
+            audio_bytes = self._local.record_audio(duration)
+            if not audio_bytes:
+                return STTResult("", 0.0, "no-audio", 0.0)
+
+            # Try local whisper first
+            result = self._local.transcribe(audio_bytes, "audio/wav")
+            if result and result.text:
                 self._active_engine = "whisper.cpp"
                 return result
 
-        # Cloud fallback: record then transcribe
+        # Cloud fallback: transcribe the same audio via cloud
+        # Need to record again since cloud STT needs its own audio
         if self._local:
-            result = self._local.record_and_transcribe(duration)
-            if result:
-                self._active_engine = "whisper.cpp"
-                return result
+            audio_bytes = self._local.record_audio(duration)
+            if not audio_bytes:
+                return STTResult("", 0.0, "no-audio", 0.0)
+
+        # Record fresh for cloud if we didn't already have audio
+        if not self._local:
+            # No local STT available - need to record directly
+            try:
+                import sounddevice as sd
+                import numpy as np
+                import io
+                import wave
+
+                duration = min(duration, RECORD_SECONDS_MAX)
+                frames = []
+                start = time.time()
+                recording = True
+
+                def callback(indata, frame_count, time_info, status):
+                    if recording:
+                        frames.append(indata.copy())
+
+                with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
+                                    dtype=np.float32, callback=callback):
+                    while recording and (time.time() - start) < duration:
+                        time.sleep(0.05)
+                        if frames and len(frames) > 10:
+                            recent = np.concatenate(frames[-10:])
+                            if np.abs(recent).max() < 0.01:
+                                break
+
+                if not frames:
+                    return STTResult("", 0.0, "no-audio", 0.0)
+
+                audio = np.concatenate(frames)
+                audio_int16 = (audio * 32767).astype(np.int16)
+                wav_buffer = io.BytesIO()
+                with wave.open(wav_buffer, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(SAMPLE_RATE)
+                    wf.writeframes(audio_int16.tobytes())
+                audio_bytes = wav_buffer.getvalue()
+            except Exception as e:
+                logger.warning("Recording failed: %s", e)
+                return STTResult("", 0.0, "record-error", 0.0)
+
+        result = self._cloud.transcribe(audio_bytes, "audio/wav")
+        if result and result.text:
+            self._active_engine = "elevenlabs"
+            return result
 
         return STTResult("", 0.0, "unavailable", 0.0)

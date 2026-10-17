@@ -56,6 +56,7 @@ class VoiceManager:
         self._state_lock = threading.Lock()
         self._speaking_lock = threading.Lock()
         self._stop_speaking = threading.Event()
+        self._stop_recording = threading.Event()
 
         self._stt = STTManager(prefer_local=prefer_local_stt)
         self._tts = TTSEngine(voice=voice, speed=speed, use_kokoro=use_kokoro_tts)
@@ -102,10 +103,12 @@ class VoiceManager:
         if self.state != VoiceState.IDLE:
             return
         self._set_state(VoiceState.LISTENING)
+        self._stop_recording.clear()
 
         def _record():
             try:
-                result = self._stt.record_and_transcribe(duration=5.0)
+                result = self._stt.record_and_transcribe(duration=5.0,
+                                                         stop_event=self._stop_recording)
                 self._set_state(VoiceState.TRANSCRIBING)
                 if result and result.text:
                     if self._on_transcription:
@@ -124,8 +127,7 @@ class VoiceManager:
     def stop_listening(self) -> None:
         """Stop recording early (user released push-to-talk)."""
         if self.state == VoiceState.LISTENING:
-            # The recording loop checks state; we just transition
-            self._set_state(VoiceState.TRANSCRIBING)
+            self._stop_recording.set()
 
     def _send_to_agent(self, text: str) -> None:
         """Send transcribed text to the agent backend."""
@@ -153,14 +155,14 @@ class VoiceManager:
 
         def _speak():
             try:
-                self._tts.play(text, block=False)
-                # Wait for playback to finish (poll state)
-                while not self._stop_speaking.is_set():
-                    time.sleep(0.1)
-                self._set_state(VoiceState.IDLE)
+                self._tts.play(text, block=True)
+                # Only set IDLE if we weren't interrupted
+                if not self._stop_speaking.is_set():
+                    self._set_state(VoiceState.IDLE)
             except Exception as e:
                 logger.warning("TTS playback failed: %s", e)
-                self._set_state(VoiceState.IDLE)
+                if not self._stop_speaking.is_set():
+                    self._set_state(VoiceState.IDLE)
 
         self._tts_thread = threading.Thread(target=_speak, daemon=True, name="jarvis-voice-tts")
         self._tts_thread.start()
@@ -168,6 +170,12 @@ class VoiceManager:
     def stop_speaking(self) -> None:
         """Interrupt TTS playback."""
         self._stop_speaking.set()
+        # Stop audio playback immediately
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
         self._set_state(VoiceState.IDLE)
 
     def toggle_listening(self) -> None:

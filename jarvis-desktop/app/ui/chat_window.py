@@ -2,6 +2,7 @@
 
 Layout follows the master plan §2: header, chat area, input bar, bottom toolbar.
 All subsystems are managed by AppCoordinator (Phase 6 integration).
+All UI updates happen on the GUI thread via Qt signals from the coordinator.
 """
 
 from __future__ import annotations
@@ -16,18 +17,13 @@ from PySide6.QtWidgets import (
 )
 
 from app.integration.coordinator import AppCoordinator, AppState
-from app.integration.jarvis_backend import AgentResponse
 from app.voice.voice_manager import VoiceState
 
 
 class ChatWindow(QMainWindow):
     """Main application window — minimal chat interface."""
 
-    chunk_received = Signal(str)
-    response_received = Signal(object)
-    status_changed = Signal(str)
     voice_state_changed = Signal(object)
-    app_state_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -122,11 +118,8 @@ class ChatWindow(QMainWindow):
         self.mic_btn.clicked.connect(self._on_mic_toggle)
         self.gesture_btn.clicked.connect(self._on_gesture_toggle)
         self.workspace_btn.clicked.connect(self._on_workspace_toggle)
-        self.chunk_received.connect(self._append_chunk)
-        self.response_received.connect(self._on_response)
-        self.status_changed.connect(self._on_status)
+        self.settings_btn.clicked.connect(self._on_settings)
         self.voice_state_changed.connect(self._on_voice_state)
-        self.app_state_changed.connect(self._on_app_state)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet("""
@@ -157,14 +150,12 @@ class ChatWindow(QMainWindow):
 
     def start_backend(self, mode: str = "agent") -> None:
         """Initialize and start the agent backend via coordinator."""
-        self._coordinator = AppCoordinator(
-            mode=mode,
-            on_state_change=self.app_state_changed.emit,
-            on_chat_message=self._on_chat_message,
-            on_voice_transcription=self._on_voice_transcription,
-            on_gesture_action=self._on_gesture_action,
-            on_workspace_update=self._on_workspace_update,
-        )
+        self._coordinator = AppCoordinator(mode=mode)
+        self._coordinator.state_changed.connect(self._on_app_state)
+        self._coordinator.chat_message.connect(self._on_chat_message)
+        self._coordinator.voice_transcription.connect(self._on_voice_transcription)
+        self._coordinator.gesture_action.connect(self._on_gesture_action)
+        self._coordinator.workspace_update.connect(self._on_workspace_update)
         self._coordinator.start()
         self.mic_btn.setEnabled(True)
         self.gesture_btn.setEnabled(True)
@@ -190,6 +181,47 @@ class ChatWindow(QMainWindow):
         if self._coordinator:
             self._coordinator.toggle_workspace()
 
+    def _on_settings(self) -> None:
+        """Handle settings button click."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox, QCheckBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Settings")
+        dialog.setMinimumWidth(400)
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Settings"))
+
+        # Model selection
+        layout.addWidget(QLabel("Model:"))
+        model_combo = QComboBox()
+        model_combo.addItems([
+            "Qwen/Qwen2.5-72B-Instruct (default)",
+            "deepseek-ai/DeepSeek-R1",
+            "openai/gpt-oss-120b",
+            "Qwen/Qwen3-4B-Thinking-2507",
+            "mistralai/Mistral-Nemo-Instruct-2407",
+        ])
+        layout.addWidget(model_combo)
+
+        layout.addWidget(QLabel(""))
+
+        # Voice
+        voice_cb = QCheckBox("Enable voice (push-to-talk)")
+        voice_cb.setChecked(self._coordinator is not None and self._coordinator.voice is not None)
+        layout.addWidget(voice_cb)
+
+        # Gestures
+        gesture_cb = QCheckBox("Enable gesture control")
+        gesture_cb.setChecked(self._gesture_active)
+        layout.addWidget(gesture_cb)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(dialog.accept)
+        layout.addWidget(btn)
+
+        dialog.exec()
+
     def _on_chat_message(self, role: str, text: str) -> None:
         if role == "user":
             self._append_message("user", text)
@@ -206,7 +238,8 @@ class ChatWindow(QMainWindow):
         self._append_message("system", f"[Gesture: {action}]")
 
     def _on_workspace_update(self, panel: str, text: str) -> None:
-        pass
+        self.status_label.setText(f"● {panel}: {text[:40]}")
+        self.status_label.setStyleSheet("color: #a371f7;")
 
     def _append_message(self, role: str, text: str) -> None:
         if role == "user":
@@ -234,20 +267,6 @@ class ChatWindow(QMainWindow):
                 cursor.removeSelectedText()
                 cursor.deletePreviousChar()
             self.chat_area.setTextCursor(cursor)
-
-    def _on_response(self, response: AgentResponse) -> None:
-        if response.success:
-            self._append_message("jarvis", response.text)
-        else:
-            self._append_message("jarvis", f"[Error: {response.error}]")
-        self.status_label.setText("● Ready")
-
-    def _on_status(self, status: str) -> None:
-        if status == "ready":
-            self.status_label.setText("● Ready")
-            self.status_label.setStyleSheet("color: #3fb950;")
-        else:
-            self.status_label.setText(f"● {status}")
 
     def _on_voice_state(self, state) -> None:
         state_val = state.value if hasattr(state, "value") else str(state)

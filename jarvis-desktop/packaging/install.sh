@@ -6,10 +6,14 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/jarvis-desktop}"
 DESKTOP_DIR="${DESKTOP_DIR:-/usr/share/applications}"
 ICON_DIR="${ICON_DIR:-/usr/share/icons/hicolor/scalable/apps}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../../" && pwd)}"
+
+# Resolve the directory containing this script, then go up to the repo root.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
 
 echo "=== JARVIS Desktop Companion Installer ==="
 echo "Install directory: $INSTALL_DIR"
+echo "Repository root: $REPO_ROOT"
 
 # Check Python
 if ! command -v python3 &>/dev/null; then
@@ -29,19 +33,19 @@ if ! python3 -c "import PySide6" 2>/dev/null; then
     }
 fi
 
-# Install application files
+# Install the entire repository so backend modules (core, providers, tools,
+# runtime, memory) are importable alongside the desktop app.
 echo "Installing application files to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-cp -a "$REPO_ROOT/jarvis-desktop/app" "$INSTALL_DIR/app"
-cp -a "$REPO_ROOT/jarvis-desktop/README.md" "$INSTALL_DIR/README.md"
+cp -a "$REPO_ROOT" "$INSTALL_DIR/jarvis-repo"
 
-# Create wrapper script — PYTHONPATH includes both app dir and repo root
-# so the app can import core, providers, tools, runtime, memory.
+# Create wrapper script — PYTHONPATH points into the installed repo copy so
+# core, providers, tools, runtime, memory are importable.
 cat > "$BIN_DIR/jarvis-desktop" <<EOF
 #!/bin/bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
-export PYTHONPATH="\$JARVIS_DESKTOP_HOME/app:\$REPO_ROOT:\${PYTHONPATH:-}"
-exec python3 "\$JARVIS_DESKTOP_HOME/app/main.py" "\$@"
+export PYTHONPATH="\$JARVIS_DESKTOP_HOME/jarvis-repo:\${PYTHONPATH:-}"
+exec python3 "\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop/app/main.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/jarvis-desktop"
 

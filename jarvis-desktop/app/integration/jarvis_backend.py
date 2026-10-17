@@ -3,6 +3,10 @@
 Runs AgentLoop in a dedicated worker thread with its own asyncio event loop.
 The Qt main thread never blocks on agent I/O — communication is via
 thread-safe queues and Qt signals.
+
+All public signals are emitted from the worker thread but are safe to connect
+to Qt slots on the main thread — Qt automatically delivers them via
+queued connections when crossing threads.
 """
 
 from __future__ import annotations
@@ -12,9 +16,11 @@ import logging
 import queue
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any, Callable
+
+from PySide6.QtCore import QObject, Signal
 
 logger = logging.getLogger("jarvis.desktop.backend")
 
@@ -40,29 +46,31 @@ class BackendState(StrEnum):
     ERROR = "error"
 
 
-class JarvisBackend:
+class JarvisBackend(QObject):
     """Thread-safe wrapper around AgentLoop for desktop use.
 
     Usage:
         backend = JarvisBackend()
+        backend.chunk_ready.connect(my_chunk_handler)
+        backend.response_ready.connect(my_response_handler)
+        backend.status_changed.connect(my_status_handler)
         backend.start()
         backend.send_message("Hello JARVIS")
-        # connect to backend.chunk_ready / backend.response_ready signals
         backend.stop()
     """
 
+    # Signals — all emitted from the worker thread but safe to connect to
+    # Qt slots on the main thread (Qt uses queued connections across threads).
+    chunk_ready = Signal(str)                    # streaming text chunk
+    response_ready = Signal(object)              # AgentResponse
+    status_changed = Signal(str)                 # status string
+    state_changed = Signal(object)               # BackendState
+
     def __init__(self, *, mode: str = "agent", max_iterations: int = 10,
-                 on_chunk: Callable[[str], None] | None = None,
-                 on_response: Callable[[AgentResponse], None] | None = None,
-                 on_status: Callable[[str], None] | None = None,
-                 on_state_change: Callable[[BackendState], None] | None = None,
                  confirmation_handler: Callable[[str, dict], str] | None = None):
+        super().__init__()
         self._mode = mode
         self._max_iterations = max_iterations
-        self._on_chunk = on_chunk
-        self._on_response = on_response
-        self._on_status = on_status
-        self._on_state_change = on_state_change
         self._confirmation_handler = confirmation_handler
 
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -207,7 +215,7 @@ class JarvisBackend:
         )
 
         self._set_state(BackendState.READY)
-        self._emit_status("ready")
+        self.status_changed.emit("ready")
         self._started_event.set()
 
         while self.state in (BackendState.READY, BackendState.RUNNING):
@@ -224,11 +232,7 @@ class JarvisBackend:
         start = time.time()
         try:
             def on_chunk(chunk: str) -> None:
-                if self._on_chunk:
-                    try:
-                        self._on_chunk(chunk)
-                    except Exception:
-                        pass
+                self.chunk_ready.emit(chunk)
 
             result = await self._agent_loop.run(text, session_id=self._session_id, on_chunk=on_chunk)
             duration_ms = (time.time() - start) * 1000
@@ -240,15 +244,13 @@ class JarvisBackend:
                 duration_ms=duration_ms,
                 tool_calls=[tc.get("name", "") for tc in result.state.tool_calls] if result.state else [],
             )
-            if self._on_response:
-                self._on_response(response)
+            self.response_ready.emit(response)
         except Exception as exc:
             logger.exception("Agent run failed")
-            if self._on_response:
-                self._on_response(AgentResponse(
-                    success=False, text="", error=str(exc)[:500],
-                    duration_ms=(time.time() - start) * 1000,
-                ))
+            self.response_ready.emit(AgentResponse(
+                success=False, text="", error=str(exc)[:500],
+                duration_ms=(time.time() - start) * 1000,
+            ))
 
     def _set_state(self, state: BackendState, error: Exception | None = None) -> None:
         with self._state_lock:
@@ -256,20 +258,12 @@ class JarvisBackend:
             self._state = state
             self._startup_error = error
         if old_state != state:
-            if self._on_state_change:
-                try:
-                    self._on_state_change(state)
-                except Exception:
-                    pass
+            self.state_changed.emit(state)
             if state == BackendState.READY:
                 self._started_event.set()
 
     def _emit_status(self, status: str) -> None:
-        if self._on_status:
-            try:
-                self._on_status(status)
-            except Exception:
-                pass
+        self.status_changed.emit(status)
 
     def _load_models_config(self) -> dict:
         try:

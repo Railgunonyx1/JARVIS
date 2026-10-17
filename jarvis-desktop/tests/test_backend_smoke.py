@@ -41,8 +41,7 @@ def test_backend_startup_error_is_reported():
 
 def test_backend_message_queued():
     """Verify messages are accepted and queued without crashing."""
-    responses = []
-    backend = JarvisBackend(mode="agent", on_response=responses.append)
+    backend = JarvisBackend(mode="agent")
     backend.start(wait=True, timeout=10.0)
     backend.send_message("Hello")
     # Give the worker thread time to pick up the message
