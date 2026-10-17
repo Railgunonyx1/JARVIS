@@ -12,7 +12,7 @@ Lightweight desktop AI assistant for Bazzite Linux, built on the existing
 - [x] Phase 5 — 3D holographic workspace — 8 tests (6 pass, 2 skip on headless)
 - [x] Phase 6 — Integration — 10 tests passing
 - [x] Phase 7 — Optimization — 14 tests passing
-- [ ] Phase 8 — Packaging
+- [x] Phase 8 — Packaging — install.sh/uninstall.sh + Flatpak manifest
 
 ## Quick start
 
