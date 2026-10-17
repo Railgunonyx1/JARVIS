@@ -88,11 +88,14 @@ class DesktopActionLayer:
                 return False
 
         try:
-            action.handler()
+            result = action.handler()
+            if result is False:
+                self._log(action.name, False, "handler returned False")
+                return False
             self._log(action.name, True)
             return True
         except Exception as e:
-            logger.warning("Action %s failed: %s", name.name, e)
+            logger.warning("Action %s failed: %s", action.name, e)
             self._log(action.name, False, str(e)[:200])
             return False
 
@@ -145,20 +148,27 @@ class DesktopActionLayer:
                       lambda: self._launch("firefox"), category="app")
 
     @staticmethod
-    def _pactl(*args: str) -> None:
-        subprocess.run(["pactl", *args], capture_output=True, timeout=5)
+    def _pactl(*args: str) -> bool:
+        result = subprocess.run(["pactl", *args], capture_output=True, timeout=5)
+        return result.returncode == 0
 
     @staticmethod
-    def _playerctl(*args: str) -> None:
-        subprocess.run(["playerctl", *args], capture_output=True, timeout=5)
+    def _playerctl(*args: str) -> bool:
+        result = subprocess.run(["playerctl", *args], capture_output=True, timeout=5)
+        return result.returncode == 0
 
     @staticmethod
-    def _wmctrl(*args: str) -> None:
-        subprocess.run(["wmctrl", *args], capture_output=True, timeout=5)
+    def _wmctrl(*args: str) -> bool:
+        result = subprocess.run(["wmctrl", *args], capture_output=True, timeout=5)
+        return result.returncode == 0
 
     @staticmethod
-    def _launch(cmd: str) -> None:
-        subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def _launch(cmd: str) -> bool:
+        try:
+            subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except FileNotFoundError:
+            return False
 
     def get_actions(self, category: str | None = None) -> list[Action]:
         """List registered actions, optionally filtered by category."""

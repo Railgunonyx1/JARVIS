@@ -12,8 +12,8 @@ import logging
 import queue
 import threading
 import time
-import traceback
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Callable
 
 logger = logging.getLogger("jarvis.desktop.backend")
@@ -28,6 +28,16 @@ class AgentResponse:
     error: str = ""
     duration_ms: float = 0.0
     tool_calls: list = field(default_factory=list)
+
+
+class BackendState(StrEnum):
+    """Backend lifecycle states."""
+    STOPPED = "stopped"
+    STARTING = "starting"
+    READY = "ready"
+    RUNNING = "running"
+    STOPPING = "stopping"
+    ERROR = "error"
 
 
 class JarvisBackend:
@@ -45,45 +55,84 @@ class JarvisBackend:
                  on_chunk: Callable[[str], None] | None = None,
                  on_response: Callable[[AgentResponse], None] | None = None,
                  on_status: Callable[[str], None] | None = None,
+                 on_state_change: Callable[[BackendState], None] | None = None,
                  confirmation_handler: Callable[[str, dict], str] | None = None):
         self._mode = mode
         self._max_iterations = max_iterations
         self._on_chunk = on_chunk
         self._on_response = on_response
         self._on_status = on_status
+        self._on_state_change = on_state_change
         self._confirmation_handler = confirmation_handler
 
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
-        self._running = False
+        self._state = BackendState.STOPPED
+        self._state_lock = threading.RLock()
         self._agent_loop = None
         self._input_queue: queue.Queue[str] = queue.Queue()
-        self._status_queue: queue.Queue[str] = queue.Queue()
-        self._lock = threading.Lock()
+        self._startup_error: Exception | None = None
+        self._started_event = threading.Event()
         self._session_id = f"desktop-{int(time.time())}"
 
     @property
-    def is_running(self) -> bool:
-        return self._running
+    def state(self) -> BackendState:
+        with self._state_lock:
+            return self._state
 
-    def start(self) -> None:
-        """Start the worker thread and asyncio event loop."""
-        if self._running:
-            return
-        self._running = True
+    @property
+    def is_running(self) -> bool:
+        with self._state_lock:
+            return self._state in (BackendState.STARTING, BackendState.READY, BackendState.RUNNING)
+
+    @property
+    def startup_error(self) -> Exception | None:
+        return self._startup_error
+
+    def start(self, wait: bool = True, timeout: float = 10.0) -> None:
+        """Start the worker thread and asyncio event loop.
+
+        Args:
+            wait: If True, block until backend is ready or fails (up to timeout).
+            If False, returns immediately after starting the thread.
+            timeout: Maximum seconds to wait when wait=True.
+        """
+        with self._state_lock:
+            if self._state in (BackendState.STARTING, BackendState.READY, BackendState.RUNNING):
+                return
+            self._state = BackendState.STARTING
+            self._startup_error = None
+            self._started_event.clear()
+
         self._thread = threading.Thread(target=self._run_loop, name="jarvis-agent", daemon=True)
         self._thread.start()
-        self._wait_until_ready()
 
-    def stop(self) -> None:
-        """Stop the worker thread gracefully."""
-        self._running = False
+        if wait:
+            self._wait_until_ready(timeout)
+
+    def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
+        """Stop the worker thread gracefully.
+
+        Args:
+            wait: If True, wait for graceful shutdown (up to timeout).
+            timeout: Maximum seconds to wait when wait=True.
+        """
+        with self._state_lock:
+            if self._state == BackendState.STOPPED:
+                return
+            self._state = BackendState.STOPPING
+
+        # Signal the worker thread to stop
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
-        if self._thread:
-            self._thread.join(timeout=5.0)
-        self._agent_loop = None
-        self._loop = None
+
+        if self._thread and wait:
+            self._thread.join(timeout=timeout)
+
+        with self._state_lock:
+            self._state = BackendState.STOPPED
+            self._agent_loop = None
+            self._loop = None
 
     def send_message(self, text: str) -> None:
         """Queue a message for the agent (non-blocking)."""
@@ -92,21 +141,33 @@ class JarvisBackend:
     def _wait_until_ready(self, timeout: float = 10.0) -> None:
         start = time.time()
         while time.time() - start < timeout:
-            if self._agent_loop is not None:
+            state = self.state
+            if state == BackendState.READY:
                 return
+            if state == BackendState.ERROR:
+                raise RuntimeError(f"Agent backend failed to start: {self._startup_error}")
+            if state == BackendState.STOPPED:
+                raise RuntimeError("Agent backend was stopped during startup")
             time.sleep(0.05)
-        raise RuntimeError("Agent backend failed to start")
+        raise RuntimeError(f"Agent backend failed to start within {timeout}s")
 
     def _run_loop(self) -> None:
         """Worker thread entry: own asyncio event loop."""
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
         try:
-            self._loop.run_until_complete(self._main())
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+
+            try:
+                self._loop.run_until_complete(self._main())
+            finally:
+                self._loop.close()
+                self._loop = None
         except Exception:
             logger.exception("Agent loop crashed")
+            self._set_state(BackendState.ERROR, error=Exception("agent loop crashed"))
         finally:
-            self._loop.close()
+            if self.state != BackendState.STOPPED:
+                self._set_state(BackendState.STOPPED)
 
     async def _main(self) -> None:
         """Build the agent and process queued messages."""
@@ -147,9 +208,11 @@ class JarvisBackend:
             mem=mem, event_bus=event_bus, tool_service=tool_service,
         )
 
+        self._set_state(BackendState.READY)
         self._emit_status("ready")
+        self._started_event.set()
 
-        while self._running:
+        while self.state in (BackendState.READY, BackendState.RUNNING):
             try:
                 text = self._input_queue.get(timeout=0.1)
             except queue.Empty:
@@ -188,6 +251,20 @@ class JarvisBackend:
                     success=False, text="", error=str(exc)[:500],
                     duration_ms=(time.time() - start) * 1000,
                 ))
+
+    def _set_state(self, state: BackendState, error: Exception | None = None) -> None:
+        with self._state_lock:
+            old_state = self._state
+            self._state = state
+            self._startup_error = error
+        if old_state != state:
+            if self._on_state_change:
+                try:
+                    self._on_state_change(state)
+                except Exception:
+                    pass
+            if state == BackendState.READY:
+                self._started_event.set()
 
     def _emit_status(self, status: str) -> None:
         if self._on_status:

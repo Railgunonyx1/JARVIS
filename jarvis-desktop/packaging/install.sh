@@ -6,7 +6,7 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/jarvis-desktop}"
 DESKTOP_DIR="${DESKTOP_DIR:-/usr/share/applications}"
 ICON_DIR="${ICON_DIR:-/usr/share/icons/hicolor/scalable/apps}"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../../" && pwd)}"
 
 echo "=== JARVIS Desktop Companion Installer ==="
 echo "Install directory: $INSTALL_DIR"
@@ -35,11 +35,12 @@ mkdir -p "$INSTALL_DIR"
 cp -a "$REPO_ROOT/jarvis-desktop/app" "$INSTALL_DIR/app"
 cp -a "$REPO_ROOT/jarvis-desktop/README.md" "$INSTALL_DIR/README.md"
 
-# Create wrapper script
+# Create wrapper script — PYTHONPATH includes both app dir and repo root
+# so the app can import core, providers, tools, runtime, memory.
 cat > "$BIN_DIR/jarvis-desktop" <<EOF
 #!/bin/bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
-export PYTHONPATH="\$JARVIS_DESKTOP_HOME:\${PYTHONPATH:-}"
+export PYTHONPATH="\$JARVIS_DESKTOP_HOME/app:\$REPO_ROOT:\${PYTHONPATH:-}"
 exec python3 "\$JARVIS_DESKTOP_HOME/app/main.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/jarvis-desktop"
