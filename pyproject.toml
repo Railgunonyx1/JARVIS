@@ -72,4 +72,5 @@ known-first-party = [
 testpaths = ["tests"]
 markers = [
     "browser: live Chromium/Playwright integration tests (opt-in via JARVIS_RUN_BROWSER_LIVE=1)",
+    "e2e: end-to-end tests requiring live model/API access (opt-in)",
 ]

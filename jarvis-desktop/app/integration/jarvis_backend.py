@@ -12,9 +12,9 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
 
 logger = logging.getLogger("jarvis.desktop.backend")
 
@@ -171,19 +171,17 @@ class JarvisBackend:
 
     async def _main(self) -> None:
         """Build the agent and process queued messages."""
-        from core.config import Config
-        from core.project import ProjectContext
-        from providers.router import ProviderRouter
-        from tools import build_default_registry
         from core.agent.loop import AgentLoop
         from core.agent.permissions import PermissionEngine
         from core.agent.tool_service import ToolExecutionService
         from core.agent.tools import AgentToolExecutor
         from core.decision_logger import get_decision_logger
-        from runtime.event_bus import get_event_bus
+        from core.project import ProjectContext
         from memory.mem import get_mem
+        from providers.router import ProviderRouter
+        from runtime.event_bus import get_event_bus
+        from tools import build_default_registry
 
-        config = Config()
         models_config = self._load_models_config()
         from core.api_keys import router_api_keys
         router = ProviderRouter(models_config, router_api_keys())

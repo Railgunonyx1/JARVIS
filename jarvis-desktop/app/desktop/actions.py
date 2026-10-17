@@ -13,12 +13,11 @@ Security model:
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable
 
 logger = logging.getLogger("jarvis.desktop.actions")
 
@@ -149,17 +148,17 @@ class DesktopActionLayer:
 
     @staticmethod
     def _pactl(*args: str) -> bool:
-        result = subprocess.run(["pactl", *args], capture_output=True, timeout=5)
+        result = subprocess.run(["pactl", *args], capture_output=True, timeout=5, check=False)
         return result.returncode == 0
 
     @staticmethod
     def _playerctl(*args: str) -> bool:
-        result = subprocess.run(["playerctl", *args], capture_output=True, timeout=5)
+        result = subprocess.run(["playerctl", *args], capture_output=True, timeout=5, check=False)
         return result.returncode == 0
 
     @staticmethod
     def _wmctrl(*args: str) -> bool:
-        result = subprocess.run(["wmctrl", *args], capture_output=True, timeout=5)
+        result = subprocess.run(["wmctrl", *args], capture_output=True, timeout=5, check=False)
         return result.returncode == 0
 
     @staticmethod
