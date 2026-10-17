@@ -528,7 +528,86 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Single integration point** — OpenAI-compatible endpoint replaces per-provider client code → `providers/model_gateway.py` · S/low.
 - *Avoid:* non-production-grade inference service (personal experimentation project); do not expose gateway directly to public internet; keep gateway bound to `127.0.0.1`; preserve encryption key + SQLite data together; never commit `.env` or provider credentials; JARVIS should retain explicit local-model fallback — do not make gateway a hard dependency.
 
-### lobehub/lobehub (Community License — no code reuse)
+### andreimerfu/pllm (MIT)
+- **High-performance LLM gateway in Go** — OpenAI-compatible proxy with multi-provider support, adaptive routing, and enterprise features → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Zero code changes** — Drop-in OpenAI replacement; change `base_url` and applications work unchanged → `providers/model_gateway.py` · S/low.
+- **Multi-provider** — OpenAI, Anthropic, Azure OpenAI, AWS Bedrock, Google Vertex AI, Grok, Cohere behind one endpoint → `providers/model_gateway.py` · S/low.
+- **Routes concept** — Virtual model endpoints select best real model using configurable strategies (priority, least-latency, weighted-round-robin, random) → `providers/model_gateway.py` · M/low.
+- **Automatic failover** — If provider goes down, requests transparently retry on healthy alternatives; zero failed requests as long as any alternative available → `providers/model_gateway.py` · M/low.
+- **Three-level failover** — Instance retry → next model in route → fallback models → `core/agent/tool_service.py` · M/low.
+- **Health tracking + circuit breakers** — Real-time health scores with circuit breakers per provider → `providers/model_gateway.py` · M/low.
+- **Multi-key load balancing** — Distribute load across multiple API keys → `providers/model_gateway.py` · S/low.
+- **Observability** — JWT auth, rate limiting, Prometheus metrics, distributed tracing, Helm chart → `benchmark/`, `runtime/event_bus.py` · S/low.
+
+### yolorouter/yolorouter (MIT)
+- **Self-hosted OpenAI-compatible LLM gateway** — Multi-provider failover, key rotation, built-in admin console → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Four wire protocols** — OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, Gemini generateContent; translates any to any → `providers/model_gateway.py` · M/low.
+- **Multi-provider failover** — Map one public model name to ordered provider candidates; caller never sees different model name → `providers/model_gateway.py` · M/low.
+- **Per-model scheduling modes** — Failover (primary-first) vs balanced (key spread across providers, cache affinity) → `providers/model_gateway.py` · M/low.
+- **Upstream key pool** — Give each provider a pool of upstream keys; rate-limited keys benched for Retry-After window; unauthorized keys benched → `security/`, `providers/model_gateway.py` · M/low.
+- **One-click model import** — Gateway fetches live model catalogue; imports verified models → `providers/model_registry.py` · S/low.
+- **Model aliasing** — Public names map to whatever upstream model id provider expects; mappings probed at config time → `providers/model_gateway.py` · S/low.
+- **Streaming done right** — Failover/key rotation happens before first byte; provider locked in once streaming starts → `providers/model_gateway.py` · S/low.
+
+### llmrix-inc/llmrix-router (MIT)
+- **High-performance Java LLM router & proxy** — Intelligent multi-model routing, failover, quota management, OpenAI-compatible API → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **One model contract** for OpenAI-compatible providers, Spring AI, LangChain4j → `providers/model_gateway.py` · S/low.
+- **Policy separated from execution** — Strategies rank candidates; executor owns timeout, retry, quota, cooldown, fallback → `core/agent/tool_service.py` · M/low.
+- **Streaming-safe failover** — Fallback allowed before first emitted chunk, prohibited after output begins → `providers/model_gateway.py` · S/low.
+- **Local or distributed state** — Zero-infrastructure local mode and Redis-backed multi-instance → `memory/store.py`, `core/agent/tool_service.py` · M/low.
+- **OpenAI-compatible edge** — `/v1/chat/completions`, `/v1/responses`, `/v1/models` with SSE streaming → `providers/model_gateway.py` · S/low.
+- **Composable advanced routing** — Semantic routing, contextual bandits, online shadow traffic, Fugu-style orchestration → `core/agent/loop.py` · M/med.
+- **Avoid:** Java-only SDK; no Python client — would need separate integration layer.
+
+### fabriziosalmi/llmproxy (MIT)
+- **Security-first proxy for LLMs** — Sits between applications and LLM providers; audit log stays on infrastructure → `security/`, `providers/model_gateway.py` · M/low.
+- **Provider translation and fallback** — OpenAI, Anthropic, Google, Azure OpenAI, Ollama adapters; 18+ providers via OpenAI-compatible adapter; fallback chains, circuit breaker, daily budget → `providers/model_gateway.py` · M/low.
+- **Authentication** — Inference keys on `/v1/*`, admin keys on control plane → `security/` · S/low.
+- **Shield injection scoring** — PII masking, budget guard, trajectory screening → `security/code_scan.py`, `core/agent/permissions.py` · M/low.
+- **Five-ring request pipeline** — Ingress → pre-flight → routing → post-flight → background; plugin architecture with 18 marketplace plugins → `core/agent/tool_service.py` · M/med.
+- **Audit log** — Queryable audit chain, GDPR export/erase, spend analytics → `runtime/event_bus.py`, `benchmark/` · S/low.
+- *Avoid:* audited as personal project; production guarantees not established.
+
+### Temikus/butter (MIT)
+- **Blazingly fast AI proxy gateway in Go** — Unified OpenAI-compatible API with minimal latency overhead → `providers/model_gateway.py`, `runtime/protocols/` · S/low.
+- **Unified API** — `/v1/chat/completions`, `/v1/embeddings`, `/v1/models`; Anthropic Messages → `providers/model_gateway.py` · S/low.
+- **11 providers** — OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Gemini, OpenRouter, Groq, Mistral, Together, Fireworks, Perplexity + OpenAI-compatible → `providers/model_gateway.py` · S/low.
+- **Multi-provider routing** — Model-specific provider lists with priority/round-robin strategies → `providers/model_gateway.py` · M/low.
+- **Multi-provider failover** — Configurable retry-on status codes and exponential backoff → `providers/model_gateway.py` · M/low.
+- **Weighted key rotation** — Per-key model allowlists; per-key rate limiting, lifecycle management → `security/` · S/low.
+- **Plugin hooks** — Go + WASM plugins; pre/post hook chains; application keys for usage tracking → `core/agent/tool_service.py` · M/med.
+- **Avoid:** Go-only runtime; no Python SDK.
+
+### api7/aisix (Apache-2.0)
+- **Rust-native AI gateway** — One OpenAI-compatible API for OpenAI, Anthropic, Google Gemini, AWS Bedrock, DeepSeek, and more → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Single static binary** — Low cold-start, lock-free config reads, dynamic configuration over etcd → CI/CD · S/low.
+- **Five adapter families** — OpenAI, Anthropic, AWS Bedrock, Google Vertex AI, Azure OpenAI — native adapters, not generic relabel → `providers/model_gateway.py` · S/low.
+- **Routing & failover** — Virtual/routing models, weighted load balancing, automatic failover, retry budgets, cooldowns, per-attempt timeouts → `providers/model_gateway.py` · M/low.
+- **Rate limits, budgets, guardrails, caching, observability** — Built-in production controls → `core/agent/tool_service.py`, `security/` · M/low.
+- **Observability exporters** — OTLP, Datadog, ... → `runtime/event_bus.py`, `benchmark/` · S/low.
+- **Avoid:** AISIX Cloud managed control plane is separate product; self-hosted binary is free but cloud features require paid plan.
+
+### shaharia-lab/ferrox (MIT)
+- **Stateless, horizontally-scalable LLM API gateway in Rust** — OpenAI-compatible API; routes to Anthropic, OpenAI, Google Gemini, AWS Bedrock → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Three client dialects** — `/v1/chat/completions`, `/v1/responses`, `/anthropic/v1/messages` each served by every provider → `providers/model_gateway.py` · S/low.
+- **Multi-provider routing** — Round-robin, weighted, failover, random strategies → `providers/model_gateway.py` · M/low.
+- **Fallback chains** — Automatic failover to backup providers on failure → `providers/model_gateway.py` · M/low.
+- **Lock-free circuit breakers** — Per-provider; prevents cascading failures → `providers/model_gateway.py` · S/low.
+- **Rate limiting** — Per-key token bucket; burst-aware → `security/` · S/low.
+- **Virtual keys** — Issue scoped API keys with per-model access control → `security/` · S/low.
+- **Observability** — Prometheus metrics, structured JSON logs, OpenTelemetry tracing → `runtime/event_bus.py`, `benchmark/` · S/low.
+- **Rust-only** — No Python SDK; would need separate integration layer.
+
+### inference-gateway/inference-gateway (MIT)
+- **Open-source cloud-native gateway** — Unifies multiple LLM providers behind one OpenAI-compatible API → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **100+ providers** — OpenAI, Anthropic, Groq, Cohere, Ollama, llama.cpp, Cloudflare, DeepSeek, ElevenLabs, Google, Mistral, MiniMax, Moonshot, Nvidia, Z.ai → `providers/model_gateway.py` · S/low.
+- **MCP support** — Full Model Context Protocol integration; gateway itself serves as MCP server on `POST /mcp` → `runtime/protocols/` · S/low.
+- **A2A support** — Agent-to-Agent protocol server → `runtime/protocols/` · M/low.
+- **Unified API routing** — Resolve provider from `provider/model` prefix or `?provider=` query param → `providers/model_gateway.py` · S/low.
+- **Middleware system** — Processing middleware for capabilities like MCP; clients can bypass via headers → `core/agent/tool_service.py` · S/low.
+- **Middleware marketplace** — 18 plugins, most off by default (budget guard, loop breaker, model downgrade, topic blocklist, schema enforcement, canary detection, shadow traffic) → `core/agent/tool_service.py` · M/med.
+- **Avoid:** Cloud-native focus; some features require Kubernetes/deployment infrastructure.
+
 - **Model-list DSL** `+add,-hide,name=display`. → `providers/model_gateway.py` formatting · S/low.
 - **White-box structured, user-editable memory** (inspectable records, not opaque blobs). → `memory/` via `cli/cockpit.py` `/memory` editor · M/low.
 - **Plugin/function-calling extension registry with an isolated gateway.** → `skills/`, MCP · M/med.
@@ -621,7 +700,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
 | **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
@@ -701,6 +780,14 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | agentbrowser | MIT | Visible cursor real Chromium + goal API + action memory + cross-domain recall + CAPTCHA |
 | lumen | MIT | Vision-only loop + tiered compression + persistent memory + action cache + delegation |
 | st4ck-lite | Apache-2.0 | Record → deterministic md test + stable IPC vocab + no-code runtime flags + PRD skills |
+| pllm | MIT | Go LLM gateway — routing, failover, caching, 3-level failover, health tracking |
+| yolorouter | MIT | Self-hosted OpenAI-compatible gateway — multi-provider failover, key rotation, admin console |
+| llmrix-router | MIT | Java LLM router — intelligent routing, failover, quota management, Spring Boot |
+| llmproxy | MIT | Security-first proxy — injection scoring, PII masking, 5-ring pipeline, audit chain |
+| butter | MIT | Fast Go AI proxy — 11 providers, weighted key rotation, plugin hooks (Go + WASM) |
+| aisix | Apache-2.0 | Rust AI gateway — 5 adapter families, routing & failover, guardrails, observability |
+| ferrox | MIT | Stateless Rust LLM gateway — lock-free circuit breakers, virtual keys, streaming |
+| inference-gateway | MIT | Cloud-native gateway — 100+ providers, MCP server, A2A server, middleware marketplace |
 
 ---
 
