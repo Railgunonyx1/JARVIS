@@ -437,15 +437,80 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Conservative by default** — balanced mode cuts ~1.9% of short dense text (tool outputs); on long documents up to 89% token reduction while keeping evidence in 94% of cases → `core/agent/tool_service.py` · S/low.
 - **No rewrite/summary** — never hallucinates or changes kept text; marker line such as "… 25 lines …" shows where lines were removed → `core/agent/tool_service.py` · S/low.
 - **Best for long-document retrieval** — not for short dense tool outputs (default cuts only 1.9% there); pair with caveman-style terse output rules → `core/agent/tool_service.py`, `core/harness/` · S/low.
+### caveman-ai/trim-1 (Apache-2.0)
+- **1.2 MB context trimmer** — 712 gradient-boosted trees (not a neural network) that score each line of a context against the current query and drop lines below a floor; kept lines are verbatim in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Deterministic, CPU-only** — milliseconds on one CPU core, no GPU, no network, no extra model request; same context+query always yields same result → `core/agent/tool_service.py` · S/low.
+- **Pure Go, zero dependencies** — `go install github.com/caveman-ai/trim-1/cmd/trim@latest`; model embedded in binary → `scripts/download_dependencies.py` · S/low.
+- **Conservative by default** — balanced mode cuts ~1.9% of short dense text (tool outputs); on long documents up to 89% token reduction while keeping evidence in 94% of cases → `core/agent/tool_service.py` · S/low.
+- **No rewrite/summary** — never hallucinates or changes kept text; marker line such as "… 25 lines …" shows where lines were removed → `core/agent/tool_service.py` · S/low.
+- **Best for long-document retrieval** — not for short dense tool outputs (default cuts only 1.9%); pair with caveman-style terse output rules → `core/agent/tool_service.py`, `core/harness/` · S/low.
 - *Avoid:* English-only training; drops later evidence sharing no words with query; cannot shorten a single long line.
 
-### headroomlabs-ai/headroom (Apache-2.0)
-- **Content-typed compression router** (JSON→variance-based pruning keeping outliers/first/last; code→AST-aware; prose→model) applied only to *new* bytes; **frozen prompt prefix kept byte-identical to protect KV cache.** → `providers/model_gateway.py`, `core/agent/tool_service.py` · L/med.
-- **Reversible compression (CCR)** with a `retrieve` tool for full text. → tool-service + new low-risk tool · M/low.
-- **CacheAligner:** flag volatile content that busts provider prefix cache; never rewrite it. → ModelGateway prompt-cache budgeting · S/low.
-- **Terse note appended to the end of the system prompt** (cache-safe); dial reasoning down only on tool-result resume turns. → `providers/model_gateway.py` · S/low.
-- **Failure mining → corrections in a local gitignored rules file.** → mine into `memory/authority.py` or skill amendments (human-confirmed) · M/med.
-- *Avoid:* shipping an ML dependency into core; compressing **verification evidence** would break invariant #4.
+### NadirRouter/barber (MIT)
+- **Query-aware context trimming** — embeds chunks and question, keeps what matters, drops the rest; chunks survive verbatim → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Lexical fallback mode** — zero-dependency scoring using BM25/term overlap, no model download → `core/agent/tool_service.py` · S/low.
+- **Semantic mode** — sentence-transformers embeddings for paraphrase-safe scoring → `core/agent/tool_service.py` · M/low.
+- **LangChain/LlamaIndex integration** — `BaseDocumentCompressor` / `BaseNodePostprocessor` → `tools/doc_retrieval.py` · S/low.
+- **Zero queries at trim time** — lexical mode needs no model; semantic mode needs one embedding pass → `core/agent/tool_service.py` · S/low.
+- **Deterministic** — same context + query = same result → `core/agent/tool_service.py` · S/low.
+- *Avoid:* lexical mode matches words not meaning; needs semantic embedder for paraphrase recall.
+
+### Supercompress (Supercompress/Supercompress, MIT)
+- **Query-aware context compression** — ~65% mean context cut on coding-agent benchmark with 24/24 evidence-retention passes → `core/agent/tool_service.py`, `orbit/tools.py` · M/low.
+- **Two engines** — Neural v2 (~400M query-aware cross-encoder, hosted API) and Compiler (fast/local policy, millisecond-class) → `core/agent/tool_service.py` · M/low.
+- **MCP plugin** — `compress_context` tool for Cursor, Claude Code, Codex, and 40+ agent harnesses → `runtime/protocols/`, `extensions/jbrowser` · S/low.
+- **Python package** — `pip install supercompress`, `sc.compress(context, query)` → `core/agent/tool_service.py` · S/low.
+- **Query is never compressed** — only surrounding context is segmented and scored → `core/agent/tool_service.py` · S/low.
+- *Avoid:* Neural v2 is hosted API (Fly CPU); local Compiler engine is older, lower quality.
+
+### Yuchen20/Context-Crumb (MIT)
+- **Token-level compressor** — looks at text word by word, removes low-signal tokens, keeps surviving text in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **ONNX backend** — no PyTorch/Transformers required; model files cached locally after first download → `scripts/download_dependencies.py` · S/low.
+- **30-70% context savings** on prose-heavy agent inputs → `core/agent/tool_service.py` · S/low.
+- **CLI + MCP stdio adapter** — `contextcrumb-shrink` compresses verbose tool catalog descriptions → `runtime/protocols/`, `cli/` · S/low.
+- **Code-aware** — Python, JavaScript, TypeScript, JSX, TSX, Go, Rust; preserves executable code exactly, compresses only comments/docstrings → `orbit/tools.py` · S/low.
+- *Avoid:* best fit for prose/docs; refuses unsupported syntax-sensitive files (diffs, configs, lockfiles, SQL, .env) unless `--force`.
+
+### nimhar/imptokens (MIT)
+- **Local context preprocessor** — sentence mode (no model, sub-5ms) + logprob mode (small local model for token-level scoring) → `core/agent/tool_service.py` · S/low.
+- **30-70% token reduction** with no meaningful quality loss → `core/agent/tool_service.py` · S/low.
+- **Works in any shell pipeline** — no framework or SDK required → `cli/`, `orbit/tools.py` · S/low.
+- **Multiple output formats** — text, token-ids, JSON; token-level debug view → `core/agent/tool_service.py` · S/low.
+- **GGUF model support** — Llama-3.2-1B (~700 MB), Qwen2.5-1.5B (~900 MB) → `scripts/download_dependencies.py` · M/low.
+- **Claude Code integration** — `UserPromptSubmit` hook, `compress-if-large`, `compress-paste` → `cli/input.py` · S/low.
+- *Avoid:* logprob mode needs ~700 MB model download; sentence mode is best for long docs with clear query.
+
+### lacausecrypto/mcp-sophon (MIT)
+- **Deterministic context compressor for MCP agents** — single 5.2 MB Rust binary, zero ML at query time → `runtime/protocols/`, `extensions/jbrowser` · S/low.
+- **Six compression tools** — compress_prompt, compress_history, compress_output, read_file_delta, write_file_delta, encode_fragments, update_memory, navigate_codebase → `orbit/tools.py`, `orbit/memory.py` · M/low.
+- **Zero ML at query time** — HashEmbedder (keyword-bound) or BGE-small optional → `core/agent/tool_service.py` · S/low.
+- **MCP-native** — slots in front of prompt caching, mem0, Letta, or Claude Code → `runtime/protocols/` · S/low.
+- **Deterministic** — same input = same output; reproducible benchmarks → `benchmark/` · S/low.
+- *Avoid:* not a memory platform or recall system; pipe mem0/Zep in front if you need neural recall; HashEmbedder is keyword-bound (use BGE for semantic).
+
+### hotchpotch/open_provence (MIT)
+- **Open-source Provence-style reranker-pruner** — removes irrelevant context while assigning relevance scores → `core/agent/tool_service.py`, `tools/doc_retrieval.py` · M/low.
+- **Four checkpoints (30M–310M parameters)** — English and Japanese; xsmall (30M) runs on CPU, flies on GPU → `scripts/download_dependencies.py` · M/low.
+- **Drop ~99% of off-topic sentences** while compressing 80–90% of relevant text → `core/agent/tool_service.py` · M/low.
+- **Python API** — `AutoModel.from_pretrained(model_name, trust_remote_code=True)` → `core/agent/tool_service.py` · S/low.
+- **Dataset tooling** — pipelines for building OpenProvence-format corpora from your own data → `scripts/` · S/low.
+- *Avoid:* ModernBERT backbone; English/Japanese only.
+
+### fkiene/llmtrim (MIT)
+- **Local proxy** — compresses LLM API traffic; -31% input / -74% output / -66% round-trip cost → `providers/model_gateway.py`, `core/agent/tool_service.py` · M/low.
+- **No model to load** — lexical retrieval, skeletonization, serialization; runs ~5 ms/call → `core/agent/tool_service.py` · S/low.
+- **Proxy + CLI + MCP + library** — Rust core, Python/Ruby/Swift/Kotlin/JS bindings → `cli/`, `runtime/protocols/` · S/low.
+- **Cache discipline** — marks + stabilizes invariant prefix so prompt cache stays warm → `providers/model_gateway.py` · S/low.
+- **Skeletonization** — tree-sitter keeps relevant function bodies, drops rest to signatures (14 languages) → `orbit/tools.py` · S/low.
+- **Quality gate** — reverts any lossy cut whose query-relevant coverage drops too far → `core/agent/verification.py` · S/low.
+- *Avoid:* quality gate is heuristic; some lossy stages are inherently lossy.
+
+### adit-rah/nanofable (MIT)
+- **8 tiny language models trained from scratch** on TinyStories — 1.2 MB to 55 MB → `scripts/download_dependencies.py` · S/low.
+- **Browser-based inference** — vanilla JS, no server, no WASM toolkit → `extensions/jbrowser` · S/low.
+- **Ternary weights** — 5 trits per byte; tiny_ternary is 1.22 MB for 1.4M params → `scripts/download_dependencies.py` · S/low.
+- **Exploratory** — coherence scores 0.91-3.83; not production-grade → research only.
+- *Avoid:* research project; coherence is low; not suitable for production agent use.
 
 ---
 
@@ -709,7 +774,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, trim-1, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, trim-1, barber, Supercompress, ContextCrumb, imptokens, mcp-sophon, open_provence, llmtrim, nanofable, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
 | **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
@@ -798,6 +863,15 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | aisix | Apache-2.0 | Rust AI gateway — 5 adapter families, routing & failover, guardrails, observability |
 | ferrox | MIT | Stateless Rust LLM gateway — lock-free circuit breakers, virtual keys, streaming |
 | inference-gateway | MIT | Cloud-native gateway — 100+ providers, MCP server, A2A server, middleware marketplace |
+| trim-1 | Apache-2.0 | 1.2 MB context trimmer — 712 gradient-boosted trees, CPU-only, verbatim line selection |
+| barber | MIT | Query-aware context trimming — lexical fallback + semantic mode, zero queries at trim time |
+| Supercompress | MIT | Query-aware context compression — ~65% cut, Neural v2 + Compiler engines, MCP plugin |
+| ContextCrumb | MIT | Token-level compressor — ONNX backend, code-aware, 30-70% savings on prose |
+| imptokens | MIT | Local context preprocessor — sentence mode (no model) + logprob mode (GGUF models) |
+| mcp-sophon | MIT | Deterministic context compressor for MCP agents — 5.2 MB Rust binary, zero ML at query time |
+| open_provence | MIT | Provence-style reranker-pruner — 30M-310M checkpoints, English + Japanese |
+| llmtrim | MIT | Local proxy — -31% input / -74% output, cache discipline, skeletonization, quality gate |
+| nanofable | MIT | 8 tiny language models trained from scratch — 1.2 MB to 55 MB, browser-based inference |
 
 ---
 
