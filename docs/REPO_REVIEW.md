@@ -396,6 +396,14 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Supply-chain hardening:** pinned exact deps, `--ignore-scripts`, lockfile as ground truth, lifecycle-script allowlist. → CI/deps policy · M/low.
 - *Avoid:* Pi has **no** permission system — the inverse of invariant #1.
 
+### worldflowai/everything-claude-code (MIT)
+- **Complete Claude Code toolkit** — agents, commands, skills, rules, hooks, and MCP configurations evolved over 10+ months of intensive daily use → `skills/`, `core/harness/`, `core/agent/tool_service.py` · M/low.
+- **Production-ready agents** evolved from Anthropic hackathon-winning work → `core/agent/loop.py`, `core/harness/` · M/low.
+- **Hooks + rules system** — session hooks for extraction, validation, and automation → `core/agent/verification.py`, `core/harness/` · S/low.
+- **MCP configurations** — pre-built MCP server configs for seamless integration → `runtime/protocols/` · S/low.
+- **Slash commands + skills** — command registry with parameterized skills → `cli/cockpit.py`, `skills/` · S/low.
+- **Community resource** — 4600+ stars, community-maintained plugin ecosystem → `extensions/jbrowser` concept · S/low.
+
 ### OpenHands (MIT)
 - **Repo-boundary discipline** enforced by architecture tests (already mirrored by FREEZE). → `tests/` no-bypass test · S/low.
 - **Per-conversation execution isolation** (own container per conversation; workspace survives container replacement). → `ToolExecutionService` sandbox · L/med.
