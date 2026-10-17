@@ -10,7 +10,12 @@ import time
 
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "jarvis-desktop")
+if _DESKTOP_ROOT not in sys.path:
+    sys.path.insert(0, _DESKTOP_ROOT)
 from app.integration.jarvis_backend import BackendState, JarvisBackend
 
 

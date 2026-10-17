@@ -276,8 +276,14 @@ class STTManager:
 
     def record_and_transcribe(self, duration: float = 5.0,
                               stop_event: threading.Event | None = None) -> STTResult:
-        """Record and transcribe, trying local first, then cloud fallback."""
+        """Record and transcribe, trying local first, then cloud fallback.
+
+        Records audio once and reuses the same bytes for both local and cloud
+        transcription. Does not record twice.
+        """
         # Record audio once
+        audio_bytes = None
+
         if self._local:
             audio_bytes = self._local.record_audio(duration,
                                                    stop_event=stop_event)
@@ -290,16 +296,8 @@ class STTManager:
                 self._active_engine = "whisper.cpp"
                 return result
 
-        # Cloud fallback: transcribe the same audio via cloud
-        # Need to record again since cloud STT needs its own audio
-        if self._local:
-            audio_bytes = self._local.record_audio(duration,
-                                                   stop_event=stop_event)
-            if not audio_bytes:
-                return STTResult("", 0.0, "no-audio", 0.0)
-
-        # Record fresh for cloud if we didn't already have audio
-        if not self._local:
+        # Cloud fallback: reuse the same audio bytes we already captured
+        if audio_bytes is None:
             # No local STT available - need to record directly
             try:
                 import sounddevice as sd

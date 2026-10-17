@@ -213,7 +213,9 @@ class ChatWindow(QMainWindow):
 
         # Gestures
         gesture_cb = QCheckBox("Enable gesture control")
-        gesture_cb.setChecked(self._gesture_active)
+        gesture_cb.setChecked(
+            self._coordinator._gesture_active if self._coordinator else False
+        )
         layout.addWidget(gesture_cb)
 
         btn = QPushButton("Close")

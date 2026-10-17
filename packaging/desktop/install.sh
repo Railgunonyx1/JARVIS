@@ -51,7 +51,7 @@ chmod +x "$BIN_DIR/jarvis-desktop"
 
 # Install desktop entry
 mkdir -p "$DESKTOP_DIR"
-cp "$REPO_ROOT/jarvis-desktop/packaging/JARVIS.desktop" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
+cp "$REPO_ROOT/packaging/desktop/JARVIS.desktop" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
 sed -i "s|Exec=jarvis-desktop|Exec=$BIN_DIR/jarvis-desktop|g" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
 
 # Install icon

@@ -130,12 +130,27 @@ class JarvisBackend(QObject):
                 return
             self._state = BackendState.STOPPING
 
-        # Signal the worker thread to stop
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
+        # Signal the worker thread to stop by putting a sentinel in the queue.
+        # The _main() loop checks self.state each iteration and will exit
+        # when it sees STOPPING. Putting None in the queue unblocks get()
+        # if it's currently waiting.
+        if self._input_queue:
+            try:
+                self._input_queue.put_nowait(None)
+            except Exception:
+                pass
 
         if self._thread and wait:
             self._thread.join(timeout=timeout)
+
+        # If the thread is still alive after the timeout, force-stop the loop
+        # as a last resort. This can interrupt active work, so only use it
+        # when the graceful shutdown timed out.
+        if self._thread and self._thread.is_alive():
+            logger.warning("Backend thread did not stop gracefully, forcing stop")
+            if self._loop and self._loop.is_running():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+            self._thread.join(timeout=5.0)
 
         with self._state_lock:
             self._state = BackendState.STOPPED

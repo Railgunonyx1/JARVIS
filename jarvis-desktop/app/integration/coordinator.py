@@ -141,7 +141,7 @@ class AppCoordinator(QObject):
         self._backend.response_ready.connect(self._on_backend_response)
         self._backend.status_changed.connect(self._on_backend_status)
         self._backend.state_changed.connect(self._on_backend_state)
-        self._backend.start()
+        self._backend.start(wait=False)
 
         # Voice
         self._voice = VoiceManager(
@@ -191,11 +191,21 @@ class AppCoordinator(QObject):
     def _on_backend_response(self, response: AgentResponse) -> None:
         if response.success:
             self.chat_message.emit("jarvis", response.text)
-            # Speak response if voice is active
-            if self._voice and self._voice.state == VoiceState.IDLE:
-                self._voice.speak(response.text)
+            # Speak response if voice is active or thinking (voice turn in progress)
+            if self._voice:
+                if self._voice.state == VoiceState.IDLE:
+                    self._voice.speak(response.text)
+                elif self._voice.state == VoiceState.THINKING:
+                    # Voice turn in progress: transition THINKING → SPEAKING
+                    self._voice.speak(response.text)
+                elif self._voice.state == VoiceState.ERROR:
+                    # Voice errored: don't speak, just report
+                    self.chat_message.emit("jarvis", f"[Voice error: {response.error or response.text}]")
         else:
             self.chat_message.emit("jarvis", f"[Error: {response.error}]")
+            # If voice was thinking and we got an error, reset to IDLE
+            if self._voice and self._voice.state == VoiceState.THINKING:
+                self._voice._set_state(VoiceState.IDLE)
         self._set_state(AppState.IDLE)
 
     def _on_backend_status(self, status: str) -> None:
