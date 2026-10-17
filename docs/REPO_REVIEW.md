@@ -430,6 +430,15 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Per-turn effort/model routing** (cheap ask → small model; resume-after-tool → low reasoning). → `providers/model_gateway.py` · M/med.
 - *Avoid:* rewriting the **user's** prompt (hurts quality); telemetry; silent vendor-cloud routing.
 
+### caveman-ai/trim-1 (Apache-2.0)
+- **1.2 MB context trimmer** — 712 gradient-boosted trees (not a neural network) that score each line of a context against the current query and drop lines below a floor; kept lines are verbatim in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Deterministic, CPU-only** — milliseconds on one CPU core, no GPU, no network, no extra model request; same context+query always yields same result → `core/agent/tool_service.py` · S/low.
+- **Pure Go, zero dependencies** — `go install github.com/caveman-ai/trim-1/cmd/trim@latest`; model embedded in binary → `scripts/download_dependencies.py` · S/low.
+- **Conservative by default** — balanced mode cuts ~1.9% of short dense text (tool outputs); on long documents up to 89% token reduction while keeping evidence in 94% of cases → `core/agent/tool_service.py` · S/low.
+- **No rewrite/summary** — never hallucinates or changes kept text; marker line such as "… 25 lines …" shows where lines were removed → `core/agent/tool_service.py` · S/low.
+- **Best for long-document retrieval** — not for short dense tool outputs (default cuts only 1.9% there); pair with caveman-style terse output rules → `core/agent/tool_service.py`, `core/harness/` · S/low.
+- *Avoid:* English-only training; drops later evidence sharing no words with query; cannot shorten a single long line.
+
 ### headroomlabs-ai/headroom (Apache-2.0)
 - **Content-typed compression router** (JSON→variance-based pruning keeping outliers/first/last; code→AST-aware; prose→model) applied only to *new* bytes; **frozen prompt prefix kept byte-identical to protect KV cache.** → `providers/model_gateway.py`, `core/agent/tool_service.py` · L/med.
 - **Reversible compression (CCR)** with a `retrieve` tool for full text. → tool-service + new low-risk tool · M/low.
@@ -700,7 +709,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, trim-1, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
 | **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
@@ -743,6 +752,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | system-prompts-of-ai-tools | GPL | Tool-result/planning pattern mining only |
 | ponytail | MIT | The ladder + non-negotiable carve-outs |
 | caveman | Apache-2.0 | Terse-output rules + reversible input compression |
+| trim-1 | Apache-2.0 | 1.2 MB context trimmer — 712 gradient-boosted trees, CPU-only, verbatim line selection |
 | headroom | Apache-2.0 | Cache-safe content-typed compression + CCR |
 | mem0 | OSS core | ADD-only extraction + multi-signal RRF retrieval |
 | claude-mem | — | 3-layer progressive search + FTS5 + `<private>` tags |
