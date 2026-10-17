@@ -1,10 +1,8 @@
 """Phase 6 — integration tests: coordinator wires all subsystems."""
 
-import sys
 import os
+import sys
 import time
-
-import pytest
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
@@ -22,7 +20,7 @@ def test_coordinator_constructs():
 
 
 def test_coordinator_starts_and_stops():
-    from app.integration.coordinator import AppCoordinator, AppState
+    from app.integration.coordinator import AppCoordinator
     coord = AppCoordinator()
     coord.start()
     assert coord.is_running
@@ -33,7 +31,7 @@ def test_coordinator_starts_and_stops():
 
 
 def test_coordinator_send_message():
-    from app.integration.coordinator import AppCoordinator, AppState
+    from app.integration.coordinator import AppCoordinator
     messages = []
     coord = AppCoordinator(
         mode="agent",
@@ -47,7 +45,7 @@ def test_coordinator_send_message():
 
 
 def test_coordinator_voice_toggle():
-    from app.integration.coordinator import AppCoordinator, AppState
+    from app.integration.coordinator import AppCoordinator
     coord = AppCoordinator()
     coord.start()
     coord.toggle_voice()
@@ -67,7 +65,7 @@ def test_coordinator_gesture_toggle():
 
 
 def test_coordinator_workspace_toggle():
-    from app.integration.coordinator import AppCoordinator, AppState
+    from app.integration.coordinator import AppCoordinator
     coord = AppCoordinator()
     coord.start()
     coord.toggle_workspace()

@@ -1,11 +1,8 @@
 """Phase 3 — voice system tests (hermetic, no audio hardware)."""
 
-import sys
 import os
+import sys
 import time
-import threading
-
-import pytest
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
@@ -99,7 +96,7 @@ def test_voice_manager_status():
 
 def test_voice_manager_with_mock_backend():
     """Voice manager should send transcribed text to backend."""
-    from app.voice.voice_manager import VoiceManager, VoiceState
+    from app.voice.voice_manager import VoiceManager
 
     sent = []
     class MockBackend:

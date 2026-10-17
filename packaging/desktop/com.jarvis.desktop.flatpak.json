@@ -22,41 +22,71 @@
   },
   "modules": [
     {
-      "name": "jarvis-desktop",
+      "name": "pyside6",
       "buildsystem": "simple",
       "build-commands": [
-        "install -D app/main.py /app/lib/jarvis-desktop/app/main.py",
-        "install -D app/ui/chat_window.py /app/lib/jarvis-desktop/app/ui/chat_window.py",
-        "install -D app/integration/jarvis_backend.py /app/lib/jarvis-desktop/app/integration/jarvis_backend.py",
-        "install -D app/integration/coordinator.py /app/lib/jarvis-desktop/app/integration/coordinator.py",
-        "install -D app/voice/tts.py /app/lib/jarvis-desktop/app/voice/tts.py",
-        "install -D app/voice/stt.py /app/lib/jarvis-desktop/app/voice/stt.py",
-        "install -D app/voice/voice_manager.py /app/lib/jarvis-desktop/app/voice/voice_manager.py",
-        "install -D app/gestures/camera.py /app/lib/jarvis-desktop/app/gestures/camera.py",
-        "install -D app/gestures/tracking.py /app/lib/jarvis-desktop/app/gestures/tracking.py",
-        "install -D app/gestures/recognition.py /app/lib/jarvis-desktop/app/gestures/recognition.py",
-        "install -D app/gestures/mappings.py /app/lib/jarvis-desktop/app/gestures/mappings.py",
-        "install -D app/desktop/actions.py /app/lib/jarvis-desktop/app/desktop/actions.py",
-        "install -D app/workspace3d/workspace3d.py /app/lib/jarvis-desktop/app/workspace3d/workspace3d.py",
-        "install -D app/workspace3d/scene.qml /app/lib/jarvis-desktop/app/workspace3d/scene.qml",
-        "install -D app/diagnostics/monitor.py /app/lib/jarvis-desktop/app/diagnostics/monitor.py",
-        "install -D app/diagnostics/__init__.py /app/lib/jarvis-desktop/app/diagnostics/__init__.py",
-        "ln -s /app/lib/jarvis-desktop/app/main.py /app/bin/jarvis-desktop"
+        "pip3 install --prefix=/app PySide6"
+      ],
+      "sources": []
+    },
+    {
+      "name": "jarvis-core",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/lib/jarvis",
+        "cp -r core /app/lib/jarvis/",
+        "cp -r providers /app/lib/jarvis/",
+        "cp -r tools /app/lib/jarvis/",
+        "cp -r runtime /app/lib/jarvis/",
+        "cp -r memory /app/lib/jarvis/",
+        "cp -r skills /app/lib/jarvis/",
+        "mkdir -p /app/lib/jarvis/config",
+        "cp config/models.toml /app/lib/jarvis/config/",
+        "cp -r jarvis-desktop/app /app/lib/jarvis/jarvis-desktop-app",
+        "ln -s /app/lib/jarvis/jarvis-desktop-app/main.py /app/bin/jarvis-desktop"
       ],
       "sources": [
         {
           "type": "dir",
-          "path": "app"
+          "path": "core",
+          "dest": "core"
+        },
+        {
+          "type": "dir",
+          "path": "providers",
+          "dest": "providers"
+        },
+        {
+          "type": "dir",
+          "path": "tools",
+          "dest": "tools"
+        },
+        {
+          "type": "dir",
+          "path": "runtime",
+          "dest": "runtime"
+        },
+        {
+          "type": "dir",
+          "path": "memory",
+          "dest": "memory"
+        },
+        {
+          "type": "dir",
+          "path": "skills",
+          "dest": "skills"
+        },
+        {
+          "type": "dir",
+          "path": "config",
+          "dest": "config"
+        },
+        {
+          "type": "dir",
+          "path": "jarvis-desktop/app",
+          "dest": "jarvis-desktop-app"
         }
       ]
-    },
-    {
-      "name": "pyside6",
-      "buildsystem": "simple",
-      "build-commands": [
-        "pip install --no-index --find-links=/app/pyside6-wheels PySide6"
-      ],
-      "sources": []
     }
   ]
 }

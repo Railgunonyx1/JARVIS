@@ -2,10 +2,10 @@
 # JARVIS Desktop Companion — Installer for Bazzite Linux
 set -euo pipefail
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/jarvis-desktop}"
-DESKTOP_DIR="${DESKTOP_DIR:-/usr/share/applications}"
-ICON_DIR="${ICON_DIR:-/usr/share/icons/hicolor/scalable/apps}"
-BIN_DIR="${BIN_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
+DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
+ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 
 # Resolve the directory containing this script, then go up to the repo root.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,11 +33,51 @@ if ! python3 -c "import PySide6" 2>/dev/null; then
     }
 fi
 
-# Install the entire repository so backend modules (core, providers, tools,
-# runtime, memory) are importable alongside the desktop app.
+# Stage only required runtime files — never secrets, caches, or dev artifacts.
 echo "Installing application files to $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
-cp -a "$REPO_ROOT" "$INSTALL_DIR/jarvis-repo"
+mkdir -p "$INSTALL_DIR/jarvis-repo"
+
+tar -C "$REPO_ROOT" \
+  --exclude='./.git' \
+  --exclude='./.env' \
+  --exclude='./.env.*' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='*.pyo' \
+  --exclude='./.pytest_cache' \
+  --exclude='./.ruff_cache' \
+  --exclude='./venv' \
+  --exclude='*.egg-info' \
+  --exclude='./dist' \
+  --exclude='./build' \
+  --exclude='./.mypy_cache' \
+  --exclude='./node_modules' \
+  --exclude='./orbit-browser' \
+  --exclude='./extensions' \
+  --exclude='./jbrowser-bridge' \
+  --exclude='./.github' \
+  --exclude='*.md' \
+  --exclude='./research_files' \
+  --exclude='./docs' \
+  --exclude='./audits' \
+  --exclude='./benchmark' \
+  --exclude='./packaging' \
+  --exclude='./scripts' \
+  --exclude='*.bat' \
+  --exclude='*.sh' \
+  --exclude='*.ps1' \
+  --exclude='*.desktop' \
+  --exclude='*.xml' \
+  --exclude='*.spec' \
+  --exclude='*.iss' \
+  --exclude='*.yml' \
+  --exclude='*.yaml' \
+  --exclude='./pytest.ini' \
+  --exclude='./pyproject.toml' \
+  -cf - . | tar -C "$INSTALL_DIR/jarvis-repo" -xf -
+
+# Ensure required subdirectories exist even if empty after exclusions
+mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 
 # Create wrapper script — PYTHONPATH points into the installed repo copy so
 # core, providers, tools, runtime, memory are importable.

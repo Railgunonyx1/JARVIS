@@ -63,6 +63,7 @@ class AppCoordinator(QObject):
     # Signals — emitted from worker threads, safe to connect to GUI slots
     state_changed = Signal(object)  # AppState
     chat_message = Signal(str, str)  # role, text
+    voice_state_changed = Signal(object)  # VoiceState
     voice_transcription = Signal(str)
     gesture_action = Signal(str)
     workspace_update = Signal(str, str)
@@ -90,6 +91,7 @@ class AppCoordinator(QObject):
 
         self._gesture_active = False
         self._workspace_visible = False
+        self._voice_turn_active = False
         self._running = False
 
     @property
@@ -189,16 +191,13 @@ class AppCoordinator(QObject):
     def _on_backend_response(self, response: AgentResponse) -> None:
         if response.success:
             self.chat_message.emit("jarvis", response.text)
-            # Speak response if voice is active or thinking (voice turn in progress)
-            if self._voice:
-                if self._voice.state == VoiceState.IDLE:
-                    self._voice.speak(response.text)
-                elif self._voice.state == VoiceState.THINKING:
-                    # Voice turn in progress: transition THINKING → SPEAKING
-                    self._voice.speak(response.text)
-                elif self._voice.state == VoiceState.ERROR:
-                    # Voice errored: don't speak, just report
-                    self.chat_message.emit("jarvis", f"[Voice error: {response.error or response.text}]")
+            if self._voice_turn_active:
+                if self._voice:
+                    if self._voice.state == VoiceState.IDLE:
+                        self._voice.speak(response.text)
+                    elif self._voice.state == VoiceState.THINKING:
+                        self._voice.speak(response.text)
+                self._voice_turn_active = False
         else:
             self.chat_message.emit("jarvis", f"[Error: {response.error}]")
             # If voice was thinking and we got an error, reset to IDLE
@@ -224,6 +223,7 @@ class AppCoordinator(QObject):
             self._voice.stop_speaking()
 
     def _on_voice_state(self, state: VoiceState) -> None:
+        self.voice_state_changed.emit(state)
         if state == VoiceState.LISTENING:
             self._set_state(AppState.LISTENING)
         elif state == VoiceState.SPEAKING:
@@ -232,6 +232,7 @@ class AppCoordinator(QObject):
             self._set_state(AppState.IDLE)
 
     def _on_voice_transcription(self, text: str) -> None:
+        self._voice_turn_active = True
         self.voice_transcription.emit(text)
 
     def _on_voice_response(self, text: str) -> None:

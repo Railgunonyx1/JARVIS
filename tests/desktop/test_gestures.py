@@ -1,10 +1,8 @@
 """Phase 4 — gesture recognition + desktop action tests (hermetic)."""
 
-import sys
 import os
+import sys
 import time
-
-import pytest
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
@@ -73,7 +71,7 @@ class TestGestureRecognition:
         from app.gestures.recognition import GestureRecognizer, GestureType
         rec = GestureRecognizer(debounce_seconds=1.0)
         hand = _make_hand(_default_landmarks())
-        events1 = rec.process([hand])
+        rec.process([hand])
         events2 = rec.process([hand])  # immediately after
         # Second call should be debounced
         assert all(e.gesture == GestureType.NONE for e in events2)
@@ -92,8 +90,8 @@ class TestGestureRecognition:
 
 class TestGestureMapping:
     def test_default_mappings_exist(self):
-        from app.gestures.mappings import GestureMapper, DEFAULT_MAPPINGS, GestureType
-        mapper = GestureMapper()
+        from app.gestures.mappings import DEFAULT_MAPPINGS, GestureMapper, GestureType
+        GestureMapper()
         assert len(DEFAULT_MAPPINGS) >= 5
         assert GestureType.PINCH in DEFAULT_MAPPINGS
         assert GestureType.OPEN_PALM in DEFAULT_MAPPINGS
@@ -122,13 +120,13 @@ class TestGestureMapping:
 
 class TestDesktopActions:
     def test_action_layer_constructs(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import DesktopActionLayer
         layer = DesktopActionLayer()
         actions = layer.get_actions()
         assert len(actions) >= 5
 
     def test_register_and_execute_safe_action(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import ActionRisk, DesktopActionLayer
         layer = DesktopActionLayer()
         called = []
         layer.register("test_action", "Test", ActionRisk.SAFE, lambda: called.append(True))
@@ -142,7 +140,7 @@ class TestDesktopActions:
         assert layer.execute("nonexistent") is False
 
     def test_confirmation_required_blocks_without_confirm(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import ActionRisk, DesktopActionLayer
         layer = DesktopActionLayer()
         called = []
         layer.register("dangerous", "Dangerous", ActionRisk.HIGH,
@@ -152,7 +150,7 @@ class TestDesktopActions:
         assert len(called) == 0
 
     def test_confirmation_allows_with_confirm(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import ActionRisk, DesktopActionLayer
         layer = DesktopActionLayer()
         called = []
         layer.register("dangerous", "Dangerous", ActionRisk.HIGH,
@@ -162,7 +160,7 @@ class TestDesktopActions:
         assert len(called) == 1
 
     def test_confirmation_handler_called(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import ActionRisk, DesktopActionLayer
         confirmed = []
         def on_confirm(name):
             confirmed.append(name)
@@ -176,7 +174,7 @@ class TestDesktopActions:
         assert "dangerous" in confirmed
 
     def test_action_history_logged(self):
-        from app.desktop.actions import DesktopActionLayer, ActionRisk
+        from app.desktop.actions import ActionRisk, DesktopActionLayer
         layer = DesktopActionLayer()
         layer.register("hist_test", "Test", ActionRisk.SAFE, lambda: None)
         layer.execute("hist_test")

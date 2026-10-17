@@ -10,7 +10,6 @@ from __future__ import annotations
 import sys
 
 from app.integration.coordinator import AppCoordinator
-from PySide6.QtCore import Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,8 +27,6 @@ from PySide6.QtWidgets import (
 
 class ChatWindow(QMainWindow):
     """Main application window — minimal chat interface."""
-
-    voice_state_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -125,7 +122,6 @@ class ChatWindow(QMainWindow):
         self.gesture_btn.clicked.connect(self._on_gesture_toggle)
         self.workspace_btn.clicked.connect(self._on_workspace_toggle)
         self.settings_btn.clicked.connect(self._on_settings)
-        self.voice_state_changed.connect(self._on_voice_state)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet("""
@@ -159,6 +155,7 @@ class ChatWindow(QMainWindow):
         self._coordinator = AppCoordinator(mode=mode)
         self._coordinator.state_changed.connect(self._on_app_state)
         self._coordinator.chat_message.connect(self._on_chat_message)
+        self._coordinator.voice_state_changed.connect(self._on_voice_state)
         self._coordinator.voice_transcription.connect(self._on_voice_transcription)
         self._coordinator.gesture_action.connect(self._on_gesture_action)
         self._coordinator.workspace_update.connect(self._on_workspace_update)
@@ -171,7 +168,6 @@ class ChatWindow(QMainWindow):
         text = self.input_field.text().strip()
         if not text or not self._coordinator:
             return
-        self._append_message("user", text)
         self.input_field.clear()
         self._coordinator.send_message(text)
 
@@ -189,7 +185,10 @@ class ChatWindow(QMainWindow):
 
     def _on_settings(self) -> None:
         """Handle settings button click."""
+        from app.settings import load, save
         from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLabel, QPushButton, QVBoxLayout
+
+        current = load()
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Settings")
@@ -198,34 +197,52 @@ class ChatWindow(QMainWindow):
 
         layout.addWidget(QLabel("Settings"))
 
-        # Model selection
         layout.addWidget(QLabel("Model:"))
         model_combo = QComboBox()
-        model_combo.addItems([
+        models = [
             "Qwen/Qwen2.5-72B-Instruct (default)",
             "deepseek-ai/DeepSeek-R1",
             "openai/gpt-oss-120b",
             "Qwen/Qwen3-4B-Thinking-2507",
             "mistralai/Mistral-Nemo-Instruct-2407",
-        ])
+        ]
+        model_combo.addItems(models)
+        if current.get("model"):
+            idx = models.index(current["model"]) if current["model"] in models else -1
+            if idx >= 0:
+                model_combo.setCurrentIndex(idx)
         layout.addWidget(model_combo)
 
         layout.addWidget(QLabel(""))
 
-        # Voice
         voice_cb = QCheckBox("Enable voice (push-to-talk)")
-        voice_cb.setChecked(self._coordinator is not None and self._coordinator.voice is not None)
+        voice_cb.setChecked(current.get("voice_enabled", True))
         layout.addWidget(voice_cb)
 
-        # Gestures
         gesture_cb = QCheckBox("Enable gesture control")
-        gesture_cb.setChecked(
-            self._coordinator._gesture_active if self._coordinator else False
-        )
+        gesture_cb.setChecked(current.get("gesture_enabled", False))
         layout.addWidget(gesture_cb)
 
-        btn = QPushButton("Close")
-        btn.clicked.connect(dialog.accept)
+        def _save():
+            new_settings = {
+                "model": models[model_combo.currentIndex()] if model_combo.currentIndex() >= 0 else "",
+                "voice_enabled": voice_cb.isChecked(),
+                "gesture_enabled": gesture_cb.isChecked(),
+            }
+            save(new_settings)
+            if self._coordinator:
+                if voice_cb.isChecked() and not self._coordinator._voice:
+                    pass
+                elif not voice_cb.isChecked() and self._coordinator._voice:
+                    pass
+                if gesture_cb.isChecked() and not self._coordinator._gesture_active:
+                    self._coordinator.toggle_gestures()
+                elif not gesture_cb.isChecked() and self._coordinator._gesture_active:
+                    self._coordinator.toggle_gestures()
+            dialog.accept()
+
+        btn = QPushButton("Save")
+        btn.clicked.connect(_save)
         layout.addWidget(btn)
 
         dialog.exec()

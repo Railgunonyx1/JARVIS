@@ -99,7 +99,7 @@ class VoiceManager:
 
     def start_listening(self) -> None:
         """Start push-to-talk recording."""
-        if self.state != VoiceState.IDLE:
+        if self.state not in (VoiceState.IDLE, VoiceState.ERROR):
             return
         self._set_state(VoiceState.LISTENING)
         self._stop_recording.clear()

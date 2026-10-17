@@ -1,7 +1,7 @@
 """Phase 7 — optimization tests: performance monitoring and benchmarks."""
 
-import sys
 import os
+import sys
 import time
 
 import pytest
@@ -173,7 +173,7 @@ def test_chat_window_has_message_limit():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.ui.chat_window import ChatWindow
     window = ChatWindow()
     assert window._max_messages == 500

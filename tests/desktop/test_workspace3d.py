@@ -1,8 +1,7 @@
 """Phase 5 — 3D workspace tests (hermetic, offscreen)."""
 
-import sys
 import os
-import time
+import sys
 
 import pytest
 
@@ -18,7 +17,7 @@ def test_workspace3d_constructs():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     assert not ws.is_loaded
@@ -38,7 +37,7 @@ def test_workspace3d_loads_qml():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     result = ws.load()
@@ -51,7 +50,7 @@ def test_workspace3d_panel_text():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.set_panel_text("chat", "Test message")
@@ -64,7 +63,7 @@ def test_workspace3d_show_hide():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.load()
@@ -79,7 +78,7 @@ def test_workspace3d_system_stats():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.update_system_stats(45.0, 60.0, 30.0)
@@ -93,7 +92,7 @@ def test_workspace3d_voice_status():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.update_voice_status("Listening")
@@ -105,7 +104,7 @@ def test_workspace3d_tasks():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.update_tasks(["Task 1", "Task 2"])
@@ -119,7 +118,7 @@ def test_workspace3d_chat():
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
+    QApplication.instance() or QApplication([])
     from app.workspace3d.workspace3d import Workspace3D
     ws = Workspace3D()
     ws.update_chat(["Hello", "How are you?"])
