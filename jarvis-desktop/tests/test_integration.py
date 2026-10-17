@@ -36,8 +36,9 @@ def test_coordinator_send_message():
     from app.integration.coordinator import AppCoordinator, AppState
     messages = []
     coord = AppCoordinator(
-        on_chat_message=lambda role, text: messages.append((role, text)),
+        mode="agent",
     )
+    coord.chat_message.connect(lambda role, text: messages.append((role, text)))
     coord.start()
     coord.send_message("Hello JARVIS")
     time.sleep(0.5)
@@ -100,9 +101,8 @@ def test_coordinator_status():
 def test_coordinator_workspace_panel_update():
     from app.integration.coordinator import AppCoordinator
     updates = []
-    coord = AppCoordinator(
-        on_workspace_update=lambda panel, text: updates.append((panel, text)),
-    )
+    coord = AppCoordinator()
+    coord.workspace_update.connect(lambda panel, text: updates.append((panel, text)))
     coord.start()
     coord.update_workspace_panel("chat", "Test")
     assert ("chat", "Test") in updates

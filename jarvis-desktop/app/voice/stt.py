@@ -11,6 +11,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Callable
@@ -273,11 +274,13 @@ class STTManager:
             self._active_engine = "elevenlabs"
         return result
 
-    def record_and_transcribe(self, duration: float = 5.0) -> STTResult:
+    def record_and_transcribe(self, duration: float = 5.0,
+                              stop_event: threading.Event | None = None) -> STTResult:
         """Record and transcribe, trying local first, then cloud fallback."""
         # Record audio once
         if self._local:
-            audio_bytes = self._local.record_audio(duration)
+            audio_bytes = self._local.record_audio(duration,
+                                                   stop_event=stop_event)
             if not audio_bytes:
                 return STTResult("", 0.0, "no-audio", 0.0)
 
@@ -290,7 +293,8 @@ class STTManager:
         # Cloud fallback: transcribe the same audio via cloud
         # Need to record again since cloud STT needs its own audio
         if self._local:
-            audio_bytes = self._local.record_audio(duration)
+            audio_bytes = self._local.record_audio(duration,
+                                                   stop_event=stop_event)
             if not audio_bytes:
                 return STTResult("", 0.0, "no-audio", 0.0)
 
@@ -316,6 +320,9 @@ class STTManager:
                                     dtype=np.float32, callback=callback):
                     while recording and (time.time() - start) < duration:
                         time.sleep(0.05)
+                        if stop_event and stop_event.is_set():
+                            recording = False
+                            break
                         if frames and len(frames) > 10:
                             recent = np.concatenate(frames[-10:])
                             if np.abs(recent).max() < 0.01:

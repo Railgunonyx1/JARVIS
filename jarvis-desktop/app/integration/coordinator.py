@@ -5,6 +5,11 @@ Manages the full integration flow:
 
 Ensures subsystems don't conflict (e.g., voice and gestures don't both
 try to control the same action simultaneously).
+
+All communication between subsystems and the UI happens through Qt signals,
+which are thread-safe when crossing threads (Qt uses queued connections
+when a signal is emitted from a non-GUI thread and connected to a slot
+living in the GUI thread).
 """
 
 from __future__ import annotations
@@ -15,7 +20,9 @@ import time
 from enum import StrEnum
 from typing import Callable
 
-from app.integration.jarvis_backend import JarvisBackend, AgentResponse
+from PySide6.QtCore import QObject, Signal
+
+from app.integration.jarvis_backend import JarvisBackend, AgentResponse, BackendState
 from app.voice.voice_manager import VoiceManager, VoiceState
 from app.gestures.camera import Camera
 from app.gestures.tracking import HandTracker
@@ -36,35 +43,38 @@ class AppState(StrEnum):
     WORKSPACE_OPEN = "workspace_open"
 
 
-class AppCoordinator:
+class AppCoordinator(QObject):
     """Central coordinator for all desktop subsystems.
 
     Owns the backend, voice, gestures, workspace, and action layer.
     Routes events between them and prevents conflicts.
 
+    All public signals are emitted from worker threads but are safe to
+    connect to Qt slots on the main thread — Qt automatically delivers
+    them via queued connections when crossing threads.
+
     Usage:
         coord = AppCoordinator()
+        coord.state_changed.connect(my_state_handler)
+        coord.chat_message.connect(my_chat_handler)
         coord.start()
         coord.send_message("Hello")
-        coord.toggle_voice()
-        coord.toggle_gestures()
-        coord.toggle_workspace()
         coord.shutdown()
     """
 
+    # Signals — emitted from worker threads, safe to connect to GUI slots
+    state_changed = Signal(object)  # AppState
+    chat_message = Signal(str, str)  # role, text
+    voice_transcription = Signal(str)
+    gesture_action = Signal(str)
+    workspace_update = Signal(str, str)
+
     def __init__(self, *, mode: str = "agent",
-                 on_state_change: Callable[[AppState], None] | None = None,
-                 on_chat_message: Callable[[str, str], None] | None = None,
-                 on_voice_transcription: Callable[[str], None] | None = None,
-                 on_gesture_action: Callable[[str], None] | None = None,
-                 on_workspace_update: Callable[[str, str], None] | None = None,
-                 confirmation_handler: Callable[[str], bool] | None = None):
+                 confirmation_handler: Callable[[str], bool] | None = None,
+                 max_iterations: int = 10):
+        super().__init__()
         self._mode = mode
-        self._on_state = on_state_change
-        self._on_chat = on_chat_message
-        self._on_voice_transcription = on_voice_transcription
-        self._on_gesture_action = on_gesture_action
-        self._on_workspace_update = on_workspace_update
+        self._max_iterations = max_iterations
         self._confirmation_handler = confirmation_handler
 
         self._state = AppState.IDLE
@@ -112,11 +122,7 @@ class AppCoordinator:
     def _set_state(self, state: AppState) -> None:
         with self._state_lock:
             self._state = state
-        if self._on_state:
-            try:
-                self._on_state(state)
-            except Exception:
-                pass
+        self.state_changed.emit(state)
 
     def start(self) -> None:
         """Initialize and start all subsystems."""
@@ -127,10 +133,14 @@ class AppCoordinator:
         # Backend
         self._backend = JarvisBackend(
             mode=self._mode,
-            on_chunk=self._on_backend_chunk,
-            on_response=self._on_backend_response,
-            on_status=self._on_backend_status,
+            max_iterations=self._max_iterations,
+            confirmation_handler=self._confirmation_handler,
         )
+        # Connect backend signals to coordinator methods
+        self._backend.chunk_ready.connect(self._on_backend_chunk)
+        self._backend.response_ready.connect(self._on_backend_response)
+        self._backend.status_changed.connect(self._on_backend_status)
+        self._backend.state_changed.connect(self._on_backend_state)
         self._backend.start()
 
         # Voice
@@ -172,27 +182,26 @@ class AppCoordinator:
         if not self._backend or not text.strip():
             return
         self._set_state(AppState.CHATTING)
-        if self._on_chat:
-            self._on_chat("user", text)
+        self.chat_message.emit("user", text)
         self._backend.send_message(text)
 
     def _on_backend_chunk(self, chunk: str) -> None:
-        if self._on_chat:
-            self._on_chat("chunk", chunk)
+        self.chat_message.emit("chunk", chunk)
 
     def _on_backend_response(self, response: AgentResponse) -> None:
         if response.success:
-            if self._on_chat:
-                self._on_chat("jarvis", response.text)
+            self.chat_message.emit("jarvis", response.text)
             # Speak response if voice is active
             if self._voice and self._voice.state == VoiceState.IDLE:
                 self._voice.speak(response.text)
         else:
-            if self._on_chat:
-                self._on_chat("jarvis", f"[Error: {response.error}]")
+            self.chat_message.emit("jarvis", f"[Error: {response.error}]")
         self._set_state(AppState.IDLE)
 
     def _on_backend_status(self, status: str) -> None:
+        pass
+
+    def _on_backend_state(self, state: BackendState) -> None:
         pass
 
     # ── Voice ───────────────────────────────────────────────────
@@ -214,9 +223,11 @@ class AppCoordinator:
         elif state == VoiceState.IDLE:
             self._set_state(AppState.IDLE)
 
+    def _on_voice_transcription(self, text: str) -> None:
+        self.voice_transcription.emit(text)
+
     def _on_voice_response(self, text: str) -> None:
-        if self._on_chat:
-            self._on_chat("jarvis", text)
+        self.chat_message.emit("jarvis", text)
 
     # ── Gestures ────────────────────────────────────────────────
     def toggle_gestures(self) -> None:
@@ -259,8 +270,7 @@ class AppCoordinator:
     def _on_gesture_action_event(self, action: str, event: GestureEvent) -> None:
         if self._actions:
             self._actions.execute(action)
-        if self._on_gesture_action:
-            self._on_gesture_action(action)
+        self.gesture_action.emit(action)
 
     # ── Workspace ───────────────────────────────────────────────
     def toggle_workspace(self) -> None:
@@ -280,8 +290,7 @@ class AppCoordinator:
         """Update a workspace panel."""
         if self._workspace:
             self._workspace.set_panel_text(panel, text)
-        if self._on_workspace_update:
-            self._on_workspace_update(panel, text)
+        self.workspace_update.emit(panel, text)
 
     # ── Desktop Actions ─────────────────────────────────────────
     def execute_action(self, action: str, *, confirmed: bool = False) -> bool:
