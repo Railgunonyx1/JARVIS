@@ -1,8 +1,8 @@
 """JARVIS Desktop Companion — entry point."""
 
-import sys
-import os
 import argparse
+import os
+import sys
 
 from PySide6.QtWidgets import QApplication
 

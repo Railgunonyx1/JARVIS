@@ -16,20 +16,18 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
+from collections.abc import Callable
 from enum import StrEnum
-from typing import Callable
 
-from PySide6.QtCore import QObject, Signal
-
-from app.integration.jarvis_backend import JarvisBackend, AgentResponse, BackendState
-from app.voice.voice_manager import VoiceManager, VoiceState
+from app.desktop.actions import DesktopActionLayer
 from app.gestures.camera import Camera
-from app.gestures.tracking import HandTracker
-from app.gestures.recognition import GestureRecognizer, GestureEvent, GestureType
 from app.gestures.mappings import GestureMapper
-from app.desktop.actions import DesktopActionLayer, ActionRisk
+from app.gestures.recognition import GestureEvent, GestureRecognizer
+from app.gestures.tracking import HandTracker
+from app.integration.jarvis_backend import AgentResponse, BackendState, JarvisBackend
+from app.voice.voice_manager import VoiceManager, VoiceState
 from app.workspace3d.workspace3d import Workspace3D
+from PySide6.QtCore import QObject, Signal
 
 logger = logging.getLogger("jarvis.desktop.integration")
 

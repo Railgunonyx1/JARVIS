@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
+from collections.abc import Callable
 from enum import StrEnum
-from typing import Callable
 
-from app.voice.stt import STTManager, STTResult
+from app.voice.stt import STTManager
 from app.voice.tts import TTSEngine
 
 logger = logging.getLogger("jarvis.desktop.voice.manager")
@@ -140,7 +139,7 @@ class VoiceManager:
         def _run():
             try:
                 self._backend.send_message(text)
-            except Exception as e:
+            except Exception:
                 logger.exception("Agent send failed")
                 self._set_state(VoiceState.ERROR)
 

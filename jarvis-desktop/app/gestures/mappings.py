@@ -7,8 +7,8 @@ Mappings are configurable; defaults follow the master plan §7 vocabulary.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from app.gestures.recognition import GestureEvent, GestureType
 

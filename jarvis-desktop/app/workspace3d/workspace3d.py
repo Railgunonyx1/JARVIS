@@ -13,7 +13,7 @@ import logging
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, QObject, Signal
+from PySide6.QtCore import QObject, QUrl, Signal
 
 logger = logging.getLogger("jarvis.desktop.workspace3d")
 

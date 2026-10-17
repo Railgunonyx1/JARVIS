@@ -8,16 +8,22 @@ All UI updates happen on the GUI thread via Qt signals from the coordinator.
 from __future__ import annotations
 
 import sys
-from PySide6.QtCore import Qt, Signal, QThread, QTimer
-from PySide6.QtGui import QTextCursor, QFont, QColor, QPalette
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTextEdit, QLineEdit, QPushButton, QLabel, QFrame, QScrollArea,
-    QSizePolicy,
-)
 
-from app.integration.coordinator import AppCoordinator, AppState
-from app.voice.voice_manager import VoiceState
+from app.integration.coordinator import AppCoordinator
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class ChatWindow(QMainWindow):
@@ -183,7 +189,7 @@ class ChatWindow(QMainWindow):
 
     def _on_settings(self) -> None:
         """Handle settings button click."""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QComboBox, QCheckBox
+        from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLabel, QPushButton, QVBoxLayout
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Settings")

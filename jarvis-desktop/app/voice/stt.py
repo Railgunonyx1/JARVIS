@@ -13,8 +13,8 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 logger = logging.getLogger("jarvis.desktop.voice.stt")
 
@@ -75,7 +75,7 @@ class WhisperSTT:
         try:
             result = subprocess.run(
                 [self._binary, "--help"],
-                capture_output=True, timeout=5,
+                capture_output=True, timeout=5, check=False,
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -130,7 +130,7 @@ class WhisperSTT:
         try:
             result = subprocess.run(
                 cmd, capture_output=True, timeout=60,
-            text=True,
+            text=True, check=False,
             cwd=str(Path(filepath).parent),
             env={**os.environ, "GGML_CUDA_NO_PINNED": "1"},
             )
@@ -157,8 +157,8 @@ class WhisperSTT:
             stop_event: Optional event that, when set, stops recording early.
         """
         try:
-            import sounddevice as sd
             import numpy as np
+            import sounddevice as sd
         except ImportError:
             logger.warning("sounddevice not available — cannot record")
             return None
@@ -300,10 +300,11 @@ class STTManager:
         if audio_bytes is None:
             # No local STT available - need to record directly
             try:
-                import sounddevice as sd
-                import numpy as np
                 import io
                 import wave
+
+                import numpy as np
+                import sounddevice as sd
 
                 duration = min(duration, RECORD_SECONDS_MAX)
                 frames = []

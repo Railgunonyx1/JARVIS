@@ -11,8 +11,8 @@ import logging
 import os
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 logger = logging.getLogger("jarvis.desktop.voice.tts")
 
@@ -144,10 +144,11 @@ class TTSEngine:
     def play_bytes(audio_bytes: bytes, block: bool = False) -> None:
         """Play raw audio bytes via sounddevice."""
         try:
-            import sounddevice as sd
-            import numpy as np
             import io
             import wave
+
+            import numpy as np
+            import sounddevice as sd
 
             # Parse WAV
             with wave.open(io.BytesIO(audio_bytes), "rb") as wf:

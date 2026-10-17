@@ -16,9 +16,9 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
 
 from PySide6.QtCore import QObject, Signal
 
