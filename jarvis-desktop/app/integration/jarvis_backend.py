@@ -267,6 +267,11 @@ class JarvisBackend(QObject):
                 duration_ms=(time.time() - start) * 1000,
             ))
 
+    def set_model(self, model: str) -> None:
+        """Set the active model for subsequent agent runs."""
+        if self._agent_loop:
+            self._agent_loop.router.set_default_model(model)
+
     def _set_state(self, state: BackendState, error: Exception | None = None) -> None:
         with self._state_lock:
             old_state = self._state

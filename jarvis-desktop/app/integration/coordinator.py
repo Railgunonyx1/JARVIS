@@ -200,7 +200,7 @@ class AppCoordinator(QObject):
                 self._voice_turn_active = False
         else:
             self.chat_message.emit("jarvis", f"[Error: {response.error}]")
-            # If voice was thinking and we got an error, reset to IDLE
+            self._voice_turn_active = False
             if self._voice and self._voice.state == VoiceState.THINKING:
                 self._voice._set_state(VoiceState.IDLE)
         self._set_state(AppState.IDLE)
@@ -216,6 +216,25 @@ class AppCoordinator(QObject):
         """Toggle push-to-talk on/off."""
         if self._voice:
             self._voice.toggle_listening()
+
+    def set_voice_enabled(self, enabled: bool) -> None:
+        """Enable or disable the voice subsystem."""
+        if enabled and not self._voice:
+            self._voice = VoiceManager(
+                agent_backend=self._backend,
+                on_state_change=self._on_voice_state,
+                on_transcription=self._on_voice_transcription,
+                on_response=self._on_voice_response,
+            )
+            self._voice.warmup()
+        elif not enabled and self._voice:
+            self._voice.stop_speaking()
+            self._voice = None
+
+    def set_model(self, model: str) -> None:
+        """Apply a model selection to the backend."""
+        if self._backend and model:
+            self._backend.set_model(model)
 
     def stop_speaking(self) -> None:
         """Interrupt TTS."""

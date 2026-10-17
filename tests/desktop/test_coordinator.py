@@ -79,8 +79,8 @@ def test_typed_chat_does_not_trigger_tts():
     backend.stop(wait=True, timeout=5.0)
 
 
-def test_coordinator_voice_error_on_thinking():
-    """When voice is THINKING and backend errors, voice should go to IDLE."""
+def test_coordinator_voice_error_resets_turn_flag():
+    """Failed voice request must clear _voice_turn_active."""
     coord = AppCoordinator(mode="agent")
     backend = JarvisBackend(mode="agent")
     coord._backend = backend
@@ -88,12 +88,41 @@ def test_coordinator_voice_error_on_thinking():
 
     voice = _DummyVoice()
     coord._voice = voice
+    coord._voice_turn_active = True
     voice.state = VoiceState.THINKING
 
     from app.integration.jarvis_backend import AgentResponse
     resp = AgentResponse(success=False, text="", error="API key missing")
     coord._on_backend_response(resp)
 
-    time.sleep(0.3)
+    assert coord._voice_turn_active is False
     assert voice.state == VoiceState.IDLE
+    backend.stop(wait=True, timeout=5.0)
+
+
+def test_set_voice_enabled():
+    """set_voice_enabled(True) creates voice, False destroys it."""
+    coord = AppCoordinator(mode="agent")
+    backend = JarvisBackend(mode="agent")
+    coord._backend = backend
+    coord._backend.start(wait=False, timeout=5.0)
+
+    coord.set_voice_enabled(True)
+    assert coord._voice is not None
+
+    coord.set_voice_enabled(False)
+    assert coord._voice is None
+    backend.stop(wait=True, timeout=5.0)
+
+
+def test_set_model_applies_to_backend():
+    """set_model propagates to the backend."""
+    coord = AppCoordinator(mode="agent")
+    backend = JarvisBackend(mode="agent")
+    coord._backend = backend
+    backend.start(wait=True, timeout=10.0)
+
+    coord.set_model("test-model")
+    assert backend._agent_loop is not None
+    assert backend._agent_loop.router.preferred_model == "test-model"
     backend.stop(wait=True, timeout=5.0)

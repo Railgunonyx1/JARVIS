@@ -38,6 +38,28 @@ def test_unknown_action_fails():
     assert layer.execute("nonexistent") is False
 
 
+def test_high_risk_requires_confirmation_even_without_flag():
+    """HIGH risk actions must require confirmation regardless of the flag."""
+    layer = DesktopActionLayer()
+    called = []
+    layer.register("dangerous", "Dangerous action", ActionRisk.HIGH,
+                   lambda: called.append(True), require_confirmation=False)
+    result = layer.execute("dangerous", confirmed=False)
+    assert result is False
+    assert len(called) == 0
+
+
+def test_low_risk_does_not_require_confirmation():
+    """LOW risk actions must not require confirmation."""
+    layer = DesktopActionLayer()
+    called = []
+    layer.register("safe_action", "Safe", ActionRisk.LOW,
+                   lambda: called.append(True), require_confirmation=False)
+    result = layer.execute("safe_action", confirmed=False)
+    assert result is True
+    assert len(called) == 1
+
+
 def test_confirmation_required_blocks_without_confirm():
     layer = DesktopActionLayer()
     called = []

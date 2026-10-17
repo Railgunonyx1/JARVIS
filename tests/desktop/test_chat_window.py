@@ -29,8 +29,9 @@ def test_send_does_not_append_message_directly():
     """
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
-    from app.ui.chat_window import ChatWindow
     from unittest.mock import MagicMock
+
+    from app.ui.chat_window import ChatWindow
 
     w = ChatWindow()
     w._coordinator = MagicMock()

@@ -100,8 +100,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest PySide6
-      - name: Desktop tests
-        run: python -m pytest tests/desktop/ -q -m "not e2e"
+      - name: Desktop tests (offscreen)
+        run: QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop/ -q -m "not e2e"
 
   browser:
     name: Browser (orbit-browser source + Electron smoke)

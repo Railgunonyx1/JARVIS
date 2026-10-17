@@ -60,9 +60,12 @@ class DesktopActionLayer:
                  handler: Callable, *, require_confirmation: bool = False,
                  category: str = "general") -> None:
         """Register an action."""
+        needs_confirmation = require_confirmation or risk in (
+            ActionRisk.HIGH, ActionRisk.CRITICAL
+        )
         self._actions[name] = Action(
             name=name, description=description, risk=risk,
-            handler=handler, require_confirmation=require_confirmation,
+            handler=handler, require_confirmation=needs_confirmation,
             category=category,
         )
 

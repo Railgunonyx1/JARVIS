@@ -25,7 +25,7 @@
       "name": "pyside6",
       "buildsystem": "simple",
       "build-commands": [
-        "pip3 install --prefix=/app PySide6"
+        "pip3 install --prefix=/app 'PySide6==6.8.1'"
       ],
       "sources": []
     },
@@ -33,7 +33,7 @@
       "name": "jarvis-core",
       "buildsystem": "simple",
       "build-commands": [
-        "mkdir -p /app/lib/jarvis",
+        "mkdir -p /app/lib/jarvis/jarvis_desktop_app",
         "cp -r core /app/lib/jarvis/",
         "cp -r providers /app/lib/jarvis/",
         "cp -r tools /app/lib/jarvis/",
@@ -42,50 +42,27 @@
         "cp -r skills /app/lib/jarvis/",
         "mkdir -p /app/lib/jarvis/config",
         "cp config/models.toml /app/lib/jarvis/config/",
-        "cp -r jarvis-desktop/app /app/lib/jarvis/jarvis-desktop-app",
-        "ln -s /app/lib/jarvis/jarvis-desktop-app/main.py /app/bin/jarvis-desktop"
+        "touch /app/lib/jarvis/jarvis_desktop_app/__init__.py",
+        "cp jarvis-desktop/app/*.py /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/ui /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/integration /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/voice /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/gestures /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/desktop /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/workspace3d /app/lib/jarvis/jarvis_desktop_app/",
+        "cp -r jarvis-desktop/app/diagnostics /app/lib/jarvis/jarvis_desktop_app/",
+        "printf '#!/bin/bash\\nexport PYTHONPATH=\"/app/lib/jarvis:${PYTHONPATH:-}\"\\nexec python3 -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); from jarvis_desktop_app.main import main; sys.exit(main())\" \"$@\"\\n' > /app/bin/jarvis-desktop",
+        "chmod +x /app/bin/jarvis-desktop"
       ],
       "sources": [
-        {
-          "type": "dir",
-          "path": "core",
-          "dest": "core"
-        },
-        {
-          "type": "dir",
-          "path": "providers",
-          "dest": "providers"
-        },
-        {
-          "type": "dir",
-          "path": "tools",
-          "dest": "tools"
-        },
-        {
-          "type": "dir",
-          "path": "runtime",
-          "dest": "runtime"
-        },
-        {
-          "type": "dir",
-          "path": "memory",
-          "dest": "memory"
-        },
-        {
-          "type": "dir",
-          "path": "skills",
-          "dest": "skills"
-        },
-        {
-          "type": "dir",
-          "path": "config",
-          "dest": "config"
-        },
-        {
-          "type": "dir",
-          "path": "jarvis-desktop/app",
-          "dest": "jarvis-desktop-app"
-        }
+        { "type": "dir", "path": "core", "dest": "core" },
+        { "type": "dir", "path": "providers", "dest": "providers" },
+        { "type": "dir", "path": "tools", "dest": "tools" },
+        { "type": "dir", "path": "runtime", "dest": "runtime" },
+        { "type": "dir", "path": "memory", "dest": "memory" },
+        { "type": "dir", "path": "skills", "dest": "skills" },
+        { "type": "dir", "path": "config", "dest": "config" },
+        { "type": "dir", "path": "jarvis-desktop/app", "dest": "jarvis_desktop_app" }
       ]
     }
   ]

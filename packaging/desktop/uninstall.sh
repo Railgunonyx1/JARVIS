@@ -2,10 +2,10 @@
 # JARVIS Desktop Companion — Uninstaller
 set -euo pipefail
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/jarvis-desktop}"
-DESKTOP_DIR="${DESKTOP_DIR:-/usr/share/applications}"
-ICON_DIR="${ICON_DIR:-/usr/share/icons/hicolor/scalable/apps}"
-BIN_DIR="${BIN_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
+DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
+ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 
 echo "=== JARVIS Desktop Companion Uninstaller ==="
 

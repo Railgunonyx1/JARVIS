@@ -24,10 +24,20 @@ fi
 PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo "Python version: $PYTHON_VERSION"
 
-# Check PySide6
-if ! python3 -c "import PySide6" 2>/dev/null; then
-    echo "WARNING: PySide6 not installed. Installing via pip..."
-    python3 -m pip install --user PySide6 || {
+# Create isolated venv for dependencies
+VENV_DIR="$INSTALL_DIR/venv"
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv "$VENV_DIR" || {
+        echo "ERROR: Failed to create venv (python3-venv missing)"
+        exit 1
+    }
+fi
+
+# Install PySide6 into the venv
+if ! "$VENV_DIR/bin/python" -c "import PySide6" 2>/dev/null; then
+    echo "Installing PySide6 into venv..."
+    "$VENV_DIR/bin/pip" install 'PySide6==6.8.1' || {
         echo "ERROR: Failed to install PySide6"
         exit 1
     }
@@ -85,7 +95,7 @@ cat > "$BIN_DIR/jarvis-desktop" <<EOF
 #!/bin/bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
 export PYTHONPATH="\$JARVIS_DESKTOP_HOME/jarvis-repo:\${PYTHONPATH:-}"
-exec python3 "\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop/app/main.py" "\$@"
+exec "\$JARVIS_DESKTOP_HOME/venv/bin/python" "\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop/app/main.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/jarvis-desktop"
 

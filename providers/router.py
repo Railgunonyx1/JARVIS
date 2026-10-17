@@ -102,6 +102,10 @@ class ProviderRouter:
         self.on_provider_event: callable | None = None
         self._init_providers(self._config, api_keys or {})
 
+    def set_default_model(self, model: str) -> None:
+        """Set the preferred model for subsequent provider selections."""
+        self.preferred_model = model
+
     def _notify(self, event: str, **payload) -> None:
         """Emit a semantic event for the UI (non-blocking, best-effort)."""
         if self.on_provider_event is not None:

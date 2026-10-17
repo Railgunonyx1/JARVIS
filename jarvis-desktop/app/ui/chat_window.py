@@ -152,7 +152,18 @@ class ChatWindow(QMainWindow):
 
     def start_backend(self, mode: str = "agent") -> None:
         """Initialize and start the agent backend via coordinator."""
-        self._coordinator = AppCoordinator(mode=mode)
+        from PySide6.QtWidgets import QMessageBox
+
+        def _confirm(action_name: str) -> bool:
+            reply = QMessageBox.question(
+                self, "Confirm Action",
+                f"Allow JARVIS to execute: {action_name}?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            return reply == QMessageBox.Yes
+
+        self._coordinator = AppCoordinator(mode=mode, confirmation_handler=_confirm)
         self._coordinator.state_changed.connect(self._on_app_state)
         self._coordinator.chat_message.connect(self._on_chat_message)
         self._coordinator.voice_state_changed.connect(self._on_voice_state)
@@ -231,10 +242,8 @@ class ChatWindow(QMainWindow):
             }
             save(new_settings)
             if self._coordinator:
-                if voice_cb.isChecked() and not self._coordinator._voice:
-                    pass
-                elif not voice_cb.isChecked() and self._coordinator._voice:
-                    pass
+                self._coordinator.set_voice_enabled(voice_cb.isChecked())
+                self._coordinator.set_model(new_settings["model"])
                 if gesture_cb.isChecked() and not self._coordinator._gesture_active:
                     self._coordinator.toggle_gestures()
                 elif not gesture_cb.isChecked() and self._coordinator._gesture_active:
