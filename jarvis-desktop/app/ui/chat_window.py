@@ -34,6 +34,7 @@ class ChatWindow(QMainWindow):
         self.setWindowTitle("JARVIS")
         self.setMinimumSize(900, 650)
         self._coordinator: AppCoordinator | None = None
+        self._max_messages = 500
         self._init_ui()
         self._connect_signals()
         self._apply_theme()
@@ -215,10 +216,24 @@ class ChatWindow(QMainWindow):
         elif role == "system":
             self.chat_area.append(f'<p style="color:#8b949e;margin:4px 0;font-style:italic;">{self._escape(text)}</p>')
         self.chat_area.moveCursor(QTextCursor.End)
+        self._trim_messages()
 
     def _append_chunk(self, chunk: str) -> None:
         self.chat_area.insertPlainText(chunk)
         self.chat_area.moveCursor(QTextCursor.End)
+        self._trim_messages()
+
+    def _trim_messages(self) -> None:
+        """Keep chat history bounded to prevent unbounded memory growth."""
+        document = self.chat_area.document()
+        if document.blockCount() > self._max_messages:
+            cursor = self.chat_area.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            for _ in range(document.blockCount() - self._max_messages):
+                cursor.select(QTextCursor.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deletePreviousChar()
+            self.chat_area.setTextCursor(cursor)
 
     def _on_response(self, response: AgentResponse) -> None:
         if response.success:

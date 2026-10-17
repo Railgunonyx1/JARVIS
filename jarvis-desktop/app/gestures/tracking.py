@@ -48,7 +48,8 @@ class HandTracker:
     def __init__(self, *, max_hands: int = 2,
                  detection_confidence: float = 0.7,
                  tracking_confidence: float = 0.5,
-                 on_hands: Callable[[list[HandLandmarks]], None] | None = None):
+                 on_hands: Callable[[list[HandLandmarks]], None] | None = None,
+                 target_fps: int = 30):
         self._max_hands = max_hands
         self._detection_confidence = detection_confidence
         self._tracking_confidence = tracking_confidence
@@ -57,8 +58,11 @@ class HandTracker:
         self._lock = threading.Lock()
         self._hands: list[HandLandmarks] = []
         self._thread: threading.Thread | None = None
-        self._mp = None  # MediaPipe hands instance
+        self._mp = None
         self._frame_source: Callable[[], np.ndarray | None] | None = None
+        self._target_fps = max(1, target_fps)
+        self._min_frame_interval = 1.0 / self._target_fps
+        self._last_frame_time = 0.0
 
     @property
     def is_running(self) -> bool:
@@ -119,6 +123,14 @@ class HandTracker:
                 if self._frame_source is None:
                     time.sleep(0.03)
                     continue
+                # Frame rate limiting — don't process faster than target FPS
+                now = time.perf_counter()
+                elapsed = now - self._last_frame_time
+                if elapsed < self._min_frame_interval:
+                    time.sleep(self._min_frame_interval - elapsed)
+                    continue
+                self._last_frame_time = time.perf_counter()
+
                 frame = self._frame_source()
                 if frame is None:
                     time.sleep(0.03)
