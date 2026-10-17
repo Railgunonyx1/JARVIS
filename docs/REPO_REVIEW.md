@@ -519,6 +519,15 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **`benchmark` latency/throughput command.** → `benchmark/`-style provider probe · S/low.
 - *Avoid:* 60+ backend images (bloat vs `download_dependencies.py`); binding `0.0.0.0` without auth — copy deny-by-default auth, not the exposure.
 
+### tashfeenahmed/freellmapi (MIT)
+- **Self-hosted LLM gateway** — OpenAI-compatible API with unified routing, rate limits, and automatic failover across multiple hosted providers → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Intelligent model routing** — routing strategies consider reliability, speed, model capability, and available quota; provider selection delegated rather than hardcoded → `providers/model_gateway.py` · M/low.
+- **Automatic failover** — retries alternative providers on rate limits or server errors → `providers/model_gateway.py` · M/low.
+- **Tool calling and structured outputs** — normalizes tool calls across supported providers → `core/agent/tool_service.py`, `tools/classification.py` · M/low.
+- **Usage and performance analytics** — per-request latency, token usage, provider health, routing information → `benchmark/`, `runtime/event_bus.py` · S/low.
+- **Single integration point** — OpenAI-compatible endpoint replaces per-provider client code → `providers/model_gateway.py` · S/low.
+- *Avoid:* non-production-grade inference service (personal experimentation project); do not expose gateway directly to public internet; keep gateway bound to `127.0.0.1`; preserve encryption key + SQLite data together; never commit `.env` or provider credentials; JARVIS should retain explicit local-model fallback — do not make gateway a hard dependency.
+
 ### lobehub/lobehub (Community License — no code reuse)
 - **Model-list DSL** `+add,-hide,name=display`. → `providers/model_gateway.py` formatting · S/low.
 - **White-box structured, user-editable memory** (inspectable records, not opaque blobs). → `memory/` via `cli/cockpit.py` `/memory` editor · M/low.
@@ -612,7 +621,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
 | **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
@@ -667,6 +676,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | agenticSeek | GPL | Wake-word state machine |
 | lobehub | Community | White-box editable memory + schedule/report surface |
 | LocalAI | MIT | Capability probe + unified voice base_url |
+| freellmapi | MIT | Self-hosted LLM gateway — routing + failover + unified OpenAI-compatible API |
 | free-claude-code | AGPL | Mid-turn fallback chain + `<provider>/<model>` slugs |
 | microsoft/JARVIS | MIT | Task DAG + capability-index routing |
 | open-jarvis | Apache-2.0 | Cost-aware escalation + trace-driven skill optimization |
