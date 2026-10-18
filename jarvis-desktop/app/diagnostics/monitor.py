@@ -72,12 +72,12 @@ class PerformanceMonitor:
             try:
                 cpu = process.cpu_percent(interval=0.1)
                 mem = process.memory_info()
-                ram_percent = psutil.virtual_memory().percent
+                ram_gb = mem.rss / (1024**3)
                 snapshot = PerformanceSnapshot(
                     timestamp=time.time(),
                     cpu_percent=cpu,
-                    ram_percent=ram_percent,
-                    ram_used_gb=mem.rss / (1024**3),
+                    ram_percent=ram_gb,
+                    ram_used_gb=ram_gb,
                     events={},
                 )
                 with self._lock:

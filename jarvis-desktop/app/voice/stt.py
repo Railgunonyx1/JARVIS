@@ -182,7 +182,9 @@ class WhisperSTT:
                         recording = False
                         break
                     # Simple VAD: check if audio is silent
-                    if frames and len(frames) > 10:
+                    # Grace period: don't stop during the first 0.5s
+                    elapsed = time.time() - start
+                    if frames and len(frames) > 10 and elapsed > 0.5:
                         recent = np.concatenate(frames[-10:])
                         if np.abs(recent).max() < 0.01:
                             break
@@ -222,20 +224,38 @@ class CloudSTT:
     """Cloud STT fallback using the existing ElevenLabs Scribe."""
 
     def __init__(self):
-        self._engine_name = "elevenlabs"
+        self._engine_name = "cloud-stt"
 
     def transcribe(self, audio_bytes: bytes, mime: str = "audio/wav") -> STTResult:
         start = time.time()
         try:
-            import sys
-            repo_root = Path(__file__).resolve().parents[3]
-            bridge_path = repo_root / "jbrowser-bridge"
-            if str(bridge_path) not in sys.path:
-                sys.path.insert(0, str(bridge_path))
-            from voice import stt_bytes
-            text = stt_bytes(audio_bytes, "audio.wav")
+            import subprocess
+            import tempfile
+            import os
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp.write(audio_bytes)
+                tmp_path = tmp.name
+
+            try:
+                result = subprocess.run(
+                    ["whisper-cli", tmp_path, "--output-format", "json"],
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
+                )
+                os.unlink(tmp_path)
+
+                if result.returncode == 0 and result.stdout:
+                    text = result.stdout.decode("utf-8").strip()
+                    if text:
+                        duration_ms = (time.time() - start) * 1000
+                        return STTResult(text, 0.0, self._engine_name, duration_ms)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
             duration_ms = (time.time() - start) * 1000
-            return STTResult(text, 0.0, self._engine_name, duration_ms)
+            return STTResult("", 0.0, self._engine_name, duration_ms)
         except Exception as e:
             logger.warning("Cloud STT failed: %s", e)
             return STTResult("", 0.0, self._engine_name, (time.time() - start) * 1000)

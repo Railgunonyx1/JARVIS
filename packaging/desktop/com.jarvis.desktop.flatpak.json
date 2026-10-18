@@ -6,14 +6,9 @@
   "command": "jarvis-desktop",
   "finish-args": [
     "--device=dri",
-    "--device=all",
-    "--talk-name=org.freedesktop.Flatpak.DevicePortal",
     "--socket=wayland",
     "--socket=x11",
-    "--socket=session-dbus",
-    "--socket=fallback-dbus",
-    "--device=video0",
-    "--device=snd",
+    "--socket=pulseaudio",
     "--share=network",
     "--persist=.jarvis-desktop"
   ],

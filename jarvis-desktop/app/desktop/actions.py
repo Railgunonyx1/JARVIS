@@ -140,7 +140,7 @@ class DesktopActionLayer:
                       lambda: self._wmctrl("-r", ":ACTIVE:", "add", "maximized"),
                       category="window")
         self.register("window_minimize", "Minimize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "remove", "maximized"),
+                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "hidden"),
                       category="window")
 
         # Application launching

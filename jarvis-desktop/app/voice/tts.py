@@ -1,8 +1,7 @@
-"""TTS for JARVIS Desktop — wraps the existing Kokoro neural TTS.
+"""TTS for JARVIS Desktop — local Kokoro neural TTS with edge-tts fallback.
 
-Reuses the jbrowser-bridge voice module's Kokoro chain (Apache-2.0,
-local ONNX, ~330MB model). Falls back to SAPI on Windows, edge-tts
-on Linux if Kokoro is unavailable.
+Uses kokoro_onnx directly (Apache-2.0, local ONNX, ~330MB model).
+Falls back to edge-tts on Linux if Kokoro is unavailable.
 """
 
 from __future__ import annotations
@@ -55,21 +54,18 @@ class TTSEngine:
 
     def _warmup_kokoro(self) -> None:
         try:
-            import sys
-            repo_root = Path(__file__).resolve().parents[3]
-            bridge_path = repo_root / "jbrowser-bridge"
-            if str(bridge_path) not in sys.path:
-                sys.path.insert(0, str(bridge_path))
-            from voice import tts_kokoro
-            # Trigger model load
-            tts_kokoro("warmup", voice=self._voice)
+            from kokoro_onnx import Kokoro
+            self._kokoro = Kokoro(
+                str(KOKORO_CACHE / "kokoro-v1.0.onnx"),
+                str(KOKORO_CACHE / "voices-v1.0.bin"),
+            )
             self._kokoro_ready = True
             self._engine_name = "kokoro"
             if self._on_ready:
                 self._on_ready()
             logger.info("Kokoro TTS ready (voice=%s)", self._voice)
         except Exception as e:
-            logger.warning("Kokoro warmup failed: %s — will use fallback", e)
+            logger.warning("Kokoro warmup failed: %s", e)
             self._kokoro_ready = False
 
     def speak(self, text: str) -> tuple[bytes, str]:
@@ -95,28 +91,46 @@ class TTSEngine:
         return self._speak_fallback(text)
 
     def _speak_kokoro(self, text: str) -> tuple[bytes, str] | None:
-        import sys
-        repo_root = Path(__file__).resolve().parents[3]
-        bridge_path = repo_root / "jbrowser-bridge"
-        if str(bridge_path) not in sys.path:
-            sys.path.insert(0, str(bridge_path))
-        from voice import tts_kokoro
-        audio_bytes, mime = tts_kokoro(text, voice=self._voice, speed=self._speed)
+        if not hasattr(self, "_kokoro") or self._kokoro is None:
+            return None
+        import io
+        import wave
+        import numpy as np
+        audio, sr = self._kokoro(text)
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(sr)
+            wf.writeframes((audio * 32767).astype(np.int16).tobytes())
         self._engine_name = "kokoro"
-        return audio_bytes, mime
+        return wav_buffer.getvalue(), "audio/wav"
 
     def _speak_fallback(self, text: str) -> tuple[bytes, str]:
         """Fallback TTS: edge-tts on Linux, SAPI on Windows."""
         try:
-            import sys
-            repo_root = Path(__file__).resolve().parents[3]
-            bridge_path = repo_root / "jbrowser-bridge"
-            if str(bridge_path) not in sys.path:
-                sys.path.insert(0, str(bridge_path))
-            from voice import tts
-            audio_bytes, mime, engine = tts(text, voice=self._voice, speed=self._speed)
-            self._engine_name = engine
-            return audio_bytes, mime
+            import subprocess
+            import tempfile
+            import wave
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            subprocess.run(
+                ["edge-tts", "--text", text, "--write-media", tmp_path],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+
+            if not os.path.exists(tmp_path):
+                return b"", "audio/wav"
+
+            with wave.open(tmp_path, "rb") as wf:
+                frames = wf.readframes(wf.getnframes())
+                os.unlink(tmp_path)
+                self._engine_name = "edge-tts"
+                return frames, "audio/wav"
         except Exception as e:
             logger.warning("Fallback TTS failed: %s", e)
             return b"", "audio/wav"

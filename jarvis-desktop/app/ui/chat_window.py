@@ -260,14 +260,14 @@ class ChatWindow(QMainWindow):
         from app.settings import load
         from PySide6.QtWidgets import QMessageBox
 
-        def _confirm(action_name: str) -> bool:
+        def _confirm(tool_name: str, arguments: dict) -> str:
             reply = QMessageBox.question(
                 self, "Confirm Action",
-                f"Allow JARVIS to execute: {action_name}?",
+                f"Allow JARVIS to execute: {tool_name}?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
-            return reply == QMessageBox.Yes
+            return "once" if reply == QMessageBox.Yes else "deny"
 
         settings = load()
 

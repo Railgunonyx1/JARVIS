@@ -34,14 +34,19 @@ if [ ! -d "$VENV_DIR" ]; then
     }
 fi
 
-# Install PySide6 into the venv
-if ! "$VENV_DIR/bin/python" -c "import PySide6" 2>/dev/null; then
-    echo "Installing PySide6 into venv..."
-    "$VENV_DIR/bin/pip" install 'PySide6==6.8.1' || {
-        echo "ERROR: Failed to install PySide6"
-        exit 1
-    }
-fi
+# Install runtime dependencies into the venv
+echo "Installing runtime dependencies..."
+"$VENV_DIR/bin/pip" install \
+  'PySide6==6.8.1' \
+  'sounddevice==0.5.5' \
+  'numpy>=1.26' \
+  'psutil>=5.9' \
+  'onnxruntime>=1.17' \
+  'kokoro-onnx>=0.4' \
+  'edge-tts>=7.2' || {
+    echo "ERROR: Failed to install runtime dependencies"
+    exit 1
+  }
 
 # Stage only required runtime files — never secrets, caches, or dev artifacts.
 echo "Installing application files to $INSTALL_DIR..."
@@ -67,7 +72,6 @@ tar -C "$REPO_ROOT" \
   --exclude='./jbrowser-bridge' \
   --exclude='./.github' \
   --exclude='*.md' \
-  --exclude='./research_files' \
   --exclude='./docs' \
   --exclude='./audits' \
   --exclude='./benchmark' \

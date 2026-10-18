@@ -69,7 +69,7 @@ class AppCoordinator(QObject):
     workspace_update = Signal(str, str)
 
     def __init__(self, *, mode: str = "agent",
-                 confirmation_handler: Callable[[str], bool] | None = None,
+                 confirmation_handler: Callable[[str, dict], str] | None = None,
                  max_iterations: int = 10):
         super().__init__()
         self._mode = mode
@@ -186,7 +186,7 @@ class AppCoordinator(QObject):
         self._backend.send_message(text)
 
     def _on_backend_chunk(self, chunk: str) -> None:
-        pass
+        self.chat_message.emit("chunk", chunk)
 
     def _on_backend_response(self, response: AgentResponse) -> None:
         if response.success:
