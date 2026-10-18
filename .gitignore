@@ -102,3 +102,4 @@ orbit-profile/
 .orbit-profile/
 .coverage
 mypy.ini
+claude-code-tools/
