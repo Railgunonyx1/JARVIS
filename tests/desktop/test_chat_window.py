@@ -47,17 +47,19 @@ def test_send_does_not_append_message_directly():
 
 def test_settings_dialog_does_not_crash():
     """Settings dialog should open without AttributeError on _gesture_active."""
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
     from app.ui.chat_window import ChatWindow
     w = ChatWindow()
-    # This used to crash with AttributeError on _gesture_active
+    QTimer.singleShot(100, w.close)
     w._on_settings()
     w.close()
 
 
 def test_settings_with_coordinator():
     """Settings dialog should work when coordinator is attached."""
+    from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
     from app.integration.coordinator import AppCoordinator
@@ -66,7 +68,7 @@ def test_settings_with_coordinator():
     w = ChatWindow()
     coord = AppCoordinator(mode="agent")
     w._coordinator = coord
-    # This should not crash
+    QTimer.singleShot(100, w.close)
     w._on_settings()
     w.close()
     coord.shutdown()

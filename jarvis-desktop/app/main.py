@@ -6,10 +6,9 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-# Ensure the parent JARVIS repo is importable
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
+_DESKTOP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _DESKTOP_ROOT not in sys.path:
+    sys.path.insert(0, _DESKTOP_ROOT)
 
 from app.ui.chat_window import ChatWindow
 

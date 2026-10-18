@@ -1,0 +1,11 @@
+{
+  "name": "apple_ui",
+  "description": "High-quality UI design following Apple's human interface guidelines. San Francisco typography, monochrome palette, depth through layering not shadows, subtle micro-interactions, and system-native components. Lightweight implementation focused on readability and accessibility.",
+  "tools": ["filesystem.read", "filesystem.write", "search.code", "patch.replace", "patch.insert"],
+  "tags": ["ui", "design", "frontend", "apple", "high-quality"],
+  "risk": "low",
+  "timeout": 90,
+  "version": "1.0.0",
+  "instructions": "skills/instructions/agent/apple_ui.md",
+  "source": ".agents/skills/apple-ui"
+}

@@ -186,7 +186,7 @@ class AppCoordinator(QObject):
         self._backend.send_message(text)
 
     def _on_backend_chunk(self, chunk: str) -> None:
-        self.chat_message.emit("chunk", chunk)
+        pass
 
     def _on_backend_response(self, response: AgentResponse) -> None:
         if response.success:

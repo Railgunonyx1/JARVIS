@@ -94,7 +94,7 @@ mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 cat > "$BIN_DIR/jarvis-desktop" <<EOF
 #!/bin/bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
-export PYTHONPATH="\$JARVIS_DESKTOP_HOME/jarvis-repo:\${PYTHONPATH:-}"
+export PYTHONPATH="\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop:\$JARVIS_DESKTOP_HOME/jarvis-repo:\${PYTHONPATH:-}"
 exec "\$JARVIS_DESKTOP_HOME/venv/bin/python" "\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop/app/main.py" "\$@"
 EOF
 chmod +x "$BIN_DIR/jarvis-desktop"

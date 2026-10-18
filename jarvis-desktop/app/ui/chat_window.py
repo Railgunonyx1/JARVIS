@@ -1,8 +1,8 @@
-"""Minimal PySide6 chat window for JARVIS Desktop.
+"""Minimal PySide6 chat window for JARVIS Desktop — Apple-inspired design.
 
-Layout follows the master plan §2: header, chat area, input bar, bottom toolbar.
-All subsystems are managed by AppCoordinator (Phase 6 integration).
-All UI updates happen on the GUI thread via Qt signals from the coordinator.
+Layout follows Apple Human Interface Guidelines: San Francisco typography,
+monochrome palette, depth through layering not shadows, subtle micro-interactions,
+and system-native components. Lightweight implementation with zero external deps.
 """
 
 from __future__ import annotations
@@ -10,7 +10,8 @@ from __future__ import annotations
 import sys
 
 from app.integration.coordinator import AppCoordinator
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -26,7 +27,9 @@ from PySide6.QtWidgets import (
 
 
 class ChatWindow(QMainWindow):
-    """Main application window — minimal chat interface."""
+    """Main application window — minimal chat interface with Apple HIG design."""
+
+    voice_state_changed = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -48,9 +51,10 @@ class ChatWindow(QMainWindow):
         # ── Header ──────────────────────────────────────────────
         header = QFrame()
         header.setObjectName("header")
-        header.setFixedHeight(52)
+        header.setFixedHeight(44)
         hlayout = QHBoxLayout(header)
         hlayout.setContentsMargins(16, 0, 16, 0)
+        hlayout.setSpacing(0)
 
         title = QLabel("JARVIS")
         title.setObjectName("title")
@@ -78,21 +82,26 @@ class ChatWindow(QMainWindow):
         # ── Input bar ───────────────────────────────────────────
         input_bar = QFrame()
         input_bar.setObjectName("input_bar")
+        input_bar.setFixedHeight(56)
         ilayout = QHBoxLayout(input_bar)
-        ilayout.setContentsMargins(12, 8, 12, 8)
+        ilayout.setContentsMargins(16, 8, 16, 8)
+        ilayout.setSpacing(12)
 
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Message JARVIS...")
         self.input_field.setObjectName("input_field")
+        self.input_field.setMinimumHeight(36)
         ilayout.addWidget(self.input_field, 1)
 
         self.mic_btn = QPushButton("Mic")
         self.mic_btn.setObjectName("mic_btn")
         self.mic_btn.setEnabled(False)
+        self.mic_btn.setFixedSize(72, 36)
         ilayout.addWidget(self.mic_btn)
 
         self.send_btn = QPushButton("Send")
         self.send_btn.setObjectName("send_btn")
+        self.send_btn.setFixedSize(72, 36)
         ilayout.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
@@ -100,16 +109,22 @@ class ChatWindow(QMainWindow):
         # ── Bottom toolbar ──────────────────────────────────────
         toolbar = QFrame()
         toolbar.setObjectName("toolbar")
+        toolbar.setFixedHeight(44)
         tlayout = QHBoxLayout(toolbar)
         tlayout.setContentsMargins(16, 0, 16, 0)
+        tlayout.setSpacing(16)
 
         self.gesture_btn = QPushButton("Gesture Mode")
+        self.gesture_btn.setObjectName("gesture_btn")
         self.gesture_btn.setCheckable(True)
         self.gesture_btn.setEnabled(False)
+        self.gesture_btn.setFixedSize(120, 34)
         tlayout.addWidget(self.gesture_btn)
 
         self.workspace_btn = QPushButton("3D Workspace")
+        self.workspace_btn.setObjectName("workspace_btn")
         self.workspace_btn.setEnabled(False)
+        self.workspace_btn.setFixedSize(120, 34)
         tlayout.addWidget(self.workspace_btn)
 
         tlayout.addStretch()
@@ -122,36 +137,127 @@ class ChatWindow(QMainWindow):
         self.gesture_btn.clicked.connect(self._on_gesture_toggle)
         self.workspace_btn.clicked.connect(self._on_workspace_toggle)
         self.settings_btn.clicked.connect(self._on_settings)
+        self.voice_state_changed.connect(self._on_voice_state)
 
     def _apply_theme(self) -> None:
+        """Apple-inspired monochrome theme — lightweight, high quality."""
         self.setStyleSheet("""
-            QMainWindow { background: #0a0e14; }
-           #header { background: #0d1117; border-bottom: 1px solid #1e2530; }
-            #title { color: #4fc3f7; font-size: 18px; font-weight: bold; }
-            #status { color: #8b949e; font-size: 12px; }
+            QMainWindow {
+                background: #FFFFFF;
+            }
+            #header {
+                background: #F5F5F7;
+                border-bottom: 1px solid #D1D1D6;
+            }
+            #title {
+                color: #1D1D1F;
+                font-size: 17px;
+                font-weight: 600;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+            }
+            #status {
+                color: #8E8E93;
+                font-size: 12px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+            }
             QPushButton {
-                background: #1e2530; color: #c9d1d9; border: 1px solid #30363d;
-                border-radius: 4px; padding: 6px 14px; font-size: 13px;
+                background: #F5F5F7;
+                color: #007AFF;
+                border: none;
+                border-radius: 8px;
+                padding: 0 16px;
+                font-size: 13px;
+                font-weight: 500;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                min-height: 34px;
             }
-            QPushButton:hover { background: #283041; }
-            QPushButton:pressed { background: #1e2530; }
-            QPushButton:disabled { color: #484f58; }
-            QPushButton:checked { background: #0d419d; border-color: #1f6feb; color: #fff; }
-            #settings_btn { background: transparent; border: none; color: #8b949e; }
-            #settings_btn:hover { color: #c9d1d9; }
-            #chat_area { background: #0a0e14; color: #c9d1d9; border: none;
-                         font-size: 14px; padding: 12px; }
-            #input_bar { background: #0d1117; border-top: 1px solid #1e2530; }
+            QPushButton:hover {
+                background: #E5E5EA;
+            }
+            QPushButton:pressed {
+                background: #D1D1D6;
+            }
+            QPushButton:disabled {
+                color: #AEAEB2;
+                background: #F2F2F2;
+            }
+            QPushButton:checked {
+                background: #007AFF;
+                color: #FFFFFF;
+            }
+            #settings_btn {
+                background: transparent;
+                border: none;
+                color: #8E8E93;
+                padding: 0;
+                min-height: auto;
+            }
+            #settings_btn:hover {
+                color: #007AFF;
+                background: transparent;
+            }
+            #chat_area {
+                background: #FFFFFF;
+                color: #1D1D1F;
+                border: none;
+                font-size: 14px;
+                line-height: 1.5;
+                padding: 16px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+            }
+            #input_bar {
+                background: #F5F5F7;
+                border-top: 1px solid #D1D1D6;
+            }
             #input_field {
-                background: #161b22; color: #c9d1d9; border: 1px solid #30363d;
-                border-radius: 6px; padding: 8px 12px; font-size: 14px;
+                background: #FFFFFF;
+                color: #1D1D1F;
+                border: 1px solid #D1D1D6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
             }
-            #input_field:focus { border-color: #1f6feb; }
-            #toolbar { background: #0d1117; border-top: 1px solid #1e2530; }
+            #input_field:focus {
+                border-color: #007AFF;
+            }
+            #toolbar {
+                background: #F5F5F7;
+                border-top: 1px solid #D1D1D6;
+            }
+            #mic_btn {
+                background: #FFFFFF;
+                border: 1px solid #D1D1D6;
+                color: #1D1D1F;
+            }
+            #mic_btn:checked {
+                background: #FF3B30;
+                color: #FFFFFF;
+                border-color: #FF3B30;
+            }
+            #send_btn {
+                background: #007AFF;
+                color: #FFFFFF;
+            }
+            #send_btn:disabled {
+                color: #AEAEB2;
+                background: #E5E5EA;
+            }
+            #gesture_btn, #workspace_btn {
+                background: #FFFFFF;
+                border: 1px solid #D1D1D6;
+                color: #1D1D1F;
+            }
+            #gesture_btn:checked, #workspace_btn:checked {
+                background: #007AFF;
+                color: #FFFFFF;
+                border-color: #007AFF;
+            }
         """)
 
     def start_backend(self, mode: str = "agent") -> None:
         """Initialize and start the agent backend via coordinator."""
+        from app.settings import load
         from PySide6.QtWidgets import QMessageBox
 
         def _confirm(action_name: str) -> bool:
@@ -163,7 +269,13 @@ class ChatWindow(QMainWindow):
             )
             return reply == QMessageBox.Yes
 
+        settings = load()
+
         self._coordinator = AppCoordinator(mode=mode, confirmation_handler=_confirm)
+        if settings.get("voice_enabled", True):
+            self._coordinator.set_voice_enabled(True)
+        if settings.get("model"):
+            self._coordinator.set_model(settings["model"])
         self._coordinator.state_changed.connect(self._on_app_state)
         self._coordinator.chat_message.connect(self._on_chat_message)
         self._coordinator.voice_state_changed.connect(self._on_voice_state)
@@ -203,28 +315,84 @@ class ChatWindow(QMainWindow):
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Settings")
-        dialog.setMinimumWidth(400)
-        layout = QVBoxLayout(dialog)
+        dialog.setFixedSize(420, 380)
+        dialog.setStyleSheet("""
+            QDialog {
+                background: #FFFFFF;
+            }
+            QLabel {
+                color: #1D1D1F;
+                font-size: 13px;
+                font-weight: 500;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+            }
+            QComboBox {
+                background: #FFFFFF;
+                color: #1D1D1F;
+                border: 1px solid #D1D1D6;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 13px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                min-height: 34px;
+            }
+            QCheckBox {
+                color: #1D1D1F;
+                font-size: 13px;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 1px solid #D1D1D6;
+                border-radius: 4px;
+                background: #FFFFFF;
+            }
+            QCheckBox::indicator:checked {
+                background: #007AFF;
+                border-color: #007AFF;
+            }
+            QPushButton {
+                background: #F5F5F7;
+                color: #007AFF;
+                border: none;
+                border-radius: 8px;
+                padding: 0 16px;
+                font-size: 13px;
+                font-weight: 500;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                min-height: 34px;
+            }
+            QPushButton:hover {
+                background: #E5E5EA;
+            }
+        """)
 
-        layout.addWidget(QLabel("Settings"))
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(20)
+
+        header_label = QLabel("Settings")
+        header_label.setStyleSheet("font-size: 17px; font-weight: 600; border: none; padding: 0;")
+        layout.addWidget(header_label)
+
+        MODEL_OPTIONS = [
+            ("Qwen/Qwen2.5-72B-Instruct", "Qwen/Qwen2.5-72B-Instruct (default)"),
+            ("deepseek-ai/DeepSeek-R1", "deepseek-ai/DeepSeek-R1"),
+            ("openai/gpt-oss-120b", "openai/gpt-oss-120b"),
+            ("Qwen/Qwen3-4B-Thinking-2507", "Qwen/Qwen3-4B-Thinking-2507"),
+            ("mistralai/Mistral-Nemo-Instruct-2407", "mistralai/Mistral-Nemo-Instruct-2407"),
+        ]
 
         layout.addWidget(QLabel("Model:"))
         model_combo = QComboBox()
-        models = [
-            "Qwen/Qwen2.5-72B-Instruct (default)",
-            "deepseek-ai/DeepSeek-R1",
-            "openai/gpt-oss-120b",
-            "Qwen/Qwen3-4B-Thinking-2507",
-            "mistralai/Mistral-Nemo-Instruct-2407",
-        ]
-        model_combo.addItems(models)
+        model_combo.addItems([label for _, label in MODEL_OPTIONS])
         if current.get("model"):
-            idx = models.index(current["model"]) if current["model"] in models else -1
-            if idx >= 0:
-                model_combo.setCurrentIndex(idx)
+            ids = [id_ for id_, _ in MODEL_OPTIONS]
+            if current["model"] in ids:
+                model_combo.setCurrentIndex(ids.index(current["model"]))
         layout.addWidget(model_combo)
-
-        layout.addWidget(QLabel(""))
 
         voice_cb = QCheckBox("Enable voice (push-to-talk)")
         voice_cb.setChecked(current.get("voice_enabled", True))
@@ -234,25 +402,36 @@ class ChatWindow(QMainWindow):
         gesture_cb.setChecked(current.get("gesture_enabled", False))
         layout.addWidget(gesture_cb)
 
+        layout.addStretch()
+
         def _save():
+            model_id = MODEL_OPTIONS[model_combo.currentIndex()][0]
             new_settings = {
-                "model": models[model_combo.currentIndex()] if model_combo.currentIndex() >= 0 else "",
+                "model": model_id,
                 "voice_enabled": voice_cb.isChecked(),
                 "gesture_enabled": gesture_cb.isChecked(),
             }
             save(new_settings)
             if self._coordinator:
                 self._coordinator.set_voice_enabled(voice_cb.isChecked())
-                self._coordinator.set_model(new_settings["model"])
+                self._coordinator.set_model(model_id)
                 if gesture_cb.isChecked() and not self._coordinator._gesture_active:
                     self._coordinator.toggle_gestures()
                 elif not gesture_cb.isChecked() and self._coordinator._gesture_active:
                     self._coordinator.toggle_gestures()
             dialog.accept()
 
-        btn = QPushButton("Save")
-        btn.clicked.connect(_save)
-        layout.addWidget(btn)
+        def _cancel():
+            dialog.reject()
+
+        btn_row = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(_save)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(_cancel)
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(save_btn)
+        layout.addLayout(btn_row)
 
         dialog.exec()
 
@@ -273,15 +452,21 @@ class ChatWindow(QMainWindow):
 
     def _on_workspace_update(self, panel: str, text: str) -> None:
         self.status_label.setText(f"● {panel}: {text[:40]}")
-        self.status_label.setStyleSheet("color: #a371f7;")
+        self.status_label.setStyleSheet("color: #AF52DE;")
 
     def _append_message(self, role: str, text: str) -> None:
         if role == "user":
-            self.chat_area.append(f'<p style="color:#4fc3f7;margin:4px 0;"><b>You:</b> {self._escape(text)}</p>')
+            self.chat_area.append(
+                f'<p style="color:#007AFF;margin:8px 0;"><b>You:</b> {self._escape(text)}</p>'
+            )
         elif role == "jarvis":
-            self.chat_area.append(f'<p style="color:#c9d1d9;margin:4px 0;"><b>JARVIS:</b> {self._escape(text)}</p>')
+            self.chat_area.append(
+                f'<p style="color:#1D1D1F;margin:8px 0;"><b>JARVIS:</b> {self._escape(text)}</p>'
+            )
         elif role == "system":
-            self.chat_area.append(f'<p style="color:#8b949e;margin:4px 0;font-style:italic;">{self._escape(text)}</p>')
+            self.chat_area.append(
+                f'<p style="color:#8E8E93;margin:8px 0;font-style:italic;">{self._escape(text)}</p>'
+            )
         self.chat_area.moveCursor(QTextCursor.End)
         self._trim_messages()
 
@@ -306,19 +491,19 @@ class ChatWindow(QMainWindow):
         state_val = state.value if hasattr(state, "value") else str(state)
         if state_val == "listening":
             self.mic_btn.setChecked(True)
-            self.mic_btn.setText("Listening...")
+            self.mic_btn.setText("Listening…")
             self.status_label.setText("● Listening")
-            self.status_label.setStyleSheet("color: #f0883e;")
+            self.status_label.setStyleSheet("color: #FF3B30;")
         elif state_val == "speaking":
             self.mic_btn.setChecked(False)
             self.mic_btn.setText("Mic")
             self.status_label.setText("● Speaking")
-            self.status_label.setStyleSheet("color: #a371f7;")
+            self.status_label.setStyleSheet("color: #AF52DE;")
         elif state_val == "error":
             self.mic_btn.setChecked(False)
             self.mic_btn.setText("Mic")
             self.status_label.setText("● Voice Error")
-            self.status_label.setStyleSheet("color: #f85149;")
+            self.status_label.setStyleSheet("color: #FF3B30;")
         else:
             self.mic_btn.setChecked(False)
             self.mic_btn.setText("Mic")
@@ -350,6 +535,11 @@ class ChatWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("JARVIS Desktop")
+
+    # Apply system font
+    font = QFont("-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif", 13)
+    app.setFont(font)
+
     window = ChatWindow()
     window.show()
     window.start_backend()
