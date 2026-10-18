@@ -56,23 +56,64 @@ def _find_chromium() -> Path | None:
 
     Resolution order:
       1. J_BROWSER_CHROMIUM_PATH env (explicit override)
-      2. Playwright build under %LOCALAPPDATA%\\ms-playwright (dev/CI default)
+      2. Playwright build (OS-aware)
+      3. System package manager locations
     Returns None when nothing is resolvable (caller may inject).
     """
     env = os.environ.get(DEFAULT_CHROMIUM)
     if env and Path(env).exists():
         return Path(env)
-    base = Path(os.environ.get("LOCALAPPDATA", "") or "")
-    if not base.is_dir():
-        base = Path.home() / "AppData" / "Local"
-    playwright_root = base / "ms-playwright"
-    if playwright_root.is_dir():
-        found = sorted(
-            playwright_root.glob("chromium-*/chrome-win64/chrome.exe"),
-            reverse=True,
-        )
-        if found:
-            return found[0]
+
+    import platform
+    system = platform.system()
+
+    if system == "Windows":
+        base = Path(os.environ.get("LOCALAPPDATA", "") or "")
+        if not base.is_dir():
+            base = Path.home() / "AppData" / "Local"
+        playwright_root = base / "ms-playwright"
+        if playwright_root.is_dir():
+            found = sorted(
+                playwright_root.glob("chromium-*/chrome-win64/chrome.exe"),
+                reverse=True,
+            )
+            if found:
+                return found[0]
+    else:
+        home = Path.home()
+        search_paths = [
+            home / ".cache" / "ms-playwright",
+            home / "Library" / "Caches" / "ms-playwright",
+            Path("/root/.cache/ms-playwright"),
+            Path("/home/*/.cache/ms-playwright"),
+        ]
+        for base in search_paths:
+            if "*" in str(base):
+                import glob
+                matches = glob.glob(str(base))
+                for m in matches:
+                    base_path = Path(m)
+                    if base_path.is_dir():
+                        found = sorted(
+                            base_path.glob("chromium-*/chrome-linux/chrome"),
+                            reverse=True,
+                        )
+                        if found:
+                            return found[0]
+            elif base.is_dir():
+                found = sorted(
+                    base.glob("chromium-*/chrome-linux/chrome"),
+                    reverse=True,
+                )
+                if found:
+                    return found[0]
+
+        for cmd in ("chromium-browser", "chromium", "google-chrome-stable"):
+            import shutil
+            resolved = shutil.which(cmd)
+            if resolved and Path(resolved).exists():
+                return Path(resolved)
+
     return None
 
 

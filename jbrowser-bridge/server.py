@@ -162,6 +162,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             length = 0
         if length <= 0:
             return {}
+        if length > 32 * 1024 * 1024:
+            return None
         raw = self.rfile.read(length)
         self._body_consumed = True
         try:
@@ -550,7 +552,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
 def serve(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
           backend_kind: str = "echo", engine=None,
-          require_auth: bool = False, auth_token: str | None = None,
+          require_auth: bool = True, auth_token: str | None = None,
           ) -> ThreadingHTTPServer:
     """Start the bridge server.
 

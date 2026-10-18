@@ -25,7 +25,7 @@ from server import serve  # noqa: E402
 
 @pytest.fixture()
 def bridge():
-    httpd = serve(host="127.0.0.1", port=0, backend_kind="echo")
+    httpd = serve(host="127.0.0.1", port=0, backend_kind="echo", require_auth=False)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{httpd.server_address[1]}"
