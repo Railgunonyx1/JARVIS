@@ -84,7 +84,7 @@ def test_confirmation_handler_called():
     confirmed = []
     def on_confirm(name):
         confirmed.append(name)
-        return True
+        return "once"
     layer = DesktopActionLayer(confirmation_handler=on_confirm)
     called = []
     layer.register("dangerous", "Dangerous action", ActionRisk.HIGH,
@@ -96,7 +96,7 @@ def test_confirmation_handler_called():
 
 def test_confirmation_handler_denies():
     def on_confirm(name):
-        return False
+        return "deny"
     layer = DesktopActionLayer(confirmation_handler=on_confirm)
     called = []
     layer.register("dangerous", "Dangerous action", ActionRisk.HIGH,

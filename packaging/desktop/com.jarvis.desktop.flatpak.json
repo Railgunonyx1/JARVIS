@@ -9,6 +9,7 @@
     "--socket=wayland",
     "--socket=x11",
     "--socket=pulseaudio",
+    "--device=camera",
     "--share=network",
     "--persist=.jarvis-desktop"
   ],
@@ -20,7 +21,7 @@
       "name": "pyside6",
       "buildsystem": "simple",
       "build-commands": [
-        "pip3 install --prefix=/app 'PySide6==6.8.1'"
+        "pip3 install --prefix=/app 'PySide6==6.8.1' 'sounddevice==0.5.5' 'numpy>=1.26' 'psutil>=5.9' 'onnxruntime>=1.17' 'kokoro-onnx>=0.4' 'edge-tts>=7.2' 'pydub>=0.25'"
       ],
       "sources": []
     },
@@ -48,7 +49,7 @@
         "cp -r jarvis-desktop/app/diagnostics /app/lib/jarvis/jarvis-desktop/app/",
         "touch /app/lib/jarvis/jarvis-desktop/app/__init__.py",
         "touch /app/lib/jarvis/jarvis-desktop/__init__.py",
-        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=/app/lib/jarvis' 'export PYTHONPATH=/app/lib/jarvis/jarvis-desktop:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis/jarvis-desktop'); from app.main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-desktop",
+        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=/app/lib/jarvis' 'export PYTHONPATH=/app/lib/jarvis:/app/lib/jarvis/jarvis-desktop:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); sys.path.insert(0, '/app/lib/jarvis/jarvis-desktop'); from app.main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-desktop",
         "chmod +x /app/bin/jarvis-desktop"
       ],
       "sources": [

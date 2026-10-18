@@ -164,7 +164,7 @@ class TestDesktopActions:
         confirmed = []
         def on_confirm(name):
             confirmed.append(name)
-            return True
+            return "once"
         layer = DesktopActionLayer(confirmation_handler=on_confirm)
         called = []
         layer.register("dangerous", "Dangerous", ActionRisk.HIGH,

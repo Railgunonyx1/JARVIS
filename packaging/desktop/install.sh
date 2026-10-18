@@ -71,7 +71,6 @@ tar -C "$REPO_ROOT" \
   --exclude='./extensions' \
   --exclude='./jbrowser-bridge' \
   --exclude='./.github' \
-  --exclude='*.md' \
   --exclude='./docs' \
   --exclude='./audits' \
   --exclude='./benchmark' \

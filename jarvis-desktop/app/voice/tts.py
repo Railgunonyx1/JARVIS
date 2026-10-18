@@ -108,32 +108,50 @@ class TTSEngine:
 
     def _speak_fallback(self, text: str) -> tuple[bytes, str]:
         """Fallback TTS: edge-tts on Linux, SAPI on Windows."""
-        try:
-            import subprocess
-            import tempfile
-            import wave
+        import subprocess
+        import tempfile
+        import wave
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
                 tmp_path = tmp.name
 
-            subprocess.run(
+            result = subprocess.run(
                 ["edge-tts", "--text", text, "--write-media", tmp_path],
                 capture_output=True,
                 timeout=30,
                 check=False,
             )
 
-            if not os.path.exists(tmp_path):
+            if result.returncode != 0 or not os.path.exists(tmp_path):
+                logger.warning("edge-tts failed (rc=%s): %s",
+                             result.returncode, result.stderr.decode()[:200])
                 return b"", "audio/wav"
 
-            with wave.open(tmp_path, "rb") as wf:
-                frames = wf.readframes(wf.getnframes())
-                os.unlink(tmp_path)
+            # edge-tts produces MP3; decode to WAV for sounddevice
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_mp3(tmp_path)
+                wav_buffer = io.BytesIO()
+                audio.export(wav_buffer, format="wav")
                 self._engine_name = "edge-tts"
-                return frames, "audio/wav"
+                return wav_buffer.getvalue(), "audio/wav"
+            except ImportError:
+                # pydub unavailable; return raw MP3 and let the player handle it
+                with open(tmp_path, "rb") as f:
+                    mp3_data = f.read()
+                self._engine_name = "edge-tts"
+                return mp3_data, "audio/mpeg"
         except Exception as e:
             logger.warning("Fallback TTS failed: %s", e)
             return b"", "audio/wav"
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     def speak_to_file(self, text: str, filepath: str | Path | None = None) -> Path | None:
         """Synthesize and save to a WAV file. Returns the path or None."""

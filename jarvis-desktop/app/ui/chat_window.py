@@ -258,18 +258,32 @@ class ChatWindow(QMainWindow):
     def start_backend(self, mode: str = "agent") -> None:
         """Initialize and start the agent backend via coordinator."""
         from app.settings import load
+        from PySide6.QtCore import QMetaObject, Qt, Q_ARG
         from PySide6.QtWidgets import QMessageBox
 
-        def _confirm(tool_name: str, arguments: dict) -> str:
-            reply = QMessageBox.question(
-                self, "Confirm Action",
-                f"Allow JARVIS to execute: {tool_name}?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            return "once" if reply == QMessageBox.Yes else "deny"
-
         settings = load()
+
+        def _confirm(tool_name: str, arguments: dict) -> str:
+            result = []
+
+            def _ask() -> None:
+                reply = QMessageBox.question(
+                    self, "Confirm Action",
+                    f"Allow JARVIS to execute: {tool_name}?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                result.append("once" if reply == QMessageBox.Yes else "deny")
+
+            # Marshal to the GUI thread; deny on timeout/cancellation
+            QMetaObject.invokeMethod(
+                self, _ask, Qt.ConnectionType.QueuedConnection,
+            )
+            import time as _time
+            deadline = _time.time() + 10.0
+            while not result and _time.time() < deadline:
+                _time.sleep(0.05)
+            return result[0] if result else "deny"
 
         self._coordinator = AppCoordinator(mode=mode, confirmation_handler=_confirm)
         if settings.get("voice_enabled", True):

@@ -178,9 +178,9 @@ class PerformanceBenchmarker:
         cpu_result = BenchmarkResult("idle_cpu_percent", avg_cpu, "%",
                                      target=self.TARGET_IDLE_CPU,
                                      passed=avg_cpu < self.TARGET_IDLE_CPU)
-        ram_result = BenchmarkResult("idle_ram_gb", avg_ram / 100.0, "GB",
+        ram_result = BenchmarkResult("idle_ram_gb", avg_ram, "GB",
                                      target=self.TARGET_IDLE_RAM_GB,
-                                     passed=avg_ram / 100.0 < self.TARGET_IDLE_RAM_GB)
+                                     passed=avg_ram < self.TARGET_IDLE_RAM_GB)
         self._results.extend([cpu_result, ram_result])
         return cpu_result, ram_result
 

@@ -50,7 +50,7 @@ class DesktopActionLayer:
         layer.execute("volume_up")
     """
 
-    def __init__(self, *, confirmation_handler: Callable[[str], bool] | None = None):
+    def __init__(self, *, confirmation_handler: Callable[[str], str] | None = None):
         self._actions: dict[str, Action] = {}
         self._confirmation_handler = confirmation_handler
         self._history: list[dict] = []
@@ -81,7 +81,8 @@ class DesktopActionLayer:
 
         if action.require_confirmation and not confirmed:
             if self._confirmation_handler:
-                if not self._confirmation_handler(action.name):
+                decision = self._confirmation_handler(action.name)
+                if decision not in ("once", "run"):
                     logger.info("Action %s denied by confirmation", name)
                     self._log(action.name, False, "denied")
                     return False
