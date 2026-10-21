@@ -95,7 +95,7 @@ mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 
 # Install the Python launcher — no shell wrapper.
 echo "Installing launcher..."
-cp "$SCRIPT_DIR/launcher.py" "$BIN_DIR/jarvis-desktop"
+cp "$REPO_ROOT/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
 sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop"
 chmod +x "$BIN_DIR/jarvis-desktop"
 
