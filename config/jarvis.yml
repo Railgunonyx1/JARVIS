@@ -1,7 +1,11 @@
 # JARVIS MK-X Configuration for DeepSeek Harness
-# 
+#
 # This file configures JARVIS's behavior when running via DSH.
 # DSH reads this file to initialize JARVIS's capabilities.
+#
+# NOTE: model routing is authoritative in config/models.toml (read by
+# providers/router.py). The models.cascade section below is legacy
+# DSH-harness config only — no Python code in this branch reads it.
 
 jarvis:
   name: JARVIS MK-X
