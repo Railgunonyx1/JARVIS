@@ -93,14 +93,10 @@ tar -C "$REPO_ROOT" \
 # Ensure required subdirectories exist even if empty after exclusions
 mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 
-# Create wrapper script — PYTHONPATH points into the installed repo copy so
-# core, providers, tools, runtime, memory are importable.
-cat > "$BIN_DIR/jarvis-desktop" <<EOF
-#!/bin/bash
-export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
-export PYTHONPATH="\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop:\$JARVIS_DESKTOP_HOME/jarvis-repo:\${PYTHONPATH:-}"
-exec "\$JARVIS_DESKTOP_HOME/venv/bin/python" "\$JARVIS_DESKTOP_HOME/jarvis-repo/jarvis-desktop/app/main.py" "\$@"
-EOF
+# Install the Python launcher — no shell wrapper.
+echo "Installing launcher..."
+cp "$SCRIPT_DIR/launcher.py" "$BIN_DIR/jarvis-desktop"
+sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop"
 chmod +x "$BIN_DIR/jarvis-desktop"
 
 # Install desktop entry
