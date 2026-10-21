@@ -154,7 +154,7 @@ class AppCoordinator(QObject):
 
         # Actions
         self._actions = DesktopActionLayer(
-            confirmation_handler=self._confirmation_handler,
+            confirmation_handler=self._action_confirmation,
         )
 
         # Workspace
@@ -175,6 +175,12 @@ class AppCoordinator(QObject):
         if self._backend:
             self._backend.stop()
         logger.info("AppCoordinator shutdown")
+
+    def _action_confirmation(self, action_name: str) -> str:
+        """Adapt the desktop action layer's 1-arg contract to the agent's 2-arg one."""
+        if self._confirmation_handler is None:
+            return "deny"
+        return self._confirmation_handler(action_name, {})
 
     # ── Chat ────────────────────────────────────────────────────
     def send_message(self, text: str) -> None:

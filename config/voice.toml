@@ -2,7 +2,7 @@
 primary_provider = "groq"
 fallback_provider = "local"
 groq_model = "whisper-large-v3"
-local_model = "tiny"  # faster-whisper model size
+local_model = "base"  # faster-whisper model size
 sample_rate = 16000
 chunk_duration_ms = 30
 

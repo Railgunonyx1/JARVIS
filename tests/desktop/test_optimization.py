@@ -46,7 +46,7 @@ def test_performance_monitor_averages():
     monitor.stop()
 
     avg_cpu = monitor.get_average_cpu()
-    avg_ram = monitor.get_average_ram()
+    avg_ram = monitor.get_average_ram_gb()
     peak_ram = monitor.get_peak_ram_gb()
 
     assert avg_cpu >= 0.0

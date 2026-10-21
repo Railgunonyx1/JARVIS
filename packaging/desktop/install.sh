@@ -43,7 +43,8 @@ echo "Installing runtime dependencies..."
   'psutil>=5.9' \
   'onnxruntime>=1.17' \
   'kokoro-onnx>=0.4' \
-  'edge-tts>=7.2' || {
+  'edge-tts>=7.2' \
+  'pydub>=0.25.1' || {
     echo "ERROR: Failed to install runtime dependencies"
     exit 1
   }

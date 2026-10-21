@@ -76,7 +76,7 @@ class PerformanceMonitor:
                 snapshot = PerformanceSnapshot(
                     timestamp=time.time(),
                     cpu_percent=cpu,
-                    ram_percent=ram_gb,
+                    ram_percent=psutil.virtual_memory().percent,
                     ram_used_gb=ram_gb,
                     events={},
                 )
@@ -95,12 +95,12 @@ class PerformanceMonitor:
             return 0.0
         return sum(s.cpu_percent for s in recent) / len(recent)
 
-    def get_average_ram(self, last_n: int = 60) -> float:
+    def get_average_ram_gb(self, last_n: int = 60) -> float:
         with self._lock:
             recent = self._snapshots[-last_n:]
         if not recent:
             return 0.0
-        return sum(s.ram_percent for s in recent) / len(recent)
+        return sum(s.ram_used_gb for s in recent) / len(recent)
 
     def get_peak_ram_gb(self) -> float:
         with self._lock:
@@ -173,7 +173,7 @@ class PerformanceBenchmarker:
         self._monitor.stop()
 
         avg_cpu = self._monitor.get_average_cpu()
-        avg_ram = self._monitor.get_average_ram()
+        avg_ram = self._monitor.get_average_ram_gb()
 
         cpu_result = BenchmarkResult("idle_cpu_percent", avg_cpu, "%",
                                      target=self.TARGET_IDLE_CPU,

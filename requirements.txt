@@ -49,4 +49,9 @@ markdownify
 # Voice: local neural TTS (ElevenLabs SDK optional, install when keyed)
 kokoro-onnx>=0.4
 edge-tts>=7.2          # keyless neural TTS (unofficial Microsoft endpoint)
+pydub>=0.25.1          # MP3→WAV fallback for edge-tts when pydub available
 PySide6>=6.8
+
+# Gestures: hand tracking (optional — camera-based)
+# mediapipe>=0.10     # hand landmark detection
+# opencv-python-headless>=4.9  # camera capture / frame processing

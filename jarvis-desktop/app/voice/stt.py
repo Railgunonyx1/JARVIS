@@ -7,6 +7,7 @@ stops immediately after.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
@@ -221,7 +222,10 @@ class WhisperSTT:
 
 
 class CloudSTT:
-    """Cloud STT fallback using the existing ElevenLabs Scribe."""
+    """Cloud STT fallback using the ElevenLabs Scribe v2 API."""
+
+    _API_URL = "https://api.elevenlabs.io/v1/speech-to-text"
+    _MODEL_ID = "scribe_v2"
 
     def __init__(self):
         self._engine_name = "cloud-stt"
@@ -229,33 +233,40 @@ class CloudSTT:
     def transcribe(self, audio_bytes: bytes, mime: str = "audio/wav") -> STTResult:
         start = time.time()
         try:
-            import subprocess
-            import tempfile
-            import os
+            api_key = os.getenv("ELEVENLABS_API_KEY", "")
+            if not api_key:
+                logger.warning("ELEVENLABS_API_KEY not set — cloud STT unavailable")
+                return STTResult("", 0.0, self._engine_name, (time.time() - start) * 1000)
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp.write(audio_bytes)
-                tmp_path = tmp.name
+            import urllib.request
+            import uuid
 
-            try:
-                result = subprocess.run(
-                    ["whisper-cli", tmp_path, "--output-format", "json"],
-                    capture_output=True,
-                    timeout=60,
-                    check=False,
-                )
-                os.unlink(tmp_path)
+            boundary = uuid.uuid4().hex
+            filename = "audio.wav"
+            body = (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="model_id"\r\n\r\n'
+                f"{self._MODEL_ID}\r\n"
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                f"Content-Type: {mime}\r\n\r\n"
+            ).encode() + audio_bytes + f"\r\n--{boundary}--\r\n".encode()
 
-                if result.returncode == 0 and result.stdout:
-                    text = result.stdout.decode("utf-8").strip()
-                    if text:
-                        duration_ms = (time.time() - start) * 1000
-                        return STTResult(text, 0.0, self._engine_name, duration_ms)
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                pass
+            req = urllib.request.Request(
+                self._API_URL,
+                data=body,
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                payload = json.loads(resp.read())
 
+            text = (payload.get("text") or "").strip()
             duration_ms = (time.time() - start) * 1000
-            return STTResult("", 0.0, self._engine_name, duration_ms)
+            return STTResult(text, 0.0, self._engine_name, duration_ms)
         except Exception as e:
             logger.warning("Cloud STT failed: %s", e)
             return STTResult("", 0.0, self._engine_name, (time.time() - start) * 1000)

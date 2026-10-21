@@ -95,6 +95,7 @@ class TTSEngine:
             return None
         import io
         import wave
+
         import numpy as np
         audio, sr = self._kokoro(text)
         wav_buffer = io.BytesIO()
@@ -108,9 +109,9 @@ class TTSEngine:
 
     def _speak_fallback(self, text: str) -> tuple[bytes, str]:
         """Fallback TTS: edge-tts on Linux, SAPI on Windows."""
+        import io
         import subprocess
         import tempfile
-        import wave
 
         tmp_path = None
         try:
@@ -174,7 +175,7 @@ class TTSEngine:
 
     @staticmethod
     def play_bytes(audio_bytes: bytes, block: bool = False) -> None:
-        """Play raw audio bytes via sounddevice."""
+        """Play raw audio bytes via sounddevice. Accepts WAV or MP3."""
         try:
             import io
             import wave
@@ -182,12 +183,31 @@ class TTSEngine:
             import numpy as np
             import sounddevice as sd
 
-            # Parse WAV
-            with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
-                frames = wf.readframes(wf.getnframes())
-                rate = wf.getframerate()
-                channels = wf.getnchannels()
-                width = wf.getsampwidth()
+            try:
+                with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
+                    frames = wf.readframes(wf.getnframes())
+                    rate = wf.getframerate()
+                    channels = wf.getnchannels()
+                    width = wf.getsampwidth()
+            except wave.Error:
+                # Not WAV — try MP3 via pydub
+                from pydub import AudioSegment
+                audio = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
+                rate = audio.frame_rate
+                channels = audio.channels
+                data = np.array(audio.get_array_of_samples(), dtype=np.float32)
+                if audio.sample_width == 2:
+                    data = data / 32768.0
+                elif audio.sample_width == 4:
+                    data = data / 2147483648.0
+                else:
+                    data = data / 128.0 - 1.0
+                if channels > 1:
+                    data = data.reshape(-1, channels)
+                sd.play(data, rate)
+                if block:
+                    sd.wait()
+                return
 
             if width == 2:
                 data = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
