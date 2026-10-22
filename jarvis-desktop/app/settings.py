@@ -38,3 +38,15 @@ def save(settings: dict) -> None:
         logger.info("Settings saved to %s", SETTINGS_FILE)
     except OSError as e:
         logger.warning("Failed to save settings: %s", e)
+
+
+def update(partial: dict) -> dict:
+    """Merge ``partial`` into the persisted settings and save.
+
+    Preserves keys owned by other surfaces (e.g. ``autostart_enabled``) instead
+    of overwriting the whole file.
+    """
+    merged = load()
+    merged.update(partial)
+    save(merged)
+    return merged

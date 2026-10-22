@@ -27,11 +27,21 @@ StartupNotify=false
 """
 
 
+def _quote(argument: str) -> str:
+    """Quote one Exec argument per the Desktop Entry spec."""
+    escaped = (
+        argument.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("%", "%%")
+    )
+    return f'"{escaped}"'
+
+
 def _launch_command() -> str:
     existing = Path(sys.argv[0]).resolve()
     if existing.name == "jarvis-desktop":
-        return str(existing)
-    return f"{sys.executable} {existing}"
+        return _quote(str(existing))
+    return f"{_quote(sys.executable)} {_quote(str(existing))}"
 
 
 def is_enabled() -> bool:

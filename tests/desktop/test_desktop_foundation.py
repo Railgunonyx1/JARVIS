@@ -43,24 +43,28 @@ def test_chat_window_backend_integration():
     w.show()
     w.start_backend()
 
-    loop = QEventLoop()
-    QTimer.singleShot(2000, loop.quit)
-    loop.exec()
+    def pump_until(predicate, timeout_ms=15000, step_ms=50):
+        import time
 
-    assert w._coordinator is not None
-    assert w._coordinator.backend is not None
-    assert w._coordinator.backend.is_running
+        deadline = time.monotonic() + timeout_ms / 1000
+        while time.monotonic() < deadline:
+            if predicate():
+                return True
+            loop = QEventLoop()
+            QTimer.singleShot(step_ms, loop.quit)
+            loop.exec()
+        return predicate()
+
+    assert pump_until(
+        lambda: w._coordinator is not None
+        and w._coordinator.backend is not None
+        and w._coordinator.backend.is_running
+    ), "backend did not reach running state"
 
     w.input_field.setText("Hello")
     w._on_send()
 
-    loop2 = QEventLoop()
-    QTimer.singleShot(5000, loop2.quit)
-    loop2.exec()
-
-    # Verify a message was added to the chat area (user message at minimum)
-    html = w.chat_area.toHtml()
-    assert "Hello" in html
+    assert pump_until(lambda: "Hello" in w.chat_area.toHtml(), timeout_ms=5000)
 
 
 @pytest.mark.e2e

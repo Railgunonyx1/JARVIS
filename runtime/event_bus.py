@@ -14,7 +14,7 @@ import asyncio
 import logging
 import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -48,8 +48,8 @@ class EventBus:
         self._handlers: dict[str, list[Handler]] = defaultdict(list)
         self._wildcards: list[tuple[str, Handler]] = []
         self._lock = threading.Lock()
-        self._event_log: list[BusEvent] = []
-        self._max_log = 500
+        self._event_log: deque[BusEvent] = deque(maxlen=500)
+        self._published_count = 0
 
     def subscribe(self, pattern: str, handler: Handler) -> None:
         """Subscribe to events matching ``pattern``.
@@ -78,19 +78,11 @@ class EventBus:
                     subs.remove(handler)
 
     def _evict_expired(self, now: float) -> None:
-        """Remove events older than TTL."""
+        """Remove events older than TTL from the front of the log."""
         cutoff = now - EVENT_LOG_TTL_SECONDS
-        # Find first event within TTL (log is ordered by insertion time)
-        keep_idx = 0
-        for i, ev in enumerate(self._event_log):
-            if ev.timestamp >= cutoff:
-                keep_idx = i
-                break
-        else:
-            # All events expired
-            keep_idx = len(self._event_log)
-        if keep_idx > 0:
-            self._event_log = self._event_log[keep_idx:]
+        log = self._event_log
+        while log and log[0].timestamp < cutoff:
+            log.popleft()
 
     def publish(self, event: BusEvent) -> None:
         """Dispatch to all matching handlers (sync).  Never raises."""
@@ -108,10 +100,9 @@ class EventBus:
                 logger.error("Bus handler error for %s: %s", event.name, e)
         with self._lock:
             self._event_log.append(event)
-            if len(self._event_log) > self._max_log:
-                self._event_log = self._event_log[-self._max_log:]
+            self._published_count += 1
             # Periodic TTL eviction (every 100 events)
-            if len(self._event_log) % 100 == 0:
+            if self._published_count % 100 == 0:
                 self._evict_expired(now)
 
     async def publish_async(self, event: BusEvent) -> None:
@@ -132,14 +123,16 @@ class EventBus:
                 logger.error("Bus async handler error for %s: %s", event.name, e)
         with self._lock:
             self._event_log.append(event)
-            if len(self._event_log) > self._max_log:
-                self._event_log = self._event_log[-self._max_log:]
-            if len(self._event_log) % 100 == 0:
+            self._published_count += 1
+            if self._published_count % 100 == 0:
                 self._evict_expired(now)
 
     def recent(self, limit: int = 50) -> list[BusEvent]:
         with self._lock:
-            return list(self._event_log[-limit:])
+            log = self._event_log
+            if limit >= len(log):
+                return list(log)
+            return list(log)[-limit:]
 
     def clear(self) -> None:
         with self._lock:

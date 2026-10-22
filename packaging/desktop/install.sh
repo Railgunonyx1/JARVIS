@@ -44,7 +44,9 @@ echo "Installing runtime dependencies..."
   'onnxruntime>=1.17' \
   'kokoro-onnx>=0.4' \
   'edge-tts>=7.2' \
-  'pydub>=0.25.1' || {
+  'pydub>=0.25.1' \
+  'openai==3.31.0' \
+  'httpx==0.28.1' || {
     echo "ERROR: Failed to install runtime dependencies"
     exit 1
   }
@@ -68,6 +70,7 @@ tar -C "$REPO_ROOT" \
   --exclude='./build' \
   --exclude='./.mypy_cache' \
   --exclude='./node_modules' \
+  --exclude='./claude-code-tools' \
   --exclude='./orbit-browser' \
   --exclude='./extensions' \
   --exclude='./jbrowser-bridge' \
@@ -103,6 +106,12 @@ cp "$REPO_ROOT/jarvis-desktop-island-launcher.py" "$BIN_DIR/jarvis-desktop-islan
 sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop-island"
 chmod +x "$BIN_DIR/jarvis-desktop-island"
 
+# Bake the chosen install root into the launchers' fallback path so a custom
+# INSTALL_DIR resolves correctly (they otherwise default to ~/.local/share).
+LAUNCH_HOME="${INSTALL_DIR//&/\\&}"
+sed -i "s|~/.local/share/jarvis-desktop|$LAUNCH_HOME|g" "$BIN_DIR/jarvis-desktop"
+sed -i "s|~/.local/share/jarvis-desktop|$LAUNCH_HOME|g" "$BIN_DIR/jarvis-desktop-island"
+
 # Install desktop entry
 mkdir -p "$DESKTOP_DIR"
 cp "$REPO_ROOT/packaging/desktop/JARVIS.desktop" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
@@ -119,6 +128,14 @@ cp "$REPO_ROOT/jarvis-desktop/assets/icon.svg" "$ICON_DIR/jarvis-desktop.svg" 2>
 # Update desktop database
 if command -v update-desktop-database &>/dev/null; then
     update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+fi
+
+# KDE Plasma Wayland ignores client-set window positions, so the island needs
+# a KWin script to pin it top-centre. Only for the real desktop user.
+if [ "$(id -u)" -ne 0 ] && [ "${XDG_CURRENT_DESKTOP:-}" != "" ] \
+        && [ -x "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" ]; then
+    "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" \
+        || echo "warning: KWin placement script was not installed (island will use compositor placement)"
 fi
 
 echo "=== Installation complete ==="

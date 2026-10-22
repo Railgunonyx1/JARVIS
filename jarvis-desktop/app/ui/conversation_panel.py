@@ -1,0 +1,221 @@
+"""Compact conversation panel for the island — purpose-built, not the full window.
+
+Conversation-focused: transcript, input, push-to-talk, and inline approval
+prompts. No permanent toolbar, no dashboard. Reuses the coordinator/backend.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QTextCursor
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+class ConversationPanel(QWidget):
+    """Compact chat surface embedded in the expanded island."""
+
+    send_requested = Signal(str)
+    mic_toggled = Signal()
+    cancel_requested = Signal()
+    approval_decision = Signal(bool)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._max_blocks = 500
+        self._decision_sink: list[str] | None = None
+        self.approval_decision.connect(self._on_approval_decision)
+        self._build()
+
+    def _on_approval_decision(self, allow: bool) -> None:
+        if self._decision_sink is not None:
+            self._decision_sink.append("once" if allow else "deny")
+            self._decision_sink = None
+        self.set_approval(None)
+
+    def request_approval(self, tool_name: str, arguments: dict | None = None) -> None:
+        """Show the approval row and route the next decision to ``sink``."""
+        self.set_approval(tool_name, self._preview(arguments))
+
+    @staticmethod
+    def _preview(arguments: dict | None) -> str:
+        """Compact, redacted argument preview (never full payloads)."""
+        if not arguments:
+            return ""
+        sensitive = ("password", "secret", "token", "api_key", "apikey", "credential")
+        parts = []
+        for name, value in list(arguments.items())[:3]:
+            if any(s in name.lower() for s in sensitive):
+                shown = "\u2022\u2022\u2022"
+            else:
+                shown = str(value)
+                if len(shown) > 60:
+                    shown = shown[:57] + "\u2026"
+            parts.append(f"{name}={shown}")
+        text = ", ".join(parts)
+        if len(arguments) > 3:
+            text += f" (+{len(arguments) - 3} more)"
+        return text
+
+    def _build(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self.transcript = QTextEdit()
+        self.transcript.setReadOnly(True)
+        self.transcript.setFrameShape(QFrame.NoFrame)
+        self.transcript.setObjectName("islandTranscript")
+        self.transcript.setStyleSheet("""
+            #islandTranscript {
+                background: transparent;
+                color: #E5E5EA;
+                border: none;
+                font-size: 13px;
+                padding: 12px 14px;
+            }
+        """)
+        root.addWidget(self.transcript, 1)
+
+        # Inline approval row (hidden unless approval is required)
+        self._approval_row = QFrame()
+        self._approval_row.setObjectName("islandApproval")
+        self._approval_row.setStyleSheet(
+            "#islandApproval { background: #2C2C2E; border-top: 1px solid #3A3A3C; }"
+        )
+        ar = QHBoxLayout(self._approval_row)
+        ar.setContentsMargins(12, 8, 12, 8)
+        self._approval_label = QLabel("")
+        self._approval_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._approval_label.setWordWrap(True)
+        self._approval_label.setStyleSheet("color: #FFD60A; font-size: 12px;")
+        ar.addWidget(self._approval_label, 1)
+        approve_btn = QPushButton("Allow")
+        deny_btn = QPushButton("Deny")
+        for b in (approve_btn, deny_btn):
+            b.setFixedHeight(28)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+        approve_btn.clicked.connect(lambda: self.approval_decision.emit(True))
+        deny_btn.clicked.connect(lambda: self.approval_decision.emit(False))
+        ar.addWidget(deny_btn)
+        ar.addWidget(approve_btn)
+        self._approval_row.hide()
+        root.addWidget(self._approval_row)
+
+        # Input row
+        input_bar = QFrame()
+        input_bar.setObjectName("islandInput")
+        input_bar.setStyleSheet(
+            "#islandInput { background: #1C1C1E; border-top: 1px solid #3A3A3C; }"
+        )
+        il = QHBoxLayout(input_bar)
+        il.setContentsMargins(12, 8, 12, 8)
+        il.setSpacing(8)
+
+        self.mic_btn = QPushButton("\U0001F3A4")
+        self.mic_btn.setFixedSize(34, 34)
+        self.mic_btn.setCheckable(True)
+        self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.mic_btn.setToolTip("Push to talk")
+        self.mic_btn.clicked.connect(self.mic_toggled.emit)
+        self._style_button(self.mic_btn)
+        il.addWidget(self.mic_btn)
+
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Ask JARVIS\u2026")
+        self.input_field.setMinimumHeight(34)
+        self.input_field.setStyleSheet(
+            "QLineEdit { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C;"
+            " border-radius: 8px; padding: 6px 10px; font-size: 13px; }"
+            "QLineEdit:focus { border-color: #0A84FF; }"
+        )
+        self.input_field.returnPressed.connect(self._on_send)
+        il.addWidget(self.input_field, 1)
+
+        self.send_btn = QPushButton("Send")
+        self.send_btn.setFixedSize(60, 34)
+        self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_btn.setStyleSheet(
+            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none;"
+            " border-radius: 8px; font-size: 13px; font-weight: 500; }"
+            "QPushButton:hover { background: #0071E3; }"
+        )
+        self.send_btn.clicked.connect(self._on_send)
+        il.addWidget(self.send_btn)
+
+        root.addWidget(input_bar)
+
+    @staticmethod
+    def _style_button(btn: QPushButton) -> None:
+        btn.setStyleSheet(
+            "QPushButton { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C;"
+            " border-radius: 8px; }"
+            "QPushButton:checked { background: #FF3B30; border-color: #FF3B30; }"
+        )
+
+    def _on_send(self) -> None:
+        text = self.input_field.text().strip()
+        if not text:
+            return
+        self.input_field.clear()
+        self.send_requested.emit(text)
+
+    # ── Rendering ────────────────────────────────────────────────
+    def append_message(self, role: str, text: str) -> None:
+        if role == "user":
+            html = f'<p style="color:#0A84FF;margin:6px 0;"><b>You:</b> {self._esc(text)}</p>'
+        elif role == "jarvis":
+            html = f'<p style="color:#FFFFFF;margin:6px 0;"><b>JARVIS:</b> {self._esc(text)}</p>'
+        else:
+            html = f'<p style="color:#8E8E93;margin:6px 0;font-style:italic;">{self._esc(text)}</p>'
+        self.transcript.append(html)
+        self.transcript.moveCursor(QTextCursor.MoveOperation.End)
+        self._trim()
+
+    def append_chunk(self, chunk: str) -> None:
+        cursor = self.transcript.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(chunk)
+        doc = self.transcript.document()
+        if doc.blockCount() > self._max_blocks:
+            self._trim()
+
+    def _trim(self) -> None:
+        doc = self.transcript.document()
+        if doc.blockCount() > self._max_blocks:
+            cursor = self.transcript.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            for _ in range(doc.blockCount() - self._max_blocks):
+                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deletePreviousChar()
+            self.transcript.setTextCursor(cursor)
+
+    def set_approval(self, tool_name: str | None, preview: str = "") -> None:
+        if tool_name:
+            text = f"Allow JARVIS to run: {tool_name}?"
+            if preview:
+                text += f"\n{preview}"
+            self._approval_label.setText(text)
+            self._approval_row.show()
+        else:
+            self._approval_label.setText("")
+            self._approval_row.hide()
+
+    def set_listening(self, active: bool) -> None:
+        self.mic_btn.setChecked(active)
+
+    def clear(self) -> None:
+        self.transcript.clear()
+
+    @staticmethod
+    def _esc(text: str) -> str:
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

@@ -30,12 +30,15 @@ class ChatWindow(QMainWindow):
     """Main application window — minimal chat interface with Apple HIG design."""
 
     voice_state_changed = Signal(object)
+    _approval_requested = Signal(str, object)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JARVIS")
         self.setMinimumSize(900, 650)
         self._coordinator: AppCoordinator | None = None
+        self._approval_result: list[str] | None = None
+        self._approval_requested.connect(self._show_approval)
         self._max_messages = 500
         self._init_ui()
         self._connect_signals()
@@ -258,34 +261,9 @@ class ChatWindow(QMainWindow):
     def start_backend(self, mode: str = "agent") -> None:
         """Initialize and start the agent backend via coordinator."""
         from app.settings import load
-        from PySide6.QtCore import QMetaObject, Qt, Q_ARG
-        from PySide6.QtWidgets import QMessageBox
 
         settings = load()
-
-        def _confirm(tool_name: str, arguments: dict) -> str:
-            result = []
-
-            def _ask() -> None:
-                reply = QMessageBox.question(
-                    self, "Confirm Action",
-                    f"Allow JARVIS to execute: {tool_name}?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
-                )
-                result.append("once" if reply == QMessageBox.Yes else "deny")
-
-            # Marshal to the GUI thread; deny on timeout/cancellation
-            QMetaObject.invokeMethod(
-                self, _ask, Qt.ConnectionType.QueuedConnection,
-            )
-            import time as _time
-            deadline = _time.time() + 10.0
-            while not result and _time.time() < deadline:
-                _time.sleep(0.05)
-            return result[0] if result else "deny"
-
-        self._coordinator = AppCoordinator(mode=mode, confirmation_handler=_confirm)
+        self._coordinator = AppCoordinator(mode=mode, confirmation_handler=self._confirm)
         if settings.get("voice_enabled", True):
             self._coordinator.set_voice_enabled(True)
         if settings.get("model"):
@@ -322,7 +300,7 @@ class ChatWindow(QMainWindow):
 
     def _on_settings(self) -> None:
         """Handle settings button click."""
-        from app.settings import load, save
+        from app.settings import load, update
         from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QLabel, QPushButton, QVBoxLayout
 
         current = load()
@@ -425,7 +403,7 @@ class ChatWindow(QMainWindow):
                 "voice_enabled": voice_cb.isChecked(),
                 "gesture_enabled": gesture_cb.isChecked(),
             }
-            save(new_settings)
+            update(new_settings)
             if self._coordinator:
                 self._coordinator.set_voice_enabled(voice_cb.isChecked())
                 self._coordinator.set_model(model_id)
@@ -521,6 +499,40 @@ class ChatWindow(QMainWindow):
         else:
             self.mic_btn.setChecked(False)
             self.mic_btn.setText("Mic")
+
+    def _confirm(self, tool_name: str, arguments: dict) -> str:
+        """Approval handler — runs on the agent worker thread.
+
+        A Python callable is not a valid QMetaObject slot (TypeError in PySide6),
+        so marshal with a queued signal and wait for the modal answer.
+        """
+        import time
+
+        result: list[str] = []
+        self._approval_result = result
+        self._approval_requested.emit(tool_name, arguments)
+        while not result:
+            time.sleep(0.02)
+        return result[0]
+
+    def _show_approval(self, tool_name: str, arguments: dict) -> None:
+        """GUI thread: modal confirmation with a redacted argument preview."""
+        from PySide6.QtWidgets import QMessageBox
+
+        from app.ui.conversation_panel import ConversationPanel
+
+        prompt = f"Allow JARVIS to execute: {tool_name}?"
+        preview = ConversationPanel._preview(arguments)
+        if preview:
+            prompt += f"\n\n{preview}"
+        reply = QMessageBox.question(
+            self, "Confirm Action", prompt,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        result, self._approval_result = self._approval_result, None
+        if result is not None:
+            result.append("once" if reply == QMessageBox.Yes else "deny")
 
     def _on_app_state(self, state) -> None:
         state_val = state.value if hasattr(state, "value") else str(state)

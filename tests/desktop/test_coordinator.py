@@ -12,7 +12,7 @@ if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
 from app.integration.coordinator import AppCoordinator
-from app.integration.jarvis_backend import JarvisBackend
+from app.integration.jarvis_backend import BackendState, JarvisBackend
 from app.voice.voice_manager import VoiceState
 
 
@@ -126,3 +126,19 @@ def test_set_model_applies_to_backend():
     assert backend._agent_loop is not None
     assert backend._agent_loop.router.preferred_model == "test-model"
     backend.stop(wait=True, timeout=5.0)
+
+
+def test_backend_status_forwards_to_chat_signal():
+    coord = AppCoordinator()
+    seen = []
+    coord.chat_message.connect(lambda role, text: seen.append((role, text)))
+    coord._on_backend_status("Loading tools")
+    assert seen == [("status", "Loading tools")]
+
+
+def test_backend_state_error_resets_app_state():
+    coord = AppCoordinator()
+    seen = []
+    coord.state_changed.connect(seen.append)
+    coord._on_backend_state(BackendState.ERROR)
+    assert [str(s) for s in seen] == ["idle"]

@@ -212,10 +212,13 @@ class AppCoordinator(QObject):
         self._set_state(AppState.IDLE)
 
     def _on_backend_status(self, status: str) -> None:
-        pass
+        """Forward backend status to UI (kept for signal compatibility)."""
+        self.chat_message.emit("status", status)
 
     def _on_backend_state(self, state: BackendState) -> None:
-        pass
+        """React to backend lifecycle changes."""
+        if state == BackendState.ERROR:
+            self._set_state(AppState.IDLE)
 
     # ── Voice ───────────────────────────────────────────────────
     def toggle_voice(self) -> None:
