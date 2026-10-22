@@ -348,3 +348,51 @@ def test_single_instance_guard(tmp_path):
     third = island_main._single_instance_guard(lock)
     assert third is not None
     third.close()
+
+
+def test_island_hide_is_shown_by_second_instance(monkeypatch, tmp_path):
+    try:
+        from PySide6 import QtNetwork  # noqa: F401
+    except Exception:
+        pytest.skip("QtNetwork unavailable (missing system libs)")
+    import os
+    import time
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    os.environ["XDG_RUNTIME_DIR"] = str(tmp_path)
+    app = QApplication.instance() or QApplication([])
+
+    from app import island_main
+
+    lock = str(tmp_path / "island.lock")
+    server_name = island_main._instance_server_name(lock)
+    guard = island_main._single_instance_guard(lock)
+    assert guard is not None
+
+    from app.ui.island_controller import IslandController
+    from app.ui.overlay_window import IslandWindow
+
+    ctrl = IslandController()
+    island = IslandWindow(ctrl)
+    island.show()
+    _ipc = island_main._InstanceIpc(server_name, island)
+    app.processEvents()
+
+    island.hide_island()
+    app.processEvents()
+    assert island.isHidden()
+
+    assert island_main._ask_running_instance(server_name) is True
+    deadline = time.time() + 2
+    while time.time() < deadline and island.isHidden():
+        app.processEvents()
+        time.sleep(0.01)
+    assert not island.isHidden()
+    assert island.isVisible()
+
+    island.close()
+    guard.close()
+    QTimer.singleShot(0, app.quit)
+    app.processEvents()

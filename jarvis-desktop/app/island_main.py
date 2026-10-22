@@ -9,8 +9,14 @@ import os
 import signal
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QApplication
+
+try:
+    from PySide6.QtNetwork import QLocalServer, QLocalSocket
+except Exception:
+    QLocalServer = None
+    QLocalSocket = None
 
 APP_ID = "jarvis-island"
 
@@ -54,6 +60,67 @@ def _single_instance_guard(lock_path: str | None = None):
     handle.write(str(os.getpid()))
     handle.flush()
     return handle
+
+
+class _InstanceIpc(QObject):
+    """Brings an existing island to front when a second instance launches."""
+
+    def __init__(self, server_name: str, island):
+        super().__init__()
+        self._island = island
+        if QLocalServer is None:
+            self._server = None
+            return
+        self._server = QLocalServer(self)
+        QLocalServer.removeServer(server_name)
+        self._server.listen(server_name)
+        self._server.newConnection.connect(self._on_connection)
+
+    def _on_connection(self):
+        server = getattr(self, "_server", None)
+        if server is None:
+            return
+        sock = server.nextPendingConnection()
+        if sock is None:
+            return
+        sock.readyRead.connect(lambda s=sock: self._handle(sock))
+        sock.disconnected.connect(sock.deleteLater)
+
+    def _handle(self, sock):
+        try:
+            data = sock.readAll().data().decode("utf-8", errors="ignore").strip()
+        except Exception:
+            data = ""
+        sock.flush()
+        sock.disconnectFromServer()
+        if data == "show":
+            island = self._island
+            if island is not None:
+                island.show()
+                island.raise_()
+                island.activateWindow()
+
+
+def _ask_running_instance(server_name: str) -> bool:
+    if QLocalSocket is None:
+        return False
+    sock = QLocalSocket()
+    sock.connectToServer(server_name)
+    if not sock.waitForConnected(300):
+        return False
+    sock.write(b"show")
+    sock.flush()
+    sock.waitForBytesWritten(300)
+    sock.disconnectFromServer()
+    sock.waitForDisconnected(300)
+    return True
+
+
+def _instance_server_name(lock_path: str) -> str:
+    # Keep the name stable and filesystem-safe.
+    base = os.path.basename(lock_path).replace(".", "-")
+    return f"{APP_ID}-{base}-ipc"
+
 
 
 def main() -> int:

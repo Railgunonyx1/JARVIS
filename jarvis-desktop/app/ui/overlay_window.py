@@ -107,6 +107,7 @@ class IslandWindow(QWidget):
         app = QApplication.instance()
         if app is not None:
             app.screenAdded.connect(self._on_screens_changed)
+            app.screenRemoved.connect(self._on_screens_changed)
             app.primaryScreenChanged.connect(self._on_screens_changed)
             self._watch_screen()
 
@@ -282,12 +283,20 @@ class IslandWindow(QWidget):
             for name in _SCREEN_SIGNALS:
                 getattr(screen, name).connect(self._on_screens_changed)
 
-    @staticmethod
-    def _active_screen():
-        return QGuiApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+    def _active_screen(self):
+        if self._watched_screen is not None and self._watched_screen in QGuiApplication.screens():
+            return self._watched_screen
+        screen = QGuiApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        if screen is not None:
+            self._watched_screen = screen
+        return screen
 
     def _target_rect(self, state: IslandState) -> QRect:
         screen = self._active_screen()
+        if screen is None or screen not in QGuiApplication.screens():
+            screen = QApplication.primaryScreen()
+            if screen is not None:
+                self._watched_screen = screen
         geo = screen.availableGeometry() if screen else None
         if state is IslandState.IDLE:
             w, h = _IDLE_W, _IDLE_H
