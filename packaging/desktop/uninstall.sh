@@ -6,17 +6,23 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
 DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
+AUTOSTART_DIR="${AUTOSTART_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/autostart}"
 
 echo "=== JARVIS Desktop Companion Uninstaller ==="
 
-# Remove wrapper script
+# Remove launchers
 rm -f "$BIN_DIR/jarvis-desktop"
+rm -f "$BIN_DIR/jarvis-desktop-island"
 
 # Remove application files
 rm -rf "$INSTALL_DIR"
 
-# Remove desktop entry
+# Remove desktop entries
 rm -f "$DESKTOP_DIR/com.jarvis.desktop.desktop"
+rm -f "$DESKTOP_DIR/com.jarvis.island.desktop"
+
+# Remove autostart entry
+rm -f "$AUTOSTART_DIR/jarvis-desktop.desktop"
 
 # Remove icon
 rm -f "$ICON_DIR/jarvis-desktop.svg"

@@ -93,16 +93,24 @@ tar -C "$REPO_ROOT" \
 # Ensure required subdirectories exist even if empty after exclusions
 mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 
-# Install the Python launcher — no shell wrapper.
-echo "Installing launcher..."
+# Install the Python launchers — no shell wrappers.
+echo "Installing launchers..."
 cp "$REPO_ROOT/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
 sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop"
 chmod +x "$BIN_DIR/jarvis-desktop"
+
+cp "$REPO_ROOT/jarvis-desktop-island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
+sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop-island"
+chmod +x "$BIN_DIR/jarvis-desktop-island"
 
 # Install desktop entry
 mkdir -p "$DESKTOP_DIR"
 cp "$REPO_ROOT/packaging/desktop/JARVIS.desktop" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
 sed -i "s|Exec=jarvis-desktop|Exec=$BIN_DIR/jarvis-desktop|g" "$DESKTOP_DIR/com.jarvis.desktop.desktop"
+
+# Install island desktop entry
+cp "$REPO_ROOT/packaging/desktop/JARVIS-Island.desktop" "$DESKTOP_DIR/com.jarvis.island.desktop"
+sed -i "s|Exec=jarvis-desktop-island|Exec=$BIN_DIR/jarvis-desktop-island|g" "$DESKTOP_DIR/com.jarvis.island.desktop"
 
 # Install icon
 mkdir -p "$ICON_DIR"

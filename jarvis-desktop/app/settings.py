@@ -18,6 +18,7 @@ DEFAULTS = {
     "model": "",
     "voice_enabled": True,
     "gesture_enabled": False,
+    "autostart_enabled": False,
 }
 
 
