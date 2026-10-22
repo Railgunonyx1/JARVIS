@@ -123,7 +123,7 @@ sed -i "s|Exec=jarvis-desktop-island|Exec=$BIN_DIR/jarvis-desktop-island|g" "$DE
 
 # Install icon
 mkdir -p "$ICON_DIR"
-cp "$REPO_ROOT/jarvis-desktop/assets/icon.svg" "$ICON_DIR/jarvis-desktop.svg" 2>/dev/null || true
+cp "$REPO_ROOT/assets/jarvis-island.svg" "$ICON_DIR/jarvis-desktop.svg" 2>/dev/null || cp "$REPO_ROOT/jarvis-desktop/assets/icon.svg" "$ICON_DIR/jarvis-desktop.svg" 2>/dev/null || true
 
 # Update desktop database
 if command -v update-desktop-database &>/dev/null; then

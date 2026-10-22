@@ -33,3 +33,9 @@ if command -v update-desktop-database &>/dev/null; then
 fi
 
 echo "=== Uninstallation complete ==="
+
+
+# Remove KWin script if installed
+if [ -x "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" ]; then
+    "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" --uninstall || true
+fi

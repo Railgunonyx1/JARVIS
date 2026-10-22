@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import tempfile
 import time
 from collections.abc import Callable
@@ -118,8 +119,20 @@ class TTSEngine:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
                 tmp_path = tmp.name
 
+            import shutil
+            edge_cmd = shutil.which("edge-tts")
+            if edge_cmd is None:
+                venv_bin = Path(sys.executable).parent
+                cand = venv_bin / "edge-tts"
+                if cand.exists():
+                    edge_cmd = str(cand)
+            if edge_cmd is None:
+                cmd = [sys.executable, "-m", "edge_tts"]
+            else:
+                cmd = [edge_cmd]
+            cmd.extend(["--text", text, "--write-media", tmp_path])
             result = subprocess.run(
-                ["edge-tts", "--text", text, "--write-media", tmp_path],
+                cmd,
                 capture_output=True,
                 timeout=30,
                 check=False,
