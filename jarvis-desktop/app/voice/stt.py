@@ -73,6 +73,13 @@ class WhisperSTT:
 
     def check_binary(self) -> bool:
         """Check if whisper-cli is available."""
+        if not self._binary or not os.path.exists(self._binary):
+            import shutil
+            found = shutil.which("whisper-cli") or shutil.which("whisper")
+            if found:
+                self._binary = found
+            else:
+                return False
         try:
             result = subprocess.run(
                 [self._binary, "--help"],
@@ -81,6 +88,14 @@ class WhisperSTT:
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
+
+    def check_ready(self) -> tuple[bool, str]:
+        """Check if local STT is ready (binary + model exist)."""
+        if not self.check_binary():
+            return False, "whisper-cli not found"
+        if not os.path.exists(self._model_path):
+            return False, f"model not found: {self._model_path}"
+        return True, "ready"
 
     def warmup(self) -> None:
         """Check binary availability in background."""

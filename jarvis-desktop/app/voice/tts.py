@@ -46,6 +46,23 @@ class TTSEngine:
     def is_ready(self) -> bool:
         return self._kokoro_ready or self._engine_name != "none"
 
+    def check_ready(self) -> tuple[bool, str]:
+        """Report readiness of TTS engines."""
+        if self._kokoro_ready:
+            return True, "kokoro"
+        models_ok = (KOKORO_CACHE / "kokoro-v1.0.onnx").exists() and (KOKORO_CACHE / "voices-v1.0.bin").exists()
+        if models_ok:
+            return True, "kokoro-models-available"
+        import shutil
+        if shutil.which("edge-tts") or (Path(sys.executable).parent / "edge-tts").exists():
+            return True, "edge-tts-available"
+        try:
+            import edge_tts  # noqa: F401
+            return True, "edge-tts-module"
+        except ImportError:
+            pass
+        return False, "no-tts-engine-available"
+
     def warmup(self) -> None:
         """Pre-load the Kokoro model in the background."""
         if not self._use_kokoro:
