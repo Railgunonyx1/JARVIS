@@ -2,6 +2,9 @@
 # JARVIS Desktop Companion — Uninstaller
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
+
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
 DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"

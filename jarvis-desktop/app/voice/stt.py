@@ -131,13 +131,25 @@ class WhisperSTT:
         try:
             result = subprocess.run(
                 cmd, capture_output=True, timeout=60,
-            text=True, check=False,
-            cwd=str(Path(filepath).parent),
-            env={**os.environ, "GGML_CUDA_NO_PINNED": "1"},
+                text=True, check=False,
+                cwd=str(Path(filepath).parent),
+                env={**os.environ, "GGML_CUDA_NO_PINNED": "1"},
             )
             duration_ms = (time.time() - start_time) * 1000
             if result.returncode == 0:
                 text = result.stdout.strip()
+                if not text:
+                    # whisper-cli with -otxt writes a .txt file next to input
+                    txt_path = filepath.rsplit(".", 1)[0] + ".txt"
+                    try:
+                        if os.path.exists(txt_path):
+                            text = Path(txt_path).read_text(encoding="utf-8", errors="ignore").strip()
+                    finally:
+                        try:
+                            if os.path.exists(txt_path):
+                                os.unlink(txt_path)
+                        except OSError:
+                            pass
                 return STTResult(text, 0.0, "whisper.cpp", duration_ms)
             else:
                 logger.warning("whisper-cli failed: %s", result.stderr[:200])

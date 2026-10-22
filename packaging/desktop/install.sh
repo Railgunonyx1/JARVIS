@@ -21,6 +21,8 @@ if ! command -v python3 &>/dev/null; then
     exit 1
 fi
 
+mkdir -p "$BIN_DIR"
+
 PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo "Python version: $PYTHON_VERSION"
 
