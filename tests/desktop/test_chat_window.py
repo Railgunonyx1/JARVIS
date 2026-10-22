@@ -52,7 +52,13 @@ def test_settings_dialog_does_not_crash():
     QApplication.instance() or QApplication([])
     from app.ui.chat_window import ChatWindow
     w = ChatWindow()
-    QTimer.singleShot(100, w.close)
+
+    def _close_dialog():
+        d = QApplication.activeModalWidget()
+        if d is not None:
+            d.reject()
+
+    QTimer.singleShot(100, _close_dialog)
     w._on_settings()
     w.close()
 
@@ -68,7 +74,13 @@ def test_settings_with_coordinator():
     w = ChatWindow()
     coord = AppCoordinator(mode="agent")
     w._coordinator = coord
-    QTimer.singleShot(100, w.close)
+
+    def _close_dialog():
+        d = QApplication.activeModalWidget()
+        if d is not None:
+            d.reject()
+
+    QTimer.singleShot(100, _close_dialog)
     w._on_settings()
     w.close()
     coord.shutdown()
