@@ -127,8 +127,13 @@ def main() -> int:
     app = QApplication(sys.argv)
     _configure_app(app)
 
-    guard = _single_instance_guard()
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    lock_path = os.path.join(runtime, f"{APP_ID}-{os.getuid()}.lock")
+    server_name = _instance_server_name(lock_path)
+    guard = _single_instance_guard(lock_path)
     if guard is None:
+        if _ask_running_instance(server_name):
+            return 0
         print("JARVIS Island is already running.", file=sys.stderr)
         return 0
 
@@ -149,6 +154,9 @@ def main() -> int:
     controller = IslandController()
     island = IslandWindow(controller)
     island.show()
+
+    ipc = _InstanceIpc(server_name, island)
+    app.setProperty("_jarvis_island_ipc", ipc)
 
     # Qt's event loop does not dispatch Python signal handlers on its own:
     # app.exec() never returns to the interpreter, so a SIGINT/SIGTERM handler
