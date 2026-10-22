@@ -103,13 +103,14 @@ class WhisperSTT:
         threading.Thread(target=self._warmup_check, daemon=True).start()
 
     def _warmup_check(self) -> None:
-        if self.check_binary():
+        ready, reason = self.check_ready()
+        if ready:
             self._ready = True
             if self._on_ready:
                 self._on_ready()
             logger.info("whisper.cpp STT ready (model=%s)", self._model_size)
         else:
-            logger.warning("whisper.cpp not found at %s — STT will use cloud fallback", self._binary)
+            logger.warning("whisper.cpp STT not ready: %s — STT will use cloud fallback", reason)
 
     def transcribe(self, audio_bytes: bytes, mime: str = "audio/wav") -> STTResult:
         """Transcribe audio bytes. Returns STTResult."""
