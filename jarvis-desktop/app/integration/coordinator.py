@@ -223,6 +223,8 @@ class AppCoordinator(QObject):
                 self._voice_turn_active = False
         elif response.success:
             self.chat_message.emit("jarvis", response.text)
+            # Reset buffer on successful non-streamed response
+            self._buffer = ""
             if self._voice_turn_active:
                 if self._voice:
                     if self._voice.state == VoiceState.IDLE:
@@ -231,6 +233,10 @@ class AppCoordinator(QObject):
                         self._voice.speak(response.text)
                 self._voice_turn_active = False
         else:
+            # Reset buffer on error so the next turn starts clean
+            self._buffer = ""
+            self.chat_message.emit("jarvis", f"[Error: {response.error}]")
+            self._voice_turn_active = False
             self.chat_message.emit("jarvis", f"[Error: {response.error}]")
             self._voice_turn_active = False
             if self._voice and self._voice.state == VoiceState.THINKING:
