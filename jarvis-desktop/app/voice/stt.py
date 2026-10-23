@@ -7,13 +7,15 @@ stops immediately after.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
 import tempfile
+import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 logger = logging.getLogger("jarvis.desktop.voice.stt")
 
@@ -71,14 +73,29 @@ class WhisperSTT:
 
     def check_binary(self) -> bool:
         """Check if whisper-cli is available."""
+        if not self._binary or not os.path.exists(self._binary):
+            import shutil
+            found = shutil.which("whisper-cli") or shutil.which("whisper")
+            if found:
+                self._binary = found
+            else:
+                return False
         try:
             result = subprocess.run(
                 [self._binary, "--help"],
-                capture_output=True, timeout=5,
+                capture_output=True, timeout=5, check=False,
             )
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
+
+    def check_ready(self) -> tuple[bool, str]:
+        """Check if local STT is ready (binary + model exist)."""
+        if not self.check_binary():
+            return False, "whisper-cli not found"
+        if not os.path.exists(self._model_path):
+            return False, f"model not found: {self._model_path}"
+        return True, "ready"
 
     def warmup(self) -> None:
         """Check binary availability in background."""
@@ -86,13 +103,14 @@ class WhisperSTT:
         threading.Thread(target=self._warmup_check, daemon=True).start()
 
     def _warmup_check(self) -> None:
-        if self.check_binary():
+        ready, reason = self.check_ready()
+        if ready:
             self._ready = True
             if self._on_ready:
                 self._on_ready()
             logger.info("whisper.cpp STT ready (model=%s)", self._model_size)
         else:
-            logger.warning("whisper.cpp not found at %s — STT will use cloud fallback", self._binary)
+            logger.warning("whisper.cpp STT not ready: %s — STT will use cloud fallback", reason)
 
     def transcribe(self, audio_bytes: bytes, mime: str = "audio/wav") -> STTResult:
         """Transcribe audio bytes. Returns STTResult."""
@@ -129,13 +147,25 @@ class WhisperSTT:
         try:
             result = subprocess.run(
                 cmd, capture_output=True, timeout=60,
-            text=True,
-            cwd=str(Path(filepath).parent),
-            env={**os.environ, "GGML_CUDA_NO_PINNED": "1"},
+                text=True, check=False,
+                cwd=str(Path(filepath).parent),
+                env={**os.environ, "GGML_CUDA_NO_PINNED": "1"},
             )
             duration_ms = (time.time() - start_time) * 1000
             if result.returncode == 0:
                 text = result.stdout.strip()
+                if not text:
+                    # whisper-cli with -otxt writes a .txt file next to input
+                    txt_path = filepath.rsplit(".", 1)[0] + ".txt"
+                    try:
+                        if os.path.exists(txt_path):
+                            text = Path(txt_path).read_text(encoding="utf-8", errors="ignore").strip()
+                    finally:
+                        try:
+                            if os.path.exists(txt_path):
+                                os.unlink(txt_path)
+                        except OSError:
+                            pass
                 return STTResult(text, 0.0, "whisper.cpp", duration_ms)
             else:
                 logger.warning("whisper-cli failed: %s", result.stderr[:200])
@@ -147,20 +177,20 @@ class WhisperSTT:
             logger.warning("whisper-cli error: %s", e)
             return STTResult("", 0.0, "whisper.cpp", (time.time() - start_time) * 1000)
 
-    def record_and_transcribe(self, duration: float = 5.0,
-                              silence_timeout: float = 2.0) -> STTResult:
-        """Record from microphone and transcribe.
+    def record_audio(self, duration: float = 5.0,
+                     stop_event: threading.Event | None = None) -> bytes | None:
+        """Record from microphone and return WAV bytes.
 
         Args:
             duration: Max recording duration in seconds.
-            silence_timeout: Stop after this many seconds of silence.
+            stop_event: Optional event that, when set, stops recording early.
         """
         try:
-            import sounddevice as sd
             import numpy as np
+            import sounddevice as sd
         except ImportError:
             logger.warning("sounddevice not available — cannot record")
-            return STTResult("", 0.0, "no-sounddevice", 0.0)
+            return None
 
         duration = min(duration, RECORD_SECONDS_MAX)
         frames = []
@@ -177,17 +207,22 @@ class WhisperSTT:
                 logger.info("Recording... (max %.0fs)", duration)
                 while recording and (time.time() - start) < duration:
                     time.sleep(0.05)
+                    if stop_event and stop_event.is_set():
+                        recording = False
+                        break
                     # Simple VAD: check if audio is silent
-                    if frames and len(frames) > 10:
+                    # Grace period: don't stop during the first 0.5s
+                    elapsed = time.time() - start
+                    if frames and len(frames) > 10 and elapsed > 0.5:
                         recent = np.concatenate(frames[-10:])
                         if np.abs(recent).max() < 0.01:
                             break
         except Exception as e:
             logger.warning("Recording failed: %s", e)
-            return STTResult("", 0.0, "record-error", 0.0)
+            return None
 
         if not frames:
-            return STTResult("", 0.0, "no-audio", 0.0)
+            return None
 
         # Convert to WAV
         import io
@@ -203,25 +238,62 @@ class WhisperSTT:
             wf.setframerate(SAMPLE_RATE)
             wf.writeframes(audio_int16.tobytes())
 
-        return self.transcribe(wav_buffer.getvalue(), "audio/wav")
+        return wav_buffer.getvalue()
+
+    def record_and_transcribe(self, duration: float = 5.0,
+                              silence_timeout: float = 2.0,
+                              stop_event: threading.Event | None = None) -> STTResult:
+        """Record from microphone and transcribe."""
+        audio_bytes = self.record_audio(duration, stop_event=stop_event)
+        if not audio_bytes:
+            return STTResult("", 0.0, "no-audio", 0.0)
+        return self.transcribe(audio_bytes, "audio/wav")
 
 
 class CloudSTT:
-    """Cloud STT fallback using the existing ElevenLabs Scribe."""
+    """Cloud STT fallback using the ElevenLabs Scribe v2 API."""
+
+    _API_URL = "https://api.elevenlabs.io/v1/speech-to-text"
+    _MODEL_ID = "scribe_v2"
 
     def __init__(self):
-        self._engine_name = "elevenlabs"
+        self._engine_name = "cloud-stt"
 
     def transcribe(self, audio_bytes: bytes, mime: str = "audio/wav") -> STTResult:
         start = time.time()
         try:
-            import sys
-            repo_root = Path(__file__).resolve().parents[3]
-            bridge_path = repo_root / "jbrowser-bridge"
-            if str(bridge_path) not in sys.path:
-                sys.path.insert(0, str(bridge_path))
-            from voice import stt_bytes
-            text = stt_bytes(audio_bytes, "audio.wav")
+            api_key = os.getenv("ELEVENLABS_API_KEY", "")
+            if not api_key:
+                logger.warning("ELEVENLABS_API_KEY not set — cloud STT unavailable")
+                return STTResult("", 0.0, self._engine_name, (time.time() - start) * 1000)
+
+            import urllib.request
+            import uuid
+
+            boundary = uuid.uuid4().hex
+            filename = "audio.wav"
+            body = (
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="model_id"\r\n\r\n'
+                f"{self._MODEL_ID}\r\n"
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                f"Content-Type: {mime}\r\n\r\n"
+            ).encode() + audio_bytes + f"\r\n--{boundary}--\r\n".encode()
+
+            req = urllib.request.Request(
+                self._API_URL,
+                data=body,
+                headers={
+                    "xi-api-key": api_key,
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                payload = json.loads(resp.read())
+
+            text = (payload.get("text") or "").strip()
             duration_ms = (time.time() - start) * 1000
             return STTResult(text, 0.0, self._engine_name, duration_ms)
         except Exception as e:
@@ -262,19 +334,78 @@ class STTManager:
             self._active_engine = "elevenlabs"
         return result
 
-    def record_and_transcribe(self, duration: float = 5.0) -> STTResult:
-        """Record and transcribe, trying local first."""
-        if self._prefer_local and self._local and self._local.is_ready:
-            result = self._local.record_and_transcribe(duration)
-            if result:
+    def record_and_transcribe(self, duration: float = 5.0,
+                              stop_event: threading.Event | None = None) -> STTResult:
+        """Record and transcribe, trying local first, then cloud fallback.
+
+        Records audio once and reuses the same bytes for both local and cloud
+        transcription. Does not record twice.
+        """
+        # Record audio once
+        audio_bytes = None
+
+        if self._local:
+            audio_bytes = self._local.record_audio(duration,
+                                                   stop_event=stop_event)
+            if not audio_bytes:
+                return STTResult("", 0.0, "no-audio", 0.0)
+
+            # Try local whisper first
+            result = self._local.transcribe(audio_bytes, "audio/wav")
+            if result and result.text:
                 self._active_engine = "whisper.cpp"
                 return result
 
-        # Cloud fallback: record then transcribe
-        if self._local:
-            result = self._local.record_and_transcribe(duration)
-            if result:
-                self._active_engine = "whisper.cpp"
-                return result
+        # Cloud fallback: reuse the same audio bytes we already captured
+        if audio_bytes is None:
+            # No local STT available - need to record directly
+            try:
+                import io
+                import wave
+
+                import numpy as np
+                import sounddevice as sd
+
+                duration = min(duration, RECORD_SECONDS_MAX)
+                frames = []
+                start = time.time()
+                recording = True
+
+                def callback(indata, frame_count, time_info, status):
+                    if recording:
+                        frames.append(indata.copy())
+
+                with sd.InputStream(samplerate=SAMPLE_RATE, channels=1,
+                                    dtype=np.float32, callback=callback):
+                    while recording and (time.time() - start) < duration:
+                        time.sleep(0.05)
+                        if stop_event and stop_event.is_set():
+                            recording = False
+                            break
+                        if frames and len(frames) > 10:
+                            recent = np.concatenate(frames[-10:])
+                            if np.abs(recent).max() < 0.01:
+                                break
+
+                if not frames:
+                    return STTResult("", 0.0, "no-audio", 0.0)
+
+                audio = np.concatenate(frames)
+                audio_int16 = (audio * 32767).astype(np.int16)
+                wav_buffer = io.BytesIO()
+                with wave.open(wav_buffer, "wb") as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(SAMPLE_RATE)
+                    wf.writeframes(audio_int16.tobytes())
+                audio_bytes = wav_buffer.getvalue()
+            except Exception as e:
+                logger.warning("Recording failed: %s", e)
+                return STTResult("", 0.0, "record-error", 0.0)
+
+        result = self._cloud.transcribe(audio_bytes, "audio/wav")
+        if result and result.text:
+            self._active_engine = "elevenlabs"
+            return result
 
         return STTResult("", 0.0, "unavailable", 0.0)

@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
+from collections.abc import Callable
 from enum import StrEnum
-from typing import Callable
 
-from app.voice.stt import STTManager, STTResult
+from app.voice.stt import STTManager
 from app.voice.tts import TTSEngine
 
 logger = logging.getLogger("jarvis.desktop.voice.manager")
@@ -56,6 +55,7 @@ class VoiceManager:
         self._state_lock = threading.Lock()
         self._speaking_lock = threading.Lock()
         self._stop_speaking = threading.Event()
+        self._stop_recording = threading.Event()
 
         self._stt = STTManager(prefer_local=prefer_local_stt)
         self._tts = TTSEngine(voice=voice, speed=speed, use_kokoro=use_kokoro_tts)
@@ -99,20 +99,29 @@ class VoiceManager:
 
     def start_listening(self) -> None:
         """Start push-to-talk recording."""
-        if self.state != VoiceState.IDLE:
+        if self.state not in (VoiceState.IDLE, VoiceState.ERROR):
             return
         self._set_state(VoiceState.LISTENING)
+        self._stop_recording.clear()
 
         def _record():
             try:
-                result = self._stt.record_and_transcribe(duration=5.0)
+                result = self._stt.record_and_transcribe(duration=5.0,
+                                                         stop_event=self._stop_recording)
                 self._set_state(VoiceState.TRANSCRIBING)
                 if result and result.text:
                     if self._on_transcription:
                         self._on_transcription(result.text)
                     self._send_to_agent(result.text)
                 else:
+                    reason = getattr(result, "engine", "unknown") if result else "no-result"
+                    logger.warning("No transcription result (reason=%s)", reason)
                     self._set_state(VoiceState.IDLE)
+                    if self._on_response and reason and reason not in ("", "none"):
+                        try:
+                            self._on_response(f"[Voice: no speech detected or STT unavailable]")
+                        except Exception:
+                            pass
             except Exception as e:
                 logger.exception("Recording failed")
                 self._set_state(VoiceState.ERROR)
@@ -124,13 +133,18 @@ class VoiceManager:
     def stop_listening(self) -> None:
         """Stop recording early (user released push-to-talk)."""
         if self.state == VoiceState.LISTENING:
-            # The recording loop checks state; we just transition
-            self._set_state(VoiceState.TRANSCRIBING)
+            self._stop_recording.set()
 
     def _send_to_agent(self, text: str) -> None:
         """Send transcribed text to the agent backend."""
         if not self._backend:
+            logger.warning("Voice: no backend available to send transcription")
             self._set_state(VoiceState.ERROR)
+            if self._on_response:
+                try:
+                    self._on_response("[Voice: agent backend unavailable]")
+                except Exception:
+                    pass
             return
 
         self._set_state(VoiceState.THINKING)
@@ -138,7 +152,7 @@ class VoiceManager:
         def _run():
             try:
                 self._backend.send_message(text)
-            except Exception as e:
+            except Exception:
                 logger.exception("Agent send failed")
                 self._set_state(VoiceState.ERROR)
 
@@ -153,14 +167,14 @@ class VoiceManager:
 
         def _speak():
             try:
-                self._tts.play(text, block=False)
-                # Wait for playback to finish (poll state)
-                while not self._stop_speaking.is_set():
-                    time.sleep(0.1)
-                self._set_state(VoiceState.IDLE)
+                self._tts.play(text, block=True)
+                # Only set IDLE if we weren't interrupted
+                if not self._stop_speaking.is_set():
+                    self._set_state(VoiceState.IDLE)
             except Exception as e:
                 logger.warning("TTS playback failed: %s", e)
-                self._set_state(VoiceState.IDLE)
+                # Do NOT change state on failure - keep current state
+                # so the conversation continues even if voice output fails
 
         self._tts_thread = threading.Thread(target=_speak, daemon=True, name="jarvis-voice-tts")
         self._tts_thread.start()
@@ -168,6 +182,12 @@ class VoiceManager:
     def stop_speaking(self) -> None:
         """Interrupt TTS playback."""
         self._stop_speaking.set()
+        # Stop audio playback immediately
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
         self._set_state(VoiceState.IDLE)
 
     def toggle_listening(self) -> None:

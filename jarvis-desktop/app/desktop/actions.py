@@ -13,12 +13,11 @@ Security model:
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable
 
 logger = logging.getLogger("jarvis.desktop.actions")
 
@@ -51,7 +50,7 @@ class DesktopActionLayer:
         layer.execute("volume_up")
     """
 
-    def __init__(self, *, confirmation_handler: Callable[[str], bool] | None = None):
+    def __init__(self, *, confirmation_handler: Callable[[str], str] | None = None):
         self._actions: dict[str, Action] = {}
         self._confirmation_handler = confirmation_handler
         self._history: list[dict] = []
@@ -61,9 +60,12 @@ class DesktopActionLayer:
                  handler: Callable, *, require_confirmation: bool = False,
                  category: str = "general") -> None:
         """Register an action."""
+        needs_confirmation = require_confirmation or risk in (
+            ActionRisk.HIGH, ActionRisk.CRITICAL
+        )
         self._actions[name] = Action(
             name=name, description=description, risk=risk,
-            handler=handler, require_confirmation=require_confirmation,
+            handler=handler, require_confirmation=needs_confirmation,
             category=category,
         )
 
@@ -79,7 +81,8 @@ class DesktopActionLayer:
 
         if action.require_confirmation and not confirmed:
             if self._confirmation_handler:
-                if not self._confirmation_handler(action.name):
+                decision = self._confirmation_handler(action.name)
+                if decision not in ("once", "run"):
                     logger.info("Action %s denied by confirmation", name)
                     self._log(action.name, False, "denied")
                     return False
@@ -88,11 +91,14 @@ class DesktopActionLayer:
                 return False
 
         try:
-            action.handler()
+            result = action.handler()
+            if result is False:
+                self._log(action.name, False, "handler returned False")
+                return False
             self._log(action.name, True)
             return True
         except Exception as e:
-            logger.warning("Action %s failed: %s", name.name, e)
+            logger.warning("Action %s failed: %s", action.name, e)
             self._log(action.name, False, str(e)[:200])
             return False
 
@@ -135,7 +141,7 @@ class DesktopActionLayer:
                       lambda: self._wmctrl("-r", ":ACTIVE:", "add", "maximized"),
                       category="window")
         self.register("window_minimize", "Minimize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "remove", "maximized"),
+                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "hidden"),
                       category="window")
 
         # Application launching
@@ -145,20 +151,27 @@ class DesktopActionLayer:
                       lambda: self._launch("firefox"), category="app")
 
     @staticmethod
-    def _pactl(*args: str) -> None:
-        subprocess.run(["pactl", *args], capture_output=True, timeout=5)
+    def _pactl(*args: str) -> bool:
+        result = subprocess.run(["pactl", *args], capture_output=True, timeout=5, check=False)
+        return result.returncode == 0
 
     @staticmethod
-    def _playerctl(*args: str) -> None:
-        subprocess.run(["playerctl", *args], capture_output=True, timeout=5)
+    def _playerctl(*args: str) -> bool:
+        result = subprocess.run(["playerctl", *args], capture_output=True, timeout=5, check=False)
+        return result.returncode == 0
 
     @staticmethod
-    def _wmctrl(*args: str) -> None:
-        subprocess.run(["wmctrl", *args], capture_output=True, timeout=5)
+    def _wmctrl(*args: str) -> bool:
+        result = subprocess.run(["wmctrl", *args], capture_output=True, timeout=5, check=False)
+        return result.returncode == 0
 
     @staticmethod
-    def _launch(cmd: str) -> None:
-        subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def _launch(cmd: str) -> bool:
+        try:
+            subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return True
+        except FileNotFoundError:
+            return False
 
     def get_actions(self, category: str | None = None) -> list[Action]:
         """List registered actions, optionally filtered by category."""

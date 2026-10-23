@@ -1,0 +1,67 @@
+{
+  "app-id": "com.jarvis.desktop",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.6",
+  "sdk": "org.kde.Sdk",
+  "command": "jarvis-desktop",
+  "finish-args": [
+    "--device=dri",
+    "--socket=wayland",
+    "--socket=x11",
+    "--socket=pulseaudio",
+    "--device=camera",
+    "--share=network",
+    "--persist=.jarvis-desktop"
+  ],
+  "build-options": {
+    "append-ld-library-path": "/app/lib"
+  },
+  "modules": [
+    {
+      "name": "pyside6",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --prefix=/app 'PySide6==6.8.1' 'sounddevice==0.5.5' 'numpy>=1.26' 'psutil>=5.9' 'onnxruntime>=1.17' 'kokoro-onnx>=0.4' 'edge-tts>=7.2' 'pydub>=0.25'"
+      ],
+      "sources": []
+    },
+    {
+      "name": "jarvis-core",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/lib/jarvis",
+        "cp -r core /app/lib/jarvis/",
+        "cp -r providers /app/lib/jarvis/",
+        "cp -r tools /app/lib/jarvis/",
+        "cp -r runtime /app/lib/jarvis/",
+        "cp -r memory /app/lib/jarvis/",
+        "cp -r skills /app/lib/jarvis/",
+        "mkdir -p /app/lib/jarvis/config",
+        "cp config/models.toml /app/lib/jarvis/config/",
+        "mkdir -p /app/lib/jarvis/jarvis-desktop/app",
+        "cp jarvis-desktop/app/*.py /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/ui /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/integration /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/voice /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/gestures /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/desktop /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/workspace3d /app/lib/jarvis/jarvis-desktop/app/",
+        "cp -r jarvis-desktop/app/diagnostics /app/lib/jarvis/jarvis-desktop/app/",
+        "touch /app/lib/jarvis/jarvis-desktop/app/__init__.py",
+        "touch /app/lib/jarvis/jarvis-desktop/__init__.py",
+        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=/app/lib/jarvis' 'export PYTHONPATH=/app/lib/jarvis:/app/lib/jarvis/jarvis-desktop:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); sys.path.insert(0, '/app/lib/jarvis/jarvis-desktop'); from app.main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-desktop",
+        "chmod +x /app/bin/jarvis-desktop"
+      ],
+      "sources": [
+        { "type": "dir", "path": "core", "dest": "core" },
+        { "type": "dir", "path": "providers", "dest": "providers" },
+        { "type": "dir", "path": "tools", "dest": "tools" },
+        { "type": "dir", "path": "runtime", "dest": "runtime" },
+        { "type": "dir", "path": "memory", "dest": "memory" },
+        { "type": "dir", "path": "skills", "dest": "skills" },
+        { "type": "dir", "path": "config", "dest": "config" },
+        { "type": "dir", "path": "jarvis-desktop/app", "dest": "jarvis-desktop/app" }
+      ]
+    }
+  ]
+}

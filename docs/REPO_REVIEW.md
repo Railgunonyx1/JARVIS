@@ -396,6 +396,14 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Supply-chain hardening:** pinned exact deps, `--ignore-scripts`, lockfile as ground truth, lifecycle-script allowlist. → CI/deps policy · M/low.
 - *Avoid:* Pi has **no** permission system — the inverse of invariant #1.
 
+### worldflowai/everything-claude-code (MIT)
+- **Complete Claude Code toolkit** — agents, commands, skills, rules, hooks, and MCP configurations evolved over 10+ months of intensive daily use → `skills/`, `core/harness/`, `core/agent/tool_service.py` · M/low.
+- **Production-ready agents** evolved from Anthropic hackathon-winning work → `core/agent/loop.py`, `core/harness/` · M/low.
+- **Hooks + rules system** — session hooks for extraction, validation, and automation → `core/agent/verification.py`, `core/harness/` · S/low.
+- **MCP configurations** — pre-built MCP server configs for seamless integration → `runtime/protocols/` · S/low.
+- **Slash commands + skills** — command registry with parameterized skills → `cli/cockpit.py`, `skills/` · S/low.
+- **Community resource** — 4600+ stars, community-maintained plugin ecosystem → `extensions/jbrowser` concept · S/low.
+
 ### OpenHands (MIT)
 - **Repo-boundary discipline** enforced by architecture tests (already mirrored by FREEZE). → `tests/` no-bypass test · S/low.
 - **Per-conversation execution isolation** (own container per conversation; workspace survives container replacement). → `ToolExecutionService` sandbox · L/med.
@@ -422,13 +430,87 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **Per-turn effort/model routing** (cheap ask → small model; resume-after-tool → low reasoning). → `providers/model_gateway.py` · M/med.
 - *Avoid:* rewriting the **user's** prompt (hurts quality); telemetry; silent vendor-cloud routing.
 
-### headroomlabs-ai/headroom (Apache-2.0)
-- **Content-typed compression router** (JSON→variance-based pruning keeping outliers/first/last; code→AST-aware; prose→model) applied only to *new* bytes; **frozen prompt prefix kept byte-identical to protect KV cache.** → `providers/model_gateway.py`, `core/agent/tool_service.py` · L/med.
-- **Reversible compression (CCR)** with a `retrieve` tool for full text. → tool-service + new low-risk tool · M/low.
-- **CacheAligner:** flag volatile content that busts provider prefix cache; never rewrite it. → ModelGateway prompt-cache budgeting · S/low.
-- **Terse note appended to the end of the system prompt** (cache-safe); dial reasoning down only on tool-result resume turns. → `providers/model_gateway.py` · S/low.
-- **Failure mining → corrections in a local gitignored rules file.** → mine into `memory/authority.py` or skill amendments (human-confirmed) · M/med.
-- *Avoid:* shipping an ML dependency into core; compressing **verification evidence** would break invariant #4.
+### caveman-ai/trim-1 (Apache-2.0)
+- **1.2 MB context trimmer** — 712 gradient-boosted trees (not a neural network) that score each line of a context against the current query and drop lines below a floor; kept lines are verbatim in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Deterministic, CPU-only** — milliseconds on one CPU core, no GPU, no network, no extra model request; same context+query always yields same result → `core/agent/tool_service.py` · S/low.
+- **Pure Go, zero dependencies** — `go install github.com/caveman-ai/trim-1/cmd/trim@latest`; model embedded in binary → `scripts/download_dependencies.py` · S/low.
+- **Conservative by default** — balanced mode cuts ~1.9% of short dense text (tool outputs); on long documents up to 89% token reduction while keeping evidence in 94% of cases → `core/agent/tool_service.py` · S/low.
+- **No rewrite/summary** — never hallucinates or changes kept text; marker line such as "… 25 lines …" shows where lines were removed → `core/agent/tool_service.py` · S/low.
+- **Best for long-document retrieval** — not for short dense tool outputs (default cuts only 1.9% there); pair with caveman-style terse output rules → `core/agent/tool_service.py`, `core/harness/` · S/low.
+### caveman-ai/trim-1 (Apache-2.0)
+- **1.2 MB context trimmer** — 712 gradient-boosted trees (not a neural network) that score each line of a context against the current query and drop lines below a floor; kept lines are verbatim in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Deterministic, CPU-only** — milliseconds on one CPU core, no GPU, no network, no extra model request; same context+query always yields same result → `core/agent/tool_service.py` · S/low.
+- **Pure Go, zero dependencies** — `go install github.com/caveman-ai/trim-1/cmd/trim@latest`; model embedded in binary → `scripts/download_dependencies.py` · S/low.
+- **Conservative by default** — balanced mode cuts ~1.9% of short dense text (tool outputs); on long documents up to 89% token reduction while keeping evidence in 94% of cases → `core/agent/tool_service.py` · S/low.
+- **No rewrite/summary** — never hallucinates or changes kept text; marker line such as "… 25 lines …" shows where lines were removed → `core/agent/tool_service.py` · S/low.
+- **Best for long-document retrieval** — not for short dense tool outputs (default cuts only 1.9%); pair with caveman-style terse output rules → `core/agent/tool_service.py`, `core/harness/` · S/low.
+- *Avoid:* English-only training; drops later evidence sharing no words with query; cannot shorten a single long line.
+
+### NadirRouter/barber (MIT)
+- **Query-aware context trimming** — embeds chunks and question, keeps what matters, drops the rest; chunks survive verbatim → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **Lexical fallback mode** — zero-dependency scoring using BM25/term overlap, no model download → `core/agent/tool_service.py` · S/low.
+- **Semantic mode** — sentence-transformers embeddings for paraphrase-safe scoring → `core/agent/tool_service.py` · M/low.
+- **LangChain/LlamaIndex integration** — `BaseDocumentCompressor` / `BaseNodePostprocessor` → `tools/doc_retrieval.py` · S/low.
+- **Zero queries at trim time** — lexical mode needs no model; semantic mode needs one embedding pass → `core/agent/tool_service.py` · S/low.
+- **Deterministic** — same context + query = same result → `core/agent/tool_service.py` · S/low.
+- *Avoid:* lexical mode matches words not meaning; needs semantic embedder for paraphrase recall.
+
+### Supercompress (Supercompress/Supercompress, MIT)
+- **Query-aware context compression** — ~65% mean context cut on coding-agent benchmark with 24/24 evidence-retention passes → `core/agent/tool_service.py`, `orbit/tools.py` · M/low.
+- **Two engines** — Neural v2 (~400M query-aware cross-encoder, hosted API) and Compiler (fast/local policy, millisecond-class) → `core/agent/tool_service.py` · M/low.
+- **MCP plugin** — `compress_context` tool for Cursor, Claude Code, Codex, and 40+ agent harnesses → `runtime/protocols/`, `extensions/jbrowser` · S/low.
+- **Python package** — `pip install supercompress`, `sc.compress(context, query)` → `core/agent/tool_service.py` · S/low.
+- **Query is never compressed** — only surrounding context is segmented and scored → `core/agent/tool_service.py` · S/low.
+- *Avoid:* Neural v2 is hosted API (Fly CPU); local Compiler engine is older, lower quality.
+
+### Yuchen20/Context-Crumb (MIT)
+- **Token-level compressor** — looks at text word by word, removes low-signal tokens, keeps surviving text in original order → `core/agent/tool_service.py`, `orbit/tools.py` · S/low.
+- **ONNX backend** — no PyTorch/Transformers required; model files cached locally after first download → `scripts/download_dependencies.py` · S/low.
+- **30-70% context savings** on prose-heavy agent inputs → `core/agent/tool_service.py` · S/low.
+- **CLI + MCP stdio adapter** — `contextcrumb-shrink` compresses verbose tool catalog descriptions → `runtime/protocols/`, `cli/` · S/low.
+- **Code-aware** — Python, JavaScript, TypeScript, JSX, TSX, Go, Rust; preserves executable code exactly, compresses only comments/docstrings → `orbit/tools.py` · S/low.
+- *Avoid:* best fit for prose/docs; refuses unsupported syntax-sensitive files (diffs, configs, lockfiles, SQL, .env) unless `--force`.
+
+### nimhar/imptokens (MIT)
+- **Local context preprocessor** — sentence mode (no model, sub-5ms) + logprob mode (small local model for token-level scoring) → `core/agent/tool_service.py` · S/low.
+- **30-70% token reduction** with no meaningful quality loss → `core/agent/tool_service.py` · S/low.
+- **Works in any shell pipeline** — no framework or SDK required → `cli/`, `orbit/tools.py` · S/low.
+- **Multiple output formats** — text, token-ids, JSON; token-level debug view → `core/agent/tool_service.py` · S/low.
+- **GGUF model support** — Llama-3.2-1B (~700 MB), Qwen2.5-1.5B (~900 MB) → `scripts/download_dependencies.py` · M/low.
+- **Claude Code integration** — `UserPromptSubmit` hook, `compress-if-large`, `compress-paste` → `cli/input.py` · S/low.
+- *Avoid:* logprob mode needs ~700 MB model download; sentence mode is best for long docs with clear query.
+
+### lacausecrypto/mcp-sophon (MIT)
+- **Deterministic context compressor for MCP agents** — single 5.2 MB Rust binary, zero ML at query time → `runtime/protocols/`, `extensions/jbrowser` · S/low.
+- **Six compression tools** — compress_prompt, compress_history, compress_output, read_file_delta, write_file_delta, encode_fragments, update_memory, navigate_codebase → `orbit/tools.py`, `orbit/memory.py` · M/low.
+- **Zero ML at query time** — HashEmbedder (keyword-bound) or BGE-small optional → `core/agent/tool_service.py` · S/low.
+- **MCP-native** — slots in front of prompt caching, mem0, Letta, or Claude Code → `runtime/protocols/` · S/low.
+- **Deterministic** — same input = same output; reproducible benchmarks → `benchmark/` · S/low.
+- *Avoid:* not a memory platform or recall system; pipe mem0/Zep in front if you need neural recall; HashEmbedder is keyword-bound (use BGE for semantic).
+
+### hotchpotch/open_provence (MIT)
+- **Open-source Provence-style reranker-pruner** — removes irrelevant context while assigning relevance scores → `core/agent/tool_service.py`, `tools/doc_retrieval.py` · M/low.
+- **Four checkpoints (30M–310M parameters)** — English and Japanese; xsmall (30M) runs on CPU, flies on GPU → `scripts/download_dependencies.py` · M/low.
+- **Drop ~99% of off-topic sentences** while compressing 80–90% of relevant text → `core/agent/tool_service.py` · M/low.
+- **Python API** — `AutoModel.from_pretrained(model_name, trust_remote_code=True)` → `core/agent/tool_service.py` · S/low.
+- **Dataset tooling** — pipelines for building OpenProvence-format corpora from your own data → `scripts/` · S/low.
+- *Avoid:* ModernBERT backbone; English/Japanese only.
+
+### fkiene/llmtrim (MIT)
+- **Local proxy** — compresses LLM API traffic; -31% input / -74% output / -66% round-trip cost → `providers/model_gateway.py`, `core/agent/tool_service.py` · M/low.
+- **No model to load** — lexical retrieval, skeletonization, serialization; runs ~5 ms/call → `core/agent/tool_service.py` · S/low.
+- **Proxy + CLI + MCP + library** — Rust core, Python/Ruby/Swift/Kotlin/JS bindings → `cli/`, `runtime/protocols/` · S/low.
+- **Cache discipline** — marks + stabilizes invariant prefix so prompt cache stays warm → `providers/model_gateway.py` · S/low.
+- **Skeletonization** — tree-sitter keeps relevant function bodies, drops rest to signatures (14 languages) → `orbit/tools.py` · S/low.
+- **Quality gate** — reverts any lossy cut whose query-relevant coverage drops too far → `core/agent/verification.py` · S/low.
+- *Avoid:* quality gate is heuristic; some lossy stages are inherently lossy.
+
+### adit-rah/nanofable (MIT)
+- **8 tiny language models trained from scratch** on TinyStories — 1.2 MB to 55 MB → `scripts/download_dependencies.py` · S/low.
+- **Browser-based inference** — vanilla JS, no server, no WASM toolkit → `extensions/jbrowser` · S/low.
+- **Ternary weights** — 5 trits per byte; tiny_ternary is 1.22 MB for 1.4M params → `scripts/download_dependencies.py` · S/low.
+- **Exploratory** — coherence scores 0.91-3.83; not production-grade → research only.
+- *Avoid:* research project; coherence is low; not suitable for production agent use.
 
 ---
 
@@ -511,7 +593,95 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 - **`benchmark` latency/throughput command.** → `benchmark/`-style provider probe · S/low.
 - *Avoid:* 60+ backend images (bloat vs `download_dependencies.py`); binding `0.0.0.0` without auth — copy deny-by-default auth, not the exposure.
 
-### lobehub/lobehub (Community License — no code reuse)
+### tashfeenahmed/freellmapi (MIT)
+- **Self-hosted LLM gateway** — OpenAI-compatible API with unified routing, rate limits, and automatic failover across multiple hosted providers → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Intelligent model routing** — routing strategies consider reliability, speed, model capability, and available quota; provider selection delegated rather than hardcoded → `providers/model_gateway.py` · M/low.
+- **Automatic failover** — retries alternative providers on rate limits or server errors → `providers/model_gateway.py` · M/low.
+- **Tool calling and structured outputs** — normalizes tool calls across supported providers → `core/agent/tool_service.py`, `tools/classification.py` · M/low.
+- **Usage and performance analytics** — per-request latency, token usage, provider health, routing information → `benchmark/`, `runtime/event_bus.py` · S/low.
+- **Single integration point** — OpenAI-compatible endpoint replaces per-provider client code → `providers/model_gateway.py` · S/low.
+- *Avoid:* non-production-grade inference service (personal experimentation project); do not expose gateway directly to public internet; keep gateway bound to `127.0.0.1`; preserve encryption key + SQLite data together; never commit `.env` or provider credentials; JARVIS should retain explicit local-model fallback — do not make gateway a hard dependency.
+
+### andreimerfu/pllm (MIT)
+- **High-performance LLM gateway in Go** — OpenAI-compatible proxy with multi-provider support, adaptive routing, and enterprise features → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Zero code changes** — Drop-in OpenAI replacement; change `base_url` and applications work unchanged → `providers/model_gateway.py` · S/low.
+- **Multi-provider** — OpenAI, Anthropic, Azure OpenAI, AWS Bedrock, Google Vertex AI, Grok, Cohere behind one endpoint → `providers/model_gateway.py` · S/low.
+- **Routes concept** — Virtual model endpoints select best real model using configurable strategies (priority, least-latency, weighted-round-robin, random) → `providers/model_gateway.py` · M/low.
+- **Automatic failover** — If provider goes down, requests transparently retry on healthy alternatives; zero failed requests as long as any alternative available → `providers/model_gateway.py` · M/low.
+- **Three-level failover** — Instance retry → next model in route → fallback models → `core/agent/tool_service.py` · M/low.
+- **Health tracking + circuit breakers** — Real-time health scores with circuit breakers per provider → `providers/model_gateway.py` · M/low.
+- **Multi-key load balancing** — Distribute load across multiple API keys → `providers/model_gateway.py` · S/low.
+- **Observability** — JWT auth, rate limiting, Prometheus metrics, distributed tracing, Helm chart → `benchmark/`, `runtime/event_bus.py` · S/low.
+
+### yolorouter/yolorouter (MIT)
+- **Self-hosted OpenAI-compatible LLM gateway** — Multi-provider failover, key rotation, built-in admin console → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Four wire protocols** — OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, Gemini generateContent; translates any to any → `providers/model_gateway.py` · M/low.
+- **Multi-provider failover** — Map one public model name to ordered provider candidates; caller never sees different model name → `providers/model_gateway.py` · M/low.
+- **Per-model scheduling modes** — Failover (primary-first) vs balanced (key spread across providers, cache affinity) → `providers/model_gateway.py` · M/low.
+- **Upstream key pool** — Give each provider a pool of upstream keys; rate-limited keys benched for Retry-After window; unauthorized keys benched → `security/`, `providers/model_gateway.py` · M/low.
+- **One-click model import** — Gateway fetches live model catalogue; imports verified models → `providers/model_registry.py` · S/low.
+- **Model aliasing** — Public names map to whatever upstream model id provider expects; mappings probed at config time → `providers/model_gateway.py` · S/low.
+- **Streaming done right** — Failover/key rotation happens before first byte; provider locked in once streaming starts → `providers/model_gateway.py` · S/low.
+
+### llmrix-inc/llmrix-router (MIT)
+- **High-performance Java LLM router & proxy** — Intelligent multi-model routing, failover, quota management, OpenAI-compatible API → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **One model contract** for OpenAI-compatible providers, Spring AI, LangChain4j → `providers/model_gateway.py` · S/low.
+- **Policy separated from execution** — Strategies rank candidates; executor owns timeout, retry, quota, cooldown, fallback → `core/agent/tool_service.py` · M/low.
+- **Streaming-safe failover** — Fallback allowed before first emitted chunk, prohibited after output begins → `providers/model_gateway.py` · S/low.
+- **Local or distributed state** — Zero-infrastructure local mode and Redis-backed multi-instance → `memory/store.py`, `core/agent/tool_service.py` · M/low.
+- **OpenAI-compatible edge** — `/v1/chat/completions`, `/v1/responses`, `/v1/models` with SSE streaming → `providers/model_gateway.py` · S/low.
+- **Composable advanced routing** — Semantic routing, contextual bandits, online shadow traffic, Fugu-style orchestration → `core/agent/loop.py` · M/med.
+- **Avoid:** Java-only SDK; no Python client — would need separate integration layer.
+
+### fabriziosalmi/llmproxy (MIT)
+- **Security-first proxy for LLMs** — Sits between applications and LLM providers; audit log stays on infrastructure → `security/`, `providers/model_gateway.py` · M/low.
+- **Provider translation and fallback** — OpenAI, Anthropic, Google, Azure OpenAI, Ollama adapters; 18+ providers via OpenAI-compatible adapter; fallback chains, circuit breaker, daily budget → `providers/model_gateway.py` · M/low.
+- **Authentication** — Inference keys on `/v1/*`, admin keys on control plane → `security/` · S/low.
+- **Shield injection scoring** — PII masking, budget guard, trajectory screening → `security/code_scan.py`, `core/agent/permissions.py` · M/low.
+- **Five-ring request pipeline** — Ingress → pre-flight → routing → post-flight → background; plugin architecture with 18 marketplace plugins → `core/agent/tool_service.py` · M/med.
+- **Audit log** — Queryable audit chain, GDPR export/erase, spend analytics → `runtime/event_bus.py`, `benchmark/` · S/low.
+- *Avoid:* audited as personal project; production guarantees not established.
+
+### Temikus/butter (MIT)
+- **Blazingly fast AI proxy gateway in Go** — Unified OpenAI-compatible API with minimal latency overhead → `providers/model_gateway.py`, `runtime/protocols/` · S/low.
+- **Unified API** — `/v1/chat/completions`, `/v1/embeddings`, `/v1/models`; Anthropic Messages → `providers/model_gateway.py` · S/low.
+- **11 providers** — OpenAI, Anthropic, AWS Bedrock, Azure OpenAI, Gemini, OpenRouter, Groq, Mistral, Together, Fireworks, Perplexity + OpenAI-compatible → `providers/model_gateway.py` · S/low.
+- **Multi-provider routing** — Model-specific provider lists with priority/round-robin strategies → `providers/model_gateway.py` · M/low.
+- **Multi-provider failover** — Configurable retry-on status codes and exponential backoff → `providers/model_gateway.py` · M/low.
+- **Weighted key rotation** — Per-key model allowlists; per-key rate limiting, lifecycle management → `security/` · S/low.
+- **Plugin hooks** — Go + WASM plugins; pre/post hook chains; application keys for usage tracking → `core/agent/tool_service.py` · M/med.
+- **Avoid:** Go-only runtime; no Python SDK.
+
+### api7/aisix (Apache-2.0)
+- **Rust-native AI gateway** — One OpenAI-compatible API for OpenAI, Anthropic, Google Gemini, AWS Bedrock, DeepSeek, and more → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Single static binary** — Low cold-start, lock-free config reads, dynamic configuration over etcd → CI/CD · S/low.
+- **Five adapter families** — OpenAI, Anthropic, AWS Bedrock, Google Vertex AI, Azure OpenAI — native adapters, not generic relabel → `providers/model_gateway.py` · S/low.
+- **Routing & failover** — Virtual/routing models, weighted load balancing, automatic failover, retry budgets, cooldowns, per-attempt timeouts → `providers/model_gateway.py` · M/low.
+- **Rate limits, budgets, guardrails, caching, observability** — Built-in production controls → `core/agent/tool_service.py`, `security/` · M/low.
+- **Observability exporters** — OTLP, Datadog, ... → `runtime/event_bus.py`, `benchmark/` · S/low.
+- **Avoid:** AISIX Cloud managed control plane is separate product; self-hosted binary is free but cloud features require paid plan.
+
+### shaharia-lab/ferrox (MIT)
+- **Stateless, horizontally-scalable LLM API gateway in Rust** — OpenAI-compatible API; routes to Anthropic, OpenAI, Google Gemini, AWS Bedrock → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **Three client dialects** — `/v1/chat/completions`, `/v1/responses`, `/anthropic/v1/messages` each served by every provider → `providers/model_gateway.py` · S/low.
+- **Multi-provider routing** — Round-robin, weighted, failover, random strategies → `providers/model_gateway.py` · M/low.
+- **Fallback chains** — Automatic failover to backup providers on failure → `providers/model_gateway.py` · M/low.
+- **Lock-free circuit breakers** — Per-provider; prevents cascading failures → `providers/model_gateway.py` · S/low.
+- **Rate limiting** — Per-key token bucket; burst-aware → `security/` · S/low.
+- **Virtual keys** — Issue scoped API keys with per-model access control → `security/` · S/low.
+- **Observability** — Prometheus metrics, structured JSON logs, OpenTelemetry tracing → `runtime/event_bus.py`, `benchmark/` · S/low.
+- **Rust-only** — No Python SDK; would need separate integration layer.
+
+### inference-gateway/inference-gateway (MIT)
+- **Open-source cloud-native gateway** — Unifies multiple LLM providers behind one OpenAI-compatible API → `providers/model_gateway.py`, `runtime/protocols/` · M/low.
+- **100+ providers** — OpenAI, Anthropic, Groq, Cohere, Ollama, llama.cpp, Cloudflare, DeepSeek, ElevenLabs, Google, Mistral, MiniMax, Moonshot, Nvidia, Z.ai → `providers/model_gateway.py` · S/low.
+- **MCP support** — Full Model Context Protocol integration; gateway itself serves as MCP server on `POST /mcp` → `runtime/protocols/` · S/low.
+- **A2A support** — Agent-to-Agent protocol server → `runtime/protocols/` · M/low.
+- **Unified API routing** — Resolve provider from `provider/model` prefix or `?provider=` query param → `providers/model_gateway.py` · S/low.
+- **Middleware system** — Processing middleware for capabilities like MCP; clients can bypass via headers → `core/agent/tool_service.py` · S/low.
+- **Middleware marketplace** — 18 plugins, most off by default (budget guard, loop breaker, model downgrade, topic blocklist, schema enforcement, canary detection, shadow traffic) → `core/agent/tool_service.py` · M/med.
+- **Avoid:** Cloud-native focus; some features require Kubernetes/deployment infrastructure.
+
 - **Model-list DSL** `+add,-hide,name=display`. → `providers/model_gateway.py` formatting · S/low.
 - **White-box structured, user-editable memory** (inspectable records, not opaque blobs). → `memory/` via `cli/cockpit.py` `/memory` editor · M/low.
 - **Plugin/function-calling extension registry with an isolated gateway.** → `skills/`, MCP · M/med.
@@ -604,7 +774,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 
 | Tier | Repos | Policy |
 |---|---|---|
-| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
+| **Permissive (code OK, still attribute)** | MIT / Apache-2.0 / BSD-3: browser-use, agent-browser, chrome-devtools-mcp, superpowers, agent-skills, pi, OpenHands, ponytail, LocalAI, freellmapi, pllm, yolorouter, llmrix-router, llmproxy, butter, aisix, ferrox, inference-gateway, trim-1, barber, Supercompress, ContextCrumb, imptokens, mcp-sophon, open_provence, llmtrim, nanofable, textual, crawl4ai, microsoft/JARVIS, open-jarvis, jarvis-registry, JarvisHub, LobeHub-code (`browse`), firecrawl-SDK, rote, openbrowse, browser-control, browser-memory, memorall, nanobrowser, moli, openbrowser-ai, clearcote, antibrow, shardbrowser, agentic-stealth-browser, rebrowser-bot-detector | Ideas **and** reusable snippets allowed with attribution; no wholesale copying of their architecture tests/docs. |
 | **AGPL (ideas/API-shape only, never code)** | Skyvern, lightpanda, firecrawl, free-claude-code, WebFurl, BrowserOS neo | Read for patterns. Do **not** copy source, prompts, or configs. |
 | **GPL (ideas only, never code/link)** | system-prompts-of-ai-tools, agenticSeek | Patterns only. Never paste their text into JARVIS prompts (leaked/proprietary content is a separate legal risk). |
 | **NC / ShareAlike / closed core (NO reuse)** | Priler/jarvis (CC BY-NC-SA), CraftJarvis/JARVIS-1 (no license = all rights reserved), IRISX-AI/IRIS-AI (non-commercial, core closed), LobeHub Community License, isair/jarvis (non-commercial), CloakBrowser Pro binaries | Ideas documented here as observations. **No code, assets, prompts, or binaries may enter JARVIS.** |
@@ -647,6 +817,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | system-prompts-of-ai-tools | GPL | Tool-result/planning pattern mining only |
 | ponytail | MIT | The ladder + non-negotiable carve-outs |
 | caveman | Apache-2.0 | Terse-output rules + reversible input compression |
+| trim-1 | Apache-2.0 | 1.2 MB context trimmer — 712 gradient-boosted trees, CPU-only, verbatim line selection |
 | headroom | Apache-2.0 | Cache-safe content-typed compression + CCR |
 | mem0 | OSS core | ADD-only extraction + multi-signal RRF retrieval |
 | claude-mem | — | 3-layer progressive search + FTS5 + `<private>` tags |
@@ -659,6 +830,7 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | agenticSeek | GPL | Wake-word state machine |
 | lobehub | Community | White-box editable memory + schedule/report surface |
 | LocalAI | MIT | Capability probe + unified voice base_url |
+| freellmapi | MIT | Self-hosted LLM gateway — routing + failover + unified OpenAI-compatible API |
 | free-claude-code | AGPL | Mid-turn fallback chain + `<provider>/<model>` slugs |
 | microsoft/JARVIS | MIT | Task DAG + capability-index routing |
 | open-jarvis | Apache-2.0 | Cost-aware escalation + trace-driven skill optimization |
@@ -683,6 +855,23 @@ Module legend: `core/agent/*` loop+tool boundary, `core/harness/*`, `providers/m
 | agentbrowser | MIT | Visible cursor real Chromium + goal API + action memory + cross-domain recall + CAPTCHA |
 | lumen | MIT | Vision-only loop + tiered compression + persistent memory + action cache + delegation |
 | st4ck-lite | Apache-2.0 | Record → deterministic md test + stable IPC vocab + no-code runtime flags + PRD skills |
+| pllm | MIT | Go LLM gateway — routing, failover, caching, 3-level failover, health tracking |
+| yolorouter | MIT | Self-hosted OpenAI-compatible gateway — multi-provider failover, key rotation, admin console |
+| llmrix-router | MIT | Java LLM router — intelligent routing, failover, quota management, Spring Boot |
+| llmproxy | MIT | Security-first proxy — injection scoring, PII masking, 5-ring pipeline, audit chain |
+| butter | MIT | Fast Go AI proxy — 11 providers, weighted key rotation, plugin hooks (Go + WASM) |
+| aisix | Apache-2.0 | Rust AI gateway — 5 adapter families, routing & failover, guardrails, observability |
+| ferrox | MIT | Stateless Rust LLM gateway — lock-free circuit breakers, virtual keys, streaming |
+| inference-gateway | MIT | Cloud-native gateway — 100+ providers, MCP server, A2A server, middleware marketplace |
+| trim-1 | Apache-2.0 | 1.2 MB context trimmer — 712 gradient-boosted trees, CPU-only, verbatim line selection |
+| barber | MIT | Query-aware context trimming — lexical fallback + semantic mode, zero queries at trim time |
+| Supercompress | MIT | Query-aware context compression — ~65% cut, Neural v2 + Compiler engines, MCP plugin |
+| ContextCrumb | MIT | Token-level compressor — ONNX backend, code-aware, 30-70% savings on prose |
+| imptokens | MIT | Local context preprocessor — sentence mode (no model) + logprob mode (GGUF models) |
+| mcp-sophon | MIT | Deterministic context compressor for MCP agents — 5.2 MB Rust binary, zero ML at query time |
+| open_provence | MIT | Provence-style reranker-pruner — 30M-310M checkpoints, English + Japanese |
+| llmtrim | MIT | Local proxy — -31% input / -74% output, cache discipline, skeletonization, quality gate |
+| nanofable | MIT | 8 tiny language models trained from scratch — 1.2 MB to 55 MB, browser-based inference |
 
 ---
 

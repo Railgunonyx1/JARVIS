@@ -76,8 +76,8 @@ class VerticalTabs {
     if (!this.isEnabled) return;
     const tabs = window.tabs || [];
     this.tabList.innerHTML = tabs.map(tab => `
-      <div class="vertical-tab ${tab.active ? 'active' : ''} ${tab.audible ? 'audible' : ''}" data-tab-id="${tab.id}">
-        <img class="vertical-tab-favicon" src="${tab.favicon || ''}" onerror="this.style.display='none'" />
+      <div class="vertical-tab ${tab.active ? 'active' : ''} ${tab.audible ? 'audible' : ''}" data-tab-id=".">
+        <img class="vertical-tab-favicon" src="${tab.favicon || ''}" " />
         <span class="vertical-tab-title">${this.escapeHtml(tab.title || 'New Tab')}</span>
         <button class="vertical-tab-close" data-close="${tab.id}">×</button>
       </div>

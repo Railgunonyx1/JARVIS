@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import numpy as np
 
@@ -141,7 +141,7 @@ class HandTracker:
                 hands = []
                 if results.multi_hand_landmarks:
                     for idx, (landmarks, handedness) in enumerate(
-                        zip(results.multi_hand_landmarks, results.multi_handedness)
+                        zip(results.multi_hand_landmarks, results.multi_handedness, strict=True)
                     ):
                         lm_list = [(lm.x, lm.y, lm.z) for lm in landmarks.landmark]
                         hand = HandLandmarks(

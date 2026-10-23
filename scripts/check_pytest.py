@@ -4,7 +4,7 @@ import sys
 
 proc = subprocess.run(
     [sys.executable, "-m", "pytest", "--tb=short", "-q"],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=120
 )
 output = proc.stdout.decode('utf-8', errors='replace') + proc.stderr.decode('utf-8', errors='replace')

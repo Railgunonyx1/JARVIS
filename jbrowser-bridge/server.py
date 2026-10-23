@@ -4,6 +4,8 @@ A small, dependency-free (stdlib only) HTTP/SSE server that connects the
 JARVIS browser extension to an intelligence backend. It binds to
 127.0.0.1 only.
 
+
+import hmac
 Endpoints
 ---------
 GET  /status     -> {"ok": bool, "kernel": "online"|"offline", ...}
@@ -25,6 +27,8 @@ Backends
   gateway (ProviderRouter fallback) with input/output budgets. Supply
   :class:`agent.AgentEngine` for task-driven (DSH-style) browsing.
 
+
+import hmac
 Security (G1 hardenings)
 ------------------------
 * Loopback-only bind (127.0.0.1).
@@ -115,8 +119,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         """Enforce bearer-token auth when a token is configured."""
         if self.auth_token is None:
             return True
-        expected = f"Bearer {self.auth_token}"
-        return self.headers.get("Authorization") == expected
+        auth_header = self.headers.get("Authorization", "")
+        return auth_header == expected
 
     def _host_ok(self) -> bool:
         """Reject requests whose Host header is not loopback.
@@ -162,6 +166,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             length = 0
         if length <= 0:
             return {}
+        if length > 32 * 1024 * 1024:
+            return None
         raw = self.rfile.read(length)
         self._body_consumed = True
         try:
@@ -550,7 +556,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
 def serve(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT,
           backend_kind: str = "echo", engine=None,
-          require_auth: bool = False, auth_token: str | None = None,
+          require_auth: bool = True, auth_token: str | None = None,
           ) -> ThreadingHTTPServer:
     """Start the bridge server.
 

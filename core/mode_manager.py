@@ -3,11 +3,10 @@ Mode Manager — handles execution modes and permission resolution.
 """
 
 import logging
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-import toml
 
 from core.capability_registry import Capability, get_all_capabilities
 
@@ -86,7 +85,8 @@ class ModeManager:
         for toml_file in self.config_dir.glob("*.toml"):
             mode_name = toml_file.stem
             try:
-                data = toml.load(toml_file)
+                with toml_file.open("rb") as fh:
+                    data = tomllib.load(fh)
                 mode_config = self._parse_mode_config(mode_name, data)
                 self._mode_configs[ExecutionMode(mode_name)] = mode_config
                 logger.info("Loaded mode: %s", mode_name)

@@ -14,7 +14,7 @@ exclude = "venv,_quarantine,research_files"
 print("Running pytest...")
 proc = subprocess.run(
     [sys.executable, "-m", "pytest", "--tb=short", "-q"],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=60
 )
 try:
@@ -35,7 +35,7 @@ else:
 print("Running ruff check...")
 proc = subprocess.run(
     [sys.executable, "-m", "ruff", "check", "--select=E,F,W,UP"],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=60
 )
 try:
@@ -52,7 +52,7 @@ results["ruff"]["error_count"] = error_count
 print("Running bandit (active tree)...")
 proc = subprocess.run(
     [sys.executable, "-m", "bandit", "-r", ".", "--exclude", venv, "--quiet", "-f", "json"],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=60
 )
 try:
@@ -71,7 +71,7 @@ except Exception as e:
 print("Running pip check...")
 proc = subprocess.run(
     [sys.executable, "-m", "pip", "check"],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=60
 )
 try:
@@ -87,7 +87,7 @@ results["pip_check"] = {
 print("Running mypy...")
 proc = subprocess.run(
     [sys.executable, "-m", "mypy", "."],
-    cwd="C:\\Users\\aayan\\Desktop\\JARVIS",
+    cwd=Path(__file__).resolve().parents[1],
     capture_output=True, timeout=60
 )
 try:

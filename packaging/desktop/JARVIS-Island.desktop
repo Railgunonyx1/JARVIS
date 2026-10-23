@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=JARVIS Island
+GenericName=AI Dynamic Island
+Comment=Always-on-top JARVIS assistant island — hover to peek, click to chat
+Exec=jarvis-desktop-island
+Icon=jarvis-desktop
+Terminal=false
+Type=Application
+Categories=Utility;AI;Chat;
+Keywords=jarvis;assistant;ai;island;overlay;
+StartupNotify=false

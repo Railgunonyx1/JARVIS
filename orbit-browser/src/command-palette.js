@@ -123,10 +123,31 @@ class CommandPalette {
     if (text === query) score += 50; else if (text.startsWith(query)) score += 30; else if (text.includes(query)) score += 20;
     return score;
   }
+  // Escape HTML when inserting dynamic values into DOM
+    function escapeHtml(text) {
+      const div = document.createElement('div')
+      div.textContent = text
+      return div.innerHTML
+    }
+
+
+  // Escape HTML when inserting dynamic values into DOM
+  function escapeHtml(text) {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+
+  // Escape HTML when inserting dynamic values into DOM
+  function escapeHtml(text) {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
   render() {
     if (!this.isOpen) return;
     const html = this.results.map((r, i) => {
-      return '<div class="cmd-item' + (i === this.selectedIndex ? ' selected' : '') + '" data-index="' + i + '"><span class="cmd-icon">' + r.icon + '</span><div class="cmd-info"><div class="cmd-name">' + r.name + '</div><div class="cmd-category">' + r.category + '</div></div>' + (r.shortcut ? '<kbd class="cmd-shortcut">' + r.shortcut + '</kbd>' : '') + '</div>';
+      return '<div class="cmd-item' + (i === this.selectedIndex ? ' selected' : '') + '" data-index="' + i + '"><span class="cmd-icon">' + r.icon + '</span><div class="cmd-info"><div class="cmd-name">' + escapeHtml(r.name) + '</div><div class="cmd-category">' + escapeHtml(r.category) + '</div></div>' + (r.shortcut ? '<kbd class="cmd-shortcut">' + escapeHtml(r.shortcut) + '</kbd>' : '') + '</div>';
     }).join('');
     this.resultsContainer.innerHTML = html || '<div class="cmd-empty">No results found</div>';
     this.resultsContainer.querySelectorAll('.cmd-item').forEach(item => {

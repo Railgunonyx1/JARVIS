@@ -343,8 +343,9 @@ class MemoryController:
     ) -> list[dict[str, Any]]:
         """Legacy-shaped results for existing callers (CLI/cockpit/tests).
 
-        When use_llm_enhance=True, uses the 1B model to reformulate the
-        query and rerank results for better relevance.
+        Reranking prefers the local ONNX cross-encoder
+        (``memory/cross_encoder.py``) and falls back to the 1B LLM lane
+        (``memory/llm/rerank.py``) only when the local lane is unavailable.
         """
         _SOURCE_NAMES = {"v": "vector", "kv": "kv", "d": "decision", "k": "knowledge"}
 
@@ -358,23 +359,7 @@ class MemoryController:
                 pass
 
         items = self.retrieve_items(search_query, project=project, top_k=top_k * 2, min_score=min_score)
-
-        # Optional 1B reranking
-        if use_llm_enhance and items:
-            try:
-                from memory.llm_enhance import rerank_memories
-                item_dicts = [
-                    {"content": i.content, "type": i.type, "score": getattr(i, "_signals", {}).get("score", 0.0)}
-                    for i in items
-                ]
-                reranked = rerank_memories(query, item_dicts, max_results=top_k)
-                # Map back to items (by content match)
-                reranked_contents = {m["content"][:100] for m in reranked}
-                items = [i for i in items if i.content[:100] in reranked_contents][:top_k]
-            except Exception:
-                items = items[:top_k]
-        else:
-            items = items[:top_k]
+        items = self._rerank_items(query, items, top_k, use_llm_enhance)
 
         out = []
         for item in items:
@@ -387,6 +372,62 @@ class MemoryController:
                 "score": getattr(item, "_signals", {}).get("score", 0.0),
             })
         return out
+
+    def _rerank_items(
+        self,
+        query: str,
+        items: list[Any],
+        top_k: int,
+        use_llm_enhance: bool,
+    ) -> list[Any]:
+        """Order retrieval candidates by relevance, degrading to input order.
+
+        Lane precedence: local ONNX cross-encoder, then the 1B LLM reranker,
+        then the fusion-ranker's own ordering. Each lane returning None or
+        raising means the next one is tried.
+        """
+        if not items:
+            return []
+        if len(items) == 1:
+            return items[:top_k]
+
+        payload = [
+            {
+                "content": item.content,
+                "type": item.type,
+                "score": getattr(item, "_signals", {}).get("score", 0.0),
+            }
+            for item in items
+        ]
+
+        ordered: list[dict[str, Any]] | None = None
+        try:
+            from memory import cross_encoder
+
+            ordered = cross_encoder.rerank(query, payload, max_results=len(items))
+        except Exception:
+            ordered = None
+
+        if ordered is None and use_llm_enhance:
+            try:
+                from memory.llm_enhance import rerank_memories
+
+                ordered = rerank_memories(query, payload, max_results=len(items))
+            except Exception:
+                ordered = None
+
+        if ordered is None:
+            return items[:top_k]
+
+        buckets: dict[str, list[Any]] = {}
+        for item in items:
+            buckets.setdefault(item.content[:100], []).append(item)
+        selected: list[Any] = []
+        for entry in ordered:
+            bucket = buckets.get(str(entry.get("content", ""))[:100])
+            if bucket:
+                selected.append(bucket.pop(0))
+        return selected[:top_k] or items[:top_k]
 
     # ── decision / knowledge helpers ──────────────────────────────────
     def record_decision(self, item: MemoryItem) -> int | None:

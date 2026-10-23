@@ -15,7 +15,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, desktop-jarvis]
   pull_request:
   schedule:
     - cron: "0 3 * * 1"  # weekly security sweep
@@ -48,7 +48,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install ruff pytest
+          pip install ruff pytest PySide6
       - name: Safety lint (real bugs: F821/F823/E9...)
         run: ruff check . --select E9,F63,F7,F82
       - name: Import smoke
@@ -85,6 +85,23 @@ jobs:
           pip install pytest
       - name: Hermetic unit + security suites
         run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
+
+  desktop:
+    name: Desktop (jarvis-desktop PySide6 tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest PySide6
+      - name: Desktop tests (offscreen)
+        run: QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop/ -q -m "not e2e"
 
   browser:
     name: Browser (orbit-browser source + Electron smoke)

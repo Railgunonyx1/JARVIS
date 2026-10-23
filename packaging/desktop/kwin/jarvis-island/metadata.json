@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Name": "JARVIS Island",
+    "Description": "Pins the JARVIS Dynamic Island to the top-centre of the screen and keeps it above other windows.",
+    "Icon": "preferences-desktop",
+    "Id": "jarvis-island",
+    "License": "MIT",
+    "Version": "1.0"
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js",
+  "KPackageStructure": "KWin/Script"
+}

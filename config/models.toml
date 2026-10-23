@@ -170,14 +170,162 @@ model = "deepseek-reasoner"
 max_tokens = 4096
 temperature = 0.7
 
-[huggingface]
-model = "meta-llama/Llama-3.3-70B-Instruct"
+# ── Hugging Face models (cloud inference, OpenAI-compatible) ──────────────
+# Primary chat model - swap model line to try a different one:
+[huggingface.primary]
+model = "Qwen/Qwen2.5-72B-Instruct"
 max_tokens = 4096
 temperature = 0.7
-base_url = "https://api-inference.huggingface.co/v1"
+base_url = "https://router.huggingface.co/v1"
 requests_per_minute = 10
 requests_per_day = 500
 priority = 5
+
+# ── Alternative HF models ───────────────────────────────────────────────
+
+# Alternative: DeepSeek-R1 - Complex reasoning specialist
+[huggingface.models.deepseek-r1]
+model = "deepseek-ai/DeepSeek-R1"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# Alternative: openai/gpt-oss-120b - Strong agentic tool use
+[huggingface.models.gpt-oss-120b]
+model = "openai/gpt-oss-120b"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# Alternative: Qwen3-4B-Thinking-2507 - Lightweight, faster for simple tasks
+[huggingface.models.qwen3-4b-thinking]
+model = "Qwen/Qwen3-4B-Thinking-2507"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# Alternative: Mistral-Nemo-Instruct-2407 - Efficient, good tool use
+[huggingface.models.mistral-nemo]
+model = "mistralai/Mistral-Nemo-Instruct-2407"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# Alternative: Meta-Llama-3.3-70B-Instruct - Solid all-rounder (previous default)
+[huggingface.models.llama-3.3-70b]
+model = "meta-llama/Llama-3.3-70B-Instruct"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# ── Additional HF models (user-requested) ─────────────────────────────────
+
+# stealth-model/space-bunny-alpha - text-generation, reasoning/coding/multimodal
+[huggingface.models.space-bunny-alpha]
+model = "stealth-model/space-bunny-alpha"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# stealth-model/union-alpha - text-generation, multimodal/coding
+[huggingface.models.union-alpha]
+model = "stealth-model/union-alpha"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# mergekit-community/oculus-alpha - qwen2-based conversational merge
+[huggingface.models.oculus-alpha]
+model = "mergekit-community/oculus-alpha"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# openbmb/MiniCPM5-2B - text-generation, tool-calling, long-context, on-device
+[huggingface.models.minicpm5-2b]
+model = "openbmb/MiniCPM5-2B"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# openbmb/MiniCPM5-1B - text-generation, tool-calling, long-context, on-device (smaller)
+[huggingface.models.minicpm5-1b]
+model = "openbmb/MiniCPM5-1B"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+# openbmb/MiniCPM5-2B-DSpark - text-generation, qwen3-based, tool-calling
+[huggingface.models.minicpm5-2b-dspark]
+model = "openbmb/MiniCPM5-2B-DSpark"
+max_tokens = 4096
+temperature = 0.7
+base_url = "https://router.huggingface.co/v1"
+requests_per_minute = 10
+requests_per_day = 500
+priority = 5
+
+
+# ── Caveman trim-1 (local context trimmer, not a chat model) ──────────────
+# Model ID: caveman-so/trim-1
+# URL: https://huggingface.co/caveman-so/trim-1
+# Size: ~1.2 MB (712 gradient-boosted trees, NOT a neural network)
+# License: Apache-2.0
+# Code: github.com/caveman-ai/trim-1
+#
+# What it does: Takes context (tool output, file contents, long chat) + your
+# query, returns only the lines relevant to the ask in their original order.
+# Never rewrites or summarizes lines - just drops the irrelevant ones.
+#
+# How it runs: Locally via the `trim` Go binary (no GPU, no network call,
+# deterministic, ~7ms p50 for 5k tokens on one CPU core).
+#   go install github.com/caveman-ai/trim-1/cmd/trim@latest
+#   trim --query "why does the build fail" build.log
+#
+# Use case for JARVIS: Run trim-1 on large tool outputs / long files BEFORE
+# sending them to the LLM, cutting input tokens while keeping evidence.
+# This is a local pre-processor, not an OpenAI-compatible chat endpoint.
+#
+# Example config for local invocation:
+[trim-1]
+model = "caveman-so/trim-1"
+size_mb = 1.2
+type = "context_trimmer"
+local_binary = "trim"
+local_binary_install = "github.com/caveman-ai/trim-1/cmd/trim@latest"
+license = "Apache-2.0"
+huggingface_url = "https://huggingface.co/caveman-so/trim-1"
+github_url = "https://github.com/caveman-ai/trim-1"
 
 # ── Free-LLM-API directory providers (freellm.net, 2026-09 data) ──────
 # All plain OpenAI-compatible endpoints; each activates automatically when

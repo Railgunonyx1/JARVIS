@@ -9,9 +9,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 logger = logging.getLogger("jarvis.desktop.diagnostics")
 
@@ -38,8 +39,7 @@ class PerformanceMonitor:
         self._running = False
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._snapshots: list[PerformanceSnapshot] = []
-        self._max_snapshots = 3600
+        self._snapshots: deque[PerformanceSnapshot] = deque(maxlen=3600)
 
     def start(self) -> None:
         if self._running:
@@ -68,39 +68,42 @@ class PerformanceMonitor:
             logger.warning("psutil unavailable — diagnostics will be empty")
             return
 
+        process.cpu_percent(interval=None)  # prime the delta baseline
+
         while self._running:
             try:
-                cpu = process.cpu_percent(interval=0.1)
+                # interval=None: CPU% since the previous call. A periodic
+                # sampler wants the delta, and interval=0.1 blocks the thread
+                # for 100ms of every sample for no benefit.
+                cpu = process.cpu_percent(interval=None)
                 mem = process.memory_info()
-                ram_percent = psutil.virtual_memory().percent
+                ram_gb = mem.rss / (1024**3)
                 snapshot = PerformanceSnapshot(
                     timestamp=time.time(),
                     cpu_percent=cpu,
-                    ram_percent=ram_percent,
-                    ram_used_gb=mem.rss / (1024**3),
+                    ram_percent=psutil.virtual_memory().percent,
+                    ram_used_gb=ram_gb,
                     events={},
                 )
                 with self._lock:
                     self._snapshots.append(snapshot)
-                    if len(self._snapshots) > self._max_snapshots:
-                        self._snapshots = self._snapshots[-self._max_snapshots:]
             except Exception:
                 pass
             time.sleep(self._interval)
 
     def get_average_cpu(self, last_n: int = 60) -> float:
         with self._lock:
-            recent = self._snapshots[-last_n:]
+            recent = list(self._snapshots)[-last_n:]
         if not recent:
             return 0.0
         return sum(s.cpu_percent for s in recent) / len(recent)
 
-    def get_average_ram(self, last_n: int = 60) -> float:
+    def get_average_ram_gb(self, last_n: int = 60) -> float:
         with self._lock:
-            recent = self._snapshots[-last_n:]
+            recent = list(self._snapshots)[-last_n:]
         if not recent:
             return 0.0
-        return sum(s.ram_percent for s in recent) / len(recent)
+        return sum(s.ram_used_gb for s in recent) / len(recent)
 
     def get_peak_ram_gb(self) -> float:
         with self._lock:
@@ -173,14 +176,14 @@ class PerformanceBenchmarker:
         self._monitor.stop()
 
         avg_cpu = self._monitor.get_average_cpu()
-        avg_ram = self._monitor.get_average_ram()
+        avg_ram = self._monitor.get_average_ram_gb()
 
         cpu_result = BenchmarkResult("idle_cpu_percent", avg_cpu, "%",
                                      target=self.TARGET_IDLE_CPU,
                                      passed=avg_cpu < self.TARGET_IDLE_CPU)
-        ram_result = BenchmarkResult("idle_ram_gb", avg_ram / 100.0, "GB",
+        ram_result = BenchmarkResult("idle_ram_gb", avg_ram, "GB",
                                      target=self.TARGET_IDLE_RAM_GB,
-                                     passed=avg_ram / 100.0 < self.TARGET_IDLE_RAM_GB)
+                                     passed=avg_ram < self.TARGET_IDLE_RAM_GB)
         self._results.extend([cpu_result, ram_result])
         return cpu_result, ram_result
 
