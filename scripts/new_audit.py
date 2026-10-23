@@ -1,6 +1,7 @@
 #!/usrusr/bin/env python3
 """Run new JARVIS audit and report results."""
 import json
+from pathlib import Path
 import os
 
 
@@ -57,7 +58,7 @@ print("\n--- Dependency Check ---")
 print("pip check: Running...")
 import subprocess
 
-proc = subprocess.run(['python', '-m', 'pip', 'check'], capture_output=True, text=True, cwd='C:\\Users\\aayan\\Desktop\\JARVIS')
+proc = subprocess.run(['python', '-m', 'pip', 'check'], capture_output=True, text=True, cwd=Path(__file__).resolve().parents[1])
 output = proc.stdout + proc.stderr
 if 'No broken requirements' in output:
     print("No broken requirements - OK")

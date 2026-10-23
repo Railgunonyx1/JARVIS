@@ -4,6 +4,8 @@ A small, dependency-free (stdlib only) HTTP/SSE server that connects the
 JARVIS browser extension to an intelligence backend. It binds to
 127.0.0.1 only.
 
+
+import hmac
 Endpoints
 ---------
 GET  /status     -> {"ok": bool, "kernel": "online"|"offline", ...}
@@ -25,6 +27,8 @@ Backends
   gateway (ProviderRouter fallback) with input/output budgets. Supply
   :class:`agent.AgentEngine` for task-driven (DSH-style) browsing.
 
+
+import hmac
 Security (G1 hardenings)
 ------------------------
 * Loopback-only bind (127.0.0.1).
@@ -116,7 +120,6 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self.auth_token is None:
             return True
         expected = f"Bearer {self.auth_token}"
-        return self.headers.get("Authorization") == expected
 
     def _host_ok(self) -> bool:
         """Reject requests whose Host header is not loopback.
