@@ -13,7 +13,7 @@ import pytest
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "jarvis-desktop")
+_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "dynamic-island")
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 from app.integration.jarvis_backend import BackendState, JarvisBackend
@@ -62,8 +62,24 @@ def test_backend_processes_message_e2e():
 
     Requires API keys configured in config/.env. Skipped if no keys present.
     """
+    env_file = os.path.join(os.path.dirname(_REPO_ROOT), "config", ".env")
+    if not os.path.isfile(env_file):
+        env_file = os.path.join(_REPO_ROOT, "config", ".env")
+    has_key = False
+    if os.path.isfile(env_file):
+        with open(env_file) as f:
+            has_key = any(
+                line.startswith(("OPENROUTER_API_KEY=", "OPENAI_API_KEY=", "ANTHROPIC_API_KEY="))
+                for line in f
+            )
+    if not has_key:
+        has_key = any(os.environ.get(k) for k in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"))
+    if not has_key:
+        pytest.skip("No LLM API keys configured")
+
     responses = []
-    backend = JarvisBackend(mode="agent", on_response=responses.append)
+    backend = JarvisBackend(mode="agent")
+    backend.response_ready.connect(lambda r: responses.append(r))
     backend.start(wait=True, timeout=10.0)
     backend.send_message("Say hello in exactly five words.")
     start = time.time()

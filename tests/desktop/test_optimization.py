@@ -9,7 +9,7 @@ import pytest
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "jarvis-desktop")
+_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "dynamic-island")
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 

@@ -6,7 +6,7 @@ import sys
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
-_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "jarvis-desktop")
+_DESKTOP_ROOT = os.path.join(_REPO_ROOT, "dynamic-island")
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
@@ -180,21 +180,21 @@ def _load_launcher(name):
 
 
 def test_launcher_resolves_working_tree():
-    mod = _load_launcher("jarvis-desktop-island-launcher.py")
+    mod = _load_launcher("scripts/island-launcher.py")
     desktop, repo = mod._resolve()
-    assert desktop == os.path.join(_REPO_ROOT, "jarvis-desktop")
+    assert desktop == os.path.join(_REPO_ROOT, "dynamic-island")
     assert repo == _REPO_ROOT
     assert os.path.isfile(os.path.join(desktop, "app", "island_main.py"))
 
 
 def test_launcher_falls_back_to_installed_home(tmp_path, monkeypatch):
-    mod = _load_launcher("jarvis-desktop-island-launcher.py")
+    mod = _load_launcher("scripts/island-launcher.py")
     isolated = tmp_path / "bin"
     isolated.mkdir()
-    monkeypatch.setattr(mod, "__file__", str(isolated / "jarvis-desktop-island-launcher.py"))
+    monkeypatch.setattr(mod, "__file__", str(isolated / "island-launcher.py"))
     monkeypatch.setenv("JARVIS_DESKTOP_HOME", str(tmp_path / "home"))
     desktop, repo = mod._resolve()
-    assert desktop == str(tmp_path / "home" / "jarvis-repo" / "jarvis-desktop")
+    assert desktop == str(tmp_path / "home" / "jarvis-repo" / "dynamic-island")
     assert repo == str(tmp_path / "home" / "jarvis-repo")
 
 

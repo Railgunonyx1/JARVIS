@@ -12,15 +12,16 @@ import sys
 
 def _resolve() -> tuple[str, str]:
     here = os.path.dirname(os.path.abspath(__file__))
-    local_desktop = os.path.join(here, "jarvis-desktop")
+    repo = os.path.dirname(here)
+    local_desktop = os.path.join(repo, "dynamic-island")
     if os.path.isfile(os.path.join(local_desktop, "app", "island_main.py")):
-        return local_desktop, here
+        return local_desktop, repo
     home = os.environ.get(
         "JARVIS_DESKTOP_HOME",
         os.path.expanduser("~/.local/share/jarvis-desktop"),
     )
     repo = os.path.join(home, "jarvis-repo")
-    return os.path.join(repo, "jarvis-desktop"), repo
+    return os.path.join(repo, "dynamic-island"), repo
 
 
 def main() -> int:
