@@ -238,7 +238,7 @@ class JarvisBackend(QObject):
                 text = self._input_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
-            if not text.strip():
+            if not text or not str(text).strip():
                 continue
             await self._run_agent(text)
 

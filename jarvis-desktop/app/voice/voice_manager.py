@@ -114,7 +114,14 @@ class VoiceManager:
                         self._on_transcription(result.text)
                     self._send_to_agent(result.text)
                 else:
+                    reason = getattr(result, "engine", "unknown") if result else "no-result"
+                    logger.warning("No transcription result (reason=%s)", reason)
                     self._set_state(VoiceState.IDLE)
+                    if self._on_response and reason and reason not in ("", "none"):
+                        try:
+                            self._on_response(f"[Voice: no speech detected or STT unavailable]")
+                        except Exception:
+                            pass
             except Exception as e:
                 logger.exception("Recording failed")
                 self._set_state(VoiceState.ERROR)
@@ -131,7 +138,13 @@ class VoiceManager:
     def _send_to_agent(self, text: str) -> None:
         """Send transcribed text to the agent backend."""
         if not self._backend:
+            logger.warning("Voice: no backend available to send transcription")
             self._set_state(VoiceState.ERROR)
+            if self._on_response:
+                try:
+                    self._on_response("[Voice: agent backend unavailable]")
+                except Exception:
+                    pass
             return
 
         self._set_state(VoiceState.THINKING)
@@ -160,8 +173,8 @@ class VoiceManager:
                     self._set_state(VoiceState.IDLE)
             except Exception as e:
                 logger.warning("TTS playback failed: %s", e)
-                if not self._stop_speaking.is_set():
-                    self._set_state(VoiceState.IDLE)
+                # Do NOT change state on failure - keep current state
+                # so the conversation continues even if voice output fails
 
         self._tts_thread = threading.Thread(target=_speak, daemon=True, name="jarvis-voice-tts")
         self._tts_thread.start()

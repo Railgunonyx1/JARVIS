@@ -241,9 +241,10 @@ class WhisperSTT:
         return wav_buffer.getvalue()
 
     def record_and_transcribe(self, duration: float = 5.0,
-                              silence_timeout: float = 2.0) -> STTResult:
+                              silence_timeout: float = 2.0,
+                              stop_event: threading.Event | None = None) -> STTResult:
         """Record from microphone and transcribe."""
-        audio_bytes = self.record_audio(duration)
+        audio_bytes = self.record_audio(duration, stop_event=stop_event)
         if not audio_bytes:
             return STTResult("", 0.0, "no-audio", 0.0)
         return self.transcribe(audio_bytes, "audio/wav")
