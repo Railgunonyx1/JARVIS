@@ -176,21 +176,25 @@ class JarvisBackend(QObject):
 
     def _run_loop(self) -> None:
         """Worker thread entry: own asyncio event loop."""
+        startup_error: Exception | None = None
         try:
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
 
             try:
                 self._loop.run_until_complete(self._main())
+            except Exception as e:
+                startup_error = e
+                logger.exception("Backend startup failed")
             finally:
                 self._loop.close()
                 self._loop = None
-        except Exception:
-            logger.exception("Agent loop crashed")
-            self._set_state(BackendState.ERROR, error=Exception("agent loop crashed"))
-        finally:
-            if self.state != BackendState.STOPPED:
-                self._set_state(BackendState.STOPPED)
+        if startup_error is not None:
+            # Preserve the original startup error so it is not lost
+            # when the lifecycle subsequently settles to STOPPED.
+            self._set_state(BackendState.ERROR, error=startup_error)
+        elif self.state != BackendState.STOPPED:
+            self._set_state(BackendState.STOPPED)
 
     async def _main(self) -> None:
         """Build the agent and process queued messages."""

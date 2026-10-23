@@ -145,10 +145,9 @@ class AppCoordinator(QObject):
         self._backend.response_ready.connect(self._on_backend_response)
         self._backend.status_changed.connect(self._on_backend_status)
         self._backend.state_changed.connect(self._on_backend_state)
-        # Apply pending model request if any
-        if self._pending_model:
-            self._backend.set_model(self._pending_model)
-            self._pending_model = ""
+        # Deferred model: apply after the backend reports READY,
+        # not before the agent loop exists.
+        self._pending_model = self._pending_model or ""
 
         # Voice: only initialize if voice is enabled
         if self._voice_enabled:
@@ -250,6 +249,10 @@ class AppCoordinator(QObject):
         """React to backend lifecycle changes."""
         if state == BackendState.ERROR:
             self._set_state(AppState.IDLE)
+        elif state == BackendState.READY and self._pending_model:
+            # Apply the model that was requested before the backend existed.
+            self._backend.set_model(self._pending_model)
+            self._pending_model = ""
 
     # ── Voice ───────────────────────────────────────────────────
     def toggle_voice(self) -> None:
@@ -269,7 +272,7 @@ class AppCoordinator(QObject):
             )
             self._voice.warmup()
         elif not enabled and self._voice:
-            self._voice.stop_speaking()
+            self._voice.shutdown()
             self._voice = None
 
 
@@ -316,7 +319,10 @@ class AppCoordinator(QObject):
         self._recognizer = GestureRecognizer(on_gesture=self._on_gesture)
         self._mapper = GestureMapper(on_action=self._on_gesture_action_event)
         self._camera = Camera()
-        self._tracker = HandTracker()
+        # Feed detected hands into the recognizer so gestures are actually classified.
+        self._tracker = HandTracker(on_hands=lambda hands: (
+            self._recognizer.process(hands) if self._recognizer else None
+        ))
         self._tracker.set_frame_source(lambda: self._camera.latest_frame if self._camera else None)
 
         if self._camera.start() and self._tracker.start():
@@ -341,8 +347,32 @@ class AppCoordinator(QObject):
             self._mapper.handle(event)
 
     def _on_gesture_action_event(self, action: str, event: GestureEvent) -> None:
-        if self._actions:
-            self._actions.execute(action)
+        if action == "toggle_gesture_mode":
+            self._set_gesture_mode(not self._gesture_active)
+        elif action == "pan_workspace":
+            self._workspace_visible = not self._workspace_visible
+            if self._workspace_visible:
+                self._workspace.show()
+            else:
+                self._workspace.hide()
+        elif action == "exit_gesture_mode":
+            self._stop_gestures()
+        elif action == "zoom_in":
+            if self._workspace:
+                self._workspace.zoom(factor=1.25)
+        elif action == "zoom_out":
+            if self._workspace:
+                self._workspace.zoom(factor=0.8)
+        elif action == "prev_task":
+            self.gesture_action.emit(action)
+        elif action == "next_task":
+            self.gesture_action.emit(action)
+        elif action == "capture_selection":
+            # Trigger selection mode (could emit to actions layer)
+            self.gesture_action.emit(action)
+        else:
+            if self._actions:
+                self._actions.execute(action)
         self.gesture_action.emit(action)
 
     # ── Workspace ───────────────────────────────────────────────

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
+from app.voice.voice_manager import VoiceState
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -184,6 +185,7 @@ class IslandWindow(QWidget):
             self._panel = ConversationPanel()
             self._panel.send_requested.connect(self._on_send)
             self._panel.mic_toggled.connect(self._on_mic)
+            self._controller.coordinator.voice_state_changed.connect(self._on_voice_state_changed)
             self._host.addWidget(self._panel)
         return self._panel
 
@@ -251,6 +253,11 @@ class IslandWindow(QWidget):
     def _on_mic(self) -> None:
         if self._controller and self._controller.coordinator is not None:
             self._controller.coordinator.toggle_voice()
+
+    def _on_voice_state_changed(self, state: object) -> None:
+        panel = self._ensure_panel()
+        if panel is not None:
+            panel.set_listening(state == VoiceState.LISTENING)
 
     def _on_chat_message(self, role: str, text: str) -> None:
         panel = self._ensure_panel()

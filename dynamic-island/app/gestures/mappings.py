@@ -26,15 +26,16 @@ class GestureMapping:
 
 
 DEFAULT_MAPPINGS: dict[GestureType, GestureMapping] = {
-    GestureType.PINCH: GestureMapping(GestureType.PINCH, "select", "Select or grab"),
-    GestureType.PINCH_MOVE: GestureMapping(GestureType.PINCH_MOVE, "move", "Move selected panel"),
-    GestureType.OPEN_PALM: GestureMapping(GestureType.OPEN_PALM, "release", "Release selection"),
-    GestureType.ZOOM_IN: GestureMapping(GestureType.ZOOM_IN, "zoom_in", "Zoom in"),
-    GestureType.ZOOM_OUT: GestureMapping(GestureType.ZOOM_OUT, "zoom_out", "Zoom out"),
-    GestureType.SWIPE_LEFT: GestureMapping(GestureType.SWIPE_LEFT, "prev_panel", "Previous panel"),
-    GestureType.SWIPE_RIGHT: GestureMapping(GestureType.SWIPE_RIGHT, "next_panel", "Next panel"),
-    GestureType.GRAB: GestureMapping(GestureType.GRAB, "grab", "Grab object"),
-    GestureType.RELEASE: GestureMapping(GestureType.RELEASE, "release", "Release object"),
+    # Island workspace gestures — mapped to coordinator actions, not desktop OS.
+    GestureType.PINCH: GestureMapping(GestureType.PINCH, "toggle_gesture_mode", "Enter/exit gesture mode"),
+    GestureType.PINCH_MOVE: GestureMapping(GestureType.PINCH_MOVE, "pan_workspace", "Pan the 3D workspace"),
+    GestureType.OPEN_PALM: GestureMapping(GestureType.OPEN_PALM, "exit_gesture_mode", "Exit gesture mode without action"),
+    GestureType.ZOOM_IN: GestureMapping(GestureType.ZOOM_IN, "zoom_in", "Zoom in (workspace)"),
+    GestureType.ZOOM_OUT: GestureMapping(GestureType.ZOOM_OUT, "zoom_out", "Zoom out (workspace)"),
+    GestureType.SWIPE_LEFT: GestureMapping(GestureType.SWIPE_LEFT, "prev_task", "Previous task/panel"),
+    GestureType.SWIPE_RIGHT: GestureMapping(GestureType.SWIPE_RIGHT, "next_task", "Next task/panel"),
+    GestureType.GRAB: GestureMapping(GestureType.GRAB, "capture_selection", "Capture/selection mode"),
+    GestureType.RELEASE: GestureMapping(GestureType.RELEASE, "deselect", "Deselect/cancel mode"),
 }
 
 

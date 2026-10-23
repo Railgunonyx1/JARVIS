@@ -92,6 +92,21 @@ class VoiceManager:
             except Exception:
                 pass
 
+    def shutdown(self) -> None:
+        """Stop all voice activity, cancel pending work, and join workers.
+
+        Must be called when disabling voice and during coordinator shutdown.
+        After this returns, no microphone capture should remain active
+        and no late transcription should be submitted.
+        """
+        self._stop_recording.set()
+        self._stop_speaking.set()
+        if self._record_thread and self._record_thread.is_alive():
+            self._record_thread.join(timeout=3.0)
+        if self._speak_thread and self._speak_thread.is_alive():
+            self._speak_thread.join(timeout=3.0)
+        self._set_state(VoiceState.IDLE)
+
     def warmup(self) -> None:
         """Pre-load models in background."""
         self._stt.warmup()
