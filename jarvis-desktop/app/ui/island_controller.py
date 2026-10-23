@@ -163,13 +163,23 @@ class IslandController(QObject):
             self._stream_buf.append(text)
             if not self._stream_timer.isActive():
                 self._stream_timer.start()
+            # Mark that we are currently in a streaming response for this turn
+            self._streaming = True
             return
+        # A completed assistant response has arrived.
+        # If we were streaming, mark the turn as no longer streaming.
+        if role == "jarvis":
+            was_streaming = self._streaming
+            self._streaming = False
+        else:
+            was_streaming = False
         # Flush pending stream text before an ordered message so the transcript
         # never interleaves.
         had_stream = self._flush_stream()
-        # The coordinator emits streamed chunks AND then the full response text;
-        # drop the duplicate so the reply is not shown twice.
-        if role == "jarvis" and had_stream:
+        # The coordinator emits streamed chunks AND then the full response text.
+        # If we were streaming, the full response is a duplicate of the
+        # coalesced chunks; skip it. Otherwise show it.
+        if role == "jarvis" and was_streaming:
             return
         self.chat_message.emit(role, text)
         if role == "user":

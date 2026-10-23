@@ -195,8 +195,7 @@ class IslandWindow(QWidget):
 
         settings = load()
         coord = AppCoordinator(mode="agent", confirmation_handler=self._confirm)
-        if settings.get("voice_enabled", True):
-            coord.set_voice_enabled(True)
+        coord.set_voice_enabled(bool(settings.get("voice_enabled", True)))
         if settings.get("model"):
             coord.set_model(settings["model"])
         coord.start()
@@ -206,19 +205,25 @@ class IslandWindow(QWidget):
         """Approval handler — runs on the agent worker thread.
 
         The request is marshalled to the GUI thread with a queued signal: a
-        Python callable is not a valid QMetaObject slot. There is no silent
-        timeout — the call blocks until the operator decides, or until the
-        island is hidden/quit (which denies).
+        Python callable is not a valid QMetaObject slot. A bounded wait
+        prevents the GUI from hanging if no decision is ever delivered.
+
+        Deny after 10 seconds or on GUI shutdown, whichever comes first.
         """
         import time
 
         result: list[str] = []
         self._approval_result = result
         self._approval_requested.emit(tool_name, arguments)
+        timeout = 10.0  # 10-second timeout
+        start = time.time()
         while not result:
             if self._quitting:
                 return "deny"
-            time.sleep(0.02)
+            remaining = timeout - (time.time() - start)
+            if remaining <= 0:
+                return "deny"
+            time.sleep(min(remaining, 0.1))
         return result[0]
 
     def _show_approval(self, tool_name: str, arguments: dict) -> None:

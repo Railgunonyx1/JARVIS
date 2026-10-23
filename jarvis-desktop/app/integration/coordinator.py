@@ -237,8 +237,6 @@ class AppCoordinator(QObject):
             self._buffer = ""
             self.chat_message.emit("jarvis", f"[Error: {response.error}]")
             self._voice_turn_active = False
-            self.chat_message.emit("jarvis", f"[Error: {response.error}]")
-            self._voice_turn_active = False
             if self._voice and self._voice.state == VoiceState.THINKING:
                 self._voice._set_state(VoiceState.IDLE)
         self._set_state(AppState.IDLE)
