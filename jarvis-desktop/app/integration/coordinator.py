@@ -92,6 +92,7 @@ class AppCoordinator(QObject):
         self._gesture_active = False
         self._workspace_visible = False
         self._voice_turn_active = False
+        self._voice_enabled = True  # voice enabled by default; ChatWindow.start_backend() may disable it
         self._running = False
 
     @property
@@ -141,16 +142,23 @@ class AppCoordinator(QObject):
         self._backend.response_ready.connect(self._on_backend_response)
         self._backend.status_changed.connect(self._on_backend_status)
         self._backend.state_changed.connect(self._on_backend_state)
-        self._backend.start(wait=False)
+        # Apply pending model request if any
+        if self._pending_model:
+            self._backend.set_model(self._pending_model)
+            self._pending_model = ""
 
-        # Voice
-        self._voice = VoiceManager(
-            agent_backend=self._backend,
-            on_state_change=self._on_voice_state,
-            on_transcription=self._on_voice_transcription,
-            on_response=self._on_voice_response,
-        )
-        self._voice.warmup()
+        # Voice: only initialize if voice is enabled
+        if self._voice_enabled:
+            self._voice = VoiceManager(
+                agent_backend=self._backend,
+                on_state_change=self._on_voice_state,
+                on_transcription=self._on_voice_transcription,
+                on_response=self._on_voice_response,
+            )
+            self._voice.warmup()
+
+        # Connect backend signals to coordinator methods
+        self._backend.start(wait=False)
 
         # Actions
         self._actions = DesktopActionLayer(
@@ -202,14 +210,15 @@ class AppCoordinator(QObject):
         if response.success and self._buffer:
             # Commit the buffered stream as the single final message,
             # then clear the buffer so the next turn starts clean.
+            buffered = self._buffer  # save before clearing
             self.chat_message.emit("jarvis", self._buffer)
             self._buffer = ""
             if self._voice_turn_active:
                 if self._voice:
                     if self._voice.state == VoiceState.IDLE:
-                        self._voice.speak(self._buffer)
+                        self._voice.speak(buffered)
                     elif self._voice.state == VoiceState.THINKING:
-                        self._voice.speak(self._buffer)
+                        self._voice.speak(buffered)
                 self._voice_turn_active = False
         elif response.success:
             self.chat_message.emit("jarvis", response.text)
@@ -244,6 +253,7 @@ class AppCoordinator(QObject):
 
     def set_voice_enabled(self, enabled: bool) -> None:
         """Enable or disable the voice subsystem."""
+        self._voice_enabled = enabled
         if enabled and not self._voice:
             self._voice = VoiceManager(
                 agent_backend=self._backend,
@@ -256,10 +266,15 @@ class AppCoordinator(QObject):
             self._voice.stop_speaking()
             self._voice = None
 
+    # Pending model: applied after backend initialization
+    _pending_model: str | None = ""
+
     def set_model(self, model: str) -> None:
         """Apply a model selection to the backend."""
         if self._backend and model:
             self._backend.set_model(model)
+        elif model:
+            self._pending_model = model
 
     def stop_speaking(self) -> None:
         """Interrupt TTS."""
