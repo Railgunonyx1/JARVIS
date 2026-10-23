@@ -264,8 +264,7 @@ class ChatWindow(QMainWindow):
 
         settings = load()
         self._coordinator = AppCoordinator(mode=mode, confirmation_handler=self._confirm)
-        if settings.get("voice_enabled", True):
-            self._coordinator.set_voice_enabled(True)
+        self._coordinator.set_voice_enabled(settings.get("voice_enabled", True))
         if settings.get("model"):
             self._coordinator.set_model(settings["model"])
         self._coordinator.state_changed.connect(self._on_app_state)
@@ -505,13 +504,21 @@ class ChatWindow(QMainWindow):
 
         A Python callable is not a valid QMetaObject slot (TypeError in PySide6),
         so marshal with a queued signal and wait for the modal answer.
+
+        Bounded wait: deny after 10 seconds or on GUI shutdown.
         """
         import time
 
         result: list[str] = []
         self._approval_result = result
         self._approval_requested.emit(tool_name, arguments)
+        timeout = 10.0  # 10-second timeout
+        start = time.time()
         while not result:
+            if time.time() - start > timeout:
+                # Timeout: deny the action
+                result.append("deny")
+                break
             time.sleep(0.02)
         return result[0]
 

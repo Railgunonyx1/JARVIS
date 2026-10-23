@@ -93,6 +93,8 @@ class AppCoordinator(QObject):
         self._workspace_visible = False
         self._voice_turn_active = False
         self._voice_enabled = True  # voice enabled by default; ChatWindow.start_backend() may disable it
+        self._buffer = ""  # per-turn chunk buffer
+        self._pending_model: str | None = ""  # model selected before backend init
         self._running = False
 
     @property
@@ -199,8 +201,7 @@ class AppCoordinator(QObject):
         self.chat_message.emit("user", text)
         self._backend.send_message(text)
 
-    # Per-turn chunk buffer: accumulated during streaming, committed once at response.
-    _buffer: str = ""
+
 
     def _on_backend_chunk(self, chunk: str) -> None:
         self._buffer += chunk
@@ -266,8 +267,7 @@ class AppCoordinator(QObject):
             self._voice.stop_speaking()
             self._voice = None
 
-    # Pending model: applied after backend initialization
-    _pending_model: str | None = ""
+
 
     def set_model(self, model: str) -> None:
         """Apply a model selection to the backend."""
