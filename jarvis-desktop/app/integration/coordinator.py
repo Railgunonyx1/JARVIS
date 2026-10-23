@@ -191,11 +191,27 @@ class AppCoordinator(QObject):
         self.chat_message.emit("user", text)
         self._backend.send_message(text)
 
+    # Per-turn chunk buffer: accumulated during streaming, committed once at response.
+    _buffer: str = ""
+
     def _on_backend_chunk(self, chunk: str) -> None:
+        self._buffer += chunk
         self.chat_message.emit("chunk", chunk)
 
     def _on_backend_response(self, response: AgentResponse) -> None:
-        if response.success:
+        if response.success and self._buffer:
+            # Commit the buffered stream as the single final message,
+            # then clear the buffer so the next turn starts clean.
+            self.chat_message.emit("jarvis", self._buffer)
+            self._buffer = ""
+            if self._voice_turn_active:
+                if self._voice:
+                    if self._voice.state == VoiceState.IDLE:
+                        self._voice.speak(self._buffer)
+                    elif self._voice.state == VoiceState.THINKING:
+                        self._voice.speak(self._buffer)
+                self._voice_turn_active = False
+        elif response.success:
             self.chat_message.emit("jarvis", response.text)
             if self._voice_turn_active:
                 if self._voice:
