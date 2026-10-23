@@ -156,12 +156,14 @@ class ChatWindow(QMainWindow):
                 color: #1D1D1F;
                 font-size: 17px;
                 font-weight: 600;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
             }
             #status {
                 color: #8E8E93;
                 font-size: 12px;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
             }
             QPushButton {
                 background: #F5F5F7;
@@ -171,7 +173,8 @@ class ChatWindow(QMainWindow):
                 padding: 0 16px;
                 font-size: 13px;
                 font-weight: 500;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
                 min-height: 34px;
             }
             QPushButton:hover {
@@ -206,7 +209,8 @@ class ChatWindow(QMainWindow):
                 font-size: 14px;
                 line-height: 1.5;
                 padding: 16px;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
             }
             #input_bar {
                 background: #F5F5F7;
@@ -219,7 +223,8 @@ class ChatWindow(QMainWindow):
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-size: 14px;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
             }
             #input_field:focus {
                 border-color: #007AFF;
@@ -315,7 +320,8 @@ class ChatWindow(QMainWindow):
                 color: #1D1D1F;
                 font-size: 13px;
                 font-weight: 500;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
             }
             QComboBox {
                 background: #FFFFFF;
@@ -324,13 +330,15 @@ class ChatWindow(QMainWindow):
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-size: 13px;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
                 min-height: 34px;
             }
             QCheckBox {
                 color: #1D1D1F;
                 font-size: 13px;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
                 spacing: 8px;
             }
             QCheckBox::indicator {
@@ -352,7 +360,8 @@ class ChatWindow(QMainWindow):
                 padding: 0 16px;
                 font-size: 13px;
                 font-weight: 500;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+                'Helvetica Neue', sans-serif;
                 min-height: 34px;
             }
             QPushButton:hover {
@@ -524,9 +533,8 @@ class ChatWindow(QMainWindow):
 
     def _show_approval(self, tool_name: str, arguments: dict) -> None:
         """GUI thread: modal confirmation with a redacted argument preview."""
-        from PySide6.QtWidgets import QMessageBox
-
         from app.ui.conversation_panel import ConversationPanel
+        from PySide6.QtWidgets import QMessageBox
 
         prompt = f"Allow JARVIS to execute: {tool_name}?"
         preview = ConversationPanel._preview(arguments)

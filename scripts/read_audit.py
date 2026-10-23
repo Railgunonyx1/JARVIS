@@ -2,13 +2,13 @@
 import json
 
 # Read bandit after
-with open(r'C:\Users\aayan\Desktop\JARVIS\audits\bandit_after.json') as f:
+with open(os.path.join(os.path.dirname(__file__.replace('scripts', 'audits')), 'bandit_after.json')) as f:
     d = json.load(f)
 t = d['metrics']['_totals']
 print(f"BANDIT AFTER: HIGH={t['SEVERITY.HIGH']} MEDIUM={t['SEVERITY.MEDIUM']} LOW={t['SEVERITY.LOW']} loc={t['loc']}")
 
 # Read bandit before (in audits folder)
-with open(r'C:\Users\aayan\Desktop\JARVIS\audits\bandit_before.json') as f:
+with open(os.path.join(os.path.dirname(__file__.replace('scripts', 'audits')), 'bandit_before.json')) as f:
     d2 = json.load(f)
 t2 = d2['metrics']['_totals']
 print(f"BANDIT BEFORE: HIGH={t2['SEVERITY.HIGH']} MEDIUM={t2['SEVERITY.MEDIUM']} LOW={t2['SEVERITY.LOW']} loc={t2['loc']}")

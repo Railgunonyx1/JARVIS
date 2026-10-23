@@ -119,7 +119,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         """Enforce bearer-token auth when a token is configured."""
         if self.auth_token is None:
             return True
-        expected = f"Bearer {self.auth_token}"
+        auth_header = self.headers.get("Authorization", "")
+        return auth_header == expected
 
     def _host_ok(self) -> bool:
         """Reject requests whose Host header is not loopback.

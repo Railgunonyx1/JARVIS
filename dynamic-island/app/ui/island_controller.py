@@ -87,6 +87,7 @@ class IslandController(QObject):
         self._connected = False
         self._backend_ready = False
         self._stream_buf: list[str] = []
+        self._streaming = False  # track active streaming turn
         self._stream_timer = QTimer(self)
         self._stream_timer.setSingleShot(True)
         self._stream_timer.setInterval(_CHUNK_FLUSH_MS)
@@ -175,7 +176,7 @@ class IslandController(QObject):
             was_streaming = False
         # Flush pending stream text before an ordered message so the transcript
         # never interleaves.
-        had_stream = self._flush_stream()
+        self._flush_stream()
         # The coordinator emits streamed chunks AND then the full response text.
         # If we were streaming, the full response is a duplicate of the
         # coalesced chunks; skip it. Otherwise show it.
