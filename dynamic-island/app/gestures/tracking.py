@@ -105,12 +105,23 @@ class HandTracker:
 
     def stop(self) -> None:
         """Stop tracking and release resources."""
+        import threading
+        if threading.current_thread() is getattr(self, "_thread", None):
+            self._running = False
+            # Cannot join self; let loop exit and resources cleaned up by next call or GC
+            return
         self._running = False
         if self._thread:
-            self._thread.join(timeout=2.0)
+            try:
+                self._thread.join(timeout=2.0)
+            except Exception:
+                pass
             self._thread = None
         if self._mp:
-            self._mp.close()
+            try:
+                self._mp.close()
+            except Exception:
+                pass
             self._mp = None
         with self._lock:
             self._hands = []

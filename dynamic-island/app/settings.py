@@ -36,12 +36,21 @@ def save(settings: dict) -> None:
         SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
         target = SETTINGS_FILE
         tmp = SETTINGS_FILE.with_suffix(".tmp")
-        tmp.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        f = None
         try:
-            tmp.flush()
-            os.fsync(tmp.fileno())
-        except Exception:
-            pass
+            f = open(tmp, "w", encoding="utf-8")
+            f.write(json.dumps(settings, indent=2))
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        finally:
+            if f is not None:
+                try:
+                    f.close()
+                except Exception:
+                    pass
         os.replace(tmp, target)
         logger.info("Settings saved to %s", SETTINGS_FILE)
     except OSError as e:

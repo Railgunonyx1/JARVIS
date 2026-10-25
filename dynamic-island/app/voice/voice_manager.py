@@ -218,11 +218,16 @@ class VoiceManager:
                 self._tts.play(text, block=True)
                 # Only set IDLE if we weren't interrupted
                 if not self._stop_speaking.is_set() and not getattr(self, "_shutdown", False):
-                    self._set_state(VoiceState.IDLE)
+                    try:
+                        self._set_state(VoiceState.IDLE)
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.warning("TTS playback failed: %s", e)
-                # Do NOT change state on failure - keep current state
-                # so the conversation continues even if voice output fails
+                try:
+                    self._set_state(VoiceState.IDLE)
+                except Exception:
+                    pass
 
         self._tts_thread = threading.Thread(target=_speak, daemon=True, name="jarvis-voice-tts")
         self._speak_thread = self._tts_thread

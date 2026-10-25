@@ -151,17 +151,24 @@ class AppCoordinator(QObject):
         with self._state_lock:
             self._state = state
             # Track per-subsystem state
-            if state == AppState.SPEAKING or state == AppState.LISTENING or state == AppState.CHATTING:
-                self._voice_state = VoiceState(state)
+            if state == AppState.SPEAKING:
+                self._voice_state = VoiceState.SPEAKING
+            elif state == AppState.LISTENING:
+                self._voice_state = VoiceState.LISTENING
+            elif state == AppState.CHATTING:
+                # Chat is a backend activity, not a VoiceState
+                pass
             elif state == AppState.GESTURE_ACTIVE:
                 self._gesture_state = True
             elif state == AppState.WORKSPACE_OPEN:
                 self._workspace_state = True
             elif state == AppState.IDLE:
-                # Only reset voice/gesture/workspace state if no subsystem is active
-                # This prevents one subsystem's IDLE from overriding another's active state
-                pass  # state will be derived from subsystem states in the property
-        self.state_changed.emit(state)
+                # Don't force-reset here; derive from subsystem states
+                pass
+        try:
+            self.state_changed.emit(state)
+        except Exception:
+            pass
 
     def start(self) -> None:
         """Initialize and start all subsystems."""
@@ -255,38 +262,42 @@ class AppCoordinator(QObject):
         self.chat_message.emit("chunk", chunk)
 
     def _on_backend_response(self, response: AgentResponse) -> None:
-        if response.success and self._buffer:
-            # Commit the buffered stream as the single final message,
-            # then clear the buffer so the next turn starts clean.
-            buffered = self._buffer  # save before clearing
-            self.chat_message.emit("jarvis", self._buffer)
-            self._buffer = ""
-            if self._voice_turn_active:
-                if self._voice:
-                    if self._voice.state == VoiceState.IDLE:
-                        self._voice.speak(buffered)
-                    elif self._voice.state == VoiceState.THINKING:
-                        self._voice.speak(buffered)
+        try:
+            if response.success and self._buffer:
+                buffered = self._buffer
+                self.chat_message.emit("jarvis", self._buffer)
+                self._buffer = ""
+                if self._voice_turn_active and self._voice:
+                    try:
+                        if self._voice.state in (VoiceState.IDLE, VoiceState.THINKING):
+                            self._voice.speak(buffered)
+                    except Exception:
+                        pass
                 self._voice_turn_active = False
-        elif response.success:
-            self.chat_message.emit("jarvis", response.text)
-            # Reset buffer on successful non-streamed response
-            self._buffer = ""
-            if self._voice_turn_active:
-                if self._voice:
-                    if self._voice.state == VoiceState.IDLE:
-                        self._voice.speak(response.text)
-                    elif self._voice.state == VoiceState.THINKING:
-                        self._voice.speak(response.text)
+            elif response.success:
+                self.chat_message.emit("jarvis", response.text)
+                self._buffer = ""
+                if self._voice_turn_active and self._voice:
+                    try:
+                        if self._voice.state in (VoiceState.IDLE, VoiceState.THINKING):
+                            self._voice.speak(response.text)
+                    except Exception:
+                        pass
                 self._voice_turn_active = False
-        else:
-            # Reset buffer on error so the next turn starts clean
-            self._buffer = ""
-            self.chat_message.emit("jarvis", f"[Error: {response.error}]")
-            self._voice_turn_active = False
-            if self._voice and self._voice.state == VoiceState.THINKING:
-                self._voice._set_state(VoiceState.IDLE)
-        self._set_state(AppState.IDLE)
+            else:
+                self._buffer = ""
+                self.chat_message.emit("jarvis", f"[Error: {response.error}]")
+                self._voice_turn_active = False
+                if self._voice:
+                    try:
+                        if getattr(self._voice.state, 'value', self._voice.state) == VoiceState.THINKING.value:
+                            self._voice._set_state(VoiceState.IDLE)
+                    except Exception:
+                        pass
+        finally:
+            self._gesture_state = bool(getattr(self, '_gesture_active', False))
+            self._workspace_state = bool(getattr(self, '_workspace_visible', False) and getattr(self, '_workspace', None) and getattr(self._workspace, 'is_visible', False))
+            self._set_state(AppState.IDLE)
 
     def _on_backend_status(self, status: str) -> None:
         """Forward backend status to UI (kept for signal compatibility)."""
@@ -389,17 +400,19 @@ class AppCoordinator(QObject):
         self._camera = None
         self._recognizer = None
         self._gesture_active = False
+        self._gesture_state = False
         # Stop tracker/camera without joining from tracker thread if possible
         try:
             if tracker:
-                tracker.stop()
-        except RuntimeError:
-            # If called from tracker thread, schedule stop on next tick
-            try:
-                from PySide6.QtCore import QTimer
-                QTimer.singleShot(0, tracker.stop)
-            except Exception:
-                pass
+                import threading
+                if threading.current_thread() is getattr(tracker, "_thread", None):
+                    try:
+                        from PySide6.QtCore import QTimer
+                        QTimer.singleShot(0, tracker.stop)
+                    except Exception:
+                        pass
+                else:
+                    tracker.stop()
         except Exception:
             pass
         try:
