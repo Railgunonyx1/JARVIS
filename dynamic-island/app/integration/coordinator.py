@@ -542,15 +542,17 @@ class AppCoordinator(QObject):
         """Toggle 3D workspace on/off."""
         if not self._workspace:
             return
+        # Use the public load() result; do NOT mutate private _loaded to fake success.
         try:
-            if not getattr(self._workspace, "_loaded", False):
-                try:
-                    self._workspace.load()
-                    self._workspace._loaded = True
-                except Exception:
-                    pass
+            load_ok = self._workspace.load()
         except Exception:
-            pass
+            load_ok = False
+        if not load_ok:
+            # QML load failed — keep workspace closed and surface a useful error.
+            # Do NOT set _workspace_visible or _set_state(WORKSPACE_OPEN).
+            logger.warning("Workspace3D load() returned False; keeping workspace closed")
+            return
+        # load() succeeded; now toggle visibility
         if getattr(self._workspace, "is_visible", False):
             try:
                 self._workspace.hide()
