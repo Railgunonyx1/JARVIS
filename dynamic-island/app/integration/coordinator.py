@@ -104,28 +104,23 @@ class AppCoordinator(QObject):
 
     @property
     def state(self) -> AppState:
-        """Derive combined state from per-subsystem trackers.
-
-        Priority: CHATTING > SPEAKING > LISTENING > GESTURE_ACTIVE > WORKSPACE_OPEN > IDLE
-        This prevents a single _state variable from overriding subsystem activity.
-        """
+        """Derive combined state from per-subsystem trackers."""
         with self._state_lock:
-            # Check voice state first (highest priority)
-            if self._voice_state != VoiceState.IDLE:
-                return AppState.SPEAKING if self._voice_state == VoiceState.SPEAKING else                        AppState.LISTENING if self._voice_state == VoiceState.LISTENING else                        AppState.CHATTING
-            # Then gesture
-            if self._gesture_state:
-                return AppState.GESTURE_ACTIVE
-            # Then workspace
-            if self._workspace_state:
-                if self._voice_state == VoiceState.SPEAKING:
-                    return AppState.SPEAKING
-                if self._voice_state == VoiceState.LISTENING:
-                    return AppState.LISTENING
-                if self._voice_state == VoiceState.CHATTING:
-                    return AppState.CHATTING
-            # Default
-            return AppState.IDLE
+            voice = self._voice_state
+            gesture = self._gesture_state
+            workspace = self._workspace_state
+            backend_busy = getattr(self, "_voice_turn_active", False) or (self._backend and getattr(self._backend, "state", None) and str(getattr(self._backend.state, "value", self._backend.state)) in ("running",))
+        if voice == VoiceState.SPEAKING:
+            return AppState.SPEAKING
+        if voice == VoiceState.LISTENING or voice == VoiceState.TRANSCRIBING or voice == VoiceState.THINKING:
+            return AppState.LISTENING if voice == VoiceState.LISTENING else AppState.CHATTING
+        if gesture:
+            return AppState.GESTURE_ACTIVE
+        if workspace:
+            return AppState.WORKSPACE_OPEN
+        if backend_busy:
+            return AppState.CHATTING
+        return AppState.IDLE
 
     @property
     def is_running(self) -> bool:
@@ -218,11 +213,6 @@ class AppCoordinator(QObject):
         # Workspace: lazy-load to reduce startup cost
         try:
             self._workspace = Workspace3D()
-            # Defer actual load; call load() only when first shown
-            try:
-                self._workspace.load()
-            except Exception:
-                pass
         except Exception:
             self._workspace = None
 
@@ -552,12 +542,27 @@ class AppCoordinator(QObject):
         """Toggle 3D workspace on/off."""
         if not self._workspace:
             return
-        if self._workspace.is_visible:
-            self._workspace.hide()
+        try:
+            if not getattr(self._workspace, "_loaded", False):
+                try:
+                    self._workspace.load()
+                    self._workspace._loaded = True
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if getattr(self._workspace, "is_visible", False):
+            try:
+                self._workspace.hide()
+            except Exception:
+                pass
             self._workspace_visible = False
             self._set_state(AppState.IDLE)
         else:
-            self._workspace.show()
+            try:
+                self._workspace.show()
+            except Exception:
+                pass
             self._workspace_visible = True
             self._set_state(AppState.WORKSPACE_OPEN)
 

@@ -100,13 +100,21 @@ mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
 
 # Install the Python launchers — no shell wrappers.
 echo "Installing launchers..."
-cp "$REPO_ROOT/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
-sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop"
-chmod +x "$BIN_DIR/jarvis-desktop"
+if [ -f "$REPO_ROOT/scripts/jarvis-desktop-launcher.py" ]; then
+    cp "$REPO_ROOT/scripts/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
+elif [ -f "$REPO_ROOT/jarvis-desktop-launcher.py" ]; then
+    cp "$REPO_ROOT/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
+fi
+[ -f "$BIN_DIR/jarvis-desktop" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop" && chmod +x "$BIN_DIR/jarvis-desktop"
 
-cp "$REPO_ROOT/jarvis-desktop-island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
-sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop-island"
-chmod +x "$BIN_DIR/jarvis-desktop-island"
+if [ -f "$REPO_ROOT/scripts/island-launcher.py" ]; then
+    cp "$REPO_ROOT/scripts/island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
+    cp "$REPO_ROOT/scripts/island-launcher.py" "$BIN_DIR/jarvis-island" 2>/dev/null || true
+elif [ -f "$REPO_ROOT/jarvis-desktop-island-launcher.py" ]; then
+    cp "$REPO_ROOT/jarvis-desktop-island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
+fi
+[ -f "$BIN_DIR/jarvis-desktop-island" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop-island" && chmod +x "$BIN_DIR/jarvis-desktop-island"
+[ -f "$BIN_DIR/jarvis-island" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-island" && chmod +x "$BIN_DIR/jarvis-island" 2>/dev/null || true
 
 # Bake the chosen install root into the launchers' fallback path so a custom
 # INSTALL_DIR resolves correctly (they otherwise default to ~/.local/share).
