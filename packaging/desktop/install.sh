@@ -95,26 +95,28 @@ tar -C "$REPO_ROOT" \
   --exclude='./pyproject.toml' \
   -cf - . | tar -C "$INSTALL_DIR/jarvis-repo" -xf -
 
-# Ensure required subdirectories exist even if empty after exclusions
-mkdir -p "$INSTALL_DIR/jarvis-repo/jarvis-desktop/app"
-
 # Install the Python launchers — no shell wrappers.
 echo "Installing launchers..."
+
+# Install jarvis-desktop launcher — required, fail if missing
 if [ -f "$REPO_ROOT/scripts/jarvis-desktop-launcher.py" ]; then
     cp "$REPO_ROOT/scripts/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
-elif [ -f "$REPO_ROOT/jarvis-desktop-launcher.py" ]; then
-    cp "$REPO_ROOT/jarvis-desktop-launcher.py" "$BIN_DIR/jarvis-desktop"
+else
+    echo "ERROR: jarvis-desktop-launcher.py not found at $REPO_ROOT/scripts/"
+    exit 1
 fi
 [ -f "$BIN_DIR/jarvis-desktop" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop" && chmod +x "$BIN_DIR/jarvis-desktop"
 
+# Install island launcher — required, fail if missing
 if [ -f "$REPO_ROOT/scripts/island-launcher.py" ]; then
     cp "$REPO_ROOT/scripts/island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
-    cp "$REPO_ROOT/scripts/island-launcher.py" "$BIN_DIR/jarvis-island" 2>/dev/null || true
-elif [ -f "$REPO_ROOT/jarvis-desktop-island-launcher.py" ]; then
-    cp "$REPO_ROOT/jarvis-desktop-island-launcher.py" "$BIN_DIR/jarvis-desktop-island"
+    cp "$REPO_ROOT/scripts/island-launcher.py" "$BIN_DIR/jarvis-island"
+else
+    echo "ERROR: island-launcher.py not found at $REPO_ROOT/scripts/"
+    exit 1
 fi
 [ -f "$BIN_DIR/jarvis-desktop-island" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-desktop-island" && chmod +x "$BIN_DIR/jarvis-desktop-island"
-[ -f "$BIN_DIR/jarvis-island" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-island" && chmod +x "$BIN_DIR/jarvis-island" 2>/dev/null || true
+[ -f "$BIN_DIR/jarvis-island" ] && sed -i "1s|.*|#!$VENV_DIR/bin/python|" "$BIN_DIR/jarvis-island" && chmod +x "$BIN_DIR/jarvis-island"
 
 # Bake the chosen install root into the launchers' fallback path so a custom
 # INSTALL_DIR resolves correctly (they otherwise default to ~/.local/share).
