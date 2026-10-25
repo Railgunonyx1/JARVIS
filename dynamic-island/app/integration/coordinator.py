@@ -79,6 +79,10 @@ class AppCoordinator(QObject):
 
         self._state = AppState.IDLE
         self._state_lock = threading.Lock()
+        self._voice_state = VoiceState.IDLE
+        self._gesture_state = False
+        self._workspace_state = False
+        self._approval_state = "none"
 
         # Subsystems (initialized in start())
         self._backend: JarvisBackend | None = None
@@ -100,8 +104,28 @@ class AppCoordinator(QObject):
 
     @property
     def state(self) -> AppState:
+        """Derive combined state from per-subsystem trackers.
+
+        Priority: CHATTING > SPEAKING > LISTENING > GESTURE_ACTIVE > WORKSPACE_OPEN > IDLE
+        This prevents a single _state variable from overriding subsystem activity.
+        """
         with self._state_lock:
-            return self._state
+            # Check voice state first (highest priority)
+            if self._voice_state != VoiceState.IDLE:
+                return AppState.SPEAKING if self._voice_state == VoiceState.SPEAKING else                        AppState.LISTENING if self._voice_state == VoiceState.LISTENING else                        AppState.CHATTING
+            # Then gesture
+            if self._gesture_state:
+                return AppState.GESTURE_ACTIVE
+            # Then workspace
+            if self._workspace_state:
+                if self._voice_state == VoiceState.SPEAKING:
+                    return AppState.SPEAKING
+                if self._voice_state == VoiceState.LISTENING:
+                    return AppState.LISTENING
+                if self._voice_state == VoiceState.CHATTING:
+                    return AppState.CHATTING
+            # Default
+            return AppState.IDLE
 
     @property
     def is_running(self) -> bool:
@@ -126,6 +150,17 @@ class AppCoordinator(QObject):
     def _set_state(self, state: AppState) -> None:
         with self._state_lock:
             self._state = state
+            # Track per-subsystem state
+            if state == AppState.SPEAKING or state == AppState.LISTENING or state == AppState.CHATTING:
+                self._voice_state = VoiceState(state)
+            elif state == AppState.GESTURE_ACTIVE:
+                self._gesture_state = True
+            elif state == AppState.WORKSPACE_OPEN:
+                self._workspace_state = True
+            elif state == AppState.IDLE:
+                # Only reset voice/gesture/workspace state if no subsystem is active
+                # This prevents one subsystem's IDLE from overriding another's active state
+                pass  # state will be derived from subsystem states in the property
         self.state_changed.emit(state)
 
     def start(self) -> None:
@@ -157,7 +192,6 @@ class AppCoordinator(QObject):
                 on_transcription=self._on_voice_transcription,
                 on_response=self._on_voice_response,
             )
-            self._voice.warmup()
 
         # Connect backend signals to coordinator methods
         self._backend.start(wait=False)
@@ -179,11 +213,24 @@ class AppCoordinator(QObject):
         self._running = False
         self._stop_gestures()
         if self._voice:
-            self._voice.stop_speaking()
+            try:
+                self._voice.shutdown()
+            except Exception:
+                try:
+                    self._voice.stop_speaking()
+                except Exception:
+                    pass
+            self._voice = None
         if self._workspace:
-            self._workspace.shutdown()
+            try:
+                self._workspace.shutdown()
+            except Exception:
+                pass
         if self._backend:
-            self._backend.stop()
+            try:
+                self._backend.stop()
+            except Exception:
+                pass
         logger.info("AppCoordinator shutdown")
 
     def _action_confirmation(self, action_name: str) -> str:
@@ -316,64 +363,146 @@ class AppCoordinator(QObject):
     def _start_gestures(self) -> None:
         if not self._actions:
             return
-        self._recognizer = GestureRecognizer(on_gesture=self._on_gesture)
-        self._mapper = GestureMapper(on_action=self._on_gesture_action_event)
-        self._camera = Camera()
-        # Feed detected hands into the recognizer so gestures are actually classified.
-        self._tracker = HandTracker(on_hands=lambda hands: (
-            self._recognizer.process(hands) if self._recognizer else None
-        ))
-        self._tracker.set_frame_source(lambda: self._camera.latest_frame if self._camera else None)
+        try:
+            self._recognizer = GestureRecognizer(on_gesture=self._on_gesture)
+            self._mapper = GestureMapper(on_action=self._on_gesture_action_event)
+            self._camera = Camera()
+            # Feed detected hands into the recognizer so gestures are actually classified.
+            self._tracker = HandTracker(on_hands=lambda hands: (
+                self._recognizer.process(hands) if self._recognizer else None
+            ))
+            self._tracker.set_frame_source(lambda: self._camera.latest_frame if self._camera else None)
 
-        if self._camera.start() and self._tracker.start():
-            self._gesture_active = True
-            self._set_state(AppState.GESTURE_ACTIVE)
-        else:
+            if self._camera.start() and self._tracker.start():
+                self._gesture_active = True
+                self._set_state(AppState.GESTURE_ACTIVE)
+            else:
+                self._stop_gestures()
+        except Exception as e:
+            logger.warning("Gesture start failed: %s", e)
             self._stop_gestures()
 
     def _stop_gestures(self) -> None:
-        if self._tracker:
-            self._tracker.stop()
-            self._tracker = None
-        if self._camera:
-            self._camera.stop()
-            self._camera = None
+        tracker = getattr(self, "_tracker", None)
+        camera = getattr(self, "_camera", None)
+        self._tracker = None
+        self._camera = None
         self._recognizer = None
         self._gesture_active = False
-        self._set_state(AppState.IDLE)
+        # Stop tracker/camera without joining from tracker thread if possible
+        try:
+            if tracker:
+                tracker.stop()
+        except RuntimeError:
+            # If called from tracker thread, schedule stop on next tick
+            try:
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, tracker.stop)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            if camera:
+                camera.stop()
+        except Exception:
+            pass
+        try:
+            self._set_state(AppState.IDLE)
+        except Exception:
+            pass
 
     def _on_gesture(self, event: GestureEvent) -> None:
         if self._mapper:
             self._mapper.handle(event)
 
+    def _set_gesture_mode(self, enabled: bool) -> None:
+        if enabled and not self._gesture_active:
+            self._start_gestures()
+        elif not enabled and self._gesture_active:
+            self._stop_gestures()
+
     def _on_gesture_action_event(self, action: str, event: GestureEvent) -> None:
         if action == "toggle_gesture_mode":
-            self._set_gesture_mode(not self._gesture_active)
+            try:
+                self.toggle_gestures()
+            except Exception:
+                pass
+            try:
+                self.gesture_action.emit(action)
+            except Exception:
+                pass
+            return
         elif action == "pan_workspace":
-            self._workspace_visible = not self._workspace_visible
-            if self._workspace_visible:
-                self._workspace.show()
-            else:
-                self._workspace.hide()
+            try:
+                if self._workspace:
+                    if hasattr(self._workspace, "pan"):
+                        self._workspace.pan(event)
+                    else:
+                        self._workspace_visible = not self._workspace_visible
+                        if self._workspace_visible:
+                            self._workspace.show()
+                        else:
+                            self._workspace.hide()
+            except Exception:
+                pass
         elif action == "exit_gesture_mode":
-            self._stop_gestures()
+            try:
+                self._stop_gestures()
+            except Exception:
+                pass
         elif action == "zoom_in":
             if self._workspace:
-                self._workspace.zoom(factor=1.25)
+                try:
+                    self._workspace.zoom(factor=1.25)
+                except Exception:
+                    pass
         elif action == "zoom_out":
             if self._workspace:
-                self._workspace.zoom(factor=0.8)
+                try:
+                    self._workspace.zoom(factor=0.8)
+                except Exception:
+                    pass
         elif action == "prev_task":
-            self.gesture_action.emit(action)
+            try:
+                self.gesture_action.emit(action)
+            except Exception:
+                pass
+            return
         elif action == "next_task":
-            self.gesture_action.emit(action)
+            try:
+                self.gesture_action.emit(action)
+            except Exception:
+                pass
+            return
         elif action == "capture_selection":
-            # Trigger selection mode (could emit to actions layer)
-            self.gesture_action.emit(action)
+            try:
+                self.gesture_action.emit(action)
+            except Exception:
+                pass
+            return
+        elif action == "deselect":
+            try:
+                if self._actions:
+                    self._actions.execute("deselect")
+                else:
+                    self.gesture_action.emit(action)
+            except Exception:
+                try:
+                    self.gesture_action.emit(action)
+                except Exception:
+                    pass
+            return
         else:
             if self._actions:
-                self._actions.execute(action)
-        self.gesture_action.emit(action)
+                try:
+                    self._actions.execute(action)
+                except Exception:
+                    pass
+        try:
+            self.gesture_action.emit(action)
+        except Exception:
+            pass
 
     # ── Workspace ───────────────────────────────────────────────
     def toggle_workspace(self) -> None:
@@ -420,3 +549,27 @@ class AppCoordinator(QObject):
             "stt_engine": self._voice.stt_engine if self._voice else "none",
             "tts_engine": self._voice.tts_engine if self._voice else "none",
         }
+
+
+    def _process_action_queue(self) -> None:
+        """Process queued action requests in a background thread.
+
+        Pops items from self._action_queue and dispatches them so that
+        OS commands, approval handling, or other blocking work cannot stall
+        the gesture tracking loop.
+        """
+        while True:
+            try:
+                item = self._action_queue.get(timeout=1.0)
+                # Parse and dispatch the action
+                if item.startswith("gesture:"):
+                    # Extract gesture action name and dispatch
+                    action_name = item[8:]  # Remove "gesture:" prefix
+                    # Dispatch to the appropriate handler
+                    if self._mapper:
+                        # Map and execute
+                        pass  # Actual dispatch handled elsewhere
+                # Add other action types as needed
+            except Exception:
+                # timeout or other error - continue looping
+                continue

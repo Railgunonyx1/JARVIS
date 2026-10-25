@@ -185,14 +185,26 @@ class TTSEngine:
                     pass
 
     def speak_to_file(self, text: str, filepath: str | Path | None = None) -> Path | None:
-        """Synthesize and save to a WAV file. Returns the path or None."""
+        """Synthesize and save to a file. Returns the path or None."""
         audio_bytes, mime = self.speak(text)
         if not audio_bytes:
             return None
         if filepath is None:
-            filepath = Path(tempfile.gettempdir()) / f"jarvis_tts_{int(time.time())}.wav"
+            # Use extension that matches the actual audio format
+            if mime and "mp3" in mime:
+                filepath = Path(tempfile.gettempdir()) / f"jarvis_tts_{int(time.time())}.mp3"
+            elif mime and "mpeg" in mime:
+                filepath = Path(tempfile.gettempdir()) / f"jarvis_tts_{int(time.time())}.mp3"
+            else:
+                filepath = Path(tempfile.gettempdir()) / f"jarvis_tts_{int(time.time())}.wav"
         else:
             filepath = Path(filepath)
+            # If no extension or extension doesn't match, adjust
+            if mime and "mp3" in mime or mime and "mpeg" in mime:
+                if filepath.suffix.lower() not in (".mp3",):
+                    filepath = filepath.with_suffix(".mp3")
+            elif filepath.suffix.lower() not in (".wav", ".mp3", ".ogg"):
+                filepath = filepath.with_suffix(".wav")
         filepath.write_bytes(audio_bytes)
         return filepath
 

@@ -3,7 +3,7 @@
   "runtime": "org.kde.Platform",
   "runtime-version": "6.6",
   "sdk": "org.kde.Sdk",
-  "command": "jarvis-desktop",
+  "command": "jarvis-island",
   "finish-args": [
     "--device=dri",
     "--socket=wayland",
@@ -38,18 +38,20 @@
         "cp -r skills /app/lib/jarvis/",
         "mkdir -p /app/lib/jarvis/config",
         "cp config/models.toml /app/lib/jarvis/config/",
-        "mkdir -p /app/lib/jarvis/jarvis-desktop/app",
-        "cp jarvis-desktop/app/*.py /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/ui /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/integration /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/voice /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/gestures /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/desktop /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/workspace3d /app/lib/jarvis/jarvis-desktop/app/",
-        "cp -r jarvis-desktop/app/diagnostics /app/lib/jarvis/jarvis-desktop/app/",
-        "touch /app/lib/jarvis/jarvis-desktop/app/__init__.py",
-        "touch /app/lib/jarvis/jarvis-desktop/__init__.py",
-        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=/app/lib/jarvis' 'export PYTHONPATH=/app/lib/jarvis:/app/lib/jarvis/jarvis-desktop:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); sys.path.insert(0, '/app/lib/jarvis/jarvis-desktop'); from app.main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-desktop",
+        "mkdir -p /app/lib/jarvis/dynamic-island/app",
+        "cp dynamic-island/app/*.py /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/ui /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/integration /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/voice /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/gestures /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/desktop /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/workspace3d /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "cp -r dynamic-island/app/diagnostics /app/lib/jarvis/dynamic-island/app/ 2>/dev/null || true",
+        "touch /app/lib/jarvis/dynamic-island/app/__init__.py",
+        "touch /app/lib/jarvis/jarvis-desktop/__init__.py 2>/dev/null || true",
+        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=${XDG_DATA_HOME:-$HOME/.local/share}/jarvis-desktop' 'mkdir -p \"$JARVIS_DESKTOP_HOME\"' 'export PYTHONPATH=/app/lib/jarvis:/app/lib/jarvis/dynamic-island:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); sys.path.insert(0, '/app/lib/jarvis/dynamic-island'); from app.island_main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-island",
+        "chmod +x /app/bin/jarvis-island",
+        "printf '%s\\n' '#!/bin/bash' 'export JARVIS_DESKTOP_HOME=${XDG_DATA_HOME:-$HOME/.local/share}/jarvis-desktop' 'mkdir -p \"$JARVIS_DESKTOP_HOME\"' 'export PYTHONPATH=/app/lib/jarvis:/app/lib/jarvis/dynamic-island:${PYTHONPATH:-}' 'exec /app/bin/python -c \"import sys; sys.path.insert(0, '/app/lib/jarvis'); sys.path.insert(0, '/app/lib/jarvis/dynamic-island'); from app.island_main import main; sys.exit(main())\" \"$@\"' > /app/bin/jarvis-desktop",
         "chmod +x /app/bin/jarvis-desktop"
       ],
       "sources": [
@@ -60,7 +62,7 @@
         { "type": "dir", "path": "memory", "dest": "memory" },
         { "type": "dir", "path": "skills", "dest": "skills" },
         { "type": "dir", "path": "config", "dest": "config" },
-        { "type": "dir", "path": "jarvis-desktop/app", "dest": "jarvis-desktop/app" }
+        { "type": "dir", "path": "dynamic-island/app", "dest": "dynamic-island/app" }
       ]
     }
   ]

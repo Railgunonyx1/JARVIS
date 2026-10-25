@@ -137,6 +137,9 @@ class IslandController(QObject):
             self._set(IslandStatus.SPEAKING)
         elif val == "chatting":
             self._set(IslandStatus.THINKING)
+        elif val == "idle":
+            if not self._status.busy and self._status not in (IslandStatus.ERROR, IslandStatus.APPROVAL):
+                self._set(IslandStatus.IDLE)
 
     def _on_voice_state(self, state) -> None:
         val = getattr(state, "value", str(state))
@@ -180,11 +183,13 @@ class IslandController(QObject):
         # The coordinator emits streamed chunks AND then the full response text.
         # If we were streaming, the full response is a duplicate of the
         # coalesced chunks; skip it. Otherwise show it.
-        if role == "jarvis" and was_streaming:
+        if role == "jarvis" and was_streaming and text and not (text.strip().startswith("[Error:") or text.strip().startswith("Error:")):
             return
         self.chat_message.emit(role, text)
         if role == "user":
             self._set(IslandStatus.THINKING, text[:60])
+        elif role == "jarvis" and (text.strip().startswith("[Error:") or text.strip().startswith("Error:")):
+            self._set(IslandStatus.ERROR, text[:60])
 
     def _flush_stream(self) -> bool:
         if self._stream_timer.isActive():

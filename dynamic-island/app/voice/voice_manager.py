@@ -61,6 +61,9 @@ class VoiceManager:
         self._tts = TTSEngine(voice=voice, speed=speed, use_kokoro=use_kokoro_tts)
 
         self._tts_thread: threading.Thread | None = None
+        self._record_thread: threading.Thread | None = None
+        self._speak_thread: threading.Thread | None = None
+        self._shutdown = False
 
     @property
     def state(self) -> VoiceState:
@@ -99,12 +102,26 @@ class VoiceManager:
         After this returns, no microphone capture should remain active
         and no late transcription should be submitted.
         """
+        if getattr(self, "_shutdown", False):
+            self._stop_recording.set()
+            self._stop_speaking.set()
+            self._set_state(VoiceState.IDLE)
+            return
+        self._shutdown = True
         self._stop_recording.set()
         self._stop_speaking.set()
-        if self._record_thread and self._record_thread.is_alive():
-            self._record_thread.join(timeout=3.0)
-        if self._speak_thread and self._speak_thread.is_alive():
-            self._speak_thread.join(timeout=3.0)
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
+        # Join any known threads
+        for t in (getattr(self, "_record_thread", None), getattr(self, "_speak_thread", None), getattr(self, "_tts_thread", None)):
+            try:
+                if t and getattr(t, "is_alive", lambda: False)():
+                    t.join(timeout=3.0)
+            except Exception:
+                pass
         self._set_state(VoiceState.IDLE)
 
     def warmup(self) -> None:
@@ -121,10 +138,19 @@ class VoiceManager:
 
         def _record():
             try:
+                if getattr(self, "_shutdown", False):
+                    self._set_state(VoiceState.IDLE)
+                    return
                 result = self._stt.record_and_transcribe(duration=5.0,
                                                          stop_event=self._stop_recording)
+                if getattr(self, "_shutdown", False):
+                    self._set_state(VoiceState.IDLE)
+                    return
                 self._set_state(VoiceState.TRANSCRIBING)
                 if result and result.text:
+                    if getattr(self, "_shutdown", False):
+                        self._set_state(VoiceState.IDLE)
+                        return
                     if self._on_transcription:
                         self._on_transcription(result.text)
                     self._send_to_agent(result.text)
@@ -139,11 +165,15 @@ class VoiceManager:
                             pass
             except Exception as e:
                 logger.exception("Recording failed")
+                if getattr(self, "_shutdown", False):
+                    self._set_state(VoiceState.IDLE)
+                    return
                 self._set_state(VoiceState.ERROR)
                 if self._on_response:
                     self._on_response(f"[Voice error: {str(e)[:100]}]")
 
-        threading.Thread(target=_record, daemon=True, name="jarvis-voice-record").start()
+        self._record_thread = threading.Thread(target=_record, daemon=True, name="jarvis-voice-record")
+        self._record_thread.start()
 
     def stop_listening(self) -> None:
         """Stop recording early (user released push-to-talk)."""
@@ -182,9 +212,12 @@ class VoiceManager:
 
         def _speak():
             try:
+                if getattr(self, "_shutdown", False):
+                    self._set_state(VoiceState.IDLE)
+                    return
                 self._tts.play(text, block=True)
                 # Only set IDLE if we weren't interrupted
-                if not self._stop_speaking.is_set():
+                if not self._stop_speaking.is_set() and not getattr(self, "_shutdown", False):
                     self._set_state(VoiceState.IDLE)
             except Exception as e:
                 logger.warning("TTS playback failed: %s", e)
@@ -192,6 +225,7 @@ class VoiceManager:
                 # so the conversation continues even if voice output fails
 
         self._tts_thread = threading.Thread(target=_speak, daemon=True, name="jarvis-voice-tts")
+        self._speak_thread = self._tts_thread
         self._tts_thread.start()
 
     def stop_speaking(self) -> None:

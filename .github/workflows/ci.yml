@@ -15,7 +15,7 @@ name: CI
 
 on:
   push:
-    branches: [main, desktop-jarvis]
+    branches: [main, desktop-jarvis, dynamic-island, Dynamic-island]
   pull_request:
   schedule:
     - cron: "0 3 * * 1"  # weekly security sweep

@@ -34,7 +34,15 @@ def load() -> dict:
 def save(settings: dict) -> None:
     try:
         SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-        SETTINGS_FILE.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        target = SETTINGS_FILE
+        tmp = SETTINGS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+        try:
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        except Exception:
+            pass
+        os.replace(tmp, target)
         logger.info("Settings saved to %s", SETTINGS_FILE)
     except OSError as e:
         logger.warning("Failed to save settings: %s", e)
