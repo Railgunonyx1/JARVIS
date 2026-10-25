@@ -101,7 +101,7 @@ class TestGestureMapping:
         from app.gestures.recognition import GestureEvent, GestureType
         called = []
         mapper = GestureMapper()
-        mapper.set_handler("select", lambda e: called.append(e))
+        mapper.set_handler("toggle_gesture_mode", lambda e: called.append(e))
         event = GestureEvent(GestureType.PINCH, 0.9, "Right", (0.5, 0.5), time.time())
         mapper.handle(event)
         assert len(called) == 1
@@ -111,7 +111,7 @@ class TestGestureMapping:
         from app.gestures.recognition import GestureEvent, GestureType
         called = []
         mapper = GestureMapper()
-        mapper.set_handler("select", lambda e: called.append(e))
+        mapper.set_handler("toggle_gesture_mode", lambda e: called.append(e))
         mapper.enable_gesture(GestureType.PINCH, False)
         event = GestureEvent(GestureType.PINCH, 0.9, "Right", (0.5, 0.5), time.time())
         mapper.handle(event)

@@ -189,6 +189,8 @@ class JarvisBackend(QObject):
             finally:
                 self._loop.close()
                 self._loop = None
+        finally:
+            pass
         if startup_error is not None:
             # Preserve the original startup error so it is not lost
             # when the lifecycle subsequently settles to STOPPED.

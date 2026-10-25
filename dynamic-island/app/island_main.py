@@ -164,9 +164,6 @@ def main() -> int:
     # gives the interpreter a chance to deliver the pending signal.
     signal.signal(signal.SIGINT, lambda *_: island.quit_application())
     signal.signal(signal.SIGTERM, lambda *_: island.quit_application())
-    keepalive = QTimer()
-    keepalive.timeout.connect(lambda: None)
-    keepalive.start(100)
 
     return app.exec()
 
