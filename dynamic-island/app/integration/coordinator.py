@@ -156,15 +156,16 @@ class AppCoordinator(QObject):
             elif state == AppState.LISTENING:
                 self._voice_state = VoiceState.LISTENING
             elif state == AppState.CHATTING:
-                # Chat is a backend activity, not a VoiceState
                 pass
             elif state == AppState.GESTURE_ACTIVE:
                 self._gesture_state = True
             elif state == AppState.WORKSPACE_OPEN:
                 self._workspace_state = True
             elif state == AppState.IDLE:
-                # Don't force-reset here; derive from subsystem states
-                pass
+                # Reset subsystem flags only if truly idle
+                self._voice_state = VoiceState.IDLE
+                self._gesture_state = bool(getattr(self, '_gesture_active', False))
+                self._workspace_state = bool(getattr(self, '_workspace_visible', False))
         try:
             self.state_changed.emit(state)
         except Exception:

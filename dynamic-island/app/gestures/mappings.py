@@ -27,9 +27,9 @@ class GestureMapping:
 
 DEFAULT_MAPPINGS: dict[GestureType, GestureMapping] = {
     # Island workspace gestures — mapped to coordinator actions, not desktop OS.
-    GestureType.PINCH: GestureMapping(GestureType.PINCH, "toggle_gesture_mode", "Enter/exit gesture mode"),
+    GestureType.PINCH: GestureMapping(GestureType.PINCH, "toggle_gesture_mode", "Toggle gesture mode"),
     GestureType.PINCH_MOVE: GestureMapping(GestureType.PINCH_MOVE, "pan_workspace", "Pan the 3D workspace"),
-    GestureType.OPEN_PALM: GestureMapping(GestureType.OPEN_PALM, "exit_gesture_mode", "Exit gesture mode without action"),
+    GestureType.OPEN_PALM: GestureMapping(GestureType.OPEN_PALM, "exit_gesture_mode", "Exit gesture mode"),
     GestureType.ZOOM_IN: GestureMapping(GestureType.ZOOM_IN, "zoom_in", "Zoom in (workspace)"),
     GestureType.ZOOM_OUT: GestureMapping(GestureType.ZOOM_OUT, "zoom_out", "Zoom out (workspace)"),
     GestureType.SWIPE_LEFT: GestureMapping(GestureType.SWIPE_LEFT, "prev_task", "Previous task/panel"),

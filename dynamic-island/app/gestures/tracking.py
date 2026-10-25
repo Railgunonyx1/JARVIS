@@ -106,11 +106,10 @@ class HandTracker:
     def stop(self) -> None:
         """Stop tracking and release resources."""
         import threading
-        if threading.current_thread() is getattr(self, "_thread", None):
-            self._running = False
-            # Cannot join self; let loop exit and resources cleaned up by next call or GC
-            return
         self._running = False
+        if threading.current_thread() is getattr(self, "_thread", None):
+            # Cannot join self; cleanup will happen when loop exits
+            return
         if self._thread:
             try:
                 self._thread.join(timeout=2.0)
@@ -129,46 +128,58 @@ class HandTracker:
 
     def _track_loop(self) -> None:
         """Background tracking loop."""
-        while self._running:
-            try:
-                if self._frame_source is None:
-                    time.sleep(0.03)
-                    continue
-                # Frame rate limiting — don't process faster than target FPS
-                now = time.perf_counter()
-                elapsed = now - self._last_frame_time
-                if elapsed < self._min_frame_interval:
-                    time.sleep(self._min_frame_interval - elapsed)
-                    continue
-                self._last_frame_time = time.perf_counter()
+        try:
+            while self._running:
+                try:
+                    if self._frame_source is None:
+                        time.sleep(0.03)
+                        continue
+                    # Frame rate limiting — don't process faster than target FPS
+                    now = time.perf_counter()
+                    elapsed = now - self._last_frame_time
+                    if elapsed < self._min_frame_interval:
+                        time.sleep(self._min_frame_interval - elapsed)
+                        continue
+                    self._last_frame_time = time.perf_counter()
 
-                frame = self._frame_source()
-                if frame is None:
-                    time.sleep(0.03)
-                    continue
-                # Convert BGR to RGB for MediaPipe
-                rgb = frame[:, :, ::-1]
-                results = self._mp.process(rgb)
-                hands = []
-                if results.multi_hand_landmarks:
-                    for idx, (landmarks, handedness) in enumerate(
-                        zip(results.multi_hand_landmarks, results.multi_handedness, strict=True)
-                    ):
-                        lm_list = [(lm.x, lm.y, lm.z) for lm in landmarks.landmark]
-                        hand = HandLandmarks(
-                            landmarks=lm_list,
-                            handedness=handedness.classification[0].label,
-                            confidence=handedness.classification[0].score,
-                            timestamp=time.time(),
-                        )
-                        hands.append(hand)
-                with self._lock:
-                    self._hands = hands
-                if self._on_hands:
-                    self._on_hands(hands)
-            except Exception as e:
-                logger.debug("Tracking error: %s", e)
-                time.sleep(0.05)
+                    frame = self._frame_source()
+                    if frame is None:
+                        time.sleep(0.03)
+                        continue
+                    # Convert BGR to RGB for MediaPipe
+                    rgb = frame[:, :, ::-1]
+                    if not self._mp:
+                        break
+                    results = self._mp.process(rgb)
+                    hands = []
+                    if results.multi_hand_landmarks:
+                        for idx, (landmarks, handedness) in enumerate(
+                            zip(results.multi_hand_landmarks, results.multi_handedness, strict=True)
+                        ):
+                            lm_list = [(lm.x, lm.y, lm.z) for lm in landmarks.landmark]
+                            hand = HandLandmarks(
+                                landmarks=lm_list,
+                                handedness=handedness.classification[0].label,
+                                confidence=handedness.classification[0].score,
+                                timestamp=time.time(),
+                            )
+                            hands.append(hand)
+                    with self._lock:
+                        self._hands = hands
+                    if self._on_hands:
+                        self._on_hands(hands)
+                except Exception as e:
+                    logger.debug("Tracking error: %s", e)
+                    time.sleep(0.05)
+        finally:
+            try:
+                if self._mp:
+                    self._mp.close()
+            except Exception:
+                pass
+            self._mp = None
+            with self._lock:
+                self._hands = []
 
     def __enter__(self):
         self.start()
