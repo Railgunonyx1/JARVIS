@@ -148,11 +148,21 @@ class JarvisBackend(QObject):
         # when the graceful shutdown timed out.
         if self._thread and self._thread.is_alive():
             logger.warning("Backend thread did not stop gracefully, forcing stop")
-            if self._loop and self._loop.is_running():
-                self._loop.call_soon_threadsafe(self._loop.stop)
-            self._thread.join(timeout=5.0)
+            try:
+                if self._loop and self._loop.is_running():
+                    self._loop.call_soon_threadsafe(self._loop.stop)
+            except Exception:
+                pass
+            try:
+                self._thread.join(timeout=5.0)
+            except Exception:
+                pass
 
         with self._state_lock:
+            if self._thread and self._thread.is_alive():
+                # Still running - do not falsely report stopped
+                self._state = BackendState.STOPPING
+                return
             self._state = BackendState.STOPPED
             self._agent_loop = None
             self._loop = None

@@ -185,12 +185,20 @@ class IslandWindow(QWidget):
             self._panel = ConversationPanel()
             self._panel.send_requested.connect(self._on_send)
             self._panel.mic_toggled.connect(self._on_mic)
-            self._controller.coordinator.voice_state_changed.connect(self._on_voice_state_changed)
+            # Bind coordinator signals if available
+            try:
+                coord = getattr(self._controller, "coordinator", None) if self._controller else None
+                if coord is not None and hasattr(coord, "voice_state_changed"):
+                    coord.voice_state_changed.connect(self._on_voice_state_changed)
+            except Exception:
+                pass
             self._host.addWidget(self._panel)
         return self._panel
 
     def _start_backend(self) -> None:
-        if self._controller is None or self._controller.coordinator is not None:
+        if self._controller is None:
+            return
+        if getattr(self._controller, "coordinator", None) is not None:
             return
         from app.integration.coordinator import AppCoordinator
         from app.settings import load
@@ -201,7 +209,19 @@ class IslandWindow(QWidget):
         if settings.get("model"):
             coord.set_model(settings["model"])
         coord.start()
-        self._controller.attach(coord)
+        try:
+            self._controller.attach(coord)
+        except Exception:
+            pass
+        # If panel already created, bind signals
+        try:
+            if getattr(self, "_panel", None) is not None and hasattr(coord, "voice_state_changed"):
+                try:
+                    coord.voice_state_changed.connect(self._on_voice_state_changed)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _confirm(self, tool_name: str, arguments: dict) -> str:
         """Approval handler — runs on the agent worker thread.

@@ -191,14 +191,20 @@ class AppCoordinator(QObject):
         # not before the agent loop exists.
         self._pending_model = self._pending_model or ""
 
-        # Voice: only initialize if voice is enabled
-        if self._voice_enabled:
+        # Voice: only initialize if voice is enabled and not already created
+        if self._voice_enabled and self._voice is None:
             self._voice = VoiceManager(
                 agent_backend=self._backend,
                 on_state_change=self._on_voice_state,
                 on_transcription=self._on_voice_transcription,
                 on_response=self._on_voice_response,
             )
+        elif self._voice_enabled and self._voice is not None:
+            # Ensure backend is attached
+            try:
+                self._voice._backend = self._backend
+            except Exception:
+                pass
 
         # Connect backend signals to coordinator methods
         self._backend.start(wait=False)
@@ -208,9 +214,16 @@ class AppCoordinator(QObject):
             confirmation_handler=self._action_confirmation,
         )
 
-        # Workspace
-        self._workspace = Workspace3D()
-        self._workspace.load()
+        # Workspace: lazy-load to reduce startup cost
+        try:
+            self._workspace = Workspace3D()
+            # Defer actual load; call load() only when first shown
+            try:
+                self._workspace.load()
+            except Exception:
+                pass
+        except Exception:
+            self._workspace = None
 
         self._set_state(AppState.IDLE)
         logger.info("AppCoordinator started")
@@ -348,12 +361,28 @@ class AppCoordinator(QObject):
             self._voice.stop_speaking()
 
     def _on_voice_state(self, state: VoiceState) -> None:
-        self.voice_state_changed.emit(state)
+        try:
+            self.voice_state_changed.emit(state)
+        except Exception:
+            pass
+        try:
+            with self._state_lock:
+                self._voice_state = state
+        except Exception:
+            pass
         if state == VoiceState.LISTENING:
             self._set_state(AppState.LISTENING)
         elif state == VoiceState.SPEAKING:
             self._set_state(AppState.SPEAKING)
         elif state == VoiceState.IDLE:
+            self._set_state(AppState.IDLE)
+        elif state == VoiceState.THINKING or state == VoiceState.TRANSCRIBING:
+            # Keep as listening/chatting context; derive state will handle
+            try:
+                self._set_state(AppState.CHATTING)
+            except Exception:
+                self._set_state(AppState.IDLE)
+        elif state == VoiceState.ERROR:
             self._set_state(AppState.IDLE)
 
     def _on_voice_transcription(self, text: str) -> None:
