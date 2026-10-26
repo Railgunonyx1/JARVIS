@@ -59,7 +59,9 @@ def test_island_centered_top(qapp):
     geo = screen.availableGeometry()
     expected_x = geo.left() + (geo.width() - island.width()) // 2
     assert abs(island.x() - expected_x) <= 1
-    assert island.y() == geo.top() + 8
+    # KDE panel-aware: place below the KDE panel (~32px on 96 DPI).
+    assert island.y() >= geo.top() + 8
+    assert island.y() <= geo.top() + 32
     island.close()
 
 
