@@ -50,9 +50,25 @@ _MARGIN = 10
 _SCREEN_SIGNALS = (
     "geometryChanged",
     "availableGeometryChanged",
+    "availableGeometryChanged",
     "logicalDotsPerInchChanged",
     "physicalDotsPerInchChanged",
 )
+
+
+# Design tokens — classic dark glass palette from DI-025 (matched to conversation_panel.py)
+_PRIMARY = "#141619"
+_ACCENT  = "#8C96A3"
+_TEXT   = "#EBEEF2"
+_MUTED   = "#B0B7C1"
+_DIVIDER = "#3A3A3C"
+_INPUT_BG = "#2C1C2E"
+_INPUT_FG = "#FFFFFF"
+_BLUE    = "#0A84FF"
+_BLUE_H  = "#0071E3"
+_AMBER   = "#FFD60A"
+_DARK_BG = "#272B30"
+_DARK_DK = "#172431"
 
 
 class IslandState(Enum):
@@ -223,8 +239,8 @@ class IslandWindow(QWidget):
                 border: 1px solid rgba(255, 255, 255, 40);
                 border-radius: {_RADIUS}px;
             }}
-            #islandTitle {{ color: #FFFFFF; font-size: 13px; font-weight: 600; }}
-            #islandStatus {{ color: #8E8E93; font-size: 11px; }}
+            #islandTitle {{ color: {_TEXT}; font-size: 13px; font-weight: 600; }}
+            #islandStatus {{ color: {_MUTED}; font-size: 11px; }}
         """)
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(28)
@@ -249,18 +265,20 @@ class IslandWindow(QWidget):
 
         self._dot = QLabel("\u25cf")
         self._dot.setObjectName("islandStatus")
+        self._dot.setStyleSheet(f"color: {_ACCENT}; font-size: 10px;")
         bar_layout.addWidget(self._dot)
 
         self._status = QLabel("Ready")
         self._status.setObjectName("islandStatus")
+        self._status.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
         bar_layout.addWidget(self._status, 1)
 
         self._close_btn = QPushButton("\u2715")
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none; color: #8E8E93; }"
-            "QPushButton:hover { color: #FFFFFF; }"
+            "QPushButton { background: transparent; border: none; color: {_MUTED}; }"
+            "QPushButton:hover { color: {_TEXT}; }"
         )
         self._close_btn.setToolTip("Collapse")
         self._close_btn.clicked.connect(self.collapse)

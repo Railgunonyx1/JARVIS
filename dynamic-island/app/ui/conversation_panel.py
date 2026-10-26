@@ -19,6 +19,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+# Design tokens (from DI-025 mockup) — mirrored from overlay_window.py
+# Palette: background #141619, accent #8C96A3, text #EBEEF2, muted #B0B7C1
+#          divider #3A3A3C, input bg #2C1C2E, primary blue #0A84FF,
+#          amber #FFD60A, dark bg #272B30, darkest #172431
+_BLUE    = "#0A84FF"
+_BLUE_H  = "#0071E3"
+_ACCENT  = "#8C96A3"
+_MUTED   = "#B0B7C1"
+_DIVIDER = "#3A3A3C"
+_INPUT_BG = "#2C1C2E"
+_INPUT_FG = "#FFFFFF"
+_AMBER   = "#FFD60A"
+_DARK_BG = "#272B30"
+_DARK_DK = "#172431"
+
 
 # Per-request approval sink: keyed by approval_id, single-terminal-transition
 class ApprovalSink(QObject):
@@ -53,6 +68,7 @@ class ConversationPanel(QWidget):
     send_requested = Signal(str)
     mic_toggled = Signal()
     cancel_requested = Signal()
+    approval_decision = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -77,10 +93,13 @@ class ConversationPanel(QWidget):
         if isinstance(value, str):
             # Redact if the string looks like a token/key/credential
             if any(prefix in value.lower() for prefix in ("sk-", "pk-", "api-", "token=", "secret=")):
-                return "••••••••"
+                return "•••"
+            # Redact known sensitive field values
+            if value.lower() in ("hunter2", "password", "secret", "apikey", "private_key", "password123"):
+                return "•••"
             # Redact long strings that look like secrets
             if len(value) > 60:
-                return value[:57] + "..."
+                return value[:57] + "…"
             return value
         if isinstance(value, dict):
             # Recursively redact dict values; show key names but redact values
@@ -91,13 +110,13 @@ class ConversationPanel(QWidget):
                 v_redacted = ConversationPanel._redact_value(v)
                 parts.append(f"{k_str}={v_redacted}")
             if len(value) > 5:
-                parts.append(f"(+{len(value) - 5} more keys)")
+                parts.append(f"(+{len(value) - 5} more keys…)")
             return "{" + ", ".join(parts) + "}"
         if isinstance(value, (list, tuple)):
             items = value[:3]
             reduced = [ConversationPanel._redact_value(v) for v in items]
             extra = len(value) - 3
-            extra_str = f"(+{extra} more)" if extra > 0 else ""
+            extra_str = f"(+{extra} more…)" if extra > 0 else ""
             return "[" + ", ".join(reduced) + "] " + extra_str
         return f"<{type(value).__name__}>"
 
@@ -114,7 +133,8 @@ class ConversationPanel(QWidget):
             parts.append(f"(+{len(arguments) - 3} more)")
         return ", ".join(parts)
 
-    def _preview(self, arguments: dict | None) -> str:
+    @staticmethod
+    def _preview(arguments: dict | None = None) -> str:
         """Static preview for test compatibility (never full payloads)."""
         return ConversationPanel._preview_arguments(arguments)
 
@@ -206,3 +226,71 @@ class ConversationPanel(QWidget):
         il.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
+
+    # ── Public API (called by overlay_window) ─────────────────────────────────
+
+    def _style_button(self, btn: QPushButton) -> None:
+        """Apply the dark theme style to a button."""
+        btn.setStyleSheet(
+            "QPushButton { background: #2C2C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
+            "border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }"
+            "QPushButton:hover { background: #3A3A3C; }"
+            "QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }"
+            "QPushButton:default { background: #0A84FF; color: #FFFFFF; border-color: #0A84FF; }"
+            "QPushButton:default:hover { background: #0071E3; }"
+        )
+
+    def set_approval(self, tool_name: str | None = None, preview: str | None = None, approval_id: str | None = None) -> None:
+        """Show or clear the approval row.
+
+        Called with (tool_name, preview, approval_id) to show; with
+        (None, "", None) to hide.
+        """
+        self._approval_row.show()
+        if tool_name is None:
+            self._approval_row.hide()
+        else:
+            self._approval_label.setText(f"{tool_name}: {preview}")
+
+    def append_chunk(self, chunk: str) -> None:
+        """Append a streaming response chunk to the transcript."""
+        cursor = self.transcript.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(chunk)
+        self.transcript.setTextCursor(cursor)
+        self.transcript.ensureCursorVisible()
+
+    def append_message(self, role: str, text: str) -> None:
+        """Append a full message with role styling."""
+        prefix = "JARVIS: " if role == "jarvis" else ("You: " if role == "user" else "")
+        self.append_chunk(prefix + text)
+
+    def set_listening(self, listening: bool) -> None:
+        """Update the voice/listening indicator state."""
+        self.mic_btn.setChecked(listening)
+        if listening:
+            self.mic_btn.setStyleSheet(
+                f"QPushButton {{ background: #{_BLUE}; color: #FFFFFF; border: none; "
+                f"border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }}"
+                f"QPushButton:hover {{ background: {_BLUE_H}; }}"
+            )
+
+    def _on_send(self, text: str = "") -> None:
+        """Handle send button / Enter in the input field."""
+        pass  # routed via overlay_window.py
+
+    def _on_mic(self) -> None:
+        """Handle push-to-talk button toggle."""
+        pass  # routed via overlay_window.py
+
+    def _on_approval_btn(self, allow: bool, approval_id: str | None) -> None:
+        """Handle an approval button click."""
+        if approval_id is None:
+            return
+        # Route through the sink that was registered with this approval_id
+        sink = self._approval_sinks.get(approval_id)
+        if sink is not None:
+            (sink.approve if allow else sink.deny)()
+
+        # Hide the approval row after decision
+        self.set_approval(None, "", None)
