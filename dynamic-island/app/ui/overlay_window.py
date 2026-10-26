@@ -501,21 +501,14 @@ class IslandWindow(QWidget):
             return self.geometry()
         w = min(w + 2 * _MARGIN, geo.width())
         h = min(h + 2 * _MARGIN, geo.height() - 2 * _TOP_MARGIN)
-        # KDE Wayland: the panel occupies the top of the screen. Qt's
-        # availableGeometry() spans the full display (0,0 -> width,height),
-        # so centering within it would place the island dead-centre. Use the
-        # same approach as the KWin script: client area below the panel.
-        # KDE panel is ~48px tall (32px base + scaling on Bazzite);
-        # subtract it from the height and shift the centre up.
-        # Only apply panel-aware correction on high-DPI / KDE sessions.
-        panel_h = 0
-        dpi = getattr(screen, "logicalDotsPerInch", lambda: 96)()
-        if dpi >= 120:
-            panel_h = 48  # scaled KDE panel on Bazzite/KDE Wayland
-        elif dpi >= 96:
-            panel_h = 32
+        # Fallback geometry for environments where KWin does not reposition the
+        # window (non-KDE Wayland, no client-area knowledge). The KWin script
+        # packaged with the installer is the authoritative placement on KDE
+        # Wayland; it uses workspace.clientArea() which accounts for the panel
+        # and panel-taskbar insets. This fallback only applies the top margin
+        # and horizontal centre so the island never lands dead-centre.
         x = geo.left() + (geo.width() - w) // 2
-        y = geo.top() + max(_TOP_MARGIN, panel_h - _TOP_MARGIN)
+        y = geo.top() + _TOP_MARGIN
         return QRect(x, y, w, h)
 
     def _reposition(self) -> None:

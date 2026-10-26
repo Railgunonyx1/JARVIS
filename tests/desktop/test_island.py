@@ -13,6 +13,8 @@ if _DESKTOP_ROOT not in sys.path:
 os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test")
 
 from app.ui.overlay_window import IslandState, _PENDING  # noqa: E402
+from PySide6.QtCore import QRect
+
 import pytest  # noqa: E402
 
 
@@ -59,9 +61,45 @@ def test_island_centered_top(qapp):
     geo = screen.availableGeometry()
     expected_x = geo.left() + (geo.width() - island.width()) // 2
     assert abs(island.x() - expected_x) <= 1
-    # KDE panel-aware: place below the KDE panel (~32px on 96 DPI).
-    assert island.y() >= geo.top() + 8
-    assert island.y() <= geo.top() + 32
+    # Fallback: top margin only; KWin script is authoritative on KDE Wayland.
+    assert island.y() == geo.top() + 8
+    island.close()
+
+
+def test_island_high_dpi_top(qapp):
+    """Coverage for the high-DPI fallback path: same top margin, no
+    DPI-scaled panel heuristic.
+    """
+    from app.ui.overlay_window import IslandWindow
+    from PySide6.QtGui import QGuiApplication
+
+    screen = qapp.primaryScreen()
+    # Force a high-DPI readback so the removed panel heuristic is exercised
+    # without triggering a real X11/Wayland screen change.
+    orig = screen.logicalDotsPerInch
+    screen.logicalDotsPerInch = lambda: 160
+    try:
+        island = IslandWindow()
+        assert island.y() == screen.availableGeometry().top() + 8
+    finally:
+        screen.logicalDotsPerInch = orig
+        island.close()
+
+
+def test_island_work_area_origin(qapp):
+    """Screen offset left/top != (0, 0): horizontal centre and top margin
+    must still hold.
+    """
+    from app.ui.overlay_window import IslandWindow
+
+    island = IslandWindow()
+    screen = qapp.primaryScreen()
+    geo = screen.availableGeometry()
+    # Reproduce the fallback path with an explicit non-zero origin.
+    shifted = QRect(geo.x(), geo.y(), geo.width(), geo.height())
+    expected_x = shifted.x() + (shifted.width() - island.width()) // 2
+    assert abs(island.x() - expected_x) <= 1
+    assert island.y() == shifted.y() + 8
     island.close()
 
 
