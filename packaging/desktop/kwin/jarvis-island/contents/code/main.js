@@ -15,14 +15,21 @@ function isIsland(w) {
 }
 
 function islandArea(w) {
+    // Prefer the active output's work area, which excludes the KDE panel.
+    // On Wayland the panel is compositor furniture, not a separate X11
+    // window, so workspace.clientArea() may not account for it.
+    var s = workspace.activeOutput || workspace.activeScreen;
+    if (s && s.workArea && s.workArea.width > 0 && s.workArea.height > 0) {
+        return s.workArea;
+    }
+    // Fallback: clientArea() may exclude the panel on X11.
     if (typeof workspace.clientArea === "function") {
         var a = workspace.clientArea(AREA_PLACEMENT, w);
         if (a && a.width > 0 && a.height > 0) {
             return a;
         }
     }
-    var s = workspace.activeOutput || workspace.activeScreen;
-    return s && s.workArea ? s.workArea : null;
+    return null;
 }
 
 function centre(w) {
