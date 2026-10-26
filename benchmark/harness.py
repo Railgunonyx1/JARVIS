@@ -13,6 +13,7 @@ executor (no LLM) so every number reflects the actual runtime pipeline:
 provider/model/iteration/token metrics from the returned state.
 """
 
+
 from __future__ import annotations
 
 import asyncio
@@ -278,7 +279,7 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
     and raw measurements; missing measurements are encoded as null/not_measured.
 
     Phases measured:
-    - cold_startup_ms: launcher + kernel cold boot to first visible frame
+    - cold_startup_ms: time from island launch to first visible frame
     - expanded_idle: island expanded, no streaming, measured RSS/CPU
     - collapsed_idle: island collapsed, no activity
     - streaming_response: agent streaming response
@@ -292,12 +293,11 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
     Uses real subprocess launch/termination. Missing measurements get
     status: "not_measured" with reason; never encode as zero.
     """
-    from benchmark.tasks import deterministic_tasks
     import psutil
     import time
     import json
 
-    results: dict[str, Any] = {}
+    results = {}
 
     # Launch the island process
     island_proc = _launch_island_subprocess()
@@ -314,14 +314,140 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
             time.sleep(0.1)
 
         if not ready:
-            pass
-
-        # Cold startup-to-visible: time from launch to first visible frame
-        startup = measure_startup()
-        cold_startup_ms = startup.get("wall_ms", 0)
+            # Island didn't become ready in time - all phases not measured
+            return {
+                "dynamic_island_phases": {
+                    "cold_startup_ms": {
+                        "measurements": 0,
+                        "wall_ms": None,
+                        "launcher_ms": None,
+                        "kernel_ms": None,
+                        "prompt_ready_ms": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "expanded_idle": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "collapsed_idle": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "streaming_response": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "voice_active": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "gesture_active": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "workspace_visible": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "workspace_hidden": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "open_close_cycles": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                    "shutdown": {
+                        "measurements": 0,
+                        "avg_rss_mb": None,
+                        "avg_cpu": None,
+                        "min_rss_mb": None,
+                        "max_rss_mb": None,
+                        "min_cpu": None,
+                        "max_cpu": None,
+                        "min_time": None,
+                        "max_time": None,
+                        "status": "not_measured",
+                        "reason": "island process did not become ready within timeout",
+                    },
+                }
+            }
 
         # Resource monitor for ongoing measurements
-        proc = psutil.Process()
+        proc = psutil.Process(island_proc.pid)
         monitors: dict[str, list[dict[str, Any]]] = {
             "collapsed_idle": [],
             "expanded_idle": [],
@@ -334,8 +460,8 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
             "shutdown": [],
         }
 
-        def _sample_resources() -> dict[str, float]:
-            """Sample process RSS and CPU."""
+        def _sample_resources() -> dict[str, Any]:
+            """Sample island process RSS and CPU."""
             try:
                 mem = proc.memory_info()
                 return {
@@ -343,34 +469,33 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
                     "cpu_percent": round(proc.cpu_percent(interval=None), 1),
                 }
             except Exception:
-                return {"rss_mb": 0.0, "cpu_percent": 0.0}
+                return {"rss_mb": None, "cpu_percent": None}
 
         # Measure collapsed idle (island visible but no activity)
-        # Island is already collapsed on launch; sample for 5s
+        # Island launches collapsed; sample for 5s
         t0 = time.perf_counter()
         monitors["collapsed_idle"].append(_sample_resources() | {"t": round(time.perf_counter() - t0, 1)})
         time.sleep(5.0)
         monitors["collapsed_idle"].append(_sample_resources() | {"t": round(time.perf_counter() - t0, 1)})
 
         # Expand the island (send expand command via stdout)
-        try:
-            expanded_count = 0
-            for _ in range(20):  # wait up to 2s
-                island_proc.stdout.flush()
-                line = island_proc.stdout.readline()
-                if line and b"expanded" in line.lower():
-                    expanded_count += 1
-                    break
-                time.sleep(0.05)
+        expanded_count = 0
+        for _ in range(40):  # wait up to 2s
+            island_proc.stdout.flush()
+            line = island_proc.stdout.readline()
+            if line and b"expanded" in line.lower():
+                expanded_count += 1
+                break
+            time.sleep(0.05)
 
-            if expanded_count > 0:
-                # Measure expanded idle for 5s
-                t0 = time.perf_counter()
-                monitors["expanded_idle"].append(_sample_resources() | {"t": 0.0})
-                time.sleep(5.0)
-                monitors["expanded_idle"].append(_sample_resources() | {"t": 5.0})
-        except Exception:
-            # If expand not supported, mark as not measured
+        if expanded_count > 0:
+            # Measure expanded idle for 5s
+            t0 = time.perf_counter()
+            monitors["expanded_idle"].append(_sample_resources() | {"t": 0.0})
+            time.sleep(5.0)
+            monitors["expanded_idle"].append(_sample_resources() | {"t": 5.0})
+        else:
+            # Expand not supported - record as not measured
             monitors["expanded_idle"].append({"rss_mb": None, "cpu_percent": None, "t": None, "status": "not_measured", "reason": "expand_not_supported"})
 
         # Measure streaming response (simulate agent response)
@@ -452,13 +577,13 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
     # Compute summaries with proper null handling
     summary: dict[str, Any] = {
         "cold_startup_ms": {
-            "measurements": 1,
+            "measurements": 0,
             "wall_ms": None,
             "launcher_ms": None,
             "kernel_ms": None,
             "prompt_ready_ms": None,
             "status": "not_measured",
-            "reason": "cold_startup requires full island launch; measure_startup provides baseline",
+            "reason": "cold_startup measurement collected via probe on separate run; island phases measured independently",
         }
     }
 
@@ -482,22 +607,52 @@ def _measure_dynamic_island_phases(loop) -> dict[str, Any]:
             }
             continue
 
-        rss_values = [s["rss_mb"] for s in valid_samples]
-        cpu_values = [s["cpu_percent"] for s in valid_samples]
-        times = [s["t"] for s in valid_samples]
+        rss_values = [s["rss_mb"] for s in valid_samples if s.get("rss_mb") is not None]
+        cpu_values = [s["cpu_percent"] for s in valid_samples if s.get("cpu_percent") is not None]
+        times = [s["t"] for s in valid_samples if s.get("t") is not None]
 
-        summary[phase] = {
+        has_rss = len(rss_values) > 0
+        has_cpu = len(cpu_values) > 0
+        has_times = len(times) > 0
+
+        summary_entry: dict[str, Any] = {
             "measurements": len(samples),
-            "avg_rss_mb": round(sum(rss_values) / len(rss_values), 1),
-            "avg_cpu": round(sum(cpu_values) / len(cpu_values), 1),
-            "min_rss_mb": round(min(rss_values), 1),
-            "max_rss_mb": round(max(rss_values), 1),
-            "min_cpu": round(min(cpu_values), 1),
-            "max_cpu": round(max(cpu_values), 1),
-            "min_time": round(min(times), 1),
-            "max_time": round(max(times), 1),
-            "status": "measured",
         }
+
+        if has_rss:
+            summary_entry["avg_rss_mb"] = round(sum(rss_values) / len(rss_values), 1)
+            summary_entry["min_rss_mb"] = round(min(rss_values), 1)
+            summary_entry["max_rss_mb"] = round(max(rss_values), 1)
+        else:
+            summary_entry["avg_rss_mb"] = None
+            summary_entry["min_rss_mb"] = None
+            summary_entry["max_rss_mb"] = None
+
+        if has_cpu:
+            summary_entry["avg_cpu"] = round(sum(cpu_values) / len(cpu_values), 1)
+            summary_entry["min_cpu"] = round(min(cpu_values), 1)
+            summary_entry["max_cpu"] = round(max(cpu_values), 1)
+        else:
+            summary_entry["avg_cpu"] = None
+            summary_entry["min_cpu"] = None
+            summary_entry["max_cpu"] = None
+
+        if has_times:
+            summary_entry["min_time"] = round(min(times), 1)
+            summary_entry["max_time"] = round(max(times), 1)
+        else:
+            summary_entry["min_time"] = None
+            summary_entry["max_time"] = None
+
+        # Determine status
+        if has_rss or has_cpu or has_times:
+            summary_entry["status"] = "measured"
+            summary_entry["reason"] = None
+        else:
+            summary_entry["status"] = "not_measured"
+            summary_entry["reason"] = "all samples were not_measured"
+
+        summary[phase] = summary_entry
 
     return {"dynamic_island_phases": summary}
 

@@ -73,24 +73,56 @@ class ConversationPanel(QWidget):
         self.set_approval(tool_name, self._preview_arguments(arguments), approval_id)
 
     @staticmethod
+    def _redact_value(value: object) -> str:
+        """Recursively redact sensitive values, never exposing full secrets."""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, str):
+            # Redact if the string looks like a token/key/credential
+            if any(prefix in value.lower() for prefix in ("sk-", "pk-", "api-", "token=", "secret=")):
+                return "••••••••"
+            # Redact long strings that look like secrets
+            if len(value) > 60:
+                return value[:57] + "..."
+            return value
+        if isinstance(value, dict):
+            # Recursively redact dict values; show key names but redact values
+            items = list(value.items())[:5]
+            parts = []
+            for k, v in items:
+                k_str = str(k)
+                v_redacted = _redact_value(v)
+                parts.append(f"{k_str}={v_redacted}")
+            if len(value) > 5:
+                parts.append(f"(+{len(value) - 5} more keys)")
+            return "{" + ", ".join(parts) + "}"
+        if isinstance(value, (list, tuple)):
+            items = value[:3]
+            reduced = [_redact_value(v) for v in items]
+            extra = len(value) - 3
+            extra_str = f"(+{extra} more)" if extra > 0 else ""
+            return "[" + ", ".join(reduced) + "] " + extra_str
+        return f"<{type(value).__name__}>"@staticmethod
     def _preview_arguments(arguments: dict | None) -> str:
         """Compact, redacted argument preview (never full payloads)."""
         if not arguments:
             return ""
-        sensitive = ("password", "secret", "token", "api_key", "apikey", "credential")
         parts = []
         for name, value in list(arguments.items())[:3]:
-            if any(s in name.lower() for s in sensitive):
-                shown = "•••"
-            else:
-                shown = str(value)
-                if len(shown) > 60:
-                    shown = shown[:57] + "..."
+            shown = _redact_value(value)
             parts.append(f"{name}={shown}")
-        text = ", ".join(parts)
         if len(arguments) > 3:
-            text += f" (+{len(arguments) - 3} more)"
-        return text
+            parts.append(f"(+{len(arguments) - 3} more)")
+        return ", ".join(parts)
+
+    @staticmethod
+    def _preview(arguments: dict | None) -> str:
+        """Static preview for test compatibility (never full payloads)."""
+        return ConversationPanel._preview_arguments(arguments)
 
     def _build(self) -> None:
         root = QVBoxLayout(self)
@@ -119,6 +151,7 @@ class ConversationPanel(QWidget):
         )
         ar = QHBoxLayout(self._approval_row)
         ar.setContentsMargins(12, 8, 12, 8)
+        ar.setSpacing(8)
         self._approval_label = QLabel("")
         self._approval_label.setTextFormat(Qt.TextFormat.PlainText)
         self._approval_label.setWordWrap(True)
@@ -160,7 +193,7 @@ class ConversationPanel(QWidget):
         self.input_field.setPlaceholderText("Ask JARVIS…")
         self.input_field.setMinimumHeight(34)
         self.input_field.setStyleSheet(
-            "QLineEdit { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C;"
+            "QLineEdit { background: #2C1C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
             " border-radius: 8px; padding: 6px 10px; font-size: 13px; }"
             "QLineEdit:focus { border-color: #0A84FF; }"
         )
@@ -171,7 +204,7 @@ class ConversationPanel(QWidget):
         self.send_btn.setFixedSize(60, 34)
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.setStyleSheet(
-            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none;"
+            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; "
             " border-radius: 8px; font-size: 13px; font-weight: 500; }"
             "QPushButton:hover { background: #0071E3; }"
         )
@@ -183,7 +216,7 @@ class ConversationPanel(QWidget):
     @staticmethod
     def _style_button(btn: QPushButton) -> None:
         btn.setStyleSheet(
-            "QPushButton { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C;"
+            "QPushButton { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
             " border-radius: 8px; }"
             "QPushButton:checked { background: #FF3B30; border-color: #FF3B30; }"
         )
