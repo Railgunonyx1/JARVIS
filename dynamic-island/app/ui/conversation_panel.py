@@ -408,36 +408,49 @@ class ConversationPanel(QWidget):
             )
 
     def _on_send(self, text: str = "") -> None:
-        """Handle send button / Enter in the input field."""
-        pass  # routed via overlay_window.py
+        """Handle send button / Enter in the input field.
+
+        Emits the send_requested signal so the overlay window routes the
+        message through the coordinator/backend. The placeholder default
+        keeps unit tests that call this method without forwarding an
+        argument working.
+        """
+        text = text.strip()
+        if text:
+            self.send_requested.emit(text)
 
     def _on_mic(self) -> None:
         """Handle push-to-talk button toggle."""
-        pass  # routed via overlay_window.py
+        # The overlay window holds the real push-to-talk logic.
+        self.mic_toggled.emit()
 
     def _on_prev(self) -> None:
         """Handle previous track button."""
         # Media playback state never overwrites JARVIS activity states
-        pass  # wired to MPRIS/adapter in the future
+        return  # wired to MPRIS/adapter in the future
 
     def _on_play(self) -> None:
         """Handle play/pause toggle."""
-        pass  # wired to MPRIS/adapter in the future
+        return  # wired to MPRIS/adapter in the future
 
     def _on_next(self) -> None:
         """Handle next track button."""
         # Media playback state never overwrites JARVIS activity states
-        pass  # wired to MPRIS/adapter in the future
+        return  # wired to MPRIS/adapter in the future
 
     def _on_progress(self, value: int) -> None:
         """Handle progress slider movement."""
-        pass  # wired to MPRIS/adapter in the future
+        return  # wired to MPRIS/adapter in the future
 
     def _on_volume(self, value: int) -> None:
         """Handle volume slider movement."""
-        pass  # wired to MPRIS/adapter in the future
+        return  # wired to MPRIS/adapter in the future
 
     # ── Media player public API ────────────────────────────────────────────────
+
+    def _set_media_hidden(self, hidden: bool) -> None:
+        """Show or hide the media row when no media is active."""
+        self._media_row.setVisible(not hidden)
 
     def set_media_title(self, title: str) -> None:
         """Set the track title shown in the media strip."""
@@ -461,12 +474,6 @@ class ConversationPanel(QWidget):
     def set_media_playing(self, playing: bool) -> None:
         """Set playback state. True = playing, False = paused."""
         self._play_btn.setChecked(playing)
-
-    def set_media_status(self, title: str, artist: str, album_art: QImage | None = None) -> None:
-        """Update the full media strip in one call."""
-        self.set_media_title(title)
-        self.set_media_artist(artist)
-        self.set_media_art(album_art)
 
     def set_media_status(self, title: str, artist: str, album_art: QImage | None = None) -> None:
         """Update the full media strip in one call.

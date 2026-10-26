@@ -325,17 +325,30 @@ class IslandWindow(QWidget):
         coord.start()
         try:
             self._controller.attach(coord)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error("Backend attachment failed: %s", exc)
+            # Surface the backend failure as an island status so the user
+            # can see that the UI is not fully connected. Do not swallow
+            # the exception — the error is logged and the UI state is
+            # updated.
+            self._controller.set_status(IslandStatus.ERROR, "Backend failed to attach")
+            # If a panel was built, surface the error there as well.
+            if getattr(self, "_panel", None) is not None:
+                try:
+                    self._panel.set_approval(
+                        None, "Backend connection failed: " + str(exc), None
+                    )
+                except Exception:
+                    pass
         # If panel already created, bind signals
         try:
             if getattr(self, "_panel", None) is not None and hasattr(coord, "voice_state_changed"):
                 try:
                     coord.voice_state_changed.connect(self._on_voice_state_changed)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as exc:
+                    logger.warning("Failed to bind voice_state_changed: %s", exc)
+        except Exception as exc:
+            logger.warning("Failed to bind voice_state_changed signals: %s", exc)
 
     def _confirm(self, tool_name: str, arguments: dict) -> str:
         """Approval handler — runs on the agent worker thread.
