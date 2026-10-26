@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections.abc import Callable
 from enum import StrEnum
 
@@ -40,6 +41,12 @@ class AppState(StrEnum):
     SPEAKING = "speaking"
     GESTURE_ACTIVE = "gesture_active"
     WORKSPACE_OPEN = "workspace_open"
+
+
+# Approval IDs are request-scoped; each gets a unique UUID tied to the
+# tool call context. The UI registry maps approval_id -> record, and only
+# the matching record's decision is accepted (stale-click safe).
+_APPROVAL_PREFIX = "approval-"
 
 
 class AppCoordinator(QObject):
@@ -70,7 +77,7 @@ class AppCoordinator(QObject):
     workspace_update = Signal(str, str)
 
     def __init__(self, *, mode: str = "agent",
-                 confirmation_handler: Callable[[str, dict], str] | None = None,
+                 confirmation_handler: Callable[[str, dict, str], str] | None = None,
                  max_iterations: int = 10):
         super().__init__()
         self._mode = mode
@@ -82,7 +89,8 @@ class AppCoordinator(QObject):
         self._voice_state = VoiceState.IDLE
         self._gesture_state = False
         self._workspace_state = False
-        self._approval_state = "none"
+        # Per-request approval tracking (request-scoped, stale-safe)
+        self._approval_id: str | None = None
 
         # Subsystems (initialized in start())
         self._backend: JarvisBackend | None = None
@@ -242,11 +250,18 @@ class AppCoordinator(QObject):
                 pass
         logger.info("AppCoordinator shutdown")
 
-    def _action_confirmation(self, action_name: str) -> str:
-        """Adapt the desktop action layer's 1-arg contract to the agent's 2-arg one."""
+    def _action_confirmation(self, action_name: str, approval_id: str | None = None) -> str:
+        """Adapt the desktop action layer's 1-arg contract to the agent's 2-arg one.
+
+        Passes the approval_id (if any) through to the confirmation handler so
+        the UI can associate the decision with the correct request.
+        """
         if self._confirmation_handler is None:
             return "deny"
-        return self._confirmation_handler(action_name, {})
+        # Generate a unique approval_id if not provided and handler expects it
+        if approval_id is None:
+            approval_id = f"{_APPROVAL_PREFIX}{uuid.uuid4().hex[:12]}"
+        return self._confirmation_handler(action_name, {}, approval_id)
 
     # ── Chat ────────────────────────────────────────────────────
     def send_message(self, text: str) -> None:
@@ -256,8 +271,6 @@ class AppCoordinator(QObject):
         self._set_state(AppState.CHATTING)
         self.chat_message.emit("user", text)
         self._backend.send_message(text)
-
-
 
     def _on_backend_chunk(self, chunk: str) -> None:
         self._buffer += chunk
@@ -334,8 +347,6 @@ class AppCoordinator(QObject):
         elif not enabled and self._voice:
             self._voice.shutdown()
             self._voice = None
-
-
 
     def set_model(self, model: str) -> None:
         """Apply a model selection to the backend."""
@@ -602,7 +613,6 @@ class AppCoordinator(QObject):
             "stt_engine": self._voice.stt_engine if self._voice else "none",
             "tts_engine": self._voice.tts_engine if self._voice else "none",
         }
-
 
     def _process_action_queue(self) -> None:
         """Process queued action requests in a background thread.

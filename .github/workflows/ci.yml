@@ -36,7 +36,7 @@ env:
 # JARVIS_RUN_BROWSER_LIVE=1 is set on a dedicated run.
 jobs:
   fast:
-    name: Fast (ubuntu: lint + unit + security + perf)
+    name: "Fast (ubuntu: lint + unit + security + perf)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install ruff pytest PySide6
-      - name: Safety lint (real bugs: F821/F823/E9...)
+      - name: "Safety lint (real bugs: F821/F823/E9...)"
         run: ruff check . --select E9,F63,F7,F82
       - name: Import smoke
         run: python -c "import cli.main"
@@ -70,7 +70,7 @@ jobs:
           if-no-files-found: ignore
 
   fast-windows:
-    name: Fast (windows: unit + security)
+    name: "Fast (windows: unit + security)"
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

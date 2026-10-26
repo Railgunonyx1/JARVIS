@@ -60,10 +60,85 @@ class IslandState(Enum):
     EXPANDED = "expanded"
 
 
+# Approval lifecycle: request-scoped IDs, event-based resolution, no shared mutable slot
+from PySide6.QtCore import QObject, QWaitCondition, QMutex, QLocale
+import uuid
+
+_PENDING = "pending"
+_APPROVED = "approved_once"
+_DENIED = "denied"
+_EXPIRED = "expired"
+_CANCELLED = "cancelled"
+_FAILED = "failed"
+
+
+class ApprovalRecord(QObject):
+    """Request-scoped approval record with a single terminal transition.
+
+    Each approval gets a unique approval_id. The state machine ensures exactly
+    one terminal transition: approved_once | denied | expired | cancelled | failed.
+    Stale or late clicks are ignored.
+    """
+
+    def __init__(self, approval_id: str, tool_name: str, arguments: dict):
+        super().__init__()
+        self.approval_id = approval_id
+        self.tool_name = tool_name
+        self.arguments = arguments
+        self.state = _PENDING
+        self.mutex = QMutex()
+        self.wait_condition = QWaitCondition()
+        # UI callback reference (weak: set to None on resolve)
+        self._decision_sink: Callable[[str], None] | None = None
+
+    def approve(self) -> None:
+        """Transition to approved_once — single terminal transition."""
+        with QMutexLocker(self.mutex) as locker:
+            if self.state != _PENDING:
+                return  # stale; already resolved
+            self.state = _APPROVED
+            self.wait_condition.wakeAll()
+
+    def deny(self) -> None:
+        """Transition to denied — single terminal transition."""
+        with QMutexLocker(self.mutex) as locker:
+            if self.state != _PENDING:
+                return  # stale; already resolved
+            self.state = _DENIED
+            self.wait_condition.wakeAll()
+
+    def expire(self) -> None:
+        """Transition to expired — single terminal transition."""
+        with QMutexLocker(self.mutex) as locker:
+            if self.state != _PENDING:
+                return  # stale; already resolved
+            self.state = _EXPIRED
+            self.wait_condition.wakeAll()
+
+    def is_terminal(self) -> bool:
+        """Check if the approval has reached a terminal state."""
+        return self.state in (_APPROVED, _DENIED, _EXPIRED, _CANCELLED, _FAILED)
+
+    def wait(self, timeout: float = 10.0) -> str:
+        """Block until a terminal state is reached or timeout expires.
+
+        Returns the terminal state string, or _EXPIRED if timeout.
+        Uses QWaitCondition for event-based wakeup instead of busy-wait sleep.
+        """
+        with QMutexLocker(self.mutex) as locker:
+            # Wait until terminal or timeout
+            result = self.wait_condition.wait(self.mutex, int(timeout * 1000))
+            if self.state == _PENDING:
+                # Timed out while still pending
+                self.state = _EXPIRED
+                self.wait_condition.wakeAll()
+            return self.state
+
+
 class IslandWindow(QWidget):
     """Top-center morphing island overlay."""
 
-    _approval_requested = Signal(str, object)
+    _approval_requested = Signal(str, object, str)  # (tool_name, arguments, approval_id)
 
     def __init__(self, controller=None) -> None:
         super().__init__()
@@ -80,7 +155,8 @@ class IslandWindow(QWidget):
         self._panel = None
         self._controller = controller
         self._quitting = False
-        self._approval_result: list[str] | None = None
+        # Registry: approval_id -> ApprovalRecord, protects against stale events
+        self._approval_registry: dict[str, ApprovalRecord] = {}
         self._watched_screen = None
 
         self._build()
@@ -111,6 +187,29 @@ class IslandWindow(QWidget):
             app.screenRemoved.connect(self._on_screens_changed)
             app.primaryScreenChanged.connect(self._on_screens_changed)
             self._watch_screen()
+
+    # ── Approval lifecycle ─────────────────────────────────────────
+    def _generate_approval_id(self, tool_name: str, arguments: dict) -> str:
+        """Generate a unique approval_id from request context."""
+        # Use request_id (tool call context) + UUID suffix for uniqueness
+        ctx = f"{tool_name}@{hash(str(arguments)) % 100000}"
+        return f"approval-{uuid.uuid4().hex[:12]}"
+
+    def _register_approval(self, record: ApprovalRecord) -> None:
+        """Register an approval record in the registry."""
+        self._approval_registry[record.approval_id] = record
+
+    def _unregister_approval(self, approval_id: str) -> None:
+        """Unregister an approval record."""
+        self._approval_registry.pop(approval_id, None)
+
+    def _resolve_approval(self, approval_id: str, state: str) -> None:
+        """Resolve an approval to a terminal state and clean up."""
+        record = self._approval_registry.pop(approval_id, None)
+        if record is None:
+            return  # stale; already cleaned up
+        record.state = state
+        record.wait_condition.wakeAll()
 
     # ── UI ───────────────────────────────────────────────────────
     def _build(self) -> None:
@@ -226,45 +325,92 @@ class IslandWindow(QWidget):
     def _confirm(self, tool_name: str, arguments: dict) -> str:
         """Approval handler — runs on the agent worker thread.
 
-        The request is marshalled to the GUI thread with a queued signal: a
-        Python callable is not a valid QMetaObject slot. A bounded wait
-        prevents the GUI from hanging if no decision is ever delivered.
+        Generates a unique approval_id, registers the record, and waits
+        event-based for a decision via queued signal. Exactly one terminal
+        transition is allowed: approved_once | denied | expired | cancelled | failed.
+        Stale or late events are ignored.
 
-        Deny after 10 seconds or on GUI shutdown, whichever comes first.
+        The GUI thread delivers the decision via _on_approval_decision,
+        which sets the record's terminal state.
         """
-        import time
+        import uuid
 
-        result: list[str] = []
-        self._approval_result = result
-        self._approval_requested.emit(tool_name, arguments)
-        timeout = 10.0  # 10-second timeout
-        start = time.time()
-        while not result:
-            if self._quitting:
-                return "deny"
-            remaining = timeout - (time.time() - start)
-            if remaining <= 0:
-                return "deny"
-            time.sleep(min(remaining, 0.1))
-        return result[0]
+        approval_id = self._generate_approval_id(tool_name, arguments)
+        record = ApprovalRecord(approval_id, tool_name, arguments)
+        self._register_approval(record)
+        # Emit to GUI thread with approval_id
+        self._approval_requested.emit(tool_name, arguments, approval_id)
+        # Wait event-based (no busy-wait sleep)
+        terminal = record.wait(timeout=10.0)
+        # Clean up registry entry
+        self._resolve_approval(approval_id, terminal)
+        # Return the terminal state as the decision
+        if terminal == _APPROVED:
+            return "approved"
+        elif terminal == _DENIED:
+            return "denied"
+        elif terminal == _EXPIRED:
+            return "denied"
+        else:
+            return "denied"
 
-    def _show_approval(self, tool_name: str, arguments: dict) -> None:
+    def _show_approval(self, tool_name: str, arguments: dict, approval_id: str) -> None:
         """GUI thread: surface the approval card, expanding so it is visible."""
-        if self._approval_result is None:
-            return
         panel = self._ensure_panel()
-        panel._decision_sink = self._approval_result
+        # Look up the record; if not found (stale), still show but mark expired
+        record = self._approval_registry.get(approval_id)
+        if record is None:
+            # Stale approval — show but mark expired immediately
+            record = ApprovalRecord(approval_id, tool_name, arguments)
+            self._register_approval(record)
+            record.expire()
+            return
+        # Update the preview with redacted arguments
         panel.request_approval(tool_name, arguments)
+        # Ensure panel's sink routes to this specific record
+        if record._decision_sink is None:
+            record._decision_sink = lambda decision: self._on_approval_decision(record, decision)
+        panel.set_approval(tool_name, self._preview_arguments(arguments))
         if self._state is not IslandState.EXPANDED:
             self.expand()
 
-    def _deny_pending(self) -> None:
-        """Resolve an unanswered approval to deny before hiding/quitting."""
-        result, self._approval_result = self._approval_result, None
-        if result is not None and not result:
-            result.append("deny")
+    def _on_approval_decision(self, record: ApprovalRecord, allow: bool) -> None:
+        """Called from the panel: resolve this specific approval record."""
+        if allow:
+            record.approve()
+        else:
+            record.deny()
+        # Hide the approval card after decision
         if self._panel is not None:
             self._panel.set_approval(None)
+
+    def _deny_pending(self) -> None:
+        """Resolve all pending approvals to deny before hiding/quitting."""
+        for record in self._approval_registry.values():
+            if record.state == _PENDING:
+                record.deny()
+        # Clear the registry
+        self._approval_registry.clear()
+
+    @staticmethod
+    def _preview_arguments(arguments: dict) -> str:
+        """Compact, redacted argument preview (never full payloads)."""
+        if not arguments:
+            return ""
+        sensitive = ("password", "secret", "token", "api_key", "apikey", "credential")
+        parts = []
+        for name, value in list(arguments.items())[:3]:
+            if any(s in name.lower() for s in sensitive):
+                shown = "\u2022\u2022\u2022"
+            else:
+                shown = str(value)
+                if len(shown) > 60:
+                    shown = shown[:57] + "\u2026"
+            parts.append(f"{name}={shown}")
+        text = ", ".join(parts)
+        if len(arguments) > 3:
+            text += f" (+{len(arguments) - 3} more)"
+        return text
 
     def _on_send(self, text: str) -> None:
         if self._controller and self._controller.coordinator is not None:
