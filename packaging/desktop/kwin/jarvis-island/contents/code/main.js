@@ -2,7 +2,7 @@
 // Wayland does not let clients position their own toplevels, so KWin does it.
 
 var APP_ID = "jarvis-island";
-var TOP_MARGIN = 8;
+var TOP_MARGIN = 2;
 var AREA_PLACEMENT = 0;
 
 function isIsland(w) {
