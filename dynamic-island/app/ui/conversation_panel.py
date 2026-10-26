@@ -559,11 +559,23 @@ class ConversationPanel(QWidget):
         self.mic_btn.setChecked(listening)
         if listening:
             self.mic_btn.setStyleSheet(
-                f"QPushButton {{ background: #{_BLUE}; color: #FFFFFF; border: none; "
-                f"border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }}"
-                f"QPushButton:hover {{ background: {_BLUE_H}; }}"
+                "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; "
+                "border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }"
+                "QPushButton:hover { background: #0071E3; }"
+                "QPushButton:checked { background: #0071E3; border-color: #0071E3; }"
+                "QPushButton:focus { outline: 2px solid #0A84FF; outline-offset: 1px; }"
+                "QPushButton:pressed { background: #0071E3; }"
             )
-
+        else:
+            # Default (idle) mic style
+            self.mic_btn.setStyleSheet(
+                "QPushButton { background: #2C2C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
+                "border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }"
+                "QPushButton:hover { background: #3A3A3C; }"
+                "QPushButton:focus { outline: 2px solid #0A84FF; outline-offset: 1px; }"
+                "QPushButton:checked { background: #0A84FF; color: #FFFFFF; border-color: #0A84FF; }"
+                "QPushButton:checked:hover { background: #0071E3; }"
+            )
     def _on_send(self, text: str = "") -> None:
         """Handle send button / Enter in the input field.
 

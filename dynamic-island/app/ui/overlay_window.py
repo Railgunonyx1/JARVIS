@@ -586,9 +586,10 @@ class IslandWindow(QWidget):
 
     def set_status(self, text: str, color: str = "#8E8E93", detail: str = "") -> None:
         self._status.setText(text)
-        self._dot.setStyleSheet(f"color: {color};")
+        self._dot.setStyleSheet(f"color: {color}; font-size: 8px; font-weight: 700;")
+        self._status.setToolTip(detail)
         if detail:
-            self._status.setToolTip(detail)
+            self._status.setToolTip(f"{text}: {detail}")
 
     # ── Interaction ──────────────────────────────────────────────
     def enterEvent(self, event) -> None:
