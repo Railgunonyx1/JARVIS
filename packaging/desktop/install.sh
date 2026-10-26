@@ -1,5 +1,12 @@
 #!/bin/bash
 # JARVIS Desktop Companion — Installer for Bazzite Linux
+#
+# Installs the JARVIS Island as a durable desktop integration:
+#   - Python venv with runtime dependencies
+#   - Installed launchers: jarvis-desktop, jarvis-desktop-island (and jarvis-island)
+#   - Desktop entries (JARVIS.desktop / JARVIS-Island.desktop)
+#   - The jarvis-autostart control command, enabled by default
+#   - KWin script for KDE Wayland top-centre placement
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
@@ -22,6 +29,16 @@ if ! command -v python3 &>/dev/null; then
 fi
 
 mkdir -p "$BIN_DIR"
+
+# Install the jarvis-autostart control command (prior to launchers).
+echo "Installing jarvis-autostart command..."
+if [ -f "$REPO_ROOT/scripts/jarvis-autostart" ]; then
+    cp "$REPO_ROOT/scripts/jarvis-autostart" "$BIN_DIR/jarvis-autostart"
+    chmod +x "$BIN_DIR/jarvis-autostart"
+else
+    echo "ERROR: jarvis-autostart not found at $REPO_ROOT/scripts/"
+    exit 1
+fi
 
 PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 echo "Python version: $PYTHON_VERSION"
@@ -123,6 +140,15 @@ fi
 LAUNCH_HOME="${INSTALL_DIR//&/\\&}"
 sed -i "s|~/.local/share/jarvis-desktop|$LAUNCH_HOME|g" "$BIN_DIR/jarvis-desktop"
 sed -i "s|~/.local/share/jarvis-desktop|$LAUNCH_HOME|g" "$BIN_DIR/jarvis-desktop-island"
+
+# Enable autostart by default during installation (opt-out later via Settings
+# or `jarvis-autostart disable`).
+echo "Enabling login autostart..."
+if [ -x "$BIN_DIR/jarvis-autostart" ]; then
+    "$BIN_DIR/jarvis-autostart" enable
+else
+    echo "warning: jarvis-autostart not installed - skipping autostart enable"
+fi
 
 # Install desktop entry
 mkdir -p "$DESKTOP_DIR"

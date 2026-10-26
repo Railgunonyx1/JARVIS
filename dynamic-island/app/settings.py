@@ -22,13 +22,21 @@ SCHEMA_VERSION = "1.0"
 # Module-level attributes for test compatibility (monkeypatchable).
 # These are computed from __file__ so the module is importable standalone.
 # Derive JARVIS_DESKTOP_HOME from the settings file location.
-_SETTINGS_FILE_PARENT = Path(__file__).resolve().parent
-JARVIS_DESKTOP_HOME = _SETTINGS_FILE_PARENT 
 DEFAULT_SETTINGS_DIR = Path.home() / ".jarvis-desktop"
 
+# XDG-aware single source of truth: the settings file always lives directly
+# under JARVIS_DESKTOP_HOME, and the directory is derived from the file
+# itself so a fresh install never hits a missing-directory save failure.
+_SETTINGS_FILE_PARENT = Path(__file__).resolve().parent
+JARVIS_DESKTOP_HOME = _SETTINGS_FILE_PARENT
+DEFAULT_SETTINGS_FILE = Path(str(JARVIS_DESKTOP_HOME) + "/settings.json")
+
 # Module-level attributes for test compatibility (monkeypatchable).
-SETTINGS_DIR = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_DIR)))
-SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+DEFAULT_SETTINGS_DIR_PATH = Path(str(DEFAULT_SETTINGS_DIR))
+DEFAULT_SETTINGS_FILE_PATH = DEFAULT_SETTINGS_DIR_PATH / "settings.json"
+
+SETTINGS_DIR = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_DIR_PATH)))
+SETTINGS_FILE = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_FILE_PATH)))
 
 DEFAULTS = {
     "schema_version": SCHEMA_VERSION,

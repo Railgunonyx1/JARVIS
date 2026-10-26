@@ -22,7 +22,7 @@ websockets==16.1.1  # WebSocket transport for browser/terminal clients
 
 # === System ===
 psutil==7.2.2
-numpy==2.5.4
+numpy>=1.26,<2.5
 filelock==4.2.0  # cross-process daemon single-instance lock
 sqlite-vec==0.1.9  # memory vector-store KNN index (memory/vector_store.py)
 

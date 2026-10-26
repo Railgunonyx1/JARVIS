@@ -212,6 +212,14 @@ class IslandController(QObject):
             if self._status not in (IslandStatus.SPEAKING, IslandStatus.APPROVAL, IslandStatus.WORKING):
                 self._set(IslandStatus.IDLE)
 
+    # ── Event handlers ───────────────────────────────────────────
+    def _set(self, status: IslandStatus, detail: str = "") -> None:
+        if status is self._status and detail == self._detail:
+            return
+        self._status = status
+        self._detail = detail
+        self.view_changed.emit(self.view)
+
     def _on_voice_state(self, state) -> None:
         """Map voice-state events to island UI status.
 

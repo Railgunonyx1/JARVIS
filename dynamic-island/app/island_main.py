@@ -35,6 +35,8 @@ if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
 from app.settings import load
+
+# Load settings once before the autostart branches touch settings.get().
 from app.ui.island_controller import IslandController
 from app.ui.overlay_window import IslandWindow
 
@@ -199,6 +201,10 @@ def main() -> int:
     args, _ = parser.parse_known_args()
 
     from app import autostart
+
+    # Load persistence settings once before the autostart branch touches
+    # settings.get(). This removes an undefined-variable NameError at startup.
+    settings = load()
 
     # Enable login autostart by default; the installer does this too, and the
     # user can opt out with Settings > Launch on login or `jarvis-autostart

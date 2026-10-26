@@ -95,18 +95,20 @@ class ConversationPanel(QWidget):
             parts = []
             for k, v in items:
                 k_str = str(k)
-                v_redacted = _redact_value(v)
+                v_redacted = ConversationPanel._redact_value(v)
                 parts.append(f"{k_str}={v_redacted}")
             if len(value) > 5:
                 parts.append(f"(+{len(value) - 5} more keys)")
             return "{" + ", ".join(parts) + "}"
         if isinstance(value, (list, tuple)):
             items = value[:3]
-            reduced = [_redact_value(v) for v in items]
+            reduced = [ConversationPanel._redact_value(v) for v in items]
             extra = len(value) - 3
             extra_str = f"(+{extra} more)" if extra > 0 else ""
             return "[" + ", ".join(reduced) + "] " + extra_str
-        return f"<{type(value).__name__}>"@staticmethod
+        return f"<{type(value).__name__}>"
+
+    @staticmethod
     def _preview_arguments(arguments: dict | None) -> str:
         """Compact, redacted argument preview (never full payloads)."""
         if not arguments:
@@ -121,6 +123,23 @@ class ConversationPanel(QWidget):
 
     @staticmethod
     def _preview(arguments: dict | None) -> str:
+        """Static preview for test compatibility (never full payloads)."""
+        return ConversationPanel._preview_arguments(arguments)
+
+    @staticmethod
+    def _preview_arguments(arguments: dict | None) -> str:
+        """Compact, redacted argument preview (never full payloads)."""
+        if not arguments:
+            return ""
+        parts = []
+        for name, value in list(arguments.items())[:3]:
+            shown = ConversationPanel._redact_value(value)
+            parts.append(f"{name}={shown}")
+        if len(arguments) > 3:
+            parts.append(f"(+{len(arguments) - 3} more)")
+        return ", ".join(parts)
+
+    def _build(self) -> None:
         """Static preview for test compatibility (never full payloads)."""
         return ConversationPanel._preview_arguments(arguments)
 
