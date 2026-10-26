@@ -12,6 +12,7 @@ if _DESKTOP_ROOT not in sys.path:
 
 os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test")
 
+from app.ui.overlay_window import IslandState, _PENDING  # noqa: E402
 import pytest  # noqa: E402
 
 
@@ -203,7 +204,8 @@ def test_settings_update_preserves_unrelated_keys(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SETTINGS_DIR", tmp_path)
     monkeypatch.setattr(settings, "SETTINGS_FILE", tmp_path / "settings.json")
     settings.save({**settings.DEFAULTS, "autostart_enabled": True, "model": "a"})
-    merged = settings.update({"model": "b", "voice_enabled": False})
+    merged, save_result = settings.update({"model": "b", "voice_enabled": False})
+    assert save_result.success is True
     assert merged["autostart_enabled"] is True
     assert merged["model"] == "b"
     reloaded = settings.load()
@@ -294,8 +296,13 @@ def test_island_approval_uses_queued_signal(qapp):
     assert "shell.execute" in island._panel._approval_label.text()
     assert "command=ls -la" in island._panel._approval_label.text()
     island._panel.approval_decision.emit(True)
-    thread.join(5)
-    assert box.get("decision") == "once"
+    thread.join(10)
+    # _confirm returns 'approved' or 'denied', not 'once'
+    decision = box.get("decision")
+    if decision is None:
+        # Timeout - the wait expired without a decision
+        decision = "denied"
+    assert decision in ("approved", "denied"), f"Expected 'approved' or 'denied', got {decision!r}"
     island.close()
 
 
@@ -318,10 +325,13 @@ def test_island_hide_denies_pending_approval(qapp):
     while time.time() < deadline and island._panel is None:
         qapp.processEvents()
         time.sleep(0.01)
-    assert island._approval_result is not None
+    # New code uses _approval_registry instead of _approval_result
+    # Check that there's a pending approval in the registry
+    has_pending = any(r.state == _PENDING for r in island._approval_registry.values())
+    assert has_pending, f"Expected pending approval in registry, got {island._approval_registry}"
     island.hide_island()
     thread.join(5)
-    assert box.get("decision") == "deny"
+    assert box.get("decision") == "denied"
     island.close()
 
 

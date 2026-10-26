@@ -75,6 +75,7 @@ class AppCoordinator(QObject):
     voice_transcription = Signal(str)
     gesture_action = Signal(str)
     workspace_update = Signal(str, str)
+    backend_ready = Signal()  # emitted when backend has started and is emitting status/state
 
     def __init__(self, *, mode: str = "agent",
                  confirmation_handler: Callable[[str, dict, str], str] | None = None,
@@ -212,6 +213,13 @@ class AppCoordinator(QObject):
 
         # Connect backend signals to coordinator methods
         self._backend.start(wait=False)
+
+        # Emit that the backend is now ready so late-binding attachers
+        # (e.g. IslandController.attach()) can connect status/state signals.
+        try:
+            self.backend_ready.emit()
+        except Exception:
+            pass
 
         # Actions
         self._actions = DesktopActionLayer(

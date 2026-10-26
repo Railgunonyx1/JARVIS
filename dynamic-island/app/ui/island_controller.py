@@ -107,19 +107,77 @@ class IslandController(QObject):
         Must be called AFTER ``coordinator.start()`` so the backend exists.
         The backend is created lazily inside ``start()``; binding before that
         would silently drop status/state signals.
+
+        If the backend is not yet available (common during early startup), we
+        store a pending connection that will be resolved when the coordinator
+        reports its backend as ready via the backend_ready signal.
         """
         self._coordinator = coordinator
+        self._backend_ready = False
+        # Subscribe to coordinator state and voice signals
         coordinator.state_changed.connect(self._on_app_state)
         coordinator.voice_state_changed.connect(self._on_voice_state)
         coordinator.voice_transcription.connect(self._on_transcription)
         coordinator.chat_message.connect(self._on_chat_message)
+        # Subscribe to backend signals if already available;
+        # otherwise, wait for backend_ready notification from coordinator.
         backend = getattr(coordinator, "_backend", None)
-        if backend is None:
-            logger.warning("Coordinator backend missing at attach; status signals not bound")
-        else:
+        if backend is not None:
+            self._backend_ready = True
             backend.status_changed.connect(self._on_backend_status)
             backend.state_changed.connect(self._on_backend_state)
+            self._resolve_backend_ready()
+        # The coordinator will emit backend_ready once the backend is running;
+        # attach() handles the late-binding case by reconnecting at that point.
         self._connected = True
+
+    def _resolve_backend_ready(self) -> None:
+        """Called when backend becomes known to be ready.
+
+        If backend was available at attach time, this is a no-op.
+        If backend was not yet available, we now bind the status/state signals.
+        """
+        if self._backend_ready:
+            return  # already connected
+        # Find the coordinator's backend and bind signals
+        backend = getattr(self._coordinator, "_backend", None)
+        if backend is not None:
+            backend.status_changed.connect(self._on_backend_status)
+            backend.state_changed.connect(self._on_backend_state)
+        self._backend_ready = True
+
+    # ── Event handlers ───────────────────────────────────────────
+    def _set(self, status: IslandStatus, detail: str = "") -> None:
+        if status is self._status and detail == self._detail:
+            return
+        self._status = status
+        self._detail = detail
+        self.view_changed.emit(self.view)
+
+    def _on_app_state(self, state) -> None:
+        """Map backend app-state events to island UI status.
+
+        State transitions are driven by explicit request lifecycle events from the
+        coordinator, not by inferring completion from `not status.busy` or string
+        inspection alone. Each terminal event (completed, failed, cancelled) drives
+        a deterministic transition.
+        """
+        val = getattr(state, "value", str(state))
+        if val == "listening":
+            self._set(IslandStatus.LISTENING)
+        elif val == "speaking":
+            self._set(IslandStatus.SPEAKING)
+        elif val == "chatting":
+            # CHATTING is an intermediate request state; do NOT transition to IDLE
+            # from chatting alone. The coordinator must emit request_completed or
+            # request_failed to authoritatively complete the turn.
+            self._set(IslandStatus.THINKING)
+        elif val == "idle":
+            # IDLE from request lifecycle — only reset if no higher-priority activity
+            # is currently visible. Do not use `not self._status.busy` which can
+            # incorrectly clear THINKING/ERROR/APPROVAL when another request is pending.
+            if self._status not in (IslandStatus.SPEAKING, IslandStatus.APPROVAL, IslandStatus.WORKING):
+                self._set(IslandStatus.IDLE)
 
     # ── Event handlers ───────────────────────────────────────────
     def _set(self, status: IslandStatus, detail: str = "") -> None:

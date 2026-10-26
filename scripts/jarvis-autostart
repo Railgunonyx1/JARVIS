@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Jarvis autostart control.
+
+Usage:
+    jarvis-autostart enable     # Ensure the log-in entry exists (idempotent).
+    jarvis-autostart disable    # Remove ONLY JARVIS's own entry.
+    jarvis-autostart status     # Print whether the entry is present.
+
+The installer writes this entry so the island starts on KDE session login, and
+the user can disable it at any time (Settings -> Launch on login, or this
+command). Disabling removes only the entry JARVIS installed, so a user or
+distribution policy can keep its own autostart configuration.
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+
+# Resolve the app package from the script's location (installed layout).
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(_HERE))
+
+from app import autostart  # noqa: E402
+
+logger = logging.getLogger("jarvis.autostart")
+
+# Human-readable status text
+_STATUS_ON = "autostart enabled"
+_STATUS_OFF = "autostart disabled"
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="jarvis-autostart",
+        description="Enable/disable the JARVIS Dynamic Island autostart entry.",
+    )
+    mode = parser.add_subparsers(dest="command", required=True, help="Command to run")
+
+    p_enable = mode.add_parser("enable", help="Write the log-in entry (idempotent).")
+    p_disable = mode.add_parser("disable", help="Remove only JARVIS's own entry.")
+    p_status = mode.add_parser("status", help="Print whether the entry is present.")
+
+    return parser
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
+
+
+def _print_status() -> None:
+    if autostart.is_enabled():
+        print(_STATUS_ON)
+    else:
+        print(_STATUS_OFF)
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
+
+
+def main() -> int:
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.command == "enable":
+        ok = autostart.enable()
+        print(f"Autostart {('enabled' if ok else 'FAILED')}")
+        return 0 if ok else 1
+    if args.command == "disable":
+        ok = autostart.disable()
+        print(f"Autostart {('disabled' if ok else 'FAILED')}")
+        return 0 if ok else 1
+    if args.command == "status":
+        _print_status()
+        return 0
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

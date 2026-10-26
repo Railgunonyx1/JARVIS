@@ -9,8 +9,6 @@ import os
 from pathlib import Path
 from typing import NamedTuple
 
-from app.paths import JARVIS_DESKTOP_HOME, ensure_dirs
-
 logger = logging.getLogger("jarvis.desktop.settings")
 
 # XDG-compatible configuration home. Falls back to JARVIS_DESKTOP_HOME or
@@ -22,6 +20,13 @@ DEFAULT_SETTINGS_DIR = Path.home() / ".jarvis-desktop"
 SCHEMA_VERSION = "1.0"
 
 # Module-level attributes for test compatibility (monkeypatchable).
+# These are computed from __file__ so the module is importable standalone.
+# Derive JARVIS_DESKTOP_HOME from the settings file location.
+_SETTINGS_FILE_PARENT = Path(__file__).resolve().parent
+JARVIS_DESKTOP_HOME = _SETTINGS_FILE_PARENT 
+DEFAULT_SETTINGS_DIR = Path.home() / ".jarvis-desktop"
+
+# Module-level attributes for test compatibility (monkeypatchable).
 SETTINGS_DIR = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_DIR)))
 SETTINGS_FILE = SETTINGS_DIR / "settings.json"
 
@@ -30,7 +35,9 @@ DEFAULTS = {
     "model": "",
     "voice_enabled": True,
     "gesture_enabled": False,
-    "autostart_enabled": False,
+    # Start the Dynamic Island on KDE session login. The installer enables
+    # this; the user can turn it off here or with `jarvis-autostart disable`.
+    "autostart_enabled": True,
 }
 
 
@@ -52,7 +59,7 @@ _PENDING_TMP_PREFIX = ".jarvis-settings-tmp"
 def _ensure_dir() -> Path:
     """Ensure the settings directory exists, return the path."""
     try:
-        ensure_dirs()
+        JARVIS_DESKTOP_HOME.mkdir(parents=True, exist_ok=True)
         return JARVIS_DESKTOP_HOME
     except OSError as e:
         logger.error("Cannot create settings directory %s: %s", JARVIS_DESKTOP_HOME, e)

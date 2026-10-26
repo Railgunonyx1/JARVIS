@@ -2,9 +2,15 @@
 
 Top-center morphing pill: idle -> hover peek -> click to expand into the
 compact conversation panel. Also the target of the OS autostart entry.
+
+Autostart is enabled by default on install (the installer writes the entry and
+starts the app with `jarvis-desktop-island`). Users can opt out at any time:
+  - `jarvis-autostart disable` removes JARVIS's own freedesktop entry, or
+  - Settings > "Launch on login" toggle in the desktop app.
 """
 
 import argparse
+import logging
 import os
 import signal
 import sys
@@ -14,19 +20,45 @@ from PySide6.QtWidgets import QApplication
 
 try:
     from PySide6.QtNetwork import QLocalServer, QLocalSocket
-except Exception:
+except Exception:  # pragma: no cover - Qt availability only
     QLocalServer = None
     QLocalSocket = None
 
 APP_ID = "jarvis-island"
 
-_DESKTOP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "jarvis-desktop"))
+logger = logging.getLogger("jarvis.desktop.island")
+
+_DESKTOP_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "jarvis-desktop")
+)
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
 from app.settings import load
 from app.ui.island_controller import IslandController
 from app.ui.overlay_window import IslandWindow
+
+# Executed by the *launcher* (the #!/usr/bin/env python3 wrapper in
+# bin/jarvis-desktop-island), not by a double-click in an editor.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+APP_DIR = os.path.join(REPO_ROOT, "dynamic-island")
+
+# Installed layout: bin/jarvis-desktop-island  ->  dynamic-island/app/island_main.py
+_INSTALLED_BIN = os.path.join(REPO_ROOT, "bin", "jarvis-desktop-island")
+_INSTALLED_ISLAND = os.path.join(REPO_ROOT, "dynamic-island", "app", "island_main.py")
+
+# In-tree (development) layout: dynamic-island/app/island_main.py
+_DEV_ISLAND = os.path.join(APP_DIR, "island_main.py")
+
+# Where the installed launcher normally lives.
+_INSTALLED_LAUNCHER = os.path.join(REPO_ROOT, "bin", "jarvis-desktop-island")
+
+# The platform default is the installed launcher; fall back to the
+# in-tree entry point only when the installed one is absent.
+_ENTRY_POINT = _INSTALLED_LAUNCHER
+if not os.path.isfile(_INSTALLED_LAUNCHER):
+    _ENTRY_POINT = _DEV_ISLAND
 
 
 def _configure_app(app: QApplication) -> None:
@@ -122,6 +154,22 @@ def _instance_server_name(lock_path: str) -> str:
     return f"{APP_ID}-{base}-ipc"
 
 
+def _select_entry_point() -> str:
+    """Return the absolute executable that launches the island.
+
+    Installed layout (as delivered by the desktop installer):
+
+      bin/jarvis-desktop-island  ->  dynamic-island/app/island_main.py
+
+    In-tree checkout layout is the fallback, used only when the installed
+    binary is not present.
+    """
+    if os.path.isfile(_INSTALLED_LAUNCHER):
+        return _INSTALLED_LAUNCHER
+    if os.path.isfile(_INSTALLED_ISLAND):
+        return _INSTALLED_ISLAND
+    return _DEV_ISLAND
+
 
 def main() -> int:
     app = QApplication(sys.argv)
@@ -138,17 +186,26 @@ def main() -> int:
         return 0
 
     parser = argparse.ArgumentParser(description="JARVIS Desktop Island")
-    parser.add_argument("--no-autostart", action="store_true",
-                        help="Do not register the login autostart entry")
-    parser.add_argument("--enable-autostart", action="store_true",
-                        help="Force-register the login autostart entry")
+    parser.add_argument(
+        "--no-autostart",
+        action="store_true",
+        help="Do not register the login autostart entry (default: on)",
+    )
+    parser.add_argument(
+        "--enable-autostart",
+        action="store_true",
+        help="Force-register the login autostart entry",
+    )
     args, _ = parser.parse_known_args()
 
     from app import autostart
-    settings = load()
+
+    # Enable login autostart by default; the installer does this too, and the
+    # user can opt out with Settings > Launch on login or `jarvis-autostart
+    # disable`. Explicit opt-out wins.
     if args.no_autostart:
         autostart.disable()
-    elif args.enable_autostart or settings.get("autostart_enabled", False):
+    elif args.enable_autostart or settings.get("autostart_enabled", True):
         autostart.enable()
 
     controller = IslandController()

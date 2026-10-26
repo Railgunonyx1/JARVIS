@@ -19,6 +19,7 @@ from app.voice.voice_manager import VoiceState
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
+    QMutexLocker,
     QRect,
     Qt,
     QTimer,
