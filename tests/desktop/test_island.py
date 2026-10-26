@@ -62,7 +62,7 @@ def test_island_centered_top(qapp):
     expected_x = geo.left() + (geo.width() - island.width()) // 2
     assert abs(island.x() - expected_x) <= 1
     # Fallback: top margin only; KWin script is authoritative on KDE Wayland.
-    assert island.y() == geo.top() + 8
+    assert island.y() == geo.top() + 4
     island.close()
 
 
@@ -80,7 +80,7 @@ def test_island_high_dpi_top(qapp):
     screen.logicalDotsPerInch = lambda: 160
     try:
         island = IslandWindow()
-        assert island.y() == screen.availableGeometry().top() + 8
+        assert island.y() == screen.availableGeometry().top() + 4
     finally:
         screen.logicalDotsPerInch = orig
         island.close()
@@ -99,7 +99,7 @@ def test_island_work_area_origin(qapp):
     shifted = QRect(geo.x(), geo.y(), geo.width(), geo.height())
     expected_x = shifted.x() + (shifted.width() - island.width()) // 2
     assert abs(island.x() - expected_x) <= 1
-    assert island.y() == shifted.y() + 8
+    assert island.y() == shifted.y() + 4
     island.close()
 
 

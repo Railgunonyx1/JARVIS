@@ -40,7 +40,7 @@ from PySide6.QtWidgets import (
 
 logger = logging.getLogger("jarvis.desktop.island")
 
-_TOP_MARGIN = 8
+_TOP_MARGIN = 4
 _IDLE_W, _IDLE_H = 180, 36
 _COMPACT_W, _COMPACT_H = 320, 44
 _EXPANDED_W, _EXPANDED_H = 480, 620
