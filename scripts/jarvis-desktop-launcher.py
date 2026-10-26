@@ -37,22 +37,18 @@ def main() -> int:
         if p not in sys.path:
             sys.path.insert(0, p)
 
-    # Use dynamic-island app entry point for the full desktop client,
-    # mapping to the appropriate sub-entry point.
-    island_main = os.path.join(desktop, "app", "island_main.py")
+    # Use dynamic-island app entry point for the full desktop client.
+    # jarvis-desktop launches the FULL-WINDOW client using main.py.
+    # The island overlay is launched separately via jarvis-island / jarvis-desktop-island.
     desktop_main = os.path.join(desktop, "app", "main.py")
 
-    if not os.path.isfile(island_main) and not os.path.isfile(desktop_main):
-        print(f"JARVIS Desktop not found at {desktop} (island_main or main.py missing)", file=sys.stderr)
+    if not os.path.isfile(desktop_main):
+        print(f"JARVIS Desktop not found at {desktop} (main.py missing). "
+              "Use 'jarvis-island' or 'jarvis-desktop-island' for the island.", file=sys.stderr)
         return 1
 
-    # Prefer island_main if both exist (island mode), otherwise desktop_main
-    if os.path.isfile(island_main):
-        from app.island_main import main as app_main
-        return app_main()
-    else:
-        from app.main import main as app_main
-        return app_main()
+    from app.main import main as app_main
+    return app_main()
 
 
 if __name__ == "__main__":
