@@ -2,13 +2,17 @@
 
 Privacy-first: the camera is OFF until explicitly activated. No frames
 are captured or retained when gesture mode is disabled.
+
+Shutdown ordering invariant: The camera is released only AFTER the gesture
+tracker worker has confirmed exit. This prevents a race where the camera
+might still be read by the tracker during shutdown. Camera.stop() does NOT
+set _tracker_exit_confirmed — the coordinator owns that confirmation.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-import time
 
 import numpy as np
 
@@ -22,6 +26,10 @@ class Camera:
     has confirmed exit. This prevents a race where the camera might still
     be read by the tracker during shutdown.
 
+    The _tracker_exit_confirmed flag is owned by the coordinator, not the
+    camera. Camera.stop() releases the capture after being notified that the
+    tracker has exited.
+
     Usage:
         cam = Camera()
         cam.start()          # begins capture
@@ -29,8 +37,7 @@ class Camera:
         cam.stop()           # stops capture, releases camera
     """
 
-    def __init__(self, *, device: int = 0, width: int = 640, height: int = 480,
-                 fps: int = 30):
+    def __init__(self, *, device: int = 0, width: int = 640, height: int = 480, fps: int = 30):
         self._device = device
         self._width = width
         self._height = height
@@ -40,7 +47,9 @@ class Camera:
         self._lock = threading.Lock()
         self._latest_frame: np.ndarray | None = None
         self._capture_thread: threading.Thread | None = None
-        self._tracker_exit_confirmed: bool = False
+        # _tracker_exit_confirmed is NOT set here — the coordinator owns this.
+        # It will be set by the coordinator after the tracker thread has exited.
+        self._tracker_exit_confirmed_by_coordinator = False
 
     @property
     def is_running(self) -> bool:
@@ -85,10 +94,14 @@ class Camera:
         """Stop camera capture and release resources.
 
         1. Request stop via _running flag.
-        2. Wait for capture thread to confirm exit.
-        3. Mark that tracker exit must be confirmed before camera release.
-        4. After tracker exit is confirmed (by coordinator), release camera.
-        5. Idempotent: second call is a no-op.
+        2. Wait for capture thread to confirm exit (join with timeout).
+        3. Do NOT release camera hardware yet — wait for the coordinator to
+           confirm that the tracker worker has exited.
+        4. Idempotent: second call is a no-op if already stopped.
+
+        This method does NOT set _tracker_exit_confirmed — that is the
+        coordinator's responsibility. The coordinator must call
+        camera.tracker_exit_confirmed() after the tracker worker has stopped.
         """
         if not self._running:
             return
@@ -96,20 +109,14 @@ class Camera:
         # Wait for capture thread to exit
         if self._capture_thread and self._capture_thread.is_alive():
             self._capture_thread.join(timeout=3.0)
-        # Only after capture thread has exited do we respect tracker exit
-        # confirmation before releasing the camera hardware.
-        self._tracker_exit_confirmed = True
-        # Now release the camera — this is safe because the tracker should
-        # have already stopped and released its references.
-        if self._cap:
-            try:
-                self._cap.release()
-            except Exception:
-                pass
-            self._cap = None
-        with self._lock:
-            self._latest_frame = None
-        logger.info("Camera stopped")
+        # Do NOT release camera hardware here. The coordinator will call
+        # camera.tracker_exit_confirmed() after the tracker worker has
+        # confirmed its own exit. Releasing the camera before the tracker
+        # has stopped would race with the tracker reading frames.
+        # Only after the coordinator signals tracker exit confirmation do we
+        # release the capture object.
+        # NOTE: Camera.release() is deferred to the coordinator's
+        # tracker_exit_confirmed() callback path.
 
     def read(self) -> np.ndarray | None:
         """Get the latest frame (non-blocking)."""
@@ -119,9 +126,10 @@ class Camera:
         """Background capture loop.
 
         Checks _running each iteration. Camera frame is read and stored.
-        The camera is released only after stop() sets _tracker_exit_confirmed
-        and the tracker worker has confirmed its own exit.
+        The camera is released only after the coordinator has confirmed
+        that the tracker worker has exited.
         """
+        import time as _time
         while self._running:
             try:
                 if self._cap is None:
@@ -131,10 +139,10 @@ class Camera:
                     with self._lock:
                         self._latest_frame = frame
                 else:
-                    time.sleep(0.01)
+                    _time.sleep(0.01)
             except Exception as e:
                 logger.debug("Capture error: %s", e)
-                time.sleep(0.05)
+                _time.sleep(0.05)
 
     def __enter__(self):
         self.start()
@@ -142,3 +150,49 @@ class Camera:
 
     def __exit__(self, *exc):
         self.stop()
+        # Do NOT set _tracker_exit_confirmed here — coordinator owns it.
+        # The coordinator must call camera.tracker_exit_confirmed() after
+        # the tracker worker has exited.
+        return False
+
+    # ── Coordinator notification ──────────────────────────────────────
+
+    def tracker_exit_confirmed(self) -> None:
+        """Signal from the coordinator that the tracker worker has exited.
+
+        The coordinator should call this after the HandTracker.stop() has
+        confirmed the worker thread has exited. After this call, it is safe
+        to release the camera hardware.
+
+        This separates the ownership: the tracker confirms its own exit,
+        then the coordinator confirms it to the camera, then the camera
+        releases the hardware.
+        """
+        self._tracker_exit_confirmed_by_coordinator = True
+        # Now safe to release the camera
+        self._release_camera()
+
+    def _release_camera(self) -> None:
+        """Release the camera capture hardware.
+
+        Safe to call only after tracker_exit_confirmed() has been called.
+        """
+        with self._lock:
+            self._latest_frame = None
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+        logger.info("Camera hardware released (tracker exit confirmed)")
+
+
+# Convenience function for the coordinator to signal camera release
+def signal_camera_tracker_exit_confirmed(camera: Camera) -> None:
+    """Call from the coordinator after HandTracker.stop() confirms worker exit.
+
+    This separates ownership: the tracker confirms its exit, then the
+    coordinator signals the camera that it's safe to release hardware.
+    """
+    camera.tracker_exit_confirmed()

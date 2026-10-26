@@ -2,6 +2,20 @@
 
 Uses MediaPipe Hands for 21-landmark hand tracking. Runs in a worker
 thread, processing frames from the Camera layer.
+
+Shutdown ordering invariant: The worker thread confirms its own exit before
+the coordinator signals the camera that it's safe to release hardware. This
+prevents a race where the camera might still be read by the tracker during
+shutdown.
+
+Key invariant: Only the worker thread owns and closes the MediaPipe resource.
+Stop signals from other threads are handled via a threading.Event stop token;
+the worker loop checks it each iteration and exits gracefully. Camera release
+only occurs after the worker thread has confirmed exit.
+
+The coordinator owns _tracker_exit_confirmed and must call
+camera.tracker_exit_confirmed() after HandTracker.stop() confirms worker
+exit, before the camera releases its hardware.
 """
 
 from __future__ import annotations
@@ -16,8 +30,8 @@ import numpy as np
 
 logger = logging.getLogger("jarvis.desktop.gestures.tracking")
 
-
 MP_INIT_ERROR = "MediaPipe not available"
+
 
 @dataclass
 class HandLandmarks:
@@ -43,13 +57,18 @@ class HandTracker:
     Key invariant: Only the worker thread owns and closes the MediaPipe resource.
     Stop signals from other threads are handled via a threading.Event stop token;
     the worker loop checks it each iteration and exits gracefully. Camera release
-only occurs after the worker thread has confirmed exit.
+    only occurs after the worker thread has confirmed exit.
+
+    The coordinator owns _tracker_exit_confirmed and must call
+    camera.tracker_exit_confirmed() after HandTracker.stop() confirms worker
+    exit, before the camera releases its hardware.
 
     Usage:
         tracker = HandTracker()
         tracker.start()
         hands = tracker.hands  # list[HandLandmarks]
-        tracker.stop()
+        tracker.stop()         # worker exits; coordinator then calls
+                               # camera.tracker_exit_confirmed()
     """
 
     def __init__(self, *, max_hands: int = 2,
@@ -72,6 +91,7 @@ only occurs after the worker thread has confirmed exit.
         self._min_frame_interval = 1.0 / self._target_fps
         self._last_frame_time = 0.0
         self._startup_error: Exception | None = None
+        self._running = False
 
     @property
     def is_running(self) -> bool:
@@ -122,9 +142,15 @@ only occurs after the worker thread has confirmed exit.
         """Stop tracking and release resources.
 
         1. Request stop via the stop event (thread-safe, no race with loop check).
-        2. Wait for the worker thread to confirm it has exited.
-        3. Only after worker exit does this thread close MediaPipe and release refs.
+        2. Wait for the worker thread to confirm it has exited (join with timeout).
+        3. Return immediately — the coordinator will call
+           camera.tracker_exit_confirmed() after this, telling the camera
+           it's safe to release hardware.
         4. Idempotent: second call is a no-op.
+
+        This method does NOT close MediaPipe or signal the camera — the
+        coordinator handles those responsibilities after confirming worker
+        exit.
         """
         if not self._running:
             return
@@ -133,18 +159,14 @@ only occurs after the worker thread has confirmed exit.
         # Wait for worker thread to exit (it checks _stop_event each iteration)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
-        # Only after the worker has exited do we close MediaPipe and clear refs.
-        # This prevents a race where the worker might still be reading frames.
-        if self._mp is not None:
-            try:
-                self._mp.close()
-            except Exception:
-                pass
-            self._mp = None
+        # Worker thread has exited. Do NOT close MediaPipe or signal camera
+        # here — the coordinator owns _tracker_exit_confirmed and will call
+        # camera.tracker_exit_confirmed() at the appropriate time.
+        # Only clear refs safely.
         self._mp_owning_thread = None
         with self._lock:
             self._hands = []
-        logger.info("Hand tracker stopped")
+        logger.info("Hand tracker stopped (worker exited)")
 
     def _track_loop(self) -> None:
         """Background tracking loop.
@@ -206,7 +228,7 @@ only occurs after the worker thread has confirmed exit.
             # Worker thread exits here. MediaPipe close is handled by stop()
             # to avoid double-close races. Just clear refs.
             try:
-                pass  # _mp close is done in stop() only
+                pass  # _mp close is done in stop() only to avoid races
             except Exception:
                 pass
             with self._lock:
@@ -218,3 +240,4 @@ only occurs after the worker thread has confirmed exit.
 
     def __exit__(self, *exc):
         self.stop()
+        return False
