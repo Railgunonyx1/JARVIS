@@ -170,35 +170,50 @@ class ConversationPanel(QWidget):
 
         # Track metadata: title and artist
         self._media_title = QLabel("No track playing")
+        self._media_title.setMinimumWidth(120)
         self._media_title.setStyleSheet(
             "color: #EBEEF2; font-size: 12px; font-weight: 500; "
-            "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; "
+            "white-space: nowrap; overflow: hidden; "
         )
+        self._media_title.setToolTip("No track playing")
+        self._media_title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         ml.addWidget(self._media_title)
 
         # Artist
         self._media_artist = QLabel("")
+        self._media_artist.setMinimumWidth(100)
         self._media_artist.setStyleSheet(
             "color: #B0B7C1; font-size: 11px; white-space: nowrap; "
-            "overflow: hidden; text-overflow: ellipsis; "
+            "overflow: hidden; "
         )
+        self._media_artist.setToolTip("")
+        self._media_artist.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         ml.addWidget(self._media_artist)
 
         # Album artwork placeholder (compact circle)
-        self._media_art = QLabel()
+        self._media_art = QLabel("")
         self._media_art.setFixedSize(36, 36)
         self._media_art.setStyleSheet(
-            "background: #2C1C2E; border-radius: 18px; border: 1px solid #3A3A3C; "
-            "color: #8C96A3; font-size: 14px; font-weight: 600; "
+            "background: #20242B; border: 2px solid #3A404B; "
+            "border-radius: 18px; color: #5C6470; "
+            "font-size: 11px; font-weight: 600; "
             "display: flex; align-items: center; justify-content: center; "
-            "cursor: pointer; "
         )
         self._media_art.setToolTip("Change album art")
+        self._media_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ml.addWidget(self._media_art)
 
-        # Playback bar: previous / play-pause / next
+        # Wrapper for playback buttons (previous / play-pause / next)
+        self._playback_w = QWidget()
+        self._playback_w.setFixedSize(100, 32)
+        self._playback_w.setStyleSheet("""
+            background: transparent; border-radius: 4px; margin-right: 6px;
+        """)
+        pl = QHBoxLayout(self._playback_w)
+        pl.setContentsMargins(4, 0, 4, 0)
+        pl.setSpacing(2)
         self._prev_btn = QPushButton("\u23EE")
-        self._prev_btn.setFixedSize(32, 32)
+        self._prev_btn.setFixedSize(26, 26)
         self._prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prev_btn.setStyleSheet("""
             QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
@@ -206,10 +221,10 @@ class ConversationPanel(QWidget):
             QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
         """)
         self._prev_btn.clicked.connect(self._on_prev)
-        ml.addWidget(self._prev_btn)
+        pl.addWidget(self._prev_btn)
 
         self._play_btn = QPushButton("\u25B6")
-        self._play_btn.setFixedSize(32, 32)
+        self._play_btn.setFixedSize(26, 26)
         self._play_btn.setCheckable(True)
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._play_btn.setStyleSheet("""
@@ -219,10 +234,10 @@ class ConversationPanel(QWidget):
         """)
         self._play_btn.setToolTip("Play / pause")
         self._play_btn.clicked.connect(self._on_play)
-        ml.addWidget(self._play_btn)
+        pl.addWidget(self._play_btn)
 
         self._next_btn = QPushButton("\u23ED")
-        self._next_btn.setFixedSize(32, 32)
+        self._next_btn.setFixedSize(26, 26)
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_btn.setStyleSheet("""
             QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
@@ -230,34 +245,37 @@ class ConversationPanel(QWidget):
             QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
         """)
         self._next_btn.clicked.connect(self._on_next)
-        ml.addWidget(self._next_btn)
+        pl.addWidget(self._next_btn)
 
-        # Progress slider
+        # Progress slider (compact)
         self._progress_bar = QSlider(Qt.Orientation.Horizontal)
-        self._progress_bar.setFixedWidth(160)
+        self._progress_bar.setFixedWidth(100)
         self._progress_bar.setMinimum(0)
         self._progress_bar.setMaximum(100)
         self._progress_bar.setStyleSheet(
             "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
             "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
-            " border-radius: 3px; height: 10px; width: 10px; margin: -3px 0; }"
+            " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
             "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
         )
         self._progress_bar.valueChanged.connect(self._on_progress)
-        ml.addWidget(self._progress_bar)
 
-        # Volume slider (optional, mirrored from media strip)
+        # Volume slider (compact)
         self._volume_bar = QSlider(Qt.Orientation.Horizontal)
-        self._volume_bar.setFixedWidth(80)
+        self._volume_bar.setFixedWidth(66)
         self._volume_bar.setMinimum(0)
         self._volume_bar.setMaximum(100)
         self._volume_bar.setStyleSheet(
             "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
             "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
-            " border-radius: 3px; height: 10px; width: 10px; margin: -3px 0; }"
+            " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
             "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
         )
         self._volume_bar.valueChanged.connect(self._on_volume)
+
+        ml.addWidget(self._media_art)
+        ml.addWidget(self._playback_w)
+        ml.addWidget(self._progress_bar)
         ml.addWidget(self._volume_bar)
 
         root.addWidget(self._media_row)
@@ -450,9 +468,23 @@ class ConversationPanel(QWidget):
         self.set_media_artist(artist)
         self.set_media_art(album_art)
 
+    def set_media_status(self, title: str, artist: str, album_art: QImage | None = None) -> None:
+        """Update the full media strip in one call.
+
+        With empty title/artist, hides the strip (no active media).
+        """
+        if not title.strip():
+            self._media_row.hide()
+            return
+        self.set_media_title(title)
+        self.set_media_artist(artist)
+        self.set_media_art(album_art)
+        self._media_row.show()
+
     def disconnect_media(self) -> None:
         """Release media resources. Call when the media player is no longer available."""
-        self.set_media_status("No track playing", "")
+        self._media_row.hide()
+        self.set_media_status("", "")
 
     def _on_approval_btn(self, allow: bool, approval_id: str | None) -> None:
         """Handle an approval button click."""
