@@ -381,11 +381,11 @@ class IslandWindow(QWidget):
             record.expire()
             return
         # Update the preview with redacted arguments
-        panel.request_approval(tool_name, arguments)
+        panel.request_approval(tool_name, arguments, approval_id)
         # Ensure panel's sink routes to this specific record
         if record._decision_sink is None:
             record._decision_sink = lambda decision: self._on_approval_decision(record, decision)
-        panel.set_approval(tool_name, self._preview_arguments(arguments))
+        panel.set_approval(tool_name, self._preview_arguments(arguments), approval_id)
         if self._state is not IslandState.EXPANDED:
             self.expand()
 

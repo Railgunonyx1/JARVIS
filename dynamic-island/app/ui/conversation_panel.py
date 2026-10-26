@@ -281,9 +281,16 @@ class ConversationPanel(QWidget):
         for b in (approve_btn, deny_btn):
             b.setFixedHeight(28)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Each button carries its approval_id via closure
-        approve_btn.clicked.connect(lambda checked, aid=None: self._on_approval_btn(True, aid))
-        deny_btn.clicked.connect(lambda checked, aid=None: self._on_approval_btn(False, aid))
+        # Each button carries the approval_id passed into set_approval
+        # Delegate to the instance methods so _current_approval_id is used.
+        # The allow/deny buttons use _on_approve_btn/_on_deny_btn which read
+        # self._current_approval_id set by set_approval().
+        self._current_approval_id: str | None = None
+        # Use a closure that captures _current_approval_id at call time
+        self._on_approve_btn = lambda: self._on_approval_btn(True, self._current_approval_id)
+        self._on_deny_btn = lambda: self._on_approval_btn(False, self._current_approval_id)
+        approve_btn.clicked.connect(self._on_approve_btn)
+        deny_btn.clicked.connect(self._on_deny_btn)
         ar.addWidget(deny_btn)
         ar.addWidget(approve_btn)
         self._approval_row.hide()
@@ -354,8 +361,10 @@ class ConversationPanel(QWidget):
         self._approval_row.show()
         if tool_name is None:
             self._approval_row.hide()
+            self._current_approval_id = None
         else:
             self._approval_label.setText(f"{tool_name}: {preview}")
+            self._current_approval_id = approval_id
 
     def append_chunk(self, chunk: str) -> None:
         """Append a streaming response chunk to the transcript."""
