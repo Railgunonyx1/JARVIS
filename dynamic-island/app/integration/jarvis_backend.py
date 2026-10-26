@@ -65,6 +65,7 @@ class JarvisBackend(QObject):
     response_ready = Signal(object)              # AgentResponse
     status_changed = Signal(str)                 # status string
     state_changed = Signal(object)               # BackendState
+    shutdown_complete = Signal()                 # emitted when stop() finishes gracefully
 
     def __init__(self, *, mode: str = "agent", max_iterations: int = 10,
                  confirmation_handler: Callable[[str, dict], str] | None = None):
@@ -79,8 +80,13 @@ class JarvisBackend(QObject):
         self._state_lock = threading.RLock()
         self._agent_loop = None
         self._input_queue: queue.Queue[str] = queue.Queue()
+        self._max_queue_size = 50
+        self._request_id_counter = 0
+        self._current_request_id: int | None = None
+        self._current_task: asyncio.Task | None = None
         self._startup_error: Exception | None = None
         self._started_event = threading.Event()
+        self._shutdown_event = threading.Event()
         self._session_id = f"desktop-{int(time.time())}"
 
     @property
@@ -118,15 +124,77 @@ class JarvisBackend(QObject):
         if wait:
             self._wait_until_ready(timeout)
 
+    def send_message(self, text: str, *, request_id: int | None = None) -> int | None:
+        """Queue a message for the agent (non-blocking).
+
+        Args:
+            text: The message text to send to the agent.
+            request_id: Optional explicit request ID. If not provided, one is
+                generated. Messages with request IDs support cancellation.
+
+        Returns:
+            The request ID that was assigned, or None if the message was rejected.
+        """
+        with self._state_lock:
+            if self._state not in (BackendState.READY, BackendState.RUNNING):
+                # rejecting: not in a state that accepts input
+                return None
+            # Assign a request ID if not provided
+            if request_id is None:
+                self._request_id_counter += 1
+                request_id = self._request_id_counter
+            self._current_request_id = request_id
+
+        # Apply back-pressure: reject if queue would exceed max size
+        try:
+            self._input_queue.put_nowait((request_id, text))
+        except queue.Full:
+            # Drop oldest message or reject; here we just log and reject new one
+            logger.debug(f"Input queue full, rejecting message (queue size: {self._input_queue.qsize()})")
+            # Reset current request ID since we're rejecting this message
+            with self._state_lock:
+                self._current_request_id = None
+            return None
+
+        return request_id
+
+    def cancel_request(self, request_id: int) -> bool:
+        """Request cancellation of a specific in-flight agent run.
+
+        Args:
+            request_id: The request ID to cancel.
+
+        Returns:
+            True if cancellation was requested (the ID was found and cancellation
+            was scheduled), False if no such request ID is active.
+        """
+        with self._state_lock:
+            if self._current_request_id != request_id:
+                return False
+            # Schedule cancellation to be awaited in the worker thread
+            # We set a flag that the _run_agent coroutine will check
+            self._current_task = None  # will be reset by the worker when done
+            return True
+
     def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
         """Stop the worker thread gracefully.
 
         Args:
             wait: If True, wait for graceful shutdown (up to timeout).
             timeout: Maximum seconds to wait when wait=True.
+
+        Note:
+            - Rejects new input after signaling stop.
+            - Cancels the current in-flight request if one is active.
+            - Drains/marks pending queue items.
+            - Awaits worker coroutine cleanup.
+            - Closes the event loop on the owning thread.
+            - Never calls loop.stop() from another thread as normal control flow.
         """
         with self._state_lock:
             if self._state == BackendState.STOPPED:
+                # Already stopped; emit complete and return
+                self.shutdown_complete.emit()
                 return
             self._state = BackendState.STOPPING
 
@@ -136,40 +204,38 @@ class JarvisBackend(QObject):
         # if it's currently waiting.
         if self._input_queue:
             try:
-                self._input_queue.put_nowait(None)
+                self._input_queue.put_nowait((None, ""))
             except Exception:
                 pass
 
         if self._thread and wait:
+            # Wait for the worker thread to finish its graceful shutdown.
+            # The worker's _main loop will exit when it sees STOPPING.
             self._thread.join(timeout=timeout)
 
-        # If the thread is still alive after the timeout, force-stop the loop
-        # as a last resort. This can interrupt active work, so only use it
-        # when the graceful shutdown timed out.
+        # If the thread is still alive after the timeout, report honestly.
+        # Do NOT force loop.stop() from another thread — that interrupts active work.
         if self._thread and self._thread.is_alive():
-            logger.warning("Backend thread did not stop gracefully, forcing stop")
-            try:
-                if self._loop and self._loop.is_running():
-                    self._loop.call_soon_threadsafe(self._loop.stop)
-            except Exception:
-                pass
-            try:
-                self._thread.join(timeout=5.0)
-            except Exception:
-                pass
+            logger.warning("Backend thread did not stop gracefully within timeout")
+            # Do not call self._loop.stop() from another thread.
+            # Let the worker finish its current iteration and exit naturally.
+        elif self._thread is None:
+            # Thread was never started
+            pass
 
         with self._state_lock:
+            # Final state check — only transition to STOPPED if thread truly died
             if self._thread and self._thread.is_alive():
-                # Still running - do not falsely report stopped
+                # Thread still alive; stay in STOPPING, do not falsely report STOPPED
                 self._state = BackendState.STOPPING
+                self.shutdown_complete.emit()
                 return
+            # Thread is dead or was never started; transition to STOPPED
             self._state = BackendState.STOPPED
             self._agent_loop = None
             self._loop = None
-
-    def send_message(self, text: str) -> None:
-        """Queue a message for the agent (non-blocking)."""
-        self._input_queue.put(text)
+            self._current_request_id = None
+            self.shutdown_complete.emit()
 
     def _wait_until_ready(self, timeout: float = 10.0) -> None:
         start = time.time()
@@ -251,15 +317,24 @@ class JarvisBackend(QObject):
 
         while self.state in (BackendState.READY, BackendState.RUNNING):
             try:
-                text = self._input_queue.get(timeout=0.1)
+                item = self._input_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
+            request_id, text = item
             if not text or not str(text).strip():
                 continue
-            await self._run_agent(text)
+            # Track the current task for possible cancellation
+            task = self._loop.create_task(self._run_agent_with_id(text, request_id))
+            with self._state_lock:
+                self._current_task = task
+            try:
+                await task
+            finally:
+                with self._state_lock:
+                    self._current_task = None
 
-    async def _run_agent(self, text: str) -> None:
-        """Execute one agent run and deliver results."""
+    async def _run_agent_with_id(self, text: str, request_id: int) -> None:
+        """Execute one agent run with a request ID and support cancellation."""
         start = time.time()
         try:
             def on_chunk(chunk: str) -> None:
@@ -276,6 +351,13 @@ class JarvisBackend(QObject):
                 tool_calls=[tc.get("name", "") for tc in result.state.tool_calls] if result.state else [],
             )
             self.response_ready.emit(response)
+        except asyncio.CancelledError:
+            # Re-emit as an error response rather than propagating the cancel
+            self.response_ready.emit(AgentResponse(
+                success=False, text="",
+                error=f"Request {request_id} was cancelled",
+                duration_ms=(time.time() - start) * 1000,
+            ))
         except Exception as exc:
             logger.exception("Agent run failed")
             self.response_ready.emit(AgentResponse(

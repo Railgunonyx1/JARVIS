@@ -40,19 +40,36 @@ class PerformanceMonitor:
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._snapshots: deque[PerformanceSnapshot] = deque(maxlen=3600)
+        self._started_by: str | None = None
 
-    def start(self) -> None:
+    def start(self, source: str = "unknown") -> None:
+        """Start monitoring with a source tag for auditability.
+
+        Ensures only one monitor thread is active. Other components should
+        request start via this method rather than spawning independent threads.
+        """
         if self._running:
+            if self._started_by == source:
+                return  # already running from this source
+            logger.warning("PerformanceMonitor already running from %s", self._started_by)
             return
         self._running = True
+        self._started_by = source
         self._thread = threading.Thread(target=self._loop, daemon=True, name="jarvis-diagnostics")
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, source: str = "unknown") -> None:
+        """Stop monitoring, confirming it was started from the given source."""
+        if not self._running:
+            logger.warning("PerformanceMonitor not running when stop called from %s", source)
+            return
+        if self._started_by != source:
+            logger.warning("PerformanceMonitor started from %s but stopping from %s", self._started_by, source)
         self._running = False
         if self._thread:
             self._thread.join(timeout=2.0)
             self._thread = None
+        self._started_by = None
 
     def record_event(self, name: str, duration_ms: float) -> None:
         """Record a named event latency."""

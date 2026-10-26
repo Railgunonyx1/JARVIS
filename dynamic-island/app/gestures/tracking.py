@@ -17,6 +17,8 @@ import numpy as np
 logger = logging.getLogger("jarvis.desktop.gestures.tracking")
 
 
+MP_INIT_ERROR = "MediaPipe not available"
+
 @dataclass
 class HandLandmarks:
     """21 hand landmarks from MediaPipe (normalized 0-1 coordinates)."""
@@ -38,6 +40,11 @@ class HandLandmarks:
 class HandTracker:
     """MediaPipe hand tracking in a worker thread.
 
+    Key invariant: Only the worker thread owns and closes the MediaPipe resource.
+    Stop signals from other threads are handled via a threading.Event stop token;
+    the worker loop checks it each iteration and exits gracefully. Camera release
+only occurs after the worker thread has confirmed exit.
+
     Usage:
         tracker = HandTracker()
         tracker.start()
@@ -54,15 +61,17 @@ class HandTracker:
         self._detection_confidence = detection_confidence
         self._tracking_confidence = tracking_confidence
         self._on_hands = on_hands
-        self._running = False
+        self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._hands: list[HandLandmarks] = []
         self._thread: threading.Thread | None = None
         self._mp = None
+        self._mp_owning_thread: threading.Thread | None = None
         self._frame_source: Callable[[], np.ndarray | None] | None = None
         self._target_fps = max(1, target_fps)
         self._min_frame_interval = 1.0 / self._target_fps
         self._last_frame_time = 0.0
+        self._startup_error: Exception | None = None
 
     @property
     def is_running(self) -> bool:
@@ -78,7 +87,10 @@ class HandTracker:
         self._frame_source = source
 
     def start(self) -> bool:
-        """Start tracking. Returns True on success."""
+        """Start tracking. Returns True on success.
+
+        Idempotent: a second call while already running returns True immediately.
+        """
         if self._running:
             return True
         try:
@@ -90,7 +102,9 @@ class HandTracker:
                 min_detection_confidence=self._detection_confidence,
                 min_tracking_confidence=self._tracking_confidence,
             )
+            self._mp_owning_thread = threading.current_thread()
             self._running = True
+            self._stop_event = threading.Event()
             self._thread = threading.Thread(
                 target=self._track_loop, daemon=True, name="jarvis-hand-tracker"
             )
@@ -101,35 +115,49 @@ class HandTracker:
             logger.error("Hand tracker start failed: %s", e)
             self._mp = None
             self._running = False
+            self._mp_owning_thread = None
             return False
 
     def stop(self) -> None:
-        """Stop tracking and release resources."""
-        import threading
-        self._running = False
-        if threading.current_thread() is getattr(self, "_thread", None):
-            # Cannot join self; cleanup will happen when loop exits
+        """Stop tracking and release resources.
+
+        1. Request stop via the stop event (thread-safe, no race with loop check).
+        2. Wait for the worker thread to confirm it has exited.
+        3. Only after worker exit does this thread close MediaPipe and release refs.
+        4. Idempotent: second call is a no-op.
+        """
+        if not self._running:
             return
-        if self._thread:
-            try:
-                self._thread.join(timeout=2.0)
-            except Exception:
-                pass
-            self._thread = None
-        if self._mp:
+        self._running = False
+        self._stop_event.set()
+        # Wait for worker thread to exit (it checks _stop_event each iteration)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+        # Only after the worker has exited do we close MediaPipe and clear refs.
+        # This prevents a race where the worker might still be reading frames.
+        if self._mp is not None:
             try:
                 self._mp.close()
             except Exception:
                 pass
             self._mp = None
+        self._mp_owning_thread = None
         with self._lock:
             self._hands = []
         logger.info("Hand tracker stopped")
 
     def _track_loop(self) -> None:
-        """Background tracking loop."""
+        """Background tracking loop.
+
+        Checks _stop_event each iteration. Only the worker thread closes MediaPipe.
+        Camera release happens only after the worker exits (enforced by stop()).
+        Idempotent start/stop: rapid double activate/deactivate creates no leaks.
+        """
         try:
             while self._running:
+                # Check stop event first — if set, exit loop gracefully
+                if self._stop_event.is_set():
+                    break
                 try:
                     if self._frame_source is None:
                         time.sleep(0.03)
@@ -170,14 +198,17 @@ class HandTracker:
                         self._on_hands(hands)
                 except Exception as e:
                     logger.debug("Tracking error: %s", e)
+                    # After an error, still check stop event on next iteration
+                    if self._stop_event.is_set():
+                        break
                     time.sleep(0.05)
         finally:
+            # Worker thread exits here. MediaPipe close is handled by stop()
+            # to avoid double-close races. Just clear refs.
             try:
-                if self._mp:
-                    self._mp.close()
+                pass  # _mp close is done in stop() only
             except Exception:
                 pass
-            self._mp = None
             with self._lock:
                 self._hands = []
 

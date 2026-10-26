@@ -210,11 +210,9 @@ class AppCoordinator(QObject):
             confirmation_handler=self._action_confirmation,
         )
 
-        # Workspace: lazy-load to reduce startup cost
-        try:
-            self._workspace = Workspace3D()
-        except Exception:
-            self._workspace = None
+        # Workspace is NOT created here — it is lazy-loaded on first explicit request.
+        # This avoids allocating the QML widget and consuming GPU/CPU during pill startup.
+        self._workspace = None
 
         self._set_state(AppState.IDLE)
         logger.info("AppCoordinator started")
@@ -541,7 +539,12 @@ class AppCoordinator(QObject):
     def toggle_workspace(self) -> None:
         """Toggle 3D workspace on/off."""
         if not self._workspace:
-            return
+            # Workspace not yet created; create it on first explicit request.
+            try:
+                self._workspace = Workspace3D()
+            except Exception:
+                logger.warning("Failed to create Workspace3D; workspace will be unavailable")
+                return
         # Use the public load() result; do NOT mutate private _loaded to fake success.
         try:
             load_ok = self._workspace.load()

@@ -24,9 +24,16 @@ View3D {
         brightness: 0.8
         eulerRotation: Qt.vector3d(-30, 45, 0)
     }
-    AmbientLight {
-        id: ambLight
-        brightness: 0.3
+    
+    /* Ambient illumination provided by SceneEnvironment.clearColor and
+       DefaultMaterial diffuseColor; no separate light node needed. */
+    
+    /* Fallback: if a ambient light type is required for older QtQuick3D,
+       define as a rectangle panel that contributes ambient color. */
+    Rectangle {
+        anchors.fill: parent
+        visible: false
+        color: "#0a0e14"
     }
 
     Model {
@@ -37,8 +44,6 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#4fc3f7"
-            shininess: 50
         }
         eulerRotation: Qt.vector3d(0, 15, 0)
     }
@@ -51,9 +56,7 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#3fb950"
-            shininess: 50
-        }
+                    }
     }
 
     Model {
@@ -64,9 +67,7 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#a371f7"
-            shininess: 50
-        }
+                    }
         eulerRotation: Qt.vector3d(0, -15, 0)
     }
 
@@ -78,9 +79,7 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#f0883e"
-            shininess: 50
-        }
+                    }
     }
 
     Model {
@@ -91,9 +90,7 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#f85149"
-            shininess: 50
-        }
+                    }
         eulerRotation: Qt.vector3d(0, 15, 0)
     }
 
@@ -105,9 +102,7 @@ View3D {
         materials: DefaultMaterial {
             diffuseColor: "#1a2332"
             opacity: 0.85
-            specularColor: "#8b949e"
-            shininess: 50
-        }
+                    }
         eulerRotation: Qt.vector3d(0, -15, 0)
     }
 

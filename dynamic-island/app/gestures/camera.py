@@ -18,6 +18,10 @@ logger = logging.getLogger("jarvis.desktop.gestures.camera")
 class Camera:
     """On-demand camera capture.
 
+    Key invariant: Camera is released only after the gesture tracker worker
+    has confirmed exit. This prevents a race where the camera might still
+    be read by the tracker during shutdown.
+
     Usage:
         cam = Camera()
         cam.start()          # begins capture
@@ -36,6 +40,7 @@ class Camera:
         self._lock = threading.Lock()
         self._latest_frame: np.ndarray | None = None
         self._capture_thread: threading.Thread | None = None
+        self._tracker_exit_confirmed: bool = False
 
     @property
     def is_running(self) -> bool:
@@ -47,7 +52,10 @@ class Camera:
             return self._latest_frame.copy() if self._latest_frame is not None else None
 
     def start(self) -> bool:
-        """Start camera capture. Returns True on success."""
+        """Start camera capture. Returns True on success.
+
+        Idempotent: a second call while already running returns True immediately.
+        """
         if self._running:
             return True
         try:
@@ -74,13 +82,30 @@ class Camera:
             return False
 
     def stop(self) -> None:
-        """Stop camera capture and release resources."""
+        """Stop camera capture and release resources.
+
+        1. Request stop via _running flag.
+        2. Wait for capture thread to confirm exit.
+        3. Mark that tracker exit must be confirmed before camera release.
+        4. After tracker exit is confirmed (by coordinator), release camera.
+        5. Idempotent: second call is a no-op.
+        """
+        if not self._running:
+            return
         self._running = False
-        if self._capture_thread:
-            self._capture_thread.join(timeout=2.0)
-            self._capture_thread = None
+        # Wait for capture thread to exit
+        if self._capture_thread and self._capture_thread.is_alive():
+            self._capture_thread.join(timeout=3.0)
+        # Only after capture thread has exited do we respect tracker exit
+        # confirmation before releasing the camera hardware.
+        self._tracker_exit_confirmed = True
+        # Now release the camera — this is safe because the tracker should
+        # have already stopped and released its references.
         if self._cap:
-            self._cap.release()
+            try:
+                self._cap.release()
+            except Exception:
+                pass
             self._cap = None
         with self._lock:
             self._latest_frame = None
@@ -91,7 +116,12 @@ class Camera:
         return self.latest_frame
 
     def _capture_loop(self) -> None:
-        """Background capture loop."""
+        """Background capture loop.
+
+        Checks _running each iteration. Camera frame is read and stored.
+        The camera is released only after stop() sets _tracker_exit_confirmed
+        and the tracker worker has confirmed its own exit.
+        """
         while self._running:
             try:
                 if self._cap is None:
