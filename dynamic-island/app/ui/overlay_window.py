@@ -261,26 +261,35 @@ class IslandWindow(QWidget):
         self._title = QLabel("JARVIS")
         self._title.setObjectName("islandTitle")
         self._title.setToolTip("Right-click for Hide / Quit")
+        self._title.setStyleSheet(
+            "QLabel { color: #EBEEF2; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }"
+        )
         bar_layout.addWidget(self._title)
 
-        self._dot = QLabel("\u25cf")
+        self._dot = QLabel("\u25CF")
         self._dot.setObjectName("islandStatus")
-        self._dot.setStyleSheet(f"color: {_ACCENT}; font-size: 10px;")
+        self._dot.setStyleSheet(f"color: {_ACCENT}; font-size: 8px; font-weight: 700;")
         bar_layout.addWidget(self._dot)
 
         self._status = QLabel("Ready")
         self._status.setObjectName("islandStatus")
-        self._status.setStyleSheet(f"color: {_MUTED}; font-size: 10px;")
+        self._status.setStyleSheet(
+            "QLabel { color: #B0B7C1; font-size: 10px; font-weight: 600; "
+            "letter-spacing: 0.3px; }"
+        )
+        self._status.setToolTip("Ready")
         bar_layout.addWidget(self._status, 1)
 
         self._close_btn = QPushButton("\u2715")
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none; color: {_MUTED}; }"
-            "QPushButton:hover { color: {_TEXT}; }"
+            "QPushButton { background: transparent; border: none; color: #B0B7C1; border-radius: 11px; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.1); color: #EBEEF2; }"
+            "QPushButton:focus { outline: 2px solid #FFD60A; outline-offset: 2px; border-radius: 11px; }"
+            "QPushButton:pressed { background: rgba(255,255,255,0.2); }"
         )
-        self._close_btn.setToolTip("Collapse")
+        self._close_btn.setToolTip("Collapse island")
         self._close_btn.clicked.connect(self.collapse)
         self._close_btn.hide()
         bar_layout.addWidget(self._close_btn)

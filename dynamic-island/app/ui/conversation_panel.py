@@ -154,9 +154,14 @@ class ConversationPanel(QWidget):
             "color: #E5E5EA;\n"
             "border: none;\n"
             "font-size: 13px;\n"
+            "line-height: 1.6;\n"
             "padding: 12px 14px;\n"
-            "}"
+            "-webkit-scrollbar-width: thin;\n"
+            "-webkit-scrollbar-color: #3A3A3C #141619;\n"
         )
+        # Add message styling for clear hierarchy
+        self.transcript.append("<style> QTextBlock { margin: 0 0 14px 0; } "
+                               "</style>")
         root.addWidget(self.transcript, 1)
 
         # ── Media player strip (optional, compact) ──────────────────────────────────
@@ -423,6 +428,15 @@ class ConversationPanel(QWidget):
         for b in (approve_btn, deny_btn):
             b.setFixedHeight(28)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            b.setStyleSheet(
+                "QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
+                "border-radius: 6px; font-size: 11px; font-weight: 600; padding: 6px 14px; }"
+                "QPushButton:hover { background: #3A3A3C; }"
+                "QPushButton:focus { outline: 2px solid #FFD60A; outline-offset: 1px; }"
+                "QPushButton:checked { background: #FFD60A; color: #FFFFFF; border-color: #FFD60A; }"
+                "QPushButton:pressed { background: #FFD60A; }"
+            )
         # Each button carries the approval_id passed into set_approval
         # Delegate to the instance methods so _current_approval_id is used.
         # The allow/deny buttons use _on_approve_btn/_on_deny_btn which read
@@ -455,6 +469,15 @@ class ConversationPanel(QWidget):
         self.mic_btn.setToolTip("Push to talk")
         self.mic_btn.clicked.connect(self.mic_toggled.emit)
         self._style_button(self.mic_btn)
+        self.mic_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.mic_btn.setStyleSheet(
+            "QPushButton { background: #2C2C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
+            "border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }"
+            "QPushButton:hover { background: #3A3A3C; }"
+            "QPushButton:focus { outline: 2px solid #0A84FF; outline-offset: 1px; }"
+            "QPushButton:checked { background: #0A84FF; color: #FFFFFF; border-color: #0A84FF; }"
+            "QPushButton:checked:hover { background: #0071E3; }"
+        )
         il.addWidget(self.mic_btn)
 
         self.input_field = QLineEdit()
@@ -462,8 +485,9 @@ class ConversationPanel(QWidget):
         self.input_field.setMinimumHeight(34)
         self.input_field.setStyleSheet(
             "QLineEdit { background: #2C1C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
-            " border-radius: 8px; padding: 6px 10px; font-size: 13px; }"
-            "QLineEdit:focus { border-color: #0A84FF; }"
+            "border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500; }"
+            "QLineEdit:focus { border-color: #0A84FF; outline: 2px solid #0A84FF; "
+            "outline-offset: 1px; background: #24282F; }"
         )
         self.input_field.returnPressed.connect(self._on_send)
         il.addWidget(self.input_field, 1)
@@ -477,6 +501,15 @@ class ConversationPanel(QWidget):
             "QPushButton:hover { background: #0071E3; }"
         )
         self.send_btn.clicked.connect(self._on_send)
+        self.send_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.send_btn.setStyleSheet(
+            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; "
+            "border-radius: 8px; font-size: 13px; font-weight: 500; "
+            "padding: 6px 12px; }"
+            "QPushButton:hover { background: #0071E3; }"
+            "QPushButton:focus { outline: 2px solid #8C96A3; outline-offset: 1px; }"
+            "QPushButton:pressed { background: #0071E3; }"
+        )
         il.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
