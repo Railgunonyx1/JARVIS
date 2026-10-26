@@ -7,7 +7,7 @@ prompts. No permanent toolbar, no dashboard. Reuses the coordinator/backend.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QObject, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QImage, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -205,6 +205,7 @@ class ConversationPanel(QWidget):
             QPushButton:hover { background: #3A3A3C; }
             QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
         """)
+        self._prev_btn.clicked.connect(self._on_prev)
         ml.addWidget(self._prev_btn)
 
         self._play_btn = QPushButton("\u25B6")
@@ -217,6 +218,7 @@ class ConversationPanel(QWidget):
             QPushButton:checked { background: #0071E3; }
         """)
         self._play_btn.setToolTip("Play / pause")
+        self._play_btn.clicked.connect(self._on_play)
         ml.addWidget(self._play_btn)
 
         self._next_btn = QPushButton("\u23ED")
@@ -227,6 +229,7 @@ class ConversationPanel(QWidget):
             QPushButton:hover { background: #3A3A3C; }
             QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
         """)
+        self._next_btn.clicked.connect(self._on_next)
         ml.addWidget(self._next_btn)
 
         # Progress slider
@@ -240,6 +243,7 @@ class ConversationPanel(QWidget):
             " border-radius: 3px; height: 10px; width: 10px; margin: -3px 0; }"
             "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
         )
+        self._progress_bar.valueChanged.connect(self._on_progress)
         ml.addWidget(self._progress_bar)
 
         # Volume slider (optional, mirrored from media strip)
@@ -253,6 +257,7 @@ class ConversationPanel(QWidget):
             " border-radius: 3px; height: 10px; width: 10px; margin: -3px 0; }"
             "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
         )
+        self._volume_bar.valueChanged.connect(self._on_volume)
         ml.addWidget(self._volume_bar)
 
         root.addWidget(self._media_row)
@@ -382,6 +387,63 @@ class ConversationPanel(QWidget):
     def _on_mic(self) -> None:
         """Handle push-to-talk button toggle."""
         pass  # routed via overlay_window.py
+
+    def _on_prev(self) -> None:
+        """Handle previous track button."""
+        # Media playback state never overwrites JARVIS activity states
+        pass  # wired to MPRIS/adapter in the future
+
+    def _on_play(self) -> None:
+        """Handle play/pause toggle."""
+        pass  # wired to MPRIS/adapter in the future
+
+    def _on_next(self) -> None:
+        """Handle next track button."""
+        # Media playback state never overwrites JARVIS activity states
+        pass  # wired to MPRIS/adapter in the future
+
+    def _on_progress(self, value: int) -> None:
+        """Handle progress slider movement."""
+        pass  # wired to MPRIS/adapter in the future
+
+    def _on_volume(self, value: int) -> None:
+        """Handle volume slider movement."""
+        pass  # wired to MPRIS/adapter in the future
+
+    # ── Media player public API ────────────────────────────────────────────────
+
+    def set_media_title(self, title: str) -> None:
+        """Set the track title shown in the media strip."""
+        self._media_title.setText(title)
+
+    def set_media_artist(self, artist: str) -> None:
+        """Set the track artist shown in the media strip."""
+        self._media_artist.setText(artist)
+
+    def set_media_art(self, pixmap: QImage | None = None) -> None:
+        """Set the album artwork. Pass a QImage or None to show placeholder."""
+        if pixmap is not None:
+            self._media_art.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectCrop))
+        else:
+            self._media_art.setText("?")
+
+    def media_play_pause(self) -> None:
+        """Toggle play/pause programmatically."""
+        self._play_btn.setChecked(not self._play_btn.isChecked())
+
+    def set_media_playing(self, playing: bool) -> None:
+        """Set playback state. True = playing, False = paused."""
+        self._play_btn.setChecked(playing)
+
+    def set_media_status(self, title: str, artist: str, album_art: QImage | None = None) -> None:
+        """Update the full media strip in one call."""
+        self.set_media_title(title)
+        self.set_media_artist(artist)
+        self.set_media_art(album_art)
+
+    def disconnect_media(self) -> None:
+        """Release media resources. Call when the media player is no longer available."""
+        self.set_media_status("No track playing", "")
 
     def _on_approval_btn(self, allow: bool, approval_id: str | None) -> None:
         """Handle an approval button click."""
