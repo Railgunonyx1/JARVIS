@@ -27,8 +27,10 @@ Requires: Python 3.11+, PySide6, and the parent JARVIS repo on `PYTHONPATH`.
 
 ```
 app/
-  main.py                  # Entry point
-  ui/chat_window.py        # PySide6 chat UI
+  main.py                  # Entry point (launches the island)
+  ui/overlay_window.py     # Dynamic Island overlay (idle -> expanded)
+  ui/conversation_panel.py # Compact conversation panel (expanded state)
+  ui/island_controller.py  # UI state controller
   integration/jarvis_backend.py  # AgentLoop ↔ Qt bridge
   voice/                   # STT/TTS (Phase 3)
   gestures/                # Camera + tracking (Phase 4)

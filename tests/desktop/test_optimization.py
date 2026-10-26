@@ -169,15 +169,6 @@ def test_gesture_tracker_has_fps_limit():
     assert tracker._min_frame_interval == 0.1
 
 
-def test_chat_window_has_message_limit():
-    pytest.importorskip("PySide6")
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.ui.chat_window import ChatWindow
-    window = ChatWindow()
-    assert window._max_messages == 500
-
 
 def test_voice_manager_lazy_warmup():
     """Voice manager should warm up models without blocking."""

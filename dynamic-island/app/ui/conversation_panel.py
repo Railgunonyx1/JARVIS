@@ -6,7 +6,7 @@ prompts. No permanent toolbar, no dashboard. Reuses the coordinator/backend.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QObject, Signal, QLocale
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -53,20 +53,13 @@ class ConversationPanel(QWidget):
     send_requested = Signal(str)
     mic_toggled = Signal()
     cancel_requested = Signal()
-    approval_decision = Signal(bool)
 
     def __init__(self) -> None:
         super().__init__()
         self._max_blocks = 500
         # Map approval_id -> ApprovalSink; each sink handles one decision only
         self._approval_sinks: dict[str, ApprovalSink] = {}
-        self.approval_decision.connect(self._on_approval_decision)
         self._build()
-
-    def _on_approval_decision(self, allow: bool) -> None:
-        # The signal carries the approval_id from the sender; find and use
-        # the matching sink; ignore if none found (stale or orphaned).
-        pass  # handled inline below
 
     def request_approval(self, tool_name: str, arguments: dict | None = None, approval_id: str | None = None) -> None:
         """Show the approval row and route the next decision to a per-ID sink."""
@@ -115,31 +108,13 @@ class ConversationPanel(QWidget):
             return ""
         parts = []
         for name, value in list(arguments.items())[:3]:
-            shown = _redact_value(value)
-            parts.append(f"{name}={shown}")
-        if len(arguments) > 3:
-            parts.append(f"(+{len(arguments) - 3} more)")
-        return ", ".join(parts)
-
-    @staticmethod
-    def _preview(arguments: dict | None) -> str:
-        """Static preview for test compatibility (never full payloads)."""
-        return ConversationPanel._preview_arguments(arguments)
-
-    @staticmethod
-    def _preview_arguments(arguments: dict | None) -> str:
-        """Compact, redacted argument preview (never full payloads)."""
-        if not arguments:
-            return ""
-        parts = []
-        for name, value in list(arguments.items())[:3]:
             shown = ConversationPanel._redact_value(value)
             parts.append(f"{name}={shown}")
         if len(arguments) > 3:
             parts.append(f"(+{len(arguments) - 3} more)")
         return ", ".join(parts)
 
-    def _build(self) -> None:
+    def _preview(self, arguments: dict | None) -> str:
         """Static preview for test compatibility (never full payloads)."""
         return ConversationPanel._preview_arguments(arguments)
 
@@ -199,7 +174,7 @@ class ConversationPanel(QWidget):
         il.setContentsMargins(12, 8, 12, 8)
         il.setSpacing(8)
 
-        self.mic_btn = QPushButton("☰")
+        self.mic_btn = QPushButton("\u2630")
         self.mic_btn.setFixedSize(34, 34)
         self.mic_btn.setCheckable(True)
         self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -209,7 +184,7 @@ class ConversationPanel(QWidget):
         il.addWidget(self.mic_btn)
 
         self.input_field = QLineEdit()
-        self.input_field.setPlaceholderText("Ask JARVIS…")
+        self.input_field.setPlaceholderText("Ask JARVIS\u2026")
         self.input_field.setMinimumHeight(34)
         self.input_field.setStyleSheet(
             "QLineEdit { background: #2C1C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
@@ -231,84 +206,3 @@ class ConversationPanel(QWidget):
         il.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
-
-    @staticmethod
-    def _style_button(btn: QPushButton) -> None:
-        btn.setStyleSheet(
-            "QPushButton { background: #2C2C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
-            " border-radius: 8px; }"
-            "QPushButton:checked { background: #FF3B30; border-color: #FF3B30; }"
-        )
-
-    def _on_approval_btn(self, allow: bool, approval_id: str | None) -> None:
-        """Route the approval decision to the per-ID sink, ignoring stale clicks."""
-        if approval_id is None or approval_id not in self._approval_sinks:
-            return  # no matching sink – stale or orphaned click
-        sink = self._approval_sinks.pop(approval_id)
-        if allow:
-            sink.approve()
-        else:
-            sink.deny()
-
-    def _on_send(self) -> None:
-        text = self.input_field.text().strip()
-        if not text:
-            return
-        self.input_field.clear()
-        self.send_requested.emit(text)
-
-    # ── Rendering ────────────────────────────────────────────────
-    def append_message(self, role: str, text: str) -> None:
-        if role == "user":
-            html = f'<p style="color:#0A84FF;margin:6px 0;"><b>You:</b> {self._esc(text)}</p>'
-        elif role == "jarvis":
-            html = f'<p style="color:#FFFFFF;margin:6px 0;"><b>JARVIS:</b> {self._esc(text)}</p>'
-        else:
-            html = f'<p style="color:#8E8E93;margin:6px 0;font-style:italic;">{self._esc(text)}</p>'
-        self.transcript.append(html)
-        self.transcript.moveCursor(QTextCursor.MoveOperation.End)
-        self._trim()
-
-    def append_chunk(self, chunk: str) -> None:
-        cursor = self.transcript.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(chunk)
-        doc = self.transcript.document()
-        if doc.blockCount() > self._max_blocks:
-            self._trim()
-
-    def _trim(self) -> None:
-        doc = self.transcript.document()
-        if doc.blockCount() > self._max_blocks:
-            cursor = self.transcript.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.Start)
-            for _ in range(doc.blockCount() - self._max_blocks):
-                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-                cursor.removeSelectedText()
-                cursor.deletePreviousChar()
-            self.transcript.setTextCursor(cursor)
-
-    def set_approval(self, tool_name: str | None, preview: str = "", approval_id: str | None = None) -> None:
-        if tool_name:
-            text = f"Allow JARVIS to run: {tool_name}?"
-            if preview:
-                text += f"\n{preview}"
-            self._approval_label.setText(text)
-            self._approval_row.show()
-            # Register a new sink for this approval_id
-            if approval_id and self._approval_sinks.get(approval_id) is None:
-                sink = ApprovalSink(approval_id, lambda decision: None)  # no-op; decision handled in _on_approval_btn
-                self._approval_sinks[approval_id] = sink
-        else:
-            self._approval_label.setText("")
-            self._approval_row.hide()
-
-    def set_listening(self, active: bool) -> None:
-        self.mic_btn.setChecked(active)
-
-    def clear(self) -> None:
-        self.transcript.clear()
-
-    @staticmethod
-    def _esc(text: str) -> str:
-        return text.replace("&", "&").replace("<", "<").replace(">", ">")

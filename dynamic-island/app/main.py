@@ -1,6 +1,11 @@
-"""JARVIS Desktop Companion — entry point."""
+""""
+JARVIS Dynamic Island — entry point.
 
-import argparse
+Launches the Dynamic Island overlay (the sole user-facing interface).
+The separate desktop companion window was removed; the island is the
+authoritative UI for all interaction.
+"""
+
 import os
 import sys
 
@@ -10,35 +15,7 @@ _DESKTOP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
-from app.ui.chat_window import ChatWindow
-
-
-def main() -> int:
-    app = QApplication(sys.argv)
-    app.setApplicationName("JARVIS Desktop")
-    window = ChatWindow()
-    window.show()
-    window.start_backend()
-
-    # Handle command-line actions from .desktop file shortcuts
-    parser = argparse.ArgumentParser(description="JARVIS Desktop Companion")
-    parser.add_argument("--settings", action="store_true",
-                        help="Open settings panel")
-    parser.add_argument("--gesture", action="store_true",
-                        help="Toggle gesture mode")
-    parser.add_argument("--workspace", action="store_true",
-                        help="Toggle 3D workspace")
-    args, _ = parser.parse_known_args()
-
-    if args.settings:
-        window._on_settings()
-    if args.gesture:
-        window._on_gesture_toggle()
-    if args.workspace:
-        window._on_workspace_toggle()
-
-    return app.exec()
-
+from app.island_main import main as island_main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(island_main())

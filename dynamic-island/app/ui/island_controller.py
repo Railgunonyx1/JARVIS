@@ -146,7 +146,6 @@ class IslandController(QObject):
             backend.state_changed.connect(self._on_backend_state)
         self._backend_ready = True
 
-    # ── Event handlers ───────────────────────────────────────────
     def _set(self, status: IslandStatus, detail: str = "") -> None:
         if status is self._status and detail == self._detail:
             return
@@ -157,10 +156,10 @@ class IslandController(QObject):
     def _on_app_state(self, state) -> None:
         """Map backend app-state events to island UI status.
 
-        State transitions are driven by explicit request lifecycle events from the
-        coordinator, not by inferring completion from `not status.busy` or string
-        inspection alone. Each terminal event (completed, failed, cancelled) drives
-        a deterministic transition.
+        State transitions are driven by explicit request lifecycle events from
+        the coordinator, not by inferring completion from `not status.busy` or
+        string inspection alone. Each terminal event (completed, failed,
+        cancelled) drives a deterministic transition.
         """
         val = getattr(state, "value", str(state))
         if val == "listening":
@@ -173,85 +172,48 @@ class IslandController(QObject):
             # request_failed to authoritatively complete the turn.
             self._set(IslandStatus.THINKING)
         elif val == "idle":
-            # IDLE from request lifecycle — only reset if no higher-priority activity
-            # is currently visible. Do not use `not self._status.busy` which can
-            # incorrectly clear THINKING/ERROR/APPROVAL when another request is pending.
-            if self._status not in (IslandStatus.SPEAKING, IslandStatus.APPROVAL, IslandStatus.WORKING):
+            # IDLE from request lifecycle — only reset if no higher-priority
+            # activity is currently visible. Do not use `not self._status.busy`
+            # which can incorrectly clear THINKING/ERROR/APPROVAL when another
+            # request is pending.
+            if self._status not in (
+                IslandStatus.SPEAKING,
+                IslandStatus.APPROVAL,
+                IslandStatus.WORKING,
+            ):
                 self._set(IslandStatus.IDLE)
 
     # ── Event handlers ───────────────────────────────────────────
-    def _set(self, status: IslandStatus, detail: str = "") -> None:
-        if status is self._status and detail == self._detail:
-            return
-        self._status = status
-        self._detail = detail
-        self.view_changed.emit(self.view)
-
-    def _on_app_state(self, state) -> None:
-        """Map backend app-state events to island UI status.
-
-        State transitions are driven by explicit request lifecycle events from the
-        coordinator, not by inferring completion from `not status.busy` or string
-        inspection alone. Each terminal event (completed, failed, cancelled) drives
-        a deterministic transition.
-        """
-        val = getattr(state, "value", str(state))
-        if val == "listening":
-            self._set(IslandStatus.LISTENING)
-        elif val == "speaking":
-            self._set(IslandStatus.SPEAKING)
-        elif val == "chatting":
-            # CHATTING is an intermediate request state; do NOT transition to IDLE
-            # from chatting alone. The coordinator must emit request_completed or
-            # request_failed to authoritatively complete the turn.
-            self._set(IslandStatus.THINKING)
-        elif val == "idle":
-            # IDLE from request lifecycle — only reset if no higher-priority activity
-            # is currently visible. Do not use `not self._status.busy` which can
-            # incorrectly clear THINKING/ERROR/APPROVAL when another request is pending.
-            if self._status not in (IslandStatus.SPEAKING, IslandStatus.APPROVAL, IslandStatus.WORKING):
-                self._set(IslandStatus.IDLE)
-
-    # ── Event handlers ───────────────────────────────────────────
-    def _set(self, status: IslandStatus, detail: str = "") -> None:
-        if status is self._status and detail == self._detail:
-            return
-        self._status = status
-        self._detail = detail
-        self.view_changed.emit(self.view)
-
     def _on_voice_state(self, state) -> None:
         """Map voice-state events to island UI status.
 
         Transitions are driven by explicit request lifecycle events, not by
-        inferring completion from voice-state alone. SPEAKING persists until TTS
-        reports playback ended or interruption; THINKING persists until the
-        coordinator emits request_completed.
+        inferring completion from voice-state alone. SPEAKING persists until
+        TTS reports playback ended or interruption; THINKING persists until
+        the coordinator emits request_completed.
         """
         val = getattr(state, "value", str(state))
         if val == "listening":
             self._set(IslandStatus.LISTENING)
         elif val == "transcribing":
-            # TRANSCRIBING is a terminal voice-state; after capture completes
-            # the coordinator should emit request_completed, not rely on
-            # voice-state alone to reset island status.
             self._set(IslandStatus.THINKING, "Transcribing")
         elif val == "thinking":
-            # THINKING from voice alone should not override an active chat/
-            # working state from the backend request lifecycle.
-            # Only go THINKING if island is not already in a higher-priority state.
             if self._status is IslandStatus.IDLE:
                 self._set(IslandStatus.THINKING)
         elif val == "speaking":
-            # SPEAKING persists until TTS reports playback ended or interruption.
-            # Backend text response alone must not mark speech complete.
             self._set(IslandStatus.SPEAKING)
         elif val == "error":
             self._set(IslandStatus.ERROR)
-        elif val == "idle" and not self._status.busy:
-            # Only go idle if no other activity is visible; do not use
-            # `not self._status.busy` which can swallow ERROR/APPROVAL/WORKING.
-            if self._status is IslandStatus.IDLE:
+        elif val == "idle":
+            # IDLE from request lifecycle — only reset if no higher-priority
+            # activity is currently visible. Do not use `not self._status.busy`
+            # which can incorrectly clear THINKING/ERROR/APPROVAL when another
+            # request is pending.
+            if self._status not in (
+                IslandStatus.SPEAKING,
+                IslandStatus.APPROVAL,
+                IslandStatus.WORKING,
+            ):
                 self._set(IslandStatus.IDLE)
 
     def _on_transcription(self, text: str) -> None:
@@ -260,35 +222,25 @@ class IslandController(QObject):
 
     def _on_chat_message(self, role: str, text: str) -> None:
         if role == "chunk":
-            # Coalesce streamed tokens: one GUI update per ~33ms instead of
-            # one per token (measured ~46x fewer widget redraws).
             self._stream_buf.append(text)
             if not self._stream_timer.isActive():
                 self._stream_timer.start()
-            # Mark that we are currently in a streaming response for this turn
             self._streaming = True
             return
-        # A completed assistant response has arrived.
-        # If we were streaming, mark the turn as no longer streaming.
         if role == "jarvis":
             was_streaming = self._streaming
             self._streaming = False
         else:
             was_streaming = False
-        # Flush pending stream text before an ordered message so the transcript
-        # never interleaves.
         self._flush_stream()
-        # The coordinator emits streamed chunks AND then the full response text.
-        # If we were streaming, the full response is a duplicate of the
-        # coalesced chunks; skip it. Otherwise show it.
         if role == "jarvis" and was_streaming:
-            # Skip duplicate final response when chunks already provided the content.
-            # The transcript already contains the coalesced stream.
             return
         self.chat_message.emit(role, text)
         if role == "user":
             self._set(IslandStatus.THINKING, text[:60])
-        elif role == "jarvis" and (text.strip().startswith("[Error:") or text.strip().startswith("Error:")):
+        elif role == "jarvis" and (
+            text.strip().startswith("[Error:") or text.strip().startswith("Error:")
+        ):
             self._set(IslandStatus.ERROR, text[:60])
 
     def _flush_stream(self) -> bool:
@@ -311,9 +263,6 @@ class IslandController(QObject):
             self._set(IslandStatus.STARTING)
         elif val in ("ready", "running"):
             self._backend_ready = True
-            # Only transition to IDLE if no other activity is ongoing
-            # (speaking, approval, or working). READY/RUNNING alone should
-            # not override a pending request's terminal state.
             if self._status is IslandStatus.IDLE:
                 self._set(IslandStatus.IDLE)
         elif val == "error":

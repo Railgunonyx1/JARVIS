@@ -5,37 +5,13 @@ Resolves the app package from this file's own directory first (so the
 working tree runs when invoked in-place), then falls back to the
 installed layout under JARVIS_DESKTOP_HOME.
 
-**Contract:** `jarvis-desktop` launches the full-window JARVIS client using
-`dynamic-island/app/main.py`. The island overlay is launched separately via
-`jarvis-desktop-island` / `jarvis-island` which uses `dynamic-island/app/island_main.py`.
+Launches the Dynamic Island. The Dynamic Island is the sole user-facing
+interface. The separate desktop chat window was removed; all functionality
+flows through the island's ConversationPanel as it expands from the pill.
 """
 
 import os
 import sys
-
-
-def _resolve_desktop() -> tuple[str, str]:
-    """Resolve the full-window desktop launcher layout.
-
-    Returns (desktop_dir, repo_dir) where desktop_dir contains
-    dynamic-island/app/main.py (the full-window entry point).
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo = os.path.dirname(here)
-    local_desktop = os.path.join(repo, "dynamic-island")
-
-    # Check for the full-window entry point first
-    desktop_main = os.path.join(local_desktop, "app", "main.py")
-    if os.path.isfile(desktop_main):
-        return local_desktop, repo
-
-    # Fall back to JARVIS_DESKTOP_HOME installed layout
-    home = os.environ.get(
-        "JARVIS_DESKTOP_HOME",
-        os.path.expanduser("~/.local/share/jarvis-desktop"),
-    )
-    repo = os.path.join(home, "jarvis-repo")
-    return os.path.join(repo, "dynamic-island"), repo
 
 
 def _resolve_island() -> tuple[str, str]:
@@ -63,26 +39,23 @@ def _resolve_island() -> tuple[str, str]:
 
 
 def main() -> int:
-    # The script is invoked as jarvis-desktop, so use the desktop resolver
-    desktop, repo = _resolve_desktop()
+    # Resolve the island entry point
+    island, repo = _resolve_island()
 
-    for p in (desktop, repo):
+    for p in (island, repo):
         if p not in sys.path:
             sys.path.insert(0, p)
 
-    # Launch the full-window client using main.py
-    desktop_main = os.path.join(desktop, "app", "main.py")
-
-    if not os.path.isfile(desktop_main):
+    island_main = os.path.join(island, "app", "island_main.py")
+    if not os.path.isfile(island_main):
         print(
-            f"JARVIS Desktop not found at {desktop} (main.py missing). "
-            "Use 'jarvis-island' or 'jarvis-desktop-island' for the island.",
+            f"JARVIS Island not found at {island} (island_main.py missing).",
             file=sys.stderr,
         )
         return 1
 
-    from app.main import main as app_main
-    return app_main()
+    from app.island_main import main as island_main_func
+    return island_main_func()
 
 
 if __name__ == "__main__":

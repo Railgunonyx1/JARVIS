@@ -21,6 +21,8 @@ if _DESKTOP_ROOT not in sys.path:
 
 
 def test_chat_window_constructs():
+    """The separate desktop chat window was removed; this test is skipped."""
+    pytest.skip("Separate desktop chat window removed; island is sole UI")
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
@@ -30,9 +32,17 @@ def test_chat_window_constructs():
     assert w.windowTitle() == "JARVIS"
     assert w.send_btn.text() == "Send"
     assert w.input_field.placeholderText() == "Message JARVIS..."
+    """The separate desktop chat window was removed; this test is skipped."""
+    pytest.skip("Separate desktop chat window removed; island is sole UI")
 
 
 def test_chat_window_backend_integration():
+    """Backend integration tests moved to the island UI test suite.
+
+    The separate desktop chat window was removed; backend functionality is
+    now tested through the island's ConversationPanel.
+    """
+    pytest.skip("Separate desktop chat window removed; backend test moved to island UI")
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QEventLoop, QTimer
@@ -65,14 +75,52 @@ def test_chat_window_backend_integration():
     w._on_send()
 
     assert pump_until(lambda: "Hello" in w.chat_area.toHtml(), timeout_ms=5000)
+    """Backend integration tests moved to the island UI test suite."""
+    pytest.skip("Separate desktop chat window removed; functionality moved to island")
 
 
 @pytest.mark.e2e
 def test_chat_window_end_to_end():
     """End-to-end: send a message through the UI and get a response.
 
+    The separate desktop chat window was removed; the island's
+    ConversationPanel is the authoritative UI for e2e testing.
+    """
+    pytest.skip("Separate desktop chat window removed; e2e moved to island UI")
+    pytest.importorskip("PySide6")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtCore import QEventLoop, QTimer
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from app.ui.chat_window import ChatWindow
+    w = ChatWindow()
+    w.show()
+    w.start_backend()
+
+    loop = QEventLoop()
+    QTimer.singleShot(2000, loop.quit)
+    loop.exec()
+
+    assert w._coordinator.backend.is_running
+
+    w.input_field.setText("Say hello in one short sentence.")
+    w._on_send()
+
+    # Wait up to 10s for a response
+    loop2 = QEventLoop()
+    QTimer.singleShot(10000, loop2.quit)
+    loop2.exec()
+
+    html = w.chat_area.toHtml()
+    # Verify the user message was rendered
+    assert "Say hello" in html or "hello" in html.lower()
+    # Verify the agent responded (either with text or an error, but not a crash)
+    assert "JARVIS:" in html
+    """End-to-end: send a message through the UI and get a response.
+
     Requires API keys configured in config/.env. Skipped if no keys present.
     """
+    pytest.skip("Separate desktop chat window removed; e2e moved to island UI")
     pytest.importorskip("PySide6")
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QEventLoop, QTimer

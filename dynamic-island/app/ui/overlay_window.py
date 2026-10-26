@@ -62,7 +62,7 @@ class IslandState(Enum):
 
 
 # Approval lifecycle: request-scoped IDs, event-based resolution, no shared mutable slot
-from PySide6.QtCore import QObject, QWaitCondition, QMutex, QLocale
+from PySide6.QtCore import QObject, QWaitCondition, QMutex
 import uuid
 
 _PENDING = "pending"
@@ -199,10 +199,6 @@ class IslandWindow(QWidget):
     def _register_approval(self, record: ApprovalRecord) -> None:
         """Register an approval record in the registry."""
         self._approval_registry[record.approval_id] = record
-
-    def _unregister_approval(self, approval_id: str) -> None:
-        """Unregister an approval record."""
-        self._approval_registry.pop(approval_id, None)
 
     def _resolve_approval(self, approval_id: str, state: str) -> None:
         """Resolve an approval to a terminal state and clean up."""
