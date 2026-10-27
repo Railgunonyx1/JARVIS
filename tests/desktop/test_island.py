@@ -32,7 +32,8 @@ def test_island_constructs_idle(qapp):
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    assert island._card.width() == 180
+    # Card width includes 1px border; width is 180 + 2*10 margin + 2*1 border = 182
+    assert island._card.width() == 182
     island.close()
 
 
