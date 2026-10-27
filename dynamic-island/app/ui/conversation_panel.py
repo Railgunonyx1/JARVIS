@@ -52,13 +52,13 @@ class ApprovalSink(QObject):
 
     def approve(self) -> None:
         if self._decided:
-            return  # stale / duplicate click – ignore
+            return  # stale / duplicate click - ignore
         self._decided = True
         self._sink("once")
 
     def deny(self) -> None:
         if self._decided:
-            return  # stale / duplicate click – ignore
+            return  # stale / duplicate click - ignore
         self._decided = True
         self._sink("deny")
 
@@ -160,8 +160,7 @@ class ConversationPanel(QWidget):
             "-webkit-scrollbar-color: #3A3A3C #141619;\n"
         )
         # Add message styling for clear hierarchy
-        self.transcript.append("<style> QTextBlock { margin: 0 0 14px 0; } "
-                               "</style>")
+        self.transcript.append("<style> QTextBlock { margin: 0 0 14px 0; } </style>")
         root.addWidget(self.transcript, 1)
 
         # ── Media player strip (optional, compact) ──────────────────────────────────
@@ -218,7 +217,7 @@ class ConversationPanel(QWidget):
         pl = QHBoxLayout(self._playback_w)
         pl.setContentsMargins(4, 0, 4, 0)
         pl.setSpacing(2)
-        self._prev_btn = QPushButton("\u23EE")
+        self._prev_btn = QPushButton("⏮")
         self._prev_btn.setFixedSize(26, 26)
         self._prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prev_btn.setStyleSheet("""
@@ -229,7 +228,7 @@ class ConversationPanel(QWidget):
         self._prev_btn.clicked.connect(self._on_prev)
         pl.addWidget(self._prev_btn)
 
-        self._play_btn = QPushButton("\u25B6")
+        self._play_btn = QPushButton("▶")
         self._play_btn.setFixedSize(26, 26)
         self._play_btn.setCheckable(True)
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -242,7 +241,7 @@ class ConversationPanel(QWidget):
         self._play_btn.clicked.connect(self._on_play)
         pl.addWidget(self._play_btn)
 
-        self._next_btn = QPushButton("\u23ED")
+        self._next_btn = QPushButton("⏭")
         self._next_btn.setFixedSize(26, 26)
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_btn.setStyleSheet("""
@@ -340,7 +339,7 @@ class ConversationPanel(QWidget):
         pl = QHBoxLayout(self._playback_w)
         pl.setContentsMargins(4, 0, 4, 0)
         pl.setSpacing(2)
-        self._prev_btn = QPushButton("\u23EE")
+        self._prev_btn = QPushButton("⏮")
         self._prev_btn.setFixedSize(26, 26)
         self._prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._prev_btn.setStyleSheet("""
@@ -351,7 +350,7 @@ class ConversationPanel(QWidget):
         self._prev_btn.clicked.connect(self._on_prev)
         pl.addWidget(self._prev_btn)
 
-        self._play_btn = QPushButton("\u25B6")
+        self._play_btn = QPushButton("▶")
         self._play_btn.setFixedSize(26, 26)
         self._play_btn.setCheckable(True)
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -364,7 +363,7 @@ class ConversationPanel(QWidget):
         self._play_btn.clicked.connect(self._on_play)
         pl.addWidget(self._play_btn)
 
-        self._next_btn = QPushButton("\u23ED")
+        self._next_btn = QPushButton("⏭")
         self._next_btn.setFixedSize(26, 26)
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_btn.setStyleSheet("""
@@ -462,7 +461,7 @@ class ConversationPanel(QWidget):
         il.setContentsMargins(12, 8, 12, 8)
         il.setSpacing(8)
 
-        self.mic_btn = QPushButton("\u2630")
+        self.mic_btn = QPushButton("🎤")
         self.mic_btn.setFixedSize(34, 34)
         self.mic_btn.setCheckable(True)
         self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -481,7 +480,7 @@ class ConversationPanel(QWidget):
         il.addWidget(self.mic_btn)
 
         self.input_field = QLineEdit()
-        self.input_field.setPlaceholderText("Ask JARVIS\u2026")
+        self.input_field.setPlaceholderText("Ask JARVIS…")
         self.input_field.setMinimumHeight(34)
         self.input_field.setStyleSheet(
             "QLineEdit { background: #2C1C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
@@ -576,6 +575,7 @@ class ConversationPanel(QWidget):
                 "QPushButton:checked { background: #0A84FF; color: #FFFFFF; border-color: #0A84FF; }"
                 "QPushButton:checked:hover { background: #0071E3; }"
             )
+
     def _on_send(self, text: str = "") -> None:
         """Handle send button / Enter in the input field.
 
@@ -586,6 +586,7 @@ class ConversationPanel(QWidget):
         """
         text = text.strip()
         if text:
+            self.input_field.clear()
             self.send_requested.emit(text)
 
     def _on_mic(self) -> None:
@@ -596,24 +597,29 @@ class ConversationPanel(QWidget):
     def _on_prev(self) -> None:
         """Handle previous track button."""
         # Media playback state never overwrites JARVIS activity states
-        return  # wired to MPRIS/adapter in the future
+        # Placeholder: wire to MPRIS/adapter
+        pass
 
     def _on_play(self) -> None:
         """Handle play/pause toggle."""
-        return  # wired to MPRIS/adapter in the future
+        # Placeholder: wire to MPRIS/adapter
+        pass
 
     def _on_next(self) -> None:
         """Handle next track button."""
         # Media playback state never overwrites JARVIS activity states
-        return  # wired to MPRIS/adapter in the future
+        # Placeholder: wire to MPRIS/adapter
+        pass
 
     def _on_progress(self, value: int) -> None:
         """Handle progress slider movement."""
-        return  # wired to MPRIS/adapter in the future
+        # Placeholder: wire to MPRIS/adapter
+        pass
 
     def _on_volume(self, value: int) -> None:
         """Handle volume slider movement."""
-        return  # wired to MPRIS/adapter in the future
+        # Placeholder: wire to MPRIS/adapter
+        pass
 
     # ── Media player public API ────────────────────────────────────────────────
 
@@ -670,6 +676,5 @@ class ConversationPanel(QWidget):
         sink = self._approval_sinks.get(approval_id)
         if sink is not None:
             (sink.approve if allow else sink.deny)()
-
         # Hide the approval row after decision
         self.set_approval(None, "", None)

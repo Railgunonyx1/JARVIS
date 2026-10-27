@@ -280,6 +280,13 @@ class IslandWindow(QWidget):
         self._status.setToolTip("Ready")
         bar_layout.addWidget(self._status, 1)
 
+        self._state_label = QLabel("Idle")
+        self._state_label.setStyleSheet(
+            "QLabel { color: #8C96A3; font-size: 9px; font-weight: 600; "
+            "letter-spacing: 0.5px; text-transform: uppercase; }"
+        )
+        bar_layout.addWidget(self._state_label)
+
         self._close_btn = QPushButton("\u2715")
         self._close_btn.setFixedSize(22, 22)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -293,6 +300,17 @@ class IslandWindow(QWidget):
         self._close_btn.clicked.connect(self.collapse)
         self._close_btn.hide()
         bar_layout.addWidget(self._close_btn)
+
+        self._app_icon = QLabel()
+        self._app_icon.setFixedSize(14, 14)
+        self._app_icon.setStyleSheet("color: #8C96A3; "
+                                     "border-radius: 7px; "
+                                     "font-size: 10px; "
+                                     "font-weight: 700; "
+                                     "text-align: center; "
+                                     "padding: 2px; "
+                                     )
+        bar_layout.addWidget(self._app_icon)
 
         card_layout.addWidget(bar)
 
@@ -587,6 +605,31 @@ class IslandWindow(QWidget):
     def set_status(self, text: str, color: str = "#8E8E93", detail: str = "") -> None:
         self._status.setText(text)
         self._dot.setStyleSheet(f"color: {color}; font-size: 8px; font-weight: 700;")
+        # Map backend status labels to compact state labels
+        if text == "Ready":
+            self._state_label.setText("Idle")
+            self._state_label.setStyleSheet(
+                "QLabel { color: #8C96A3; font-size: 9px; font-weight: 600; "
+                "letter-spacing: 0.5px; text-transform: uppercase; }"
+            )
+        elif text in ("Listening", "Thinking", "Speaking", "Working", "Starting"):
+            self._state_label.setText(text[:10].title())
+            self._state_label.setStyleSheet(
+                "QLabel { color: #8C96A3; font-size: 9px; font-weight: 600; "
+                "letter-spacing: 0.5px; text-transform: uppercase; }"
+            )
+        elif text == "Error":
+            self._state_label.setText("Error")
+            self._state_label.setStyleSheet(
+                "QLabel { color: #FF6B6B; font-size: 9px; font-weight: 600; "
+                "letter-spacing: 0.5px; text-transform: uppercase; }"
+            )
+        elif text == "Approval":
+            self._state_label.setText("Approval")
+            self._state_label.setStyleSheet(
+                "QLabel { color: #FFD60A; font-size: 9px; font-weight: 600; "
+                "letter-spacing: 0.5px; text-transform: uppercase; }"
+            )
         self._status.setToolTip(detail)
         if detail:
             self._status.setToolTip(f"{text}: {detail}")
