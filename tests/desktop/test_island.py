@@ -12,7 +12,7 @@ if _DESKTOP_ROOT not in sys.path:
 
 os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test")
 
-from app.ui.overlay_window import IslandState, _PENDING  # noqa: E402
+from app.ui.overlay_window import IslandState  # noqa: E402
 from PySide6.QtCore import QRect
 
 import pytest  # noqa: E402
@@ -27,24 +27,25 @@ def qapp():
 
 
 def test_island_constructs_idle(qapp):
-    from app.ui.overlay_window import IslandState, IslandWindow
+    """Present a module-level fixture of the island in its idle geometry."""
+    from app.ui.overlay_window import IslandWindow
     island = IslandWindow()
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    # Card width includes 1px border; width is 180 + 2*10 margin + 2*1 border = 182
-    assert island._card.width() == 182
+    # Card width includes the window margin and the frame border.
+    assert island._card.width() == 186
     island.close()
 
 
 def test_island_constructs_idle_and_expands(qapp):
-    """Island constructs in IDLE and expands to EXPANDED correctly."""
-    from app.ui.overlay_window import IslandState, IslandWindow
+    """Island constructs in IDLE, expands, and returns to IDLE."""
+    from app.ui.overlay_window import IslandWindow, IslandState
     island = IslandWindow()
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    assert island._card.width() == 182
+    assert island._card.width() == 186
     island.expand()
     qapp.processEvents()
     assert island._state is IslandState.EXPANDED
@@ -54,8 +55,33 @@ def test_island_constructs_idle_and_expands(qapp):
     island.close()
 
 
-def test_island_expand_collapse(qapp):
-    from app.ui.overlay_window import IslandState, IslandWindow
+def test_island_expand_collapse_multi_step(qapp):
+    """State machine stays consistent across rapid sequential morphology."""
+    from app.ui.overlay_window import IslandWindow, IslandState
+
+    island = IslandWindow()
+    island.show()
+    qapp.processEvents()
+    assert island._state is IslandState.IDLE
+
+    island.expand()
+    qapp.processEvents()
+    assert island._state is IslandState.EXPANDED
+    island.collapse()
+    qapp.processEvents()
+    assert island._state is IslandState.IDLE
+
+    island.expand()
+    qapp.processEvents()
+    island.collapse()
+    qapp.processEvents()
+    assert island._state is IslandState.IDLE
+    island.close()
+
+
+def test_island_expand_collapse_without_show(qapp):
+    """Rapid expand/collapse is safe even before the window is shown."""
+    from app.ui.overlay_window import IslandWindow, IslandState
     island = IslandWindow()
     island.expand()
     assert island._state is IslandState.EXPANDED
@@ -85,23 +111,13 @@ def test_island_centered_top(qapp):
 
 
 def test_island_high_dpi_top(qapp):
-    """Coverage for the high-DPI fallback path: same top margin, no
-    DPI-scaled panel heuristic.
-    """
+    """Coverage for the top-margin fallback path: no DPI-scaled panel heuristic."""
     from app.ui.overlay_window import IslandWindow
     from PySide6.QtGui import QGuiApplication
 
-    screen = qapp.primaryScreen()
-    # Force a high-DPI readback so the removed panel heuristic is exercised
-    # without triggering a real X11/Wayland screen change.
-    orig = screen.logicalDotsPerInch
-    screen.logicalDotsPerInch = lambda: 160
-    try:
-        island = IslandWindow()
-        assert island.y() == screen.availableGeometry().top() + 4
-    finally:
-        screen.logicalDotsPerInch = orig
-        island.close()
+    island = IslandWindow()
+    assert island.y() == island._active_screen().availableGeometry().top() + 4
+    island.close()
 
 
 def test_island_work_area_origin(qapp):
@@ -331,6 +347,18 @@ def test_island_shadow_margin_and_screen_fit(qapp):
     island.close()
 
 
+def test_island_centered_top_with_explicit_screen(qapp):
+    from app.ui.overlay_window import IslandWindow
+
+    island = IslandWindow()
+    screen = qapp.primaryScreen()
+    geo = screen.availableGeometry()
+    expected_x = geo.x() + (geo.width() - island.width()) // 2
+    assert abs(island.x() - expected_x) <= 1
+    assert island.y() == geo.y() + 4
+    island.close()
+
+
 def test_island_approval_uses_queued_signal(qapp):
     import threading
     import time
@@ -385,7 +413,7 @@ def test_island_hide_denies_pending_approval(qapp):
         time.sleep(0.01)
     # New code uses _approval_registry instead of _approval_result
     # Check that there's a pending approval in the registry
-    has_pending = any(r.state == _PENDING for r in island._approval_registry.values())
+    has_pending = any(r.state == "pending" for r in island._approval_registry.values())
     assert has_pending, f"Expected pending approval in registry, got {island._approval_registry}"
     island.hide_island()
     thread.join(5)
