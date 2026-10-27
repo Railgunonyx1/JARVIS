@@ -37,6 +37,23 @@ def test_island_constructs_idle(qapp):
     island.close()
 
 
+def test_island_constructs_idle_and_expands(qapp):
+    """Island constructs in IDLE and expands to EXPANDED correctly."""
+    from app.ui.overlay_window import IslandState, IslandWindow
+    island = IslandWindow()
+    island.show()
+    qapp.processEvents()
+    assert island._state is IslandState.IDLE
+    assert island._card.width() == 182
+    island.expand()
+    qapp.processEvents()
+    assert island._state is IslandState.EXPANDED
+    island.collapse()
+    qapp.processEvents()
+    assert island._state is IslandState.IDLE
+    island.close()
+
+
 def test_island_expand_collapse(qapp):
     from app.ui.overlay_window import IslandState, IslandWindow
     island = IslandWindow()
