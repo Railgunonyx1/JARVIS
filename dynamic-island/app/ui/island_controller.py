@@ -18,6 +18,17 @@ logger = logging.getLogger("jarvis.desktop.island.controller")
 _CHUNK_FLUSH_MS = 33  # ~30 fps coalescing window for streamed tokens
 
 
+class IslandState(Enum):
+    IDLE = "idle"
+    STARTING = "starting"
+    LISTENING = "listening"
+    THINKING = "thinking"
+    SPEAKING = "speaking"
+    WORKING = "working"
+    APPROVAL = "approval"
+    ERROR = "error"
+
+
 class IslandStatus(Enum):
     IDLE = "idle"
     STARTING = "starting"

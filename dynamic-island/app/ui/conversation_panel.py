@@ -35,6 +35,25 @@ _AMBER   = "#FFD60A"
 _DARK_BG = "#272B30"
 _DARK_DK = "#172431"
 
+_MIC_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+    'fill="none" stroke="{c}" stroke-width="1.75" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+    '<rect x="9" y="2" width="6" height="11" rx="3"/>'
+    '<path d="M5 10v4a8 8 0 0 0 16 0v-4"/>'
+    '<line x1="9" y1="20" x2="9" y2="24"/>'
+    '<line x1="15" y1="20" x2="15" y2="24"/>'
+    '</svg>'
+)
+_SEND_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+    'fill="none" stroke="{c}" stroke-width="1.75" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+    '<line x1="12" y1="19" x2="12" y2="5"/>'
+    '<polyline points="5 12 12 5 19 12"/>'
+    '</svg>'
+)
+
 
 # Per-request approval sink: keyed by approval_id, single-terminal-transition
 class ApprovalSink(QObject):
@@ -151,56 +170,53 @@ class ConversationPanel(QWidget):
         self.transcript.setStyleSheet(
             "#islandTranscript {\n"
             "background: transparent;\n"
-            "color: #E5E5EA;\n"
+            "color: #E8EDF3;\n"
             "border: none;\n"
             "font-size: 13px;\n"
-            "line-height: 1.6;\n"
-            "padding: 12px 14px;\n"
+            "line-height: 1.55;\n"
+            "padding: 10px 12px;\n"
             "-webkit-scrollbar-width: thin;\n"
-            "-webkit-scrollbar-color: #3A3A3C #141619;\n"
+            "-webkit-scrollbar-color: #3A424B #161B20;\n"
+            "}\n"
         )
-        # Add message styling for clear hierarchy
-        self.transcript.append("<style> QTextBlock { margin: 0 0 14px 0; } </style>")
+        self.transcript.append("<style> QTextBlock { margin: 0 0 12px 0; } </style>")
         root.addWidget(self.transcript, 1)
 
-        # ── Media player strip (optional, compact) ──────────────────────────────────
+        # Media player strip — hidden until valid media metadata arrives
         self._media_row = QFrame()
         self._media_row.setObjectName("islandMedia")
         self._media_row.setStyleSheet(
-            "#islandMedia { background: #141619; border-top: 1px solid #3A3A3C; }"
+            "#islandMedia { background: #1A2026; border-top: 1px solid #3A424B; }"
         )
         ml = QHBoxLayout(self._media_row)
         ml.setContentsMargins(12, 8, 12, 8)
         ml.setSpacing(12)
 
-        # Track metadata: title and artist
         self._media_title = QLabel("No track playing")
         self._media_title.setMinimumWidth(120)
         self._media_title.setStyleSheet(
-            "color: #EBEEF2; font-size: 12px; font-weight: 500; "
+            "color: #EDF2F7; font-size: 12px; font-weight: 500; "
             "white-space: nowrap; overflow: hidden; "
         )
         self._media_title.setToolTip("No track playing")
         self._media_title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         ml.addWidget(self._media_title)
 
-        # Artist
         self._media_artist = QLabel("")
         self._media_artist.setMinimumWidth(100)
         self._media_artist.setStyleSheet(
-            "color: #B0B7C1; font-size: 11px; white-space: nowrap; "
+            "color: #A6AEB8; font-size: 11px; white-space: nowrap; "
             "overflow: hidden; "
         )
         self._media_artist.setToolTip("")
         self._media_artist.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         ml.addWidget(self._media_artist)
 
-        # Album artwork placeholder (compact circle)
         self._media_art = QLabel("")
         self._media_art.setFixedSize(36, 36)
         self._media_art.setStyleSheet(
-            "background: #20242B; border: 2px solid #3A404B; "
-            "border-radius: 18px; color: #5C6470; "
+            "background: #222933; border: 2px solid #3A424B; "
+            "border-radius: 18px; color: #A6AEB8; "
             "font-size: 11px; font-weight: 600; "
             "display: flex; align-items: center; justify-content: center; "
         )
@@ -208,7 +224,6 @@ class ConversationPanel(QWidget):
         self._media_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ml.addWidget(self._media_art)
 
-        # Wrapper for playback buttons (previous / play-pause / next)
         self._playback_w = QWidget()
         self._playback_w.setFixedSize(100, 32)
         self._playback_w.setStyleSheet("""
@@ -217,64 +232,54 @@ class ConversationPanel(QWidget):
         pl = QHBoxLayout(self._playback_w)
         pl.setContentsMargins(4, 0, 4, 0)
         pl.setSpacing(2)
-        self._prev_btn = QPushButton("⏮")
+        self._prev_btn = QPushButton("\u23EE")
         self._prev_btn.setFixedSize(26, 26)
         self._prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._prev_btn.setStyleSheet("""
-            QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
-            QPushButton:hover { background: #3A3A3C; }
-            QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
-        """)
+        self._prev_btn.setStyleSheet(self._player_btn_style("#3A424B", "#8E9AAF"))
         self._prev_btn.clicked.connect(self._on_prev)
         pl.addWidget(self._prev_btn)
 
-        self._play_btn = QPushButton("▶")
+        self._play_btn = QPushButton("\u25B6")
         self._play_btn.setFixedSize(26, 26)
         self._play_btn.setCheckable(True)
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._play_btn.setStyleSheet("""
-            QPushButton { background: #0A84FF; color: #FFFFFF; border: none; border-radius: 6px; }
-            QPushButton:hover { background: #0071E3; }
-            QPushButton:checked { background: #0071E3; }
-        """)
+        self._play_btn.setStyleSheet(
+            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; border-radius: 6px; }"
+            "QPushButton:hover { background: #0071E3; }"
+            "QPushButton:checked { background: #0071E3; }"
+        )
         self._play_btn.setToolTip("Play / pause")
         self._play_btn.clicked.connect(self._on_play)
         pl.addWidget(self._play_btn)
 
-        self._next_btn = QPushButton("⏭")
+        self._next_btn = QPushButton("\u23ED")
         self._next_btn.setFixedSize(26, 26)
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._next_btn.setStyleSheet("""
-            QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
-            QPushButton:hover { background: #3A3A3C; }
-            QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
-        """)
+        self._next_btn.setStyleSheet(self._player_btn_style("#3A424B", "#8E9AAF"))
         self._next_btn.clicked.connect(self._on_next)
         pl.addWidget(self._next_btn)
 
-        # Progress slider (compact)
         self._progress_bar = QSlider(Qt.Orientation.Horizontal)
         self._progress_bar.setFixedWidth(100)
         self._progress_bar.setMinimum(0)
         self._progress_bar.setMaximum(100)
         self._progress_bar.setStyleSheet(
-            "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
-            "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
+            "QSlider::groove:horizontal { background: #3A424B; border-radius: 3px; height: 4px; }"
+            "QSlider::handle:horizontal { background: #8E9AAF; border: 1px solid #3A424B; "
             " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
-            "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
+            "QSlider::handle:horizontal:hover { background: #EDF2F7; }"
         )
         self._progress_bar.valueChanged.connect(self._on_progress)
 
-        # Volume slider (compact)
         self._volume_bar = QSlider(Qt.Orientation.Horizontal)
         self._volume_bar.setFixedWidth(66)
         self._volume_bar.setMinimum(0)
         self._volume_bar.setMaximum(100)
         self._volume_bar.setStyleSheet(
-            "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
-            "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
+            "QSlider::groove:horizontal { background: #3A424B; border-radius: 3px; height: 4px; }"
+            "QSlider::handle:horizontal { background: #8E9AAF; border: 1px solid #3A424B; "
             " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
-            "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
+            "QSlider::handle:horizontal:hover { background: #EDF2F7; }"
         )
         self._volume_bar.valueChanged.connect(self._on_volume)
 
@@ -282,145 +287,22 @@ class ConversationPanel(QWidget):
         ml.addWidget(self._playback_w)
         ml.addWidget(self._progress_bar)
         ml.addWidget(self._volume_bar)
-
+        self._media_row.hide()
         root.addWidget(self._media_row)
 
-        # Media player strip (optional, compact) — hidden until valid media metadata arrives
-        self._media_row = QFrame()
-        self._media_row.setObjectName("islandMedia")
-        self._media_row.setStyleSheet(
-            "#islandMedia { background: #141619; border-top: 1px solid #3A3A3C; }"
-        )
-        ml = QHBoxLayout(self._media_row)
-        ml.setContentsMargins(12, 8, 12, 8)
-        ml.setSpacing(12)
-
-        # Track metadata: title and artist
-        self._media_title = QLabel("No track playing")
-        self._media_title.setMinimumWidth(120)
-        self._media_title.setStyleSheet(
-            "color: #EBEEF2; font-size: 12px; font-weight: 500; "
-            "white-space: nowrap; overflow: hidden; "
-        )
-        self._media_title.setToolTip("No track playing")
-        self._media_title.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        ml.addWidget(self._media_title)
-
-        # Artist
-        self._media_artist = QLabel("")
-        self._media_artist.setMinimumWidth(100)
-        self._media_artist.setStyleSheet(
-            "color: #B0B7C1; font-size: 11px; white-space: nowrap; "
-            "overflow: hidden; "
-        )
-        self._media_artist.setToolTip("")
-        self._media_artist.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        ml.addWidget(self._media_artist)
-
-        # Album artwork placeholder (compact circle)
-        self._media_art = QLabel("")
-        self._media_art.setFixedSize(36, 36)
-        self._media_art.setStyleSheet(
-            "background: #20242B; border: 2px solid #3A404B; "
-            "border-radius: 18px; color: #5C6470; "
-            "font-size: 11px; font-weight: 600; "
-            "display: flex; align-items: center; justify-content: center; "
-        )
-        self._media_art.setToolTip("Change album art")
-        self._media_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        ml.addWidget(self._media_art)
-
-        # Wrapper for playback buttons (previous / play-pause / next)
-        self._playback_w = QWidget()
-        self._playback_w.setFixedSize(100, 32)
-        self._playback_w.setStyleSheet("""
-            background: transparent; border-radius: 4px; margin-right: 6px;
-        """)
-        pl = QHBoxLayout(self._playback_w)
-        pl.setContentsMargins(4, 0, 4, 0)
-        pl.setSpacing(2)
-        self._prev_btn = QPushButton("⏮")
-        self._prev_btn.setFixedSize(26, 26)
-        self._prev_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._prev_btn.setStyleSheet("""
-            QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
-            QPushButton:hover { background: #3A3A3C; }
-            QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
-        """)
-        self._prev_btn.clicked.connect(self._on_prev)
-        pl.addWidget(self._prev_btn)
-
-        self._play_btn = QPushButton("▶")
-        self._play_btn.setFixedSize(26, 26)
-        self._play_btn.setCheckable(True)
-        self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._play_btn.setStyleSheet("""
-            QPushButton { background: #0A84FF; color: #FFFFFF; border: none; border-radius: 6px; }
-            QPushButton:hover { background: #0071E3; }
-            QPushButton:checked { background: #0071E3; }
-        """)
-        self._play_btn.setToolTip("Play / pause")
-        self._play_btn.clicked.connect(self._on_play)
-        pl.addWidget(self._play_btn)
-
-        self._next_btn = QPushButton("⏭")
-        self._next_btn.setFixedSize(26, 26)
-        self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._next_btn.setStyleSheet("""
-            QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; }
-            QPushButton:hover { background: #3A3A3C; }
-            QPushButton:checked { background: #8C96A3; border-color: #8C96A3; }
-        """)
-        self._next_btn.clicked.connect(self._on_next)
-        pl.addWidget(self._next_btn)
-
-        # Progress slider (compact)
-        self._progress_bar = QSlider(Qt.Orientation.Horizontal)
-        self._progress_bar.setFixedWidth(100)
-        self._progress_bar.setMinimum(0)
-        self._progress_bar.setMaximum(100)
-        self._progress_bar.setStyleSheet(
-            "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
-            "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
-            " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
-            "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
-        )
-        self._progress_bar.valueChanged.connect(self._on_progress)
-
-        # Volume slider (compact)
-        self._volume_bar = QSlider(Qt.Orientation.Horizontal)
-        self._volume_bar.setFixedWidth(66)
-        self._volume_bar.setMinimum(0)
-        self._volume_bar.setMaximum(100)
-        self._volume_bar.setStyleSheet(
-            "QSlider::groove:horizontal { background: #3A3A3C; border-radius: 3px; height: 4px; }"
-            "QSlider::handle:horizontal { background: #8C96A3; border: 1px solid #3A3A3C; "
-            " border-radius: 3px; height: 8px; width: 8px; margin: -2px 0; }"
-            "QSlider::handle:horizontal:hover { background: #EBEEF2; }"
-        )
-        self._volume_bar.valueChanged.connect(self._on_volume)
-
-        ml.addWidget(self._media_art)
-        ml.addWidget(self._playback_w)
-        ml.addWidget(self._progress_bar)
-        ml.addWidget(self._volume_bar)
-
-        # Hide the media row when no audio is playing (show only when a track is active)
-        self._media_row.hide()
-
-        # ── Inline approval row (hidden unless approval is required) ──────────
+        # Inline approval row
         self._approval_row = QFrame()
         self._approval_row.setObjectName("islandApproval")
         self._approval_row.setStyleSheet(
-            "#islandApproval { background: #2C2C2E; border-top: 1px solid #3A3A3C; }"
+            "#islandApproval { background: #2B3139; border-top: 1px solid #3A424B; }"
         )
         ar = QHBoxLayout(self._approval_row)
         ar.setContentsMargins(12, 8, 12, 8)
-        ar.setSpacing(8)
+        ar.setSpacing(10)
         self._approval_label = QLabel("")
         self._approval_label.setTextFormat(Qt.TextFormat.PlainText)
         self._approval_label.setWordWrap(True)
-        self._approval_label.setStyleSheet("color: #FFD60A; font-size: 12px;")
+        self._approval_label.setStyleSheet("color: #FFB627; font-size: 12px; font-weight: 600;")
         ar.addWidget(self._approval_label, 1)
         approve_btn = QPushButton("Allow")
         deny_btn = QPushButton("Deny")
@@ -429,19 +311,12 @@ class ConversationPanel(QWidget):
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             b.setStyleSheet(
-                "QPushButton { background: #2C1C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
+                "QPushButton { background: #2C333C; color: #EDF2F7; border: 1px solid #45505B; "
                 "border-radius: 6px; font-size: 11px; font-weight: 600; padding: 6px 14px; }"
-                "QPushButton:hover { background: #3A3A3C; }"
-                "QPushButton:focus { outline: 2px solid #FFD60A; outline-offset: 1px; }"
-                "QPushButton:checked { background: #FFD60A; color: #FFFFFF; border-color: #FFD60A; }"
-                "QPushButton:pressed { background: #FFD60A; }"
+                "QPushButton:hover { background: #3A424B; }"
+                "QPushButton:focus { outline: 2px solid #FFB627; outline-offset: 1px; }"
             )
-        # Each button carries the approval_id passed into set_approval
-        # Delegate to the instance methods so _current_approval_id is used.
-        # The allow/deny buttons use _on_approve_btn/_on_deny_btn which read
-        # self._current_approval_id set by set_approval().
         self._current_approval_id: str | None = None
-        # Use a closure that captures _current_approval_id at call time
         self._on_approve_btn = lambda: self._on_approval_btn(True, self._current_approval_id)
         self._on_deny_btn = lambda: self._on_approval_btn(False, self._current_approval_id)
         approve_btn.clicked.connect(self._on_approve_btn)
@@ -455,60 +330,57 @@ class ConversationPanel(QWidget):
         input_bar = QFrame()
         input_bar.setObjectName("islandInput")
         input_bar.setStyleSheet(
-            "#islandInput { background: #1C1C1E; border-top: 1px solid #3A3A3C; }"
+            "#islandInput { background: #1A2026; border-top: 1px solid #3A424B; }"
         )
         il = QHBoxLayout(input_bar)
         il.setContentsMargins(12, 8, 12, 8)
-        il.setSpacing(8)
+        il.setSpacing(10)
 
-        self.mic_btn = QPushButton("🎤")
+        self.mic_btn = QPushButton()
         self.mic_btn.setFixedSize(34, 34)
         self.mic_btn.setCheckable(True)
         self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.mic_btn.setToolTip("Push to talk")
-        self.mic_btn.clicked.connect(self.mic_toggled.emit)
-        self._style_button(self.mic_btn)
-        self.mic_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.mic_btn.setStyleSheet(
-            "QPushButton { background: #2C2C2E; color: #E5E5EA; border: 1px solid #3A3A3C; "
-            "border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; }"
-            "QPushButton:hover { background: #3A3A3C; }"
+            "QPushButton { background: #2C333C; color: #A6AEB8; border: 1px solid #45505B; "
+            "border-radius: 9px; padding: 5px; }"
+            "QPushButton:hover { background: #3A424B; }"
             "QPushButton:focus { outline: 2px solid #0A84FF; outline-offset: 1px; }"
             "QPushButton:checked { background: #0A84FF; color: #FFFFFF; border-color: #0A84FF; }"
             "QPushButton:checked:hover { background: #0071E3; }"
         )
+        self.mic_btn.setToolTip("Push to talk")
+        self.mic_btn.clicked.connect(self.mic_toggled.emit)
+        self.mic_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._update_mic_icon(False)
         il.addWidget(self.mic_btn)
 
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Ask JARVIS…")
         self.input_field.setMinimumHeight(34)
         self.input_field.setStyleSheet(
-            "QLineEdit { background: #2C1C2E; color: #FFFFFF; border: 1px solid #3A3A3C; "
-            "border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500; }"
+            "QLineEdit { background: #2C333C; color: #EDF2F7; border: 1px solid #45505B; "
+            "border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 500; }"
             "QLineEdit:focus { border-color: #0A84FF; outline: 2px solid #0A84FF; "
-            "outline-offset: 1px; background: #24282F; }"
+            "outline-offset: 1px; background: #323B45; }"
         )
         self.input_field.returnPressed.connect(self._on_send)
         il.addWidget(self.input_field, 1)
 
-        self.send_btn = QPushButton("Send")
-        self.send_btn.setFixedSize(60, 34)
+        self.send_btn = QPushButton()
+        self.send_btn.setFixedSize(34, 34)
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.setStyleSheet(
             "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; "
-            " border-radius: 8px; font-size: 13px; font-weight: 500; }"
-            "QPushButton:hover { background: #0071E3; }"
-        )
-        self.send_btn.clicked.connect(self._on_send)
-        self.send_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.send_btn.setStyleSheet(
-            "QPushButton { background: #0A84FF; color: #FFFFFF; border: none; "
-            "border-radius: 8px; font-size: 13px; font-weight: 500; "
-            "padding: 6px 12px; }"
+            "border-radius: 9px; }"
             "QPushButton:hover { background: #0071E3; }"
             "QPushButton:focus { outline: 2px solid #8C96A3; outline-offset: 1px; }"
             "QPushButton:pressed { background: #0071E3; }"
         )
+        self.send_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.send_btn.setToolTip("Send message (Enter)")
+        self.send_btn.clicked.connect(self._on_send)
+        self._update_send_icon()
+        self.input_field.returnPressed.connect(self._on_send)
         il.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
@@ -637,10 +509,10 @@ class ConversationPanel(QWidget):
 
     def set_media_art(self, pixmap: QImage | None = None) -> None:
         """Set the album artwork. Pass a QImage or None to show placeholder."""
-        if pixmap is not None:
+        if pixmap is not None and not pixmap.isNull():
             self._media_art.setPixmap(pixmap.scaled(36, 36, Qt.AspectRatioMode.KeepAspectCrop))
         else:
-            self._media_art.setText("?")
+            self._media_art.setText("\u2022")
 
     def media_play_pause(self) -> None:
         """Toggle play/pause programmatically."""
@@ -672,9 +544,26 @@ class ConversationPanel(QWidget):
         """Handle an approval button click."""
         if approval_id is None:
             return
-        # Route through the sink that was registered with this approval_id
         sink = self._approval_sinks.get(approval_id)
         if sink is not None:
             (sink.approve if allow else sink.deny)()
-        # Hide the approval row after decision
+        approve_btn, deny_btn = self._last_approval_row_buttons
+        if approve_btn is not None and deny_btn is not None:
+            approve_btn.setEnabled(False)
+            deny_btn.setEnabled(False)
         self.set_approval(None, "", None)
+
+    def _player_btn_style(self, hover_bg: str, checked_bg: str) -> str:
+        return (
+            "QPushButton { background: #2C333C; color: #A6AEB8; border: 1px solid #45505B; "
+            "border-radius: 6px; }"
+            "QPushButton:hover { background: #3A424B; }"
+            f"QPushButton:checked {{ background: {checked_bg}; color: #EDF2F7; border-color: {checked_bg}; }}"
+        )
+
+    def _update_mic_icon(self, checked: bool) -> None:
+        color = "#FFFFFF" if checked else "#A6AEB8"
+        self.mic_btn.setText(_MIC_SVG.format(c=color))
+
+    def _update_send_icon(self) -> None:
+        self.send_btn.setText(_SEND_SVG.format(c="#FFFFFF"))

@@ -3,8 +3,6 @@
 import os
 import sys
 
-import pytest
-
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -12,164 +10,30 @@ _DESKTOP_ROOT = os.path.join(_REPO_ROOT, "dynamic-island")
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
+import pytest  # noqa: E402
 
-def test_chat_window_constructs():
-    """ChatWindow should construct without crashing.
 
-    This test is skipped because the separate desktop chat window was removed.
-    The island's ConversationPanel is the authoritative UI.
-    """
-    pytest.skip("Separate desktop chat window removed; island is sole UI")
+@pytest.fixture(scope="module")
+def qapp():
+    pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
+def test_chat_window_is_deprecated_stub(qapp):
+    """ChatWindow is a deprecated stub; real chat lives in the island overlay."""
     from app.ui.chat_window import ChatWindow
+
     w = ChatWindow()
-    assert w is not None
+    assert w.windowTitle().startswith("JARVIS Chat")
     w.close()
 
 
-def test_send_does_not_append_message_directly():
-    """Regression: _on_send must not append the user message itself.
-
-    This test is skipped because the separate desktop chat window was removed.
-    The island's ConversationPanel is the authoritative UI.
-    """
-    pytest.skip("Separate desktop chat window removed; island is sole UI")
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from unittest.mock import MagicMock
-
+def test_chat_window_has_no_mic_button(qapp):
+    """ChatWindow should not expose a mic button; the island handles voice."""
     from app.ui.chat_window import ChatWindow
 
     w = ChatWindow()
-    w._coordinator = MagicMock()
-    w.input_field.setText("hello jarvis")
-    w._on_send()
-
-    assert w.input_field.text() == ""
-    w._coordinator.send_message.assert_called_once_with("hello jarvis")
-    chat_html = w.chat_area.toHtml()
-    assert "hello jarvis" not in chat_html
-    w.close()
-    """Regression: _on_send must not append the user message itself.
-
-    The coordinator's chat_message signal owns display. A direct append in
-    _on_send caused duplicate user messages in the chat area.
-    """
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from unittest.mock import MagicMock
-
-    from app.ui.chat_window import ChatWindow
-
-    w = ChatWindow()
-    w._coordinator = MagicMock()
-    w.input_field.setText("hello jarvis")
-    w._on_send()
-
-    assert w.input_field.text() == ""
-    w._coordinator.send_message.assert_called_once_with("hello jarvis")
-    chat_html = w.chat_area.toHtml()
-    assert "hello jarvis" not in chat_html
-    w.close()
-
-
-def test_settings_dialog_does_not_crash():
-    """Settings dialog should open without AttributeError on _gesture_active.
-
-    This test is skipped because the separate desktop chat window was removed.
-    The island's ConversationPanel is the authoritative UI.
-    """
-    pytest.skip("Separate desktop chat window removed; island is sole UI")
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.ui.chat_window import ChatWindow
-    w = ChatWindow()
-
-    def _close_dialog():
-        d = QApplication.activeModalWidget()
-        if d is not None:
-            d.reject()
-
-    QTimer.singleShot(100, _close_dialog)
-    w._on_settings()
-    w.close()
-    """Settings dialog should open without AttributeError on _gesture_active."""
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.ui.chat_window import ChatWindow
-    w = ChatWindow()
-
-    def _close_dialog():
-        d = QApplication.activeModalWidget()
-        if d is not None:
-            d.reject()
-
-    QTimer.singleShot(100, _close_dialog)
-    w._on_settings()
-    w.close()
-
-
-def test_settings_with_coordinator():
-    """Settings dialog should work when coordinator is attached.
-
-    This test is skipped because the separate desktop chat window was removed.
-    The island's ConversationPanel is the authoritative UI.
-    """
-    pytest.skip("Separate desktop chat window removed; island is sole UI")
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.integration.coordinator import AppCoordinator
-    from app.ui.chat_window import ChatWindow
-
-    w = ChatWindow()
-    coord = AppCoordinator(mode="agent")
-    w._coordinator = coord
-
-    def _close_dialog():
-        d = QApplication.activeModalWidget()
-        if d is not None:
-            d.reject()
-
-    QTimer.singleShot(100, _close_dialog)
-    w._on_settings()
-    w.close()
-    coord.shutdown()
-
-
-def test_mic_btn_enabled_after_start():
-    """Settings dialog should work when coordinator is attached."""
-    from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.integration.coordinator import AppCoordinator
-    from app.ui.chat_window import ChatWindow
-
-    w = ChatWindow()
-    coord = AppCoordinator(mode="agent")
-    w._coordinator = coord
-
-    def _close_dialog():
-        d = QApplication.activeModalWidget()
-        if d is not None:
-            d.reject()
-
-    QTimer.singleShot(100, _close_dialog)
-    w._on_settings()
-    w.close()
-    coord.shutdown()
-
-
-def test_mic_btn_enabled_after_start():
-    """Mic button should be enabled after start_backend."""
-    from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
-    from app.ui.chat_window import ChatWindow
-    w = ChatWindow()
-    assert w.mic_btn.isEnabled() is False
-    w.start_backend()
-    assert w.mic_btn.isEnabled() is True
+    assert not hasattr(w, "mic_btn")
     w.close()
