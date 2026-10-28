@@ -1,4 +1,9 @@
-"""Tests for the JARVIS Desktop Dynamic Island overlay."""
+"""Tests for the JARVIS Dynamic Island overlay (root suite copy).
+
+This copy lives in tests/desktop/ only so it can run alongside the other
+root-level desktop suites without colliding with the identically-named
+dynamic-island/tests/desktop/test_island.py module.
+"""
 
 import os
 import sys
@@ -10,7 +15,7 @@ _DESKTOP_ROOT = os.path.join(_REPO_ROOT, "dynamic-island")
 if _DESKTOP_ROOT not in sys.path:
     sys.path.insert(0, _DESKTOP_ROOT)
 
-os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test")
+os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test-root")
 
 from app.ui.overlay_window import IslandState  # noqa: E402
 from PySide6.QtCore import QRect
@@ -383,12 +388,9 @@ def test_island_approval_uses_queued_signal(qapp):
     assert "command=ls -la" in island._panel._approval_label.text()
     island._panel.approval_decision.emit(True)
     thread.join(10)
-    # _confirm returns 'approved' or 'denied', not 'once'
     decision = box.get("decision")
-    if decision is None:
-        # Timeout - the wait expired without a decision
-        decision = "denied"
-    assert decision in ("approved", "denied"), f"Expected 'approved' or 'denied', got {decision!r}"
+    # _confirm returns 'once' for an approved terminal state or 'deny' otherwise.
+    assert decision in ("once", "deny"), f"Expected 'once' or 'deny', got {decision!r}"
     island.close()
 
 
@@ -417,7 +419,8 @@ def test_island_hide_denies_pending_approval(qapp):
     assert has_pending, f"Expected pending approval in registry, got {island._approval_registry}"
     island.hide_island()
     thread.join(5)
-    assert box.get("decision") == "denied"
+    # _confirm returns 'deny' for the denied/no-answer terminal path.
+    assert box.get("decision") == "deny"
     island.close()
 
 

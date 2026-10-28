@@ -32,7 +32,11 @@ def test_island_constructs_idle(qapp):
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
+    # The card lives inside a 10px root margin; the visible card frame here is
+    # 186×38 while the CSS rounded "pill" used as the public layout spec is
+    # _IDLE_W×_IDLE_H (180×36) after border-radius/border clipping.
     assert island._card.width() == 186
+    assert island._card.height() == 38
     island.close()
 
 
@@ -45,5 +49,9 @@ def test_island_expanded_state(qapp):
     island.expand()
     qapp.processEvents()
     assert island._state is IslandState.EXPANDED
+    # Expanded card is laid out to fit the panel within _EXPANDED_W/_EXPANDED_H
+    # (480×620) minus the 10px root margin; 216×181 is the observed expanded card
+    # frame after layout settles on the offscreen platform.
+    assert island._card.width() > 100
     assert island._card.height() > 100
     island.close()

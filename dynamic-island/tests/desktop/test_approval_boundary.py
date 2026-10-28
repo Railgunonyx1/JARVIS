@@ -193,8 +193,10 @@ def test_permission_callback_contract_spans_agent_backend_coordinator_island_and
     record = _await_record(island)
     app.processEvents()
     assert record.approval_id.startswith("approval-")
-    assert island._panel._current_approval_id == record.approval_id
+    # _show_approval registers the sink and, via _present_next_approval,
+    # sets the panel's _current_approval_id to the same value.
     assert record.approval_id in island._panel._approval_sinks
+    assert island._panel._current_approval_id == record.approval_id
     assert executed == []
 
     # Click the actual inline Allow button; its captured approval ID flows via
