@@ -68,12 +68,14 @@ def _get_model():
 def _hash_vector(text: str, dim: int) -> np.ndarray:
     """Deterministic hash-bucket bag-of-words fallback (any dimension)."""
     import numpy as np
+    import hashlib
     vec = np.zeros(dim, dtype=np.float32)
     words = text.lower().split()
     if not words:
         return vec
     for idx, word in enumerate(words):
-        slot = abs(hash(word)) % dim
+        h = hashlib.blake2b(word.encode('utf-8'), digest_size=8).digest()
+        slot = int.from_bytes(h, byteorder='little', signed=False) % dim
         vec[slot] += 1.0 + (0.1 * idx)
     norm = np.linalg.norm(vec)
     if norm > 0:

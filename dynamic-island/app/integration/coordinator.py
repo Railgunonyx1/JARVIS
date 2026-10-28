@@ -288,7 +288,7 @@ class AppCoordinator(QObject):
         self.chat_message.emit("user", text)
         self._backend.send_message(text)
 
-    def _on_backend_chunk(self, chunk: str) -> None:
+    def _on_backend_chunk(self, request_id: int, chunk: str) -> None:
         self._buffer += chunk
         self.chat_message.emit("chunk", chunk)
 

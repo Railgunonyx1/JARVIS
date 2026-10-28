@@ -34,6 +34,7 @@ class AgentResponse:
     error: str = ""
     duration_ms: float = 0.0
     tool_calls: list = field(default_factory=list)
+    request_id: int | None = None
 
 
 class BackendState(StrEnum):
@@ -61,7 +62,7 @@ class JarvisBackend(QObject):
 
     # Signals — all emitted from the worker thread but safe to connect to
     # Qt slots on the main thread (Qt uses queued connections across threads).
-    chunk_ready = Signal(str)                    # streaming text chunk
+    chunk_ready = Signal(int, str)               # (request_id, streaming text chunk)
     response_ready = Signal(object)              # AgentResponse
     status_changed = Signal(str)                 # status string
     state_changed = Signal(object)               # BackendState
@@ -171,12 +172,17 @@ class JarvisBackend(QObject):
         """
         with self._state_lock:
             task = self._tasks_by_id.get(request_id) or self._current_task
-        if task is not None and not task.done():
+            loop = self._loop
+        if task is not None and not task.done() and loop is not None:
             try:
-                task.cancel()
+                loop.call_soon_threadsafe(task.cancel)
                 return True
             except Exception:
-                return False
+                try:
+                    task.cancel()
+                    return True
+                except Exception:
+                    return False
         return False
 
     def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
@@ -345,7 +351,7 @@ class JarvisBackend(QObject):
         start = time.time()
         try:
             def on_chunk(chunk: str) -> None:
-                self.chunk_ready.emit(chunk)
+                self.chunk_ready.emit(request_id, chunk)
 
             result = await self._agent_loop.run(text, session_id=self._session_id, on_chunk=on_chunk)
             duration_ms = (time.time() - start) * 1000
@@ -356,6 +362,7 @@ class JarvisBackend(QObject):
                 error=result.error or "",
                 duration_ms=duration_ms,
                 tool_calls=[tc.get("name", "") for tc in result.state.tool_calls] if result.state else [],
+                request_id=request_id,
             )
             self.response_ready.emit(response)
         except asyncio.CancelledError:
@@ -364,12 +371,14 @@ class JarvisBackend(QObject):
                 success=False, text="",
                 error=f"Request {request_id} was cancelled",
                 duration_ms=(time.time() - start) * 1000,
+                request_id=request_id,
             ))
         except Exception as exc:
             logger.exception("Agent run failed")
             self.response_ready.emit(AgentResponse(
                 success=False, text="", error=str(exc)[:500],
                 duration_ms=(time.time() - start) * 1000,
+                request_id=request_id,
             ))
 
     def set_model(self, model: str) -> None:

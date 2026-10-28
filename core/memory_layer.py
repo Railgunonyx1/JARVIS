@@ -19,6 +19,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 
+# DEPRECATED: Use memory.api.get_mem() for all memory operations.
+# This module has no active imports in the codebase.
+
 class MemoryEntity:
     """Represents a tracked entity in the memory layer."""
 
