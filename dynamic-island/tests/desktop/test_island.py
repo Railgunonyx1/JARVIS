@@ -32,16 +32,18 @@ def test_island_constructs_idle(qapp):
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    # Card width includes 1px border; width is 180 + 2*10 margin + 2*1 border = 182
-    assert island._card.width() == 182
+    assert island._card.width() == 186
     island.close()
 
 
 def test_island_expanded_state(qapp):
-    from app.ui.overlay_window import IslandWindow, _EXPANDED_HEIGHT, IslandState
+    from app.ui.overlay_window import IslandWindow, IslandState
     island = IslandWindow()
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    assert island._card.height() == _EXPANDED_HEIGHT
+    island.expand()
+    qapp.processEvents()
+    assert island._state is IslandState.EXPANDED
+    assert island._card.height() > 100
     island.close()

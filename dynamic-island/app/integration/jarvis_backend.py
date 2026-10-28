@@ -79,11 +79,12 @@ class JarvisBackend(QObject):
         self._state = BackendState.STOPPED
         self._state_lock = threading.RLock()
         self._agent_loop = None
-        self._input_queue: queue.Queue[str] = queue.Queue()
         self._max_queue_size = 50
+        self._input_queue: queue.Queue[tuple[int | None, str]] = queue.Queue(maxsize=self._max_queue_size)
         self._request_id_counter = 0
         self._current_request_id: int | None = None
         self._current_task: asyncio.Task | None = None
+        self._tasks_by_id: dict[int, asyncio.Task] = {}
         self._startup_error: Exception | None = None
         self._started_event = threading.Event()
         self._shutdown_event = threading.Event()
@@ -169,12 +170,14 @@ class JarvisBackend(QObject):
             was scheduled), False if no such request ID is active.
         """
         with self._state_lock:
-            if self._current_request_id != request_id:
+            task = self._tasks_by_id.get(request_id) or self._current_task
+        if task is not None and not task.done():
+            try:
+                task.cancel()
+                return True
+            except Exception:
                 return False
-            # Schedule cancellation to be awaited in the worker thread
-            # We set a flag that the _run_agent coroutine will check
-            self._current_task = None  # will be reset by the worker when done
-            return True
+        return False
 
     def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
         """Stop the worker thread gracefully.
@@ -327,11 +330,15 @@ class JarvisBackend(QObject):
             task = self._loop.create_task(self._run_agent_with_id(text, request_id))
             with self._state_lock:
                 self._current_task = task
+                if isinstance(request_id, int):
+                    self._tasks_by_id[request_id] = task
             try:
                 await task
             finally:
                 with self._state_lock:
                     self._current_task = None
+                    if isinstance(request_id, int):
+                        self._tasks_by_id.pop(request_id, None)
 
     async def _run_agent_with_id(self, text: str, request_id: int) -> None:
         """Execute one agent run with a request ID and support cancellation."""

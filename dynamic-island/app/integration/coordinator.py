@@ -258,18 +258,26 @@ class AppCoordinator(QObject):
                 pass
         logger.info("AppCoordinator shutdown")
 
-    def _action_confirmation(self, action_name: str, approval_id: str | None = None) -> str:
-        """Adapt the desktop action layer's 1-arg contract to the agent's 2-arg one.
+    def _action_confirmation(
+        self,
+        action_name: str,
+        arguments: dict | None = None,
+        approval_id: str | None = None,
+    ) -> str:
+        """Bridge permission checks and desktop actions to the island UI.
 
-        Passes the approval_id (if any) through to the confirmation handler so
-        the UI can associate the decision with the correct request.
+        AgentLoop and PermissionEngine call with (tool_name, arguments), while
+        DesktopActionLayer calls with only an action name. The UI callback is
+        request-scoped and receives a separately generated approval ID.
         """
         if self._confirmation_handler is None:
             return "deny"
-        # Generate a unique approval_id if not provided and handler expects it
+        if isinstance(arguments, str) and approval_id is None:
+            approval_id = arguments
+            arguments = None
         if approval_id is None:
             approval_id = f"{_APPROVAL_PREFIX}{uuid.uuid4().hex[:12]}"
-        return self._confirmation_handler(action_name, {}, approval_id)
+        return self._confirmation_handler(action_name, arguments or {}, approval_id)
 
     # ── Chat ────────────────────────────────────────────────────
     def send_message(self, text: str) -> None:

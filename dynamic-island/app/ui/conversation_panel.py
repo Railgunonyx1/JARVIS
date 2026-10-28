@@ -306,6 +306,7 @@ class ConversationPanel(QWidget):
         ar.addWidget(self._approval_label, 1)
         approve_btn = QPushButton("Allow")
         deny_btn = QPushButton("Deny")
+        self._last_approval_row_buttons = (approve_btn, deny_btn)
         for b in (approve_btn, deny_btn):
             b.setFixedHeight(28)
             b.setCursor(Qt.CursorShape.PointingHandCursor)

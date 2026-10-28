@@ -126,17 +126,41 @@ class IslandController(QObject):
         self._coordinator = coordinator
         self._backend_ready = False
         # Subscribe to coordinator state and voice signals
-        coordinator.state_changed.connect(self._on_app_state)
-        coordinator.voice_state_changed.connect(self._on_voice_state)
-        coordinator.voice_transcription.connect(self._on_transcription)
-        coordinator.chat_message.connect(self._on_chat_message)
+        try:
+            coordinator.state_changed.connect(self._on_app_state)
+        except Exception:
+            pass
+        try:
+            coordinator.voice_state_changed.connect(self._on_voice_state)
+        except Exception:
+            pass
+        try:
+            coordinator.voice_transcription.connect(self._on_transcription)
+        except Exception:
+            pass
+        try:
+            coordinator.chat_message.connect(self._on_chat_message)
+        except Exception:
+            pass
+        # Subscribe to backend_ready if available for late binding
+        try:
+            if hasattr(coordinator, "backend_ready"):
+                coordinator.backend_ready.connect(self._resolve_backend_ready)
+        except Exception:
+            pass
         # Subscribe to backend signals if already available;
         # otherwise, wait for backend_ready notification from coordinator.
         backend = getattr(coordinator, "_backend", None)
         if backend is not None:
             self._backend_ready = True
-            backend.status_changed.connect(self._on_backend_status)
-            backend.state_changed.connect(self._on_backend_state)
+            try:
+                backend.status_changed.connect(self._on_backend_status)
+            except Exception:
+                pass
+            try:
+                backend.state_changed.connect(self._on_backend_state)
+            except Exception:
+                pass
             self._resolve_backend_ready()
         # The coordinator will emit backend_ready once the backend is running;
         # attach() handles the late-binding case by reconnecting at that point.

@@ -13,6 +13,8 @@ ConversationPanel. No agent/permission/tool logic here.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from enum import Enum
 from app.voice.voice_manager import VoiceState
 
@@ -44,6 +46,7 @@ _TOP_MARGIN = 4
 _IDLE_W, _IDLE_H = 180, 36
 _COMPACT_W, _COMPACT_H = 320, 44
 _EXPANDED_W, _EXPANDED_H = 480, 620
+_EXPANDED_HEIGHT = _EXPANDED_H
 _RADIUS = 20
 _EXIT_DELAY_MS = 180
 _MARGIN = 10
@@ -80,6 +83,7 @@ class IslandState(Enum):
 # Approval lifecycle: request-scoped IDs, event-based resolution, no shared mutable slot
 from PySide6.QtCore import QObject, QWaitCondition, QMutex
 import uuid
+from collections.abc import Callable
 
 _PENDING = "pending"
 _APPROVED = "approved_once"
@@ -87,6 +91,7 @@ _DENIED = "denied"
 _EXPIRED = "expired"
 _CANCELLED = "cancelled"
 _FAILED = "failed"
+_APPROVAL_TIMEOUT_SECONDS = 10.0
 
 
 class ApprovalRecord(QObject):
@@ -102,60 +107,66 @@ class ApprovalRecord(QObject):
         self.approval_id = approval_id
         self.tool_name = tool_name
         self.arguments = arguments
-        self.state = _PENDING
         self.mutex = QMutex()
         self.wait_condition = QWaitCondition()
+        self._state = _PENDING
         # UI callback reference (weak: set to None on resolve)
         self._decision_sink: Callable[[str], None] | None = None
 
-    def approve(self) -> None:
-        """Transition to approved_once — single terminal transition."""
-        with QMutexLocker(self.mutex) as locker:
-            if self.state != _PENDING:
-                return  # stale; already resolved
-            self.state = _APPROVED
-            self.wait_condition.wakeAll()
+    @property
+    def state(self) -> str:
+        with QMutexLocker(self.mutex):
+            return self._state
 
-    def deny(self) -> None:
-        """Transition to denied — single terminal transition."""
-        with QMutexLocker(self.mutex) as locker:
-            if self.state != _PENDING:
-                return  # stale; already resolved
-            self.state = _DENIED
+    def transition(self, state: str) -> bool:
+        """Atomically perform the only permitted transition from pending."""
+        if state not in (_APPROVED, _DENIED, _EXPIRED, _CANCELLED, _FAILED):
+            raise ValueError(f"not an approval terminal state: {state}")
+        with QMutexLocker(self.mutex):
+            if self._state != _PENDING:
+                return False
+            self._state = state
             self.wait_condition.wakeAll()
+            return True
 
-    def expire(self) -> None:
-        """Transition to expired — single terminal transition."""
-        with QMutexLocker(self.mutex) as locker:
-            if self.state != _PENDING:
-                return  # stale; already resolved
-            self.state = _EXPIRED
-            self.wait_condition.wakeAll()
+    def approve(self) -> bool:
+        """Transition to approved_once, or reject a duplicate/stale decision."""
+        return self.transition(_APPROVED)
+
+    def deny(self) -> bool:
+        """Transition to denied, or reject a duplicate/stale decision."""
+        return self.transition(_DENIED)
+
+    def expire(self) -> bool:
+        """Transition to expired, or reject a duplicate/stale decision."""
+        return self.transition(_EXPIRED)
 
     def is_terminal(self) -> bool:
         """Check if the approval has reached a terminal state."""
         return self.state in (_APPROVED, _DENIED, _EXPIRED, _CANCELLED, _FAILED)
 
-    def wait(self, timeout: float = 10.0) -> str:
-        """Block until a terminal state is reached or timeout expires.
-
-        Returns the terminal state string, or _EXPIRED if timeout.
-        Uses QWaitCondition for event-based wakeup instead of busy-wait sleep.
-        """
-        with QMutexLocker(self.mutex) as locker:
-            # Wait until terminal or timeout
-            result = self.wait_condition.wait(self.mutex, int(timeout * 1000))
-            if self.state == _PENDING:
-                # Timed out while still pending
-                self.state = _EXPIRED
-                self.wait_condition.wakeAll()
-            return self.state
+    def wait(self, timeout: float = _APPROVAL_TIMEOUT_SECONDS) -> str:
+        """Wait for one terminal transition; timeout races use first-writer-wins."""
+        deadline = time.monotonic() + timeout
+        while True:
+            with QMutexLocker(self.mutex):
+                if self._state != _PENDING:
+                    return self._state
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.wait_condition.wait(self.mutex, max(1, int(remaining * 1000)))
+            if time.monotonic() >= deadline:
+                break
+        self.transition(_EXPIRED)
+        return self.state
 
 
 class IslandWindow(QWidget):
     """Top-center morphing island overlay."""
 
-    _approval_requested = Signal(str, object, str)  # (tool_name, arguments, approval_id)
+    _approval_requested = Signal(str, object, str)
+    _approval_finished = Signal(str)
 
     def __init__(self, controller=None) -> None:
         super().__init__()
@@ -174,6 +185,11 @@ class IslandWindow(QWidget):
         self._quitting = False
         # Registry: approval_id -> ApprovalRecord, protects against stale events
         self._approval_registry: dict[str, ApprovalRecord] = {}
+        self._approval_registry_mutex = QMutex()
+        self._approval_queue: list[str] = []
+        self._approval_ui_lock = threading.RLock()
+        self._active_approval_id: str | None = None
+        self._last_status_before_approval = ("Ready", "")
         self._watched_screen = None
 
         self._build()
@@ -193,10 +209,10 @@ class IslandWindow(QWidget):
             self._controller.stream_chunk.connect(self._on_stream_chunk)
             self._controller.transcription.connect(self._on_transcription)
 
-        self._approval_requested.connect(self._show_approval)
-
         self.resize(_IDLE_W, _IDLE_H)
         self._reposition()
+        self._approval_requested.connect(self._show_approval)
+        self._approval_finished.connect(self._on_approval_finished)
 
         app = QApplication.instance()
         if app is not None:
@@ -212,17 +228,27 @@ class IslandWindow(QWidget):
         ctx = f"{tool_name}@{hash(str(arguments)) % 100000}"
         return f"approval-{uuid.uuid4().hex[:12]}"
 
-    def _register_approval(self, record: ApprovalRecord) -> None:
-        """Register an approval record in the registry."""
-        self._approval_registry[record.approval_id] = record
+    def _register_approval(self, record: ApprovalRecord) -> bool:
+        with QMutexLocker(self._approval_registry_mutex):
+            if record.approval_id in self._approval_registry:
+                return False
+            self._approval_registry[record.approval_id] = record
+            return True
+
+    def _get_approval(self, approval_id: str) -> ApprovalRecord | None:
+        with QMutexLocker(self._approval_registry_mutex):
+            return self._approval_registry.get(approval_id)
 
     def _resolve_approval(self, approval_id: str, state: str) -> None:
-        """Resolve an approval to a terminal state and clean up."""
-        record = self._approval_registry.pop(approval_id, None)
-        if record is None:
-            return  # stale; already cleaned up
-        record.state = state
-        record.wait_condition.wakeAll()
+        """Resolve and remove one request without overwriting a terminal result."""
+        with QMutexLocker(self._approval_registry_mutex):
+            record = self._approval_registry.get(approval_id)
+            if record is None:
+                return
+            if state in (_APPROVED, _DENIED, _EXPIRED, _CANCELLED, _FAILED):
+                record.transition(state)
+            if self._approval_registry.get(approval_id) is record:
+                self._approval_registry.pop(approval_id, None)
 
     # ── UI ───────────────────────────────────────────────────────
     def _build(self) -> None:
@@ -377,75 +403,117 @@ class IslandWindow(QWidget):
         except Exception as exc:
             logger.warning("Failed to bind voice_state_changed signals: %s", exc)
 
-    def _confirm(self, tool_name: str, arguments: dict) -> str:
+    def _confirm(self, tool_name: str, arguments: dict, approval_id: str | None = None) -> str:
         """Approval handler — runs on the agent worker thread.
 
-        Generates a unique approval_id, registers the record, and waits
-        event-based for a decision via queued signal. Exactly one terminal
-        transition is allowed: approved_once | denied | expired | cancelled | failed.
+        Accepts a request-scoped approval_id from the caller when available,
+        otherwise generates one. Registers the record, emits the decision UI
+        to the GUI thread, and waits event-based for a single terminal
+        transition: approved_once | denied | expired | cancelled | failed.
         Stale or late events are ignored.
 
-        The GUI thread delivers the decision via _on_approval_decision,
-        which sets the record's terminal state.
+        The GUI thread delivers the decision via _on_approval_decision, which
+        sets the record's terminal state.
         """
-        import uuid
+        import uuid as _uuid
 
-        approval_id = self._generate_approval_id(tool_name, arguments)
+        if approval_id is None:
+            approval_id = f"approval-{_uuid.uuid4().hex[:12]}"
+
         record = ApprovalRecord(approval_id, tool_name, arguments)
-        self._register_approval(record)
-        # Emit to GUI thread with approval_id
+        if not self._register_approval(record):
+            return "deny"
+        # Emit to GUI thread with approval_id. The panel's per-ID sink will
+        # route the operator's decision back to this exact record.
+        self.set_status("Approval", detail=f"{tool_name}: approval required")
         self._approval_requested.emit(tool_name, arguments, approval_id)
         # Wait event-based (no busy-wait sleep)
-        terminal = record.wait(timeout=10.0)
-        # Clean up registry entry
-        self._resolve_approval(approval_id, terminal)
-        # Return the terminal state as the decision
-        if terminal == _APPROVED:
-            return "approved"
-        elif terminal == _DENIED:
-            return "denied"
-        elif terminal == _EXPIRED:
-            return "denied"
-        else:
-            return "denied"
+        try:
+            terminal = record.wait(timeout=_APPROVAL_TIMEOUT_SECONDS)
+            return "once" if terminal == _APPROVED else "deny"
+        finally:
+            self._resolve_approval(approval_id, record.state)
+            self._approval_finished.emit(approval_id)
 
     def _show_approval(self, tool_name: str, arguments: dict, approval_id: str) -> None:
-        """GUI thread: surface the approval card, expanding so it is visible."""
         panel = self._ensure_panel()
-        # Look up the record; if not found (stale), still show but mark expired
-        record = self._approval_registry.get(approval_id)
+        record = self._get_approval(approval_id)
         if record is None:
-            # Stale approval — show but mark expired immediately
-            record = ApprovalRecord(approval_id, tool_name, arguments)
-            self._register_approval(record)
-            record.expire()
             return
-        # Update the preview with redacted arguments
-        panel.request_approval(tool_name, arguments, approval_id)
-        # Ensure panel's sink routes to this specific record
         if record._decision_sink is None:
-            record._decision_sink = lambda decision: self._on_approval_decision(record, decision)
-        panel.set_approval(tool_name, self._preview_arguments(arguments), approval_id)
-        if self._state is not IslandState.EXPANDED:
-            self.expand()
+            record._decision_sink = lambda decision: self._on_approval_decision(
+                record, decision in ("once", "run", True)
+            )
+        from app.ui.conversation_panel import ApprovalSink
+        panel._approval_sinks[approval_id] = ApprovalSink(
+            approval_id, record._decision_sink
+        )
+        with self._approval_ui_lock:
+            self._approval_queue.append(approval_id)
+            if self._active_approval_id is None:
+                self._present_next_approval()
+
+    def _present_next_approval(self) -> None:
+        if self._panel is None or not self._approval_queue:
+            self._active_approval_id = None
+            return
+        while self._approval_queue:
+            approval_id = self._approval_queue.pop(0)
+            record = self._get_approval(approval_id)
+            if record is None or record.is_terminal():
+                continue
+            self._active_approval_id = approval_id
+            self._panel.request_approval(record.tool_name, record.arguments, approval_id)
+            self._panel.set_approval(
+                record.tool_name, self._preview_arguments(record.arguments), approval_id
+            )
+            if self._state is not IslandState.EXPANDED:
+                self.expand()
+            return
+        self._active_approval_id = None
+
+    def _on_approval_finished(self, approval_id: str) -> None:
+        with self._approval_ui_lock:
+            if self._panel is not None:
+                self._panel._approval_sinks.pop(approval_id, None)
+            if self._active_approval_id == approval_id:
+                self._active_approval_id = None
+                if self._panel is not None:
+                    self._panel.set_approval(None, "", None)
+                if self._approval_queue:
+                    next_record = self._get_approval(self._approval_queue[0])
+                    if next_record is not None:
+                        self.set_status("Approval", detail=f"{next_record.tool_name}: approval required")
+                    self._present_next_approval()
+                else:
+                    label, detail = self._last_status_before_approval
+                    self.set_status(label or "Ready", detail=detail)
+            else:
+                self._approval_queue = [
+                    pending_id for pending_id in self._approval_queue
+                    if pending_id != approval_id
+                ]
 
     def _on_approval_decision(self, record: ApprovalRecord, allow: bool) -> None:
-        """Called from the panel: resolve this specific approval record."""
         if allow:
             record.approve()
         else:
             record.deny()
-        # Hide the approval card after decision
-        if self._panel is not None:
-            self._panel.set_approval(None)
 
     def _deny_pending(self) -> None:
         """Resolve all pending approvals to deny before hiding/quitting."""
-        for record in self._approval_registry.values():
-            if record.state == _PENDING:
+        with self._approval_ui_lock:
+            self._approval_queue.clear()
+            self._active_approval_id = None
+            label, detail = self._last_status_before_approval
+            self.set_status(label or "Ready", detail=detail)
+            if self._panel is not None:
+                self._panel.set_approval(None, "", None)
+            with QMutexLocker(self._approval_registry_mutex):
+                pending = list(self._approval_registry.values())
+                self._approval_registry.clear()
+            for record in pending:
                 record.deny()
-        # Clear the registry
-        self._approval_registry.clear()
 
     @staticmethod
     def _preview_arguments(arguments: dict) -> str:
