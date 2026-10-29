@@ -146,6 +146,28 @@ class EventBus:
             return before - len(self._event_log)
 
 
+
+def _match_pattern(pattern: str, name: str) -> bool:
+    p_parts = pattern.split(".")
+    n_parts = name.split(".")
+    stack: list[tuple[int, int, bool]] = [(0, 0, False)]  # (pi, ni, pi_moved)
+    limit = (len(p_parts) + 1) * (len(n_parts) + 1) * 3
+    while stack:
+        pi, ni, _ = stack.pop()
+        if pi == len(p_parts):
+            return ni == len(n_parts)
+        if p_parts[pi] == "**":
+            for k in range(ni, len(n_parts) + 1):
+                stack.append((pi + 1, k, False))
+            continue
+        if ni == len(n_parts):
+            continue
+        if p_parts[pi] == "*" or p_parts[pi] == n_parts[ni]:
+            stack.append((pi + 1, ni + 1, True))
+            continue
+    return False
+
+
 def _match_pattern(pattern: str, name: str) -> bool:
     """Segment-level glob matching for event subscription patterns.
 
