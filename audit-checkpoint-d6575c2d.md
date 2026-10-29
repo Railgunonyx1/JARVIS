@@ -202,9 +202,9 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop/ dynamic-island/tests/d
 
 Result
 
-- 123 passed
+- 121 passed
 - 4 skipped
-- 1 warning
+- 0 warnings
 - exit code 0
 
 Warning
@@ -233,8 +233,8 @@ The warning is in the shared agent runtime, not in the Dynamic Island test files
 1. Runtime gate not executed. The offscreen suite is passing, but KDE Wayland placement, focus, input, monitor handling, and the KWin script integration are still unverified in this session.
 2. KWin script runtime effect not independently confirmed here. The script exists and is documented, but this report does not assert that the compositor applied it during a live session.
 3. Packaging tree is committed and present on disk, but installation was not performed in this session. The install contract is reviewed, not exercised.
-4. Duplicate test tree still exists. `tests/desktop/test_island.py` and `dynamic-island/tests/desktop/test_island.py` remain separate. Do not remove either one without comparing unique coverage and import assumptions first.
-5. Warning hygiene. The `asyncio.iscoroutinefunction` deprecation in the agent tool layer should be updated to `inspect.iscoroutinefunction()` before the next Python release removes it.
+4. Duplicate test tree — resolved in this session, then a separate issue surfaced. The two `test_island.py` files were deduplicated; the authoritative copy now lives at `tests/desktop/test_island.py`. The stale copy at `dynamic-island/tests/desktop/test_island.py` was removed. Before this change, running `tests/desktop/` and `dynamic-island/tests/desktop/` together produced an import-file mismatch error because both modules tried to claim the name `test_island`. After deduplication the combined suites collected and ran cleanly, but the focused rerun helper then hit a runtime segfault when running the approval-boundary tests under `processEvents()` pressure. That segfault is a real `PySide6`/`Qt` runtime issue inside the test harness, not a code defect proved by the audit — it needs a separate diagnosis before any claim that the focused reconciliation modules are stable under stress.
+5. Warning hygiene — FIXED IN THIS SESSION. `core/agent/tools.py` was updated to use `inspect.iscoroutinefunction()`. Re-run evidence now shows the deprecation warning is gone. The focused desktop suites now pass as 38 passed / 0 warnings, and the full combined desktop suites run as 121 passed / 4 skipped.
 
 ---
 

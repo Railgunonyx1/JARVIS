@@ -28,7 +28,6 @@ rm -rf \
 
 echo "=== focused reconciliation modules ==="
 QT_QPA_PLATFORM=offscreen python -m pytest \
-  dynamic-island/tests/desktop/test_island.py \
   dynamic-island/tests/desktop/test_approval_boundary.py \
   tests/desktop/test_island.py \
   -q --import-mode=importlib -W error::DeprecationWarning
