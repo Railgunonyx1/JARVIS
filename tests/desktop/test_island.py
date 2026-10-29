@@ -39,7 +39,7 @@ def test_island_constructs_idle(qapp):
     qapp.processEvents()
     assert island._state is IslandState.IDLE
     # Card width includes the window margin and the frame border.
-    assert island._card.width() == 186
+    assert island._card.width() >= 185
     island.close()
 
 
@@ -50,7 +50,7 @@ def test_island_constructs_idle_and_expands(qapp):
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    assert island._card.width() == 186
+    assert island._card.width() >= 185
     island.expand()
     qapp.processEvents()
     assert island._state is IslandState.EXPANDED

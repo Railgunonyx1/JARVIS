@@ -8,6 +8,7 @@ tools.registry; nothing here re-implements tool logic.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import threading
 import time
@@ -120,7 +121,7 @@ class AgentToolExecutor:
             return result
 
         try:
-            if asyncio.iscoroutinefunction(tool.handler):
+            if inspect.iscoroutinefunction(tool.handler):
                 raw = await tool.handler(arguments)
             else:
                 # Create a cancellation event for this tool call, keyed by the
