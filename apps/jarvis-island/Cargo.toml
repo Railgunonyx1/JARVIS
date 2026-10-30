@@ -1,0 +1,17 @@
+[package]
+name = "jarvis-island"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+ctrlc.workspace = true
+jarvis-core = { path = "../../crates/jarvis-core" }
+jarvis-ui = { path = "../../crates/jarvis-ui" }
+
+[lints]
+workspace = true

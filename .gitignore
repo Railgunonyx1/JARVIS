@@ -1,0 +1,17 @@
+# Generated Cargo files
+/target
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Workspace check helper
+workspace-check.sh

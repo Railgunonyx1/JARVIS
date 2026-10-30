@@ -1,0 +1,22 @@
+[package]
+name = "jarvis-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+once_cell.workspace = true
+jarvis-core = { path = "../jarvis-core" }
+
+[features]
+default = []
+gtk4 = []
+
+[lints]
+workspace = true
