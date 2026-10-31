@@ -7,16 +7,24 @@ repository.workspace = true
 
 [dependencies]
 tokio.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
 once_cell.workspace = true
-jarvis-core = { path = "../jarvis-core" }
+
+jarvis-core = { path = "../jarvis-core", optional = true }
+glib = { version = "0.19", optional = true }
+pango = { version = "0.19", optional = true }
+gtk4 = { version = "0.7", optional = true }
+relm4 = { version = "0.7", optional = true }
+cairo-rs = { version = "0.19", optional = true }
 
 [features]
 default = []
-gtk4 = []
-
-[lints]
-workspace = true
+gtk4 = [
+    "jarvis-core",
+    "dep:gtk4",
+    "glib",
+    "pango",
+    "relm4",
+    "cairo-rs",
+]

@@ -2,6 +2,7 @@
 members = [
     "crates/jarvis-core",
     "crates/jarvis-ui",
+    "apps/jarvis-island",
 ]
 resolver = "2"
 
@@ -22,9 +23,3 @@ thiserror = "1"
 anyhow = "1"
 ctrlc = "3"
 once_cell = "1"
-
-[workspace.lints]
-workspace = true
-
-[lints]
-workspace = true

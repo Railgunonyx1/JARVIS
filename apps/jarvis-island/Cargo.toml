@@ -10,8 +10,10 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 ctrlc.workspace = true
+anyhow.workspace = true
 jarvis-core = { path = "../../crates/jarvis-core" }
 jarvis-ui = { path = "../../crates/jarvis-ui" }
 
-[lints]
-workspace = true
+[features]
+default = []
+gtk4 = ["jarvis-ui/gtk4"]

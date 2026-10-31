@@ -13,7 +13,6 @@ tracing.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
 once_cell.workspace = true
-jarvis-ui = { path = "../jarvis-ui" }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

@@ -1,8 +1,8 @@
 //! JARVIS Dynamic Island entry point.
 //!
 //! First milestone:
-//! - initialise structured logging,
-//! - build the core runtime,
+//! - initialise structured logging once,
+//! - build the core runtime with a notification channel,
 //! - start the UI stub,
 //! - keep the process alive so we can wire up the GTK overlay and subsystem
 //!   hooks without refactoring the entrypoint later.
@@ -11,11 +11,13 @@ use jarvis_core::events::AppState;
 use jarvis_core::start;
 use jarvis_ui::IslandRunner;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tracing::{info, warn};
 use tokio::signal;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Tracing is initialized exactly once at the application entrypoint.
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -25,13 +27,20 @@ async fn main() -> anyhow::Result<()> {
 
     info!("JARVIS Dynamic Island starting");
 
-    let core = start()?;
+    // Create the channel before starting core so core can publish toward the UI.
+    let (notif_tx, _notif_rx) = mpsc::unbounded_channel();
 
-    // The UI backend is selected through the feature flag on jarvis-ui.
-    // Once GTK layer-shell is wired, we will switch this from the stub to the
-    // real GTK runner.
-    let ui = jarvis_ui::GtkIslandRunner::new()?;
-    let ui = Box::new(ui);
+    let core = start(notif_tx)?;
+
+    // The UI backend is selected at compile time through the `gtk4` feature on
+    // `jarvis-ui`. When that feature is enabled, this crate links the real GTK
+    // runner from `jarvis_ui::GtkIslandRunner`. Otherwise it falls back to
+    // the built-in stub runner `jarvis_ui::stub::StubIslandRunner`.
+    let ui: Box<dyn IslandRunner> = if cfg!(feature = "gtk4") {
+        Box::new(jarvis_ui::GtkIslandRunner::new()?)
+    } else {
+        Box::new(jarvis_ui::stub::StubIslandRunner::new()?)
+    };
 
     // Publish an initial collapsed state so the UI knows what to render.
     core.notify(jarvis_core::events::AppNotification::State(AppState::collapsed()));

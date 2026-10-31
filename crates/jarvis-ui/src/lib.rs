@@ -9,10 +9,13 @@
 //!
 //! - a GTK main-loop driven UI, or
 //! - a Tokio-driven app with a GTK window created inside a blocking entrypoint.
+//!
+//! The GTK backend is optional. When the `gtk4` feature is enabled, this crate
+//! compiles the real GTK runner and links against GTK/Relm4. Otherwise only
+//! the trait and the stub runner are available.
 
-#[cfg(feature = "gtk4")]
 mod gtk;
-#[cfg(feature = "gtk4")]
+
 pub use gtk::GtkIslandRunner;
 
 /// Dynamic Island runner interface.
@@ -37,5 +40,69 @@ pub trait IslandRunner: Send + Sync {
     fn collapse(&self);
 
     /// Update the displayed state.
-    fn state(&self, state: jarvis_core::events::AppState);
+    fn state(&self, state: crate::stub::AppState);
+}
+
+pub mod stub {
+    //! Minimal stub state type and runner used when the GTK backend is not
+    //! enabled.
+    //!
+    //! This avoids linking against GTK/Relm4 and `jarvis-core` in the default
+    //! configuration while keeping the trait and entrypoint stable.
+
+    use super::IslandRunner;
+
+    #[derive(Debug, Clone, Default)]
+    pub struct AppState {
+        pub visible: bool,
+        pub expanded: bool,
+        pub message: String,
+    }
+
+    /// Stub island runner used when the GTK backend is not enabled.
+    pub struct StubIslandRunner;
+
+    impl StubIslandRunner {
+        pub fn new() -> anyhow::Result<Self> {
+            Ok(Self)
+        }
+    }
+
+    impl IslandRunner for StubIslandRunner {
+        fn run(&self) -> anyhow::Result<()> {
+            tracing::info!("running JARVIS Dynamic Island stub (no GTK backend active)");
+            Ok(())
+        }
+
+        fn show(&self) {
+            tracing::info!("island show requested");
+        }
+
+        fn hide(&self) {
+            tracing::info!("island hide requested");
+        }
+
+        fn expand(&self) {
+            tracing::info!("island expand requested");
+        }
+
+        fn collapse(&self) {
+            tracing::info!("island collapse requested");
+        }
+
+        fn state(&self, _state: crate::stub::AppState) {
+            tracing::info!("island state updated (stub)");
+        }
+    }
+}
+
+#[cfg(feature = "gtk4")]
+pub mod events {
+    //! Re-export of core event types when the GTK backend is enabled.
+    //!
+    //! The GTK runner and any UI-side state handling depend on these types only
+    //! when the `gtk4` feature is active, which is when `jarvis-core` is linked
+    //! and the real GTK module is compiled.
+
+    pub use jarvis_core::events::{AppNotification, AppState};
 }
