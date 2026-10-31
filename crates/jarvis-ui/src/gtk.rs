@@ -7,26 +7,38 @@
 //! - collapsed/expanded presentation,
 //! - transparency and input handling,
 //! - monitor-change and display-scaling handling.
+//!
+//! The GTK backend is currently a scaffold. The Rust lifecycle glue is in place,
+//! but the actual overlay window, layer-shell wiring, and main-loop integration
+//! are not implemented yet.
 
 use crate::IslandRunner;
-use crate::stub::AppState;
 
 pub struct GtkIslandRunner {
-    // In the first real GTK milestone, hold the window and layer-shell state
-    // here. For now this is intentionally a scaffold.
+    notif_rx: tokio::sync::mpsc::UnboundedReceiver<jarvis_core::events::AppNotification>,
 }
 
 impl GtkIslandRunner {
     pub fn new() -> anyhow::Result<Self> {
-        anyhow::bail!(
-            "GTK4 backend is not wired yet. Enable the gtk4 feature and implement              the layer-shell window."
-        );
+        // The receiver is attached by the entrypoint through
+        // `with_notification_receiver`, not here.
+        unreachable!("created through IslandRunner::with_notification_receiver");
     }
 }
 
 impl IslandRunner for GtkIslandRunner {
+    fn with_notification_receiver(
+        self,
+        receiver: tokio::sync::mpsc::UnboundedReceiver<jarvis_core::events::AppNotification>,
+    ) -> Self {
+        Self { notif_rx: receiver }
+    }
+
     fn run(&self) -> anyhow::Result<()> {
-        anyhow::bail!("GTK runner not implemented yet")
+        // When GTK is enabled, this should become the GTK main-thread event loop.
+        // For the current milestone we cannot start a real GTK loop because GTK is
+        // not wired yet, so we bail with a clear message.
+        anyhow::bail!("GTK4 backend is not wired yet. Enable the gtk4 feature and implement the layer-shell window.");
     }
 
     fn show(&self) {
@@ -45,7 +57,8 @@ impl IslandRunner for GtkIslandRunner {
         tracing::info!("gtk island collapse requested");
     }
 
-    fn state(&self, _state: AppState) {
-        tracing::info!("gtk island state updated");
+    fn state(&self, state: jarvis_core::events::AppState) {
+        tracing::info!(?state, "gtk island state updated");
+        let _ = state;
     }
 }
