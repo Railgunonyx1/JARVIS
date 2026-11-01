@@ -430,3 +430,49 @@ def test_failure_classification_precedence():
     assert classify_failure("provider returned an empty response") == FailureClass.MODEL_FAILURE
     assert classify_failure("unknown tool") == FailureClass.MALFORMED_TOOL
     assert classify_failure("something broke") == FailureClass.TOOL_FAILURE
+
+
+# ---------------------------------------------------------------------------
+# 8. Desktop backend uses the single composition root
+# ---------------------------------------------------------------------------
+
+_DESKTOP_BACKEND = (Path(__file__).resolve().parents[1]
+                    / "dynamic-island" / "app" / "integration" / "jarvis_backend.py")
+
+_GRAPH_CONSTRUCTORS = {
+    "ProviderRouter",
+    "AgentToolExecutor",
+    "ToolExecutionService",
+    "PermissionEngine",
+    "AgentLoop",
+    "build_default_registry",
+}
+
+
+def _called_names(source: str) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name):
+                names.add(func.id)
+            elif isinstance(func, ast.Attribute):
+                names.add(func.attr)
+    return names
+
+
+def test_desktop_backend_delegates_to_build_kernel():
+    """The desktop backend must not assemble its own runtime graph.
+
+    Building a reduced graph in the desktop path silently drops the model
+    gateway and harness selection, so desktop and CLI would run different
+    configurations while claiming to share one kernel.
+    """
+    assert _DESKTOP_BACKEND.exists(), f"missing {_DESKTOP_BACKEND}"
+    calls = _called_names(_DESKTOP_BACKEND.read_text(encoding="utf-8"))
+
+    assert "build_kernel" in calls, "desktop backend must call build_kernel()"
+    assert "close_kernel" in calls, "desktop backend must call close_kernel()"
+
+    duplicated = calls & _GRAPH_CONSTRUCTORS
+    assert not duplicated, f"desktop backend rebuilds kernel components: {sorted(duplicated)}"

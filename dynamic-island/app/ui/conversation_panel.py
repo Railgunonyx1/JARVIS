@@ -457,6 +457,7 @@ class ConversationPanel(QWidget):
         keeps unit tests that call this method without forwarding an
         argument working.
         """
+        if not isinstance(text, str): text = self.input_field.text()
         text = text.strip()
         if text:
             self.input_field.clear()

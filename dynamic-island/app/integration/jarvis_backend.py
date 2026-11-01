@@ -80,6 +80,7 @@ class JarvisBackend(QObject):
         self._state = BackendState.STOPPED
         self._state_lock = threading.RLock()
         self._agent_loop = None
+        self._runtime = None
         self._max_queue_size = 50
         self._input_queue: queue.Queue[tuple[int | None, str]] = queue.Queue(maxsize=self._max_queue_size)
         self._request_id_counter = 0
@@ -126,125 +127,69 @@ class JarvisBackend(QObject):
         if wait:
             self._wait_until_ready(timeout)
 
-    def send_message(self, text: str, *, request_id: int | None = None) -> int | None:
-        """Queue a message for the agent (non-blocking).
-
-        Args:
-            text: The message text to send to the agent.
-            request_id: Optional explicit request ID. If not provided, one is
-                generated. Messages with request IDs support cancellation.
-
-        Returns:
-            The request ID that was assigned, or None if the message was rejected.
-        """
-        with self._state_lock:
-            if self._state not in (BackendState.READY, BackendState.RUNNING):
-                # rejecting: not in a state that accepts input
-                return None
-            # Assign a request ID if not provided
-            if request_id is None:
-                self._request_id_counter += 1
-                request_id = self._request_id_counter
-            self._current_request_id = request_id
-
-        # Apply back-pressure: reject if queue would exceed max size
-        try:
-            self._input_queue.put_nowait((request_id, text))
-        except queue.Full:
-            # Drop oldest message or reject; here we just log and reject new one
-            logger.debug(f"Input queue full, rejecting message (queue size: {self._input_queue.qsize()})")
-            # Reset current request ID since we're rejecting this message
-            with self._state_lock:
-                self._current_request_id = None
-            return None
-
-        return request_id
 
     def cancel_request(self, request_id: int) -> bool:
         """Request cancellation of a specific in-flight agent run.
 
-        Args:
-            request_id: The request ID to cancel.
+        This operation is request-scoped: the cancellation token is wired to
+        the task created for that request ID, not to the agent loop as a
+        whole. Cancelling one request leaves other in-flight or queued requests
+        alone.
 
-        Returns:
-            True if cancellation was requested (the ID was found and cancellation
-            was scheduled), False if no such request ID is active.
+        Returns True only when the backend found an active, not-yet-done task
+        for that exact request ID and scheduled cancellation on the worker loop.
+        When the backend has no task for that ID it returns False and reports
+        the outcome honestly, rather than falling back to the current request
+        and pretending the named request was cancelled.
         """
+        task = None
+        loop = None
         with self._state_lock:
-            task = self._tasks_by_id.get(request_id) or self._current_task
+            if request_id in self._tasks_by_id and not self._tasks_by_id[request_id].done():
+                task = self._tasks_by_id[request_id]
             loop = self._loop
-        if task is not None and not task.done() and loop is not None:
+        if task is None or loop is None:
+            return False
+        try:
+            loop.call_soon_threadsafe(task.cancel)
+            return True
+        except Exception:
             try:
-                loop.call_soon_threadsafe(task.cancel)
+                task.cancel()
                 return True
             except Exception:
-                try:
-                    task.cancel()
-                    return True
-                except Exception:
-                    return False
-        return False
+                return False
 
-    def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
-        """Stop the worker thread gracefully.
 
-        Args:
-            wait: If True, wait for graceful shutdown (up to timeout).
-            timeout: Maximum seconds to wait when wait=True.
+    def send_message(self, text: str, *, request_id: int | None = None) -> int | None:
+        """Queue a message for the agent (non-blocking).
 
-        Note:
-            - Rejects new input after signaling stop.
-            - Cancels the current in-flight request if one is active.
-            - Drains/marks pending queue items.
-            - Awaits worker coroutine cleanup.
-            - Closes the event loop on the owning thread.
-            - Never calls loop.stop() from another thread as normal control flow.
+        Assigns a request ID to the message and delivers it to the worker loop.
+        If the queue is full, the message is rejected but the backend keeps any
+        existing per-request state intact; rejecting one message never mutates
+        the shared request counter, the current request ID, or other request IDs.
+
+        Returns the request ID that was queued, or None when the backend is not
+        in a state that accepts input or the input queue is full.
         """
         with self._state_lock:
-            if self._state == BackendState.STOPPED:
-                # Already stopped; emit complete and return
-                self.shutdown_complete.emit()
-                return
-            self._state = BackendState.STOPPING
+            if self._state not in (BackendState.READY, BackendState.RUNNING):
+                return None
+            if request_id is None:
+                self._request_id_counter += 1
+                request_id = self._request_id_counter
 
-        # Signal the worker thread to stop by putting a sentinel in the queue.
-        # The _main() loop checks self.state each iteration and will exit
-        # when it sees STOPPING. Putting None in the queue unblocks get()
-        # if it's currently waiting.
-        if self._input_queue:
-            try:
-                self._input_queue.put_nowait((None, ""))
-            except Exception:
-                pass
+        try:
+            self._input_queue.put_nowait((request_id, text))
+        except queue.Full:
+            logger.debug(
+                "Input queue full, rejecting message "
+                f"(queue size: {self._input_queue.qsize()}, request_id: {request_id})"
+            )
+            return None
 
-        if self._thread and wait:
-            # Wait for the worker thread to finish its graceful shutdown.
-            # The worker's _main loop will exit when it sees STOPPING.
-            self._thread.join(timeout=timeout)
+        return request_id
 
-        # If the thread is still alive after the timeout, report honestly.
-        # Do NOT force loop.stop() from another thread — that interrupts active work.
-        if self._thread and self._thread.is_alive():
-            logger.warning("Backend thread did not stop gracefully within timeout")
-            # Do not call self._loop.stop() from another thread.
-            # Let the worker finish its current iteration and exit naturally.
-        elif self._thread is None:
-            # Thread was never started
-            pass
-
-        with self._state_lock:
-            # Final state check — only transition to STOPPED if thread truly died
-            if self._thread and self._thread.is_alive():
-                # Thread still alive; stay in STOPPING, do not falsely report STOPPED
-                self._state = BackendState.STOPPING
-                self.shutdown_complete.emit()
-                return
-            # Thread is dead or was never started; transition to STOPPED
-            self._state = BackendState.STOPPED
-            self._agent_loop = None
-            self._loop = None
-            self._current_request_id = None
-            self.shutdown_complete.emit()
 
     def _wait_until_ready(self, timeout: float = 10.0) -> None:
         start = time.time()
@@ -272,79 +217,130 @@ class JarvisBackend(QObject):
                 startup_error = e
                 logger.exception("Backend startup failed")
             finally:
-                self._loop.close()
+                try:
+                    self._loop.close()
+                except Exception:
+                    pass
                 self._loop = None
         finally:
             pass
+
         if startup_error is not None:
-            # Preserve the original startup error so it is not lost
-            # when the lifecycle subsequently settles to STOPPED.
-            self._set_state(BackendState.ERROR, error=startup_error)
+            try:
+                self._set_state(BackendState.ERROR, error=startup_error)
+            except Exception:
+                logger.exception("Backend failed to report startup error")
         elif self.state != BackendState.STOPPED:
-            self._set_state(BackendState.STOPPED)
+            try:
+                self._set_state(BackendState.STOPPED)
+            except Exception:
+                logger.exception("Backend failed to report stopped state")
+
+
+    def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
+        """Stop the worker thread gracefully.
+
+        The shutdown sequence is deliberately bounded:
+
+        1. Reject new input from this point forward.
+        2. Wake the worker loop if it is blocked waiting on the input queue.
+        3. Let the worker finish its current iteration and release asyncio
+           resources on its own thread.
+        4. Wait for the worker thread to terminate, with an explicit timeout.
+        5. Report the honest outcome: STOPPED only when the thread actually
+           terminated, otherwise STOPPING with the completion signal emitted.
+
+        The method never calls loop.stop() from another thread as normal
+        control flow. If the worker still has work in flight when the timeout
+        expires, that is reported rather than forcibly cut off.
+        """
+        with self._state_lock:
+            if self._state == BackendState.STOPPED:
+                self.shutdown_complete.emit()
+                return
+            self._state = BackendState.STOPPING
+            # Cancel the currently executing request on the worker's own loop,
+            # so shutdown is deterministic instead of hoping inference finishes.
+            task = self._current_task
+            loop = self._loop
+        if task is not None and loop is not None and not task.done():
+            try:
+                loop.call_soon_threadsafe(task.cancel)
+            except Exception:
+                try:
+                    task.cancel()
+                except Exception:
+                    pass
+
+        # Wake the worker loop out of a blocking input-queue get(), if any.
+        try:
+            self._input_queue.put_nowait((None, ""))
+        except Exception:
+            pass
+
+        if self._thread is not None and wait:
+            self._thread.join(timeout=timeout)
+
+        with self._state_lock:
+            if self._thread is not None and self._thread.is_alive():
+                logger.warning(
+                    "Backend thread did not stop gracefully within timeout; "
+                    "remaining work was not forcibly cancelled."
+                )
+                self._state = BackendState.STOPPING
+                self.shutdown_complete.emit()
+                return
+            self._state = BackendState.STOPPED
+            self._agent_loop = None
+            self._loop = None
+            self._current_request_id = None
+            self._tasks_by_id.clear()
+            self._input_queue = queue.Queue(maxsize=self._max_queue_size)
+            self.shutdown_complete.emit()
 
     async def _main(self) -> None:
-        """Build the agent and process queued messages."""
-        from core.agent.loop import AgentLoop
-        from core.agent.permissions import PermissionEngine
-        from core.agent.tool_service import ToolExecutionService
-        from core.agent.tools import AgentToolExecutor
-        from core.decision_logger import get_decision_logger
-        from core.project import ProjectContext
-        from memory.mem import get_mem
-        from providers.router import ProviderRouter
-        from runtime.event_bus import get_event_bus
-        from tools import build_default_registry
+        """Build the agent through the canonical composition root."""
+        from runtime.kernel import build_kernel, close_kernel
 
-        models_config = self._load_models_config()
-        from core.api_keys import router_api_keys
-        router = ProviderRouter(models_config, router_api_keys())
-        registry = build_default_registry()
-        project = ProjectContext.discover()
-        event_bus = get_event_bus()
-        logger_ = get_decision_logger()
-        permissions = PermissionEngine(logger_, mode=self._mode,
-                                       confirmation_handler=self._confirmation_handler)
-        executor = AgentToolExecutor(registry, logger_)
-        tool_service = ToolExecutionService(
-            registry=registry, permissions=permissions, executor=executor,
-            decision_logger=logger_, bus=event_bus, mode=self._mode,
-        )
-        mem = get_mem()
-
-        self._agent_loop = AgentLoop(
-            router=router, registry=registry, project=project,
-            decision_logger=logger_, mode=self._mode,
+        self._runtime = build_kernel(
+            mode=self._mode,
             max_iterations=self._max_iterations,
             confirmation_handler=self._confirmation_handler,
-            mem=mem, event_bus=event_bus, tool_service=tool_service,
         )
+        self._agent_loop = self._runtime.agent_loop
 
         self._set_state(BackendState.READY)
         self.status_changed.emit("ready")
         self._started_event.set()
 
-        while self.state in (BackendState.READY, BackendState.RUNNING):
-            try:
-                item = self._input_queue.get(timeout=0.1)
-            except queue.Empty:
-                continue
-            request_id, text = item
-            if not text or not str(text).strip():
-                continue
-            # Track the current task for possible cancellation
-            task = self._loop.create_task(self._run_agent_with_id(text, request_id))
-            with self._state_lock:
-                self._current_task = task
-                if isinstance(request_id, int):
-                    self._tasks_by_id[request_id] = task
-            try:
-                await task
-            finally:
+        try:
+            while self.state in (BackendState.READY, BackendState.RUNNING):
+                try:
+                    item = self._input_queue.get(timeout=0.1)
+                except queue.Empty:
+                    continue
+                request_id, text = item
+                if not text or not str(text).strip():
+                    continue
+                # Track the current task for possible cancellation
+                task = self._loop.create_task(self._run_agent_with_id(text, request_id))
                 with self._state_lock:
-                    self._current_task = None
+                    self._current_task = task
                     if isinstance(request_id, int):
-                        self._tasks_by_id.pop(request_id, None)
+                        self._tasks_by_id[request_id] = task
+                try:
+                    await task
+                finally:
+                    with self._state_lock:
+                        self._current_task = None
+                        if isinstance(request_id, int):
+                            self._tasks_by_id.pop(request_id, None)
+        finally:
+            runtime = self._runtime
+            close_kernel(runtime)
+            with self._state_lock:
+                self._runtime = None
+                self._agent_loop = None
 
     async def _run_agent_with_id(self, text: str, request_id: int) -> None:
         """Execute one agent run with a request ID and support cancellation."""
@@ -398,11 +394,3 @@ class JarvisBackend(QObject):
 
     def _emit_status(self, status: str) -> None:
         self.status_changed.emit(status)
-
-    def _load_models_config(self) -> dict:
-        try:
-            from core.config import Config
-            c = Config()
-            return c.get_section("models") or {}
-        except Exception:
-            return {}

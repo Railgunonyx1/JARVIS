@@ -44,6 +44,31 @@ def test_backend_startup_error_is_reported():
     backend.stop(wait=True, timeout=10.0)
 
 
+def test_backend_runs_the_canonical_kernel():
+    """The desktop backend must run the kernel built by build_kernel()."""
+    from runtime.kernel import JarvisRuntime
+
+    backend = JarvisBackend(mode="agent")
+    backend.start(wait=True, timeout=10.0)
+    try:
+        runtime = backend._runtime
+        assert isinstance(runtime, JarvisRuntime)
+        assert backend._agent_loop is runtime.agent_loop
+        assert runtime.agent_loop.harness is not None
+        assert runtime.agent_loop.model_gateway is not None
+        assert runtime.agent_loop.tool_service is runtime.tool_service
+    finally:
+        backend.stop(wait=True, timeout=10.0)
+
+
+def test_backend_releases_kernel_on_stop():
+    backend = JarvisBackend(mode="agent")
+    backend.start(wait=True, timeout=10.0)
+    backend.stop(wait=True, timeout=10.0)
+    assert backend._runtime is None
+    assert backend._agent_loop is None
+
+
 def test_backend_message_queued():
     """Verify messages are accepted and queued without crashing."""
     backend = JarvisBackend(mode="agent")

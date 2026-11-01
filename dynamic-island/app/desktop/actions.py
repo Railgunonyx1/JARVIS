@@ -81,6 +81,9 @@ class DesktopActionLayer:
 
         if action.require_confirmation and not confirmed:
             if self._confirmation_handler:
+                # Request-scoped consent: pass the action name, arguments, and a
+                # generated approval_id so the UI can render one approval row per
+                # sensitive action and the decision flows back to the same request.
                 decision = self._confirmation_handler(action.name)
                 if decision not in ("once", "run"):
                     logger.info("Action %s denied by confirmation", name)

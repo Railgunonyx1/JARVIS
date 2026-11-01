@@ -97,8 +97,14 @@ _APPROVAL_TIMEOUT_SECONDS = 10.0
 class ApprovalRecord(QObject):
     """Request-scoped approval record with a single terminal transition.
 
-    Each approval gets a unique approval_id. The state machine ensures exactly
-    one terminal transition: approved_once | denied | expired | cancelled | failed.
+    Adapted concept: an explicit, request-scoped consent gateway with a single
+    terminal transition, drawn from the FatihMakes approval/confirmation pattern
+    (Mark-LVI-style ``undo.py``/``confirm.py`` shape). Adapted to JARVIS by
+    making the record itself the authority, not a shared mutable flag, and by
+    rejecting stale/duplicate/late decisions at the record level.
+
+    Each approval gets a unique ``approval_id``. The state machine ensures exactly
+    one terminal transition: ``approved_once | denied | expired | cancelled | failed``.
     Stale or late clicks are ignored.
     """
 
@@ -140,6 +146,14 @@ class ApprovalRecord(QObject):
     def expire(self) -> bool:
         """Transition to expired, or reject a duplicate/stale decision."""
         return self.transition(_EXPIRED)
+
+    def cancel(self) -> bool:
+        """Transition to cancelled when the originating request is cancelled."""
+        return self.transition(_CANCELLED)
+
+    def fail(self) -> bool:
+        """Transition to failed when the originating request errors out."""
+        return self.transition(_FAILED)
 
     def is_terminal(self) -> bool:
         """Check if the approval has reached a terminal state."""

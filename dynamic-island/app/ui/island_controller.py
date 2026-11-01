@@ -195,6 +195,11 @@ class IslandController(QObject):
         the coordinator, not by inferring completion from `not status.busy` or
         string inspection alone. Each terminal event (completed, failed,
         cancelled) drives a deterministic transition.
+
+        Note: THINKING and ERROR are intentionally kept out of the idle-clear
+        guard so they cannot be clobbered by a stray ``idle`` event from another
+        concurrent request. This is a small defense-in-depth change on top of
+        the existing coordinator-driven transition discipline.
         """
         val = getattr(state, "value", str(state))
         if val == "listening":
@@ -215,6 +220,8 @@ class IslandController(QObject):
                 IslandStatus.SPEAKING,
                 IslandStatus.APPROVAL,
                 IslandStatus.WORKING,
+                IslandStatus.THINKING,
+                IslandStatus.ERROR,
             ):
                 self._set(IslandStatus.IDLE)
 

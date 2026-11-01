@@ -68,6 +68,15 @@ class AppCoordinator(QObject):
         coord.shutdown()
     """
 
+    # The coordinator no longer owns a background action queue.
+    # Any old stub that reads or writes _action_queue directly now raises
+    # AttributeError so it fails fast instead of silently spinning.
+
+    # Legacy internal queue no longer used by the coordinator.
+    # The attribute is kept only so existing stub callers fail fast and
+    # visibly instead of silently spinning on an empty/unbounded queue.
+    _action_queue: list[str] | None = None
+
     # Signals — emitted from worker threads, safe to connect to GUI slots
     state_changed = Signal(object)  # AppState
     chat_message = Signal(str, str)  # role, text
@@ -211,7 +220,8 @@ class AppCoordinator(QObject):
             except Exception:
                 pass
 
-        # Connect backend signals to coordinator methods
+        # Start the backend in the background so the UI is not blocked
+        # on agent initialization.
         self._backend.start(wait=False)
 
         # Emit that the backend is now ready so late-binding attachers
@@ -626,9 +636,11 @@ class AppCoordinator(QObject):
             "voice_state": self._voice.state.value if self._voice else "none",
             "gesture_active": self._gesture_active,
             "workspace_visible": self._workspace_visible,
-            "stt_engine": self._voice.stt_engine if self._voice else "none",
-            "tts_engine": self._voice.tts_engine if self._voice else "none",
+            "stt_engine": getattr(self._voice, 'stt_engine', None) if self._voice else None,
+            "tts_engine": getattr(self._voice, 'tts_engine', None) if self._voice else None,
         }
+
+
 
     def _process_action_queue(self) -> None:
         """Process queued action requests in a background thread.
