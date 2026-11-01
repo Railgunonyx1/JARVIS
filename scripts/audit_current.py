@@ -1,6 +1,12 @@
 import json
+import os
+from pathlib import Path
 
-with open(os.path.join(os.path.dirname(__file__.replace('scripts', 'audits')), 'bandit_current.json')) as f:
+here = Path(__file__).resolve().parent
+audits = here.parent / "audits"
+bandit_current = audits / "bandit_current.json"
+
+with open(bandit_current) as f:
     d = json.load(f)
 
 totals = d.get('metrics', {}).get('_totals', {})

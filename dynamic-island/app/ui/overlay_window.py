@@ -398,7 +398,13 @@ class IslandWindow(QWidget):
             # can see that the UI is not fully connected. Do not swallow
             # the exception — the error is logged and the UI state is
             # updated.
-            self._controller.set_status(IslandStatus.ERROR, "Backend failed to attach")
+            try:
+                from app.ui.island_controller import IslandStatus
+            except Exception:
+                IslandStatus = None  # type: ignore[assignment]
+
+            if IslandStatus is not None:
+                self._controller.set_status(IslandStatus.ERROR, "Backend failed to attach")
             # If a panel was built, surface the error there as well.
             if getattr(self, "_panel", None) is not None:
                 try:

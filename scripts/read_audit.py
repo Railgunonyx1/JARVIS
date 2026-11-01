@@ -1,33 +1,57 @@
 #!/usr/bin/env python3
 import json
+from pathlib import Path
+
+_here = Path(__file__).resolve().parent
+_audits = _here.parent / "audits"
 
 # Read bandit after
-with open(os.path.join(os.path.dirname(__file__.replace('scripts', 'audits')), 'bandit_after.json')) as f:
+with open(_audits / "bandit_after.json") as f:
     d = json.load(f)
-t = d['metrics']['_totals']
-print(f"BANDIT AFTER: HIGH={t['SEVERITY.HIGH']} MEDIUM={t['SEVERITY.MEDIUM']} LOW={t['SEVERITY.LOW']} loc={t['loc']}")
+t = d["metrics"]["_totals"]
+print(
+    f"BANDIT AFTER: "
+    f"HIGH={t['SEVERITY.HIGH']} "
+    f"MEDIUM={t['SEVERITY.MEDIUM']} "
+    f"LOW={t['SEVERITY.LOW']} "
+    f"loc={t['loc']}"
+)
 
 # Read bandit before (in audits folder)
-with open(os.path.join(os.path.dirname(__file__.replace('scripts', 'audits')), 'bandit_before.json')) as f:
+with open(_audits / "bandit_before.json") as f:
     d2 = json.load(f)
-t2 = d2['metrics']['_totals']
-print(f"BANDIT BEFORE: HIGH={t2['SEVERITY.HIGH']} MEDIUM={t2['SEVERITY.MEDIUM']} LOW={t2['SEVERITY.LOW']} loc={t2['loc']}")
+t2 = d2["metrics"]["_totals"]
+print(
+    f"BANDIT BEFORE: "
+    f"HIGH={t2['SEVERITY.HIGH']} "
+    f"MEDIUM={t2['SEVERITY.MEDIUM']} "
+    f"LOW={t2['SEVERITY.LOW']} "
+    f"loc={t2['loc']}"
+)
 
 # Read current bandit
 try:
-    with open(r'C:\Users\aayan\Desktop\JARVIS\audits\bandit_current.json') as f:
+    current = _audits / "bandit_current.json"
+    with open(current) as f:
         d3 = json.load(f)
-    t3 = d3['metrics']['_totals']
-    print(f"BANDIT CURRENT: HIGH={t3['SEVERITY.HIGH']} MEDIUM={t3['SEVERITY.MEDIUM']} LOW={t3['SEVERITY.LOW']} loc={t3['loc']}")
-except:
+    t3 = d3["metrics"]["_totals"]
+    print(
+        f"BANDIT CURRENT: "
+        f"HIGH={t3['SEVERITY.HIGH']} "
+        f"MEDIUM={t3['SEVERITY.MEDIUM']} "
+        f"LOW={t3['SEVERITY.LOW']} "
+        f"loc={t3['loc']}"
+    )
+except OSError:
     print("No current bandit.json found")
 
 # Read audit results
 try:
-    with open(r'C:\Users\aayan\Desktop\JARVIS\audit_results.json') as f:
+    results = Path("audit_results.json")
+    with open(results) as f:
         ar = json.load(f)
-    print(f"\nPYTEST: {ar['pytest']['status']} ({ar['pytest'].get('passed', '?')} passed)")
-    print(f"RUFF errors: {ar['ruff']['error_count']}")
-    print(f"PIP CHECK: {ar['pip_check']['status']}")
-except:
+    print("\nPYTEST:", ar["pytest"]["status"], "(", ar["pytest"].get("passed", "?"), "passed)")
+    print("RUFF errors:", ar["ruff"]["error_count"])
+    print("PIP CHECK:", ar["pip_check"]["status"])
+except OSError:
     print("\nNo audit_results.json found")

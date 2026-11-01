@@ -45,6 +45,7 @@ EchoBackend so the AI layer works end-to-end without a kernel attached.
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import logging
 import os
@@ -120,7 +121,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         if self.auth_token is None:
             return True
         auth_header = self.headers.get("Authorization", "")
-        return auth_header == expected
+        expected = "Bearer " + self.auth_token
+        return hmac.compare_digest(auth_header, expected)
 
     def _host_ok(self) -> bool:
         """Reject requests whose Host header is not loopback.

@@ -104,7 +104,9 @@ def migrate_legacy_data() -> None:
     Policy: copy/merge only when destination doesn't exist. Never delete source
     until new file is validated. Log which migration occurred, without logging secrets.
     """
-    logger = logging.getLogger("jarvis.paths")
+    import logging as _logging
+
+    logger = _logging.getLogger("jarvis.paths")
 
     # Migrate settings if new location is empty and old exists
     if SETTINGS_FILE.exists():
