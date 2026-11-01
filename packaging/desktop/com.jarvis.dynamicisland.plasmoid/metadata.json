@@ -1,0 +1,18 @@
+{
+  "KPlugin": {
+    "Id": "com.jarvis.dynamicisland",
+    "Name": "JARVIS Dynamic Island",
+    "Description": "A minimal Dynamic Island-style desktop widget for KDE Plasma 6",
+    "Icon": "preferences-system-windows",
+    "Authors": [
+      {
+        "Name": "JARVIS"
+      }
+    ],
+    "Category": "Utilities",
+    "License": "MIT",
+    "Version": "0.1.0",
+    "Website": "https://github.com/Railgunonyx1/JARVIS"
+  },
+  "KPackageStructure": "Plasma/Applet"
+}
