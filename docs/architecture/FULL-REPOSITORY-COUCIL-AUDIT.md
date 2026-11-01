@@ -1,3 +1,16 @@
+# READ-ONLY SNAPSHOT — NOT A LIVE AUDIT
+
+> This document is a point-in-time council review artifact captured during a prior
+> read-only review. It is preserved for traceability, not as a current statement of
+> repository status, architecture alignment, or implementation readiness.
+>
+> Do not treat its baseline commit, status notes, verdicts, or "no source changes applied
+> during this review" wording as current. The branch may already include later commits,
+> including the latest remote commit `0ad5497`, and the current repository state may
+> differ from the evidence this document describes.
+
+---
+
 # JARVIS Dynamic Island — Phase 0 Council Review and Verdict
 
 Review type: formal Phase 0 architecture council review and implementation readiness assessment
@@ -232,3 +245,14 @@ Phase 1 status: not approved yet
 Files staged for review: `docs/architecture/*`
 Source changes: none applied during this review
 Commit/push status: none during this review
+
+---
+
+## Audit snapshot metadata
+
+- Snapshot type: read-only council review document
+- Snapshot baseline commit captured in this document: `b1f5051`
+- Snapshot reviewer posture: read-only during this review
+- Snapshot source archive: `docs/architecture/*`
+- Latest repository commit at time of snapshot: `b1f5051`
+- Snapshot preservation note: kept verbatim for historical traceability; not updated to reflect later commits

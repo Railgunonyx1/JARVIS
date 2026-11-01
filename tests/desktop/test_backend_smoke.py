@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Smoke tests: backend construction and lifecycle (hermetic, no API needed).
 
 These tests verify the backend can start and stop without crashing.
@@ -54,7 +55,7 @@ def test_backend_runs_the_canonical_kernel():
         runtime = backend._runtime
         assert isinstance(runtime, JarvisRuntime)
         assert backend._agent_loop is runtime.agent_loop
-        assert runtime.agent_loop.harness is not None
+        assert runtime.harness_selector.active is not None
         assert runtime.agent_loop.model_gateway is not None
         assert runtime.agent_loop.tool_service is runtime.tool_service
     finally:
@@ -67,6 +68,21 @@ def test_backend_releases_kernel_on_stop():
     backend.stop(wait=True, timeout=10.0)
     assert backend._runtime is None
     assert backend._agent_loop is None
+
+
+def test_backend_harness_is_canonical_runtime_reference():
+    """The desktop backend must expose canonical runtime state, not a
+    legacy agent-loop-only stub."""
+    backend = JarvisBackend(mode="agent")
+    backend.start(wait=True, timeout=10.0)
+    try:
+        runtime = backend._runtime
+        assert isinstance(runtime, JarvisRuntime)
+        assert runtime.harness_selector.active is runtime.agent_loop.harness
+        assert runtime.agent_loop.model_gateway is not None
+        assert runtime.agent_loop.tool_service is runtime.tool_service
+    finally:
+        backend.stop(wait=True, timeout=10.0)
 
 
 def test_backend_message_queued():
