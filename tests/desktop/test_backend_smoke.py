@@ -73,6 +73,8 @@ def test_backend_releases_kernel_on_stop():
 def test_backend_harness_is_canonical_runtime_reference():
     """The desktop backend must expose canonical runtime state, not a
     legacy agent-loop-only stub."""
+    from runtime.kernel import JarvisRuntime
+
     backend = JarvisBackend(mode="agent")
     backend.start(wait=True, timeout=10.0)
     try:
