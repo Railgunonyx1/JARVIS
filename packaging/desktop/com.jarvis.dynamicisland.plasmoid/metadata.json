@@ -1,1 +1,7 @@
-ewogICJLUEx1Z2luIjogImNvcy5qYXJ2aXMuZHluYW1pY2lzbGFuZCIsCiAgICAiRmlsZSI6ICJwYWNraXDvbmctZGVzaW1lOi8vY29tLmphcm92aXMuZHluYW1pY2lzbGFuZS9tZXRhZGF0YS5qc29tIiwKICAgICJNYXRwbGVDb3VudCI6ICJcb2xkZXIiLAogICAgIkpQT1NURSI6ICJcZnVuY3Rpb24iLAogICAgIlNvdXJjZVN0YXJ0IjogIlxkYW5nZS9vcGVyYXRvci9zbmlpbmVkL2lzbGFuZC9mb3JtYXRzL25ld19wYWNraXd1bSIKfQ==
+{
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "plasmoid": {
+    "apiVersion": "3.0",
+    "version": "1.0"
+  }
+}
