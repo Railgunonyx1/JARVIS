@@ -20,8 +20,6 @@ from typing import Any
 _TOOL_NAME_ALIASES: dict[str, str] = {
     "web_search": "web.search",
     "web_search_tool": "web.search",
-    "web_fetch": "browser.open",
-    "browser_fetch": "browser.open",
     "file_read": "filesystem.read",
     "read_file": "filesystem.read",
     "file_write": "filesystem.write",
@@ -101,7 +99,7 @@ _HARNESS_PRESETS: dict[HarnessType, HarnessConfig] = {
         description="Optimized for analysis, search, and information gathering",
         max_iterations=12,
         max_tool_calls_per_step=4,
-        tool_whitelist=("web.search", "browser.open", "filesystem.read", "shell.execute", "search.code"),
+        tool_whitelist=("web.search", "filesystem.read", "shell.execute", "search.code"),
         model_preference=("reasoning",),
         system_prompt_addendum=(
             "\nYou are a research-focused agent. Prioritize gathering information "

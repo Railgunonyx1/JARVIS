@@ -37,11 +37,13 @@ tar -C "$REPO_ROOT" \
 cat > "$BIN_DIR/jarvis-desktop-island" <<EOF
 #!/usr/bin/env bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
+export JARVIS_DESKTOP_LAUNCHER="$BIN_DIR/jarvis-desktop-island"
 exec "$VENV_DIR/bin/python" "$REPO_DIR/scripts/island-launcher.py" "\$@"
 EOF
 cat > "$BIN_DIR/jarvis-island" <<EOF
 #!/usr/bin/env bash
 export JARVIS_DESKTOP_HOME="$INSTALL_DIR"
+export JARVIS_DESKTOP_LAUNCHER="$BIN_DIR/jarvis-desktop-island"
 exec "$VENV_DIR/bin/python" "$REPO_DIR/scripts/island-launcher.py" "\$@"
 EOF
 cat > "$BIN_DIR/jarvis-autostart" <<EOF

@@ -39,6 +39,9 @@ def _quote(argument: str) -> str:
 
 
 def _launch_command() -> str:
+    configured_launcher = os.environ.get("JARVIS_DESKTOP_LAUNCHER", "").strip()
+    if configured_launcher and Path(configured_launcher).is_file():
+        return _quote(str(Path(configured_launcher).resolve()))
     existing = Path(sys.argv[0]).resolve()
     if existing.name in {"jarvis-desktop", "jarvis-desktop-island", "jarvis-island"}:
         return _quote(str(existing))

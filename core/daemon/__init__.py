@@ -473,15 +473,7 @@ class JARVISDaemon:
         """Extract arguments for a skill from the user message."""
         args: dict[str, Any] = {}
 
-        if skill_name == "browser":
-            return []
-            import re
-            url_match = re.search(r"https?://\S+", user_message)
-            if url_match:
-                args["url"] = url_match.group(0)
-            else:
-                args["url"] = "https://example.com"
-
+        if skill_name == "filesystem":
         elif skill_name == "filesystem":
             import re
             path_match = re.search(r"[/\w\d.-]+\.\w+", user_message)
