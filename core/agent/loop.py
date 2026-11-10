@@ -213,6 +213,11 @@ class AgentLoop:
         """The active execution harness wired by the runtime kernel."""
         return self._harness
 
+    @property
+    def tool_service(self):
+        """The canonical permission-gated tool execution service."""
+        return self._tool_service
+
     # ── Mode management (delegates to ToolExecutionService) ────────────────
 
     @property
