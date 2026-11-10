@@ -312,7 +312,6 @@ class TestCameraShutdownOrdering:
 
         # Verify the tracker stopped cleanly.
         assert tracker._running is False
-        tracker.__dict__.clear()
 
     def test_stop_before_start_is_noop(self):
         """Tracker.stop() before start() is a no-op."""
