@@ -58,6 +58,7 @@ def norm(name: str) -> str:
 
 # Curated mappings from the LIVE tool catalog (tools.build_default_registry).
 # Advisory skills map to [] — they shape behaviour, not tool calls.
+_TOOL_MAP: dict[str, dict[str, object]] = {
     "brainstorming": {"tools": [], "risk": "low", "tags": ["planning", "ideation"]},
     "convex-performance-audit": {"tools": [], "risk": "low", "tags": ["performance", "audit"]},
     "documentation-writer": {
@@ -69,10 +70,6 @@ def norm(name: str) -> str:
         "risk": "low", "tags": ["diagrams", "docs"],
     },
     "executing-plans": {"tools": [], "risk": "low", "tags": ["planning", "execution"]},
-    "f1-test-drive": {
-        "tools": ["shell.execute", "test.run", "test.run_target", "runtime.status"],
-        "risk": "medium", "tags": ["testing", "e2e", "f1"],
-    },
     "find-skills": {
         "tools": ["skills.list", "skills.load"],
         "risk": "low", "tags": ["meta", "discovery"],
