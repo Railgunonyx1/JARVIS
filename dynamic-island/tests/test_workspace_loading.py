@@ -16,20 +16,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Ensure dynamic-island app is importable
-DYNAMIC_ISLAND_ROOT = os.path.join(PROJECT_ROOT, "dynamic-island")
-DYNAMIC_ISLAND_APP = os.path.join(PROJECT_ROOT, "dynamic-island", "app")
-if DYNAMIC_ISLAND_ROOT not in sys.path:
-    sys.path.insert(0, DYNAMIC_ISLAND_ROOT)
-if DYNAMIC_ISLAND_APP not in sys.path:
-    sys.path.insert(0, DYNAMIC_ISLAND_APP)
-
 # Attempt to import the module under test
 HAS_WORKSPACE = False
 Workspace3D = None
 
 try:
-    from dynamic_island.app.workspace3d.workspace3d import Workspace3D as _Workspace3D
+    from app.workspace3d.workspace3d import Workspace3D as _Workspace3D
     Workspace3D = _Workspace3D
     HAS_WORKSPACE = True
 except (ModuleNotFoundError, ImportError):
