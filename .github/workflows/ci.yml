@@ -36,6 +36,8 @@ jobs:
       - name: Safety lint
         run: ruff check . --select E9,F63,F7,F82
       - name: Desktop and application tests
-        run: python -m pytest tests/ dynamic-island/tests/ -q
+        run: |
+          python -m pytest tests/ -q
+          python -m pytest dynamic-island/tests/ -q
       - name: Secret scan
         run: python scripts/scan_secrets.py

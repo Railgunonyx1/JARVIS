@@ -35,7 +35,8 @@ Or use `python -m app.main` with `dynamic-island/` and the repository root on `P
 ## Verification
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop dynamic-island/tests -q
+QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop -q
+QT_QPA_PLATFORM=offscreen python -m pytest dynamic-island/tests -q
 ```
 
 A headless test run does not validate KWin placement, actual microphone/audio devices, camera hardware or GPU-backed Qt Quick 3D. Verify those on a KDE Plasma 6 Wayland session before release.

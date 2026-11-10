@@ -20,7 +20,8 @@ packaging/desktop/uninstall.sh
 ## Release gates
 
 1. `ruff check .` passes.
-2. `QT_QPA_PLATFORM=offscreen python -m pytest tests/ dynamic-island/tests/ -q` passes.
+2. `QT_QPA_PLATFORM=offscreen python -m pytest tests/ -q
+QT_QPA_PLATFORM=offscreen python -m pytest dynamic-island/tests/ -q` passes.
 3. `python scripts/scan_secrets.py` reports no potential secrets.
 4. The installer and uninstaller are exercised on a clean KDE Plasma 6 user account.
 5. Compact/expanded states, autostart, KWin placement, push-to-talk, gesture opt-in and lazy 3D loading are manually checked on the target Wayland session.

@@ -56,4 +56,6 @@ testpaths = ["tests"]
 markers = [
     "hardware: requires physical audio, camera or desktop hardware",
     "e2e: end-to-end tests requiring live model/API access (opt-in)",
+    "requires_qt: requires Qt runtime modules",
+    "manual: requires manual target-system validation",
 ]

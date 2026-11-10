@@ -74,7 +74,8 @@ The authoritative desktop application is under `dynamic-island/`. The reusable A
 
 ```bash
 ruff check .
-PYTHONPATH="$PWD/dynamic-island:$PWD" QT_QPA_PLATFORM=offscreen python -m pytest tests/ dynamic-island/tests/ -q
+PYTHONPATH="$PWD/dynamic-island:$PWD" QT_QPA_PLATFORM=offscreen python -m pytest tests/ -q
+PYTHONPATH="$PWD/dynamic-island:$PWD" QT_QPA_PLATFORM=offscreen python -m pytest dynamic-island/tests/ -q
 python scripts/scan_secrets.py
 ```
 

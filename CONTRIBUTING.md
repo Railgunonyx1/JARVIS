@@ -32,7 +32,8 @@ PYTHONPATH="$PWD/dynamic-island:$PWD" python scripts/island-launcher.py
 
 ```bash
 ruff check .
-QT_QPA_PLATFORM=offscreen python -m pytest tests/ dynamic-island/tests/ -q
+QT_QPA_PLATFORM=offscreen python -m pytest tests/ -q
+QT_QPA_PLATFORM=offscreen python -m pytest dynamic-island/tests/ -q
 python scripts/scan_secrets.py
 ```
 
