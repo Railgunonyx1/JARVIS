@@ -474,7 +474,6 @@ class JARVISDaemon:
         args: dict[str, Any] = {}
 
         if skill_name == "filesystem":
-        elif skill_name == "filesystem":
             import re
             path_match = re.search(r"[/\w\d.-]+\.\w+", user_message)
             if path_match:
