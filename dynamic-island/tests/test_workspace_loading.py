@@ -10,6 +10,7 @@ Hardware/QML-dependent tests require Qt runtime and are marked MANUAL.
 
 import sys
 import os
+from pathlib import Path
 
 # Ensure project root is on PATH for imports
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,6 +89,7 @@ class TestWorkspaceLoading:
             pytest.skip("Workspace3D not available")
 
         ws = Workspace3D()
+        assert ws.load() is True
         assert ws.is_visible is False
         ws.show()
         assert ws.is_visible is True
@@ -123,26 +125,22 @@ class TestWorkspaceLoading:
         assert ws.is_loaded is False
         # Widget should be None after shutdown
         assert ws.get_widget() is None
-        ws.__dict__.clear()
 
-    def test_workspace_no_crash_on_missing_qml(self):
-        """Workspace3D should not crash when QML file missing - gracefully returns False."""
+    def test_workspace_no_crash_on_missing_qml(self, monkeypatch):
+        """Workspace3D returns False cleanly when the scene file is missing."""
         if not HAS_WORKSPACE:
             pytest.skip("Workspace3D not available - QML dependent")
 
-        # Create a workspace with a non-existent QML path by patching
-        # Since we can't easily patch _QML_PATH, test the error handling path
-        # by verifying the method catches exceptions
-        try:
-            ws = Workspace3D()
-            # Calling load() should not raise; it should return False on error
-            result = ws.load()
-            assert isinstance(result, bool), "load() should return bool even on failure"
-            # On failure, widget should be None and loaded should be False
-            assert ws.is_loaded is False
-            ws.shutdown()
-        except Exception as e:
-            pytest.fail(f"Workspace3D.load() raised exception on error path: {e}")
+        from app.workspace3d import workspace3d as workspace_module
+
+        missing_qml = Path(__file__).with_name("definitely_missing_scene.qml")
+        monkeypatch.setattr(workspace_module, "_QML_PATH", missing_qml)
+
+        ws = Workspace3D()
+        assert ws.load() is False
+        assert ws.is_loaded is False
+        assert ws.get_widget() is None
+        ws.shutdown()
 
     @pytest.mark.manual
     def test_workspace_with_real_qml_runtime(self):
