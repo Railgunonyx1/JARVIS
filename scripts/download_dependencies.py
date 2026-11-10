@@ -1,24 +1,12 @@
-"""Download every JARVIS dependency in one command.
+"""Install the Dynamic Island runtime and development dependencies.
 
-Cross-platform (Linux/Bazzite + Windows). Installs:
-
-  1. runtime dependencies  (requirements.txt)
-  2. dev/test tools        (requirements-dev.txt)
-  3. optional Playwright Chromium   --playwright
-  4. optional Orbit npm deps        --orbit
-  5. optional precompiled bytecode  --precompile
-
-Examples
---------
-    python scripts/download_dependencies.py
-    python scripts/download_dependencies.py --playwright --orbit
-    python scripts/download_dependencies.py --system   # use current interpreter
+Cross-platform (Linux/Bazzite + Windows). Creates a local .venv unless
+--system is supplied. Optional bytecode precompilation is available.
 """
 
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS = ROOT / "requirements.txt"
 REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
-VENV_DIR = ROOT / "venv"
+VENV_DIR = ROOT / ".venv"
 
 
 def info(msg: str) -> None:
@@ -89,35 +77,6 @@ def install_requirements(python: Path) -> None:
         ok("Dev/test dependencies installed.")
 
 
-def install_playwright(python: Path) -> None:
-    info("Installing Playwright Chromium engine ...")
-    run_pip(python, "install", "playwright")
-    result = subprocess.run([str(python), "-m", "playwright", "install", "chromium"])
-    if result.returncode != 0:
-        warn("playwright install chromium failed (non-fatal).")
-    else:
-        ok("Playwright Chromium installed.")
-
-
-def install_orbit() -> None:
-    pkg = ROOT / "orbit-browser"
-    if not (pkg / "package.json").exists():
-        warn("orbit-browser/package.json not found — skipping.")
-        return
-    npm = shutil.which("npm")
-    if npm is None:
-        warn("npm not found — skipping Orbit deps (install Node.js 20+).")
-        return
-    install_cmd = ["ci", "--prefer-offline", "--no-audit", "--no-fund"]
-    if not (pkg / "package-lock.json").exists():
-        install_cmd = ["install", "--prefer-offline", "--no-audit", "--no-fund"]
-    info("Installing Orbit browser npm dependencies ...")
-    result = subprocess.run([npm, *install_cmd], cwd=str(pkg))
-    if result.returncode != 0:
-        fail("npm install failed in orbit-browser.")
-    ok("Orbit browser dependencies installed.")
-
-
 def precompile(python: Path) -> None:
     script = ROOT / "scripts" / "precompile.py"
     if not script.exists():
@@ -134,31 +93,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Download all JARVIS dependencies.")
     parser.add_argument("--system", action="store_true",
                         help="install into the current interpreter instead of venv/")
-    parser.add_argument("--playwright", action="store_true",
-                        help="also download the Playwright Chromium engine")
-    parser.add_argument("--orbit", action="store_true",
-                        help="also install the Orbit browser npm dependencies")
     parser.add_argument("--precompile", action="store_true",
                         help="precompile bytecode after installing")
     args = parser.parse_args(argv)
 
     print()
-    print("  JARVIS — Dependency Downloader")
+    print("  JARVIS Dynamic Island — Dependency Installer")
     print("  ==============================")
 
     python = ensure_python(args.system)
     install_requirements(python)
-    if args.playwright:
-        install_playwright(python)
-    if args.orbit:
-        install_orbit()
     if args.precompile:
         precompile(python)
 
     print()
     ok("ALL DEPENDENCIES DOWNLOADED")
     print(f"       Interpreter: {python}")
-    print("       Run the agent: python -m cli")
+    print("       Run the island: ./jarvis-island")
     print()
     return 0
 

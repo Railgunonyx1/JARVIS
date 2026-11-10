@@ -3,7 +3,7 @@
 Replaces the generative 1B LLM rerank lane (``memory/llm/rerank.py``) with a
 local ONNX cross-encoder: one in-process forward pass, no network call, no
 timeout, no JSON parsing, deterministic. ``onnxruntime`` is already shipped for
-the Kokoro TTS lane (``jbrowser-bridge/voice.py``), so this adds a model file
+the Dynamic Island Kokoro TTS lane (``dynamic-island/app/voice/tts.py``), so this adds a model file
 rather than a new runtime.
 
 Graceful degradation follows the ``memory/vector_store.py`` pattern: a missing
