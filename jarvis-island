@@ -1,26 +1,19 @@
 #!/bin/sh
-# Start the JARVIS Dynamic Island overlay.
-# Uses the repo virtualenv when present, otherwise the system python3.
-set -e
-
+# Start the JARVIS Dynamic Island overlay from a source checkout.
+set -eu
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-PY="$DIR/venv/bin/python"
+PY="$DIR/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+    PY="$DIR/venv/bin/python"
+fi
 if [ ! -x "$PY" ]; then
     PY=$(command -v python3 || true)
 fi
-
-if [ -z "$PY" ]; then
-    echo "jarvis-island: no python3 found on PATH" >&2
+if [ -z "$PY" ] || [ ! -x "$PY" ]; then
+    echo "jarvis-island: no usable Python 3 interpreter found" >&2
     exit 1
 fi
 
-# KDE Wayland ignores client window positions; the installed KWin script does
-# the top-centre placement. Set JARVIS_ISLAND_X11=1 to fall back to XWayland,
-# where Qt can position the window itself.
-if [ "${JARVIS_ISLAND_X11:-0}" = "1" ] && [ -n "${DISPLAY:-}" ]; then
-    QT_QPA_PLATFORM=xcb
-    export QT_QPA_PLATFORM
-fi
-
-exec "$PY" "$DIR/jarvis-desktop-island-launcher.py" "$@"
+export PYTHONPATH="$DIR/dynamic-island:$DIR${PYTHONPATH:+:$PYTHONPATH}"
+exec "$PY" "$DIR/scripts/island-launcher.py" "$@"

@@ -39,7 +39,7 @@ ignore = [
 known-first-party = [
     "app", "core", "memory", "providers", "tools", "runtime", "security",
     "jarvis_core", "jarvis_models", "jarvis_tools", "jarvis_memory",
-    "jarvis_mcp", "jarvis_routing", "jarvis_verification", "jarvis_ui",
+    "jarvis_mcp", "jarvis_routing", "jarvis_verification",
 ]
 
 [tool.ruff.lint.extend-per-file-ignores]
