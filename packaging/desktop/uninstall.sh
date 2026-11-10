@@ -1,44 +1,25 @@
-#!/bin/bash
-# JARVIS Desktop Companion — Uninstaller
+#!/usr/bin/env bash
+# User-level uninstaller for JARVIS Dynamic Island.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
-
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/jarvis-desktop}"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
-BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
-AUTOSTART_DIR="${AUTOSTART_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/autostart}"
+AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 
-echo "=== JARVIS Desktop Companion Uninstaller ==="
-
-# Remove launchers
-rm -f "$BIN_DIR/jarvis-desktop"
-rm -f "$BIN_DIR/jarvis-desktop-island"
-
-# Remove application files
+if [ -x "$BIN_DIR/jarvis-autostart" ]; then
+  "$BIN_DIR/jarvis-autostart" disable || true
+fi
+rm -f "$BIN_DIR/jarvis-desktop-island" "$BIN_DIR/jarvis-island" "$BIN_DIR/jarvis-autostart"
+rm -f "$DESKTOP_DIR/com.jarvis.island.desktop"
+rm -f "$AUTOSTART_DIR/jarvis-desktop.desktop"
+rm -f "$ICON_DIR/jarvis-desktop.svg"
 rm -rf "$INSTALL_DIR"
 
-# Remove desktop entries
-rm -f "$DESKTOP_DIR/com.jarvis.desktop.desktop"
-rm -f "$DESKTOP_DIR/com.jarvis.island.desktop"
-
-# Remove autostart entry
-rm -f "$AUTOSTART_DIR/jarvis-desktop.desktop"
-
-# Remove icon
-rm -f "$ICON_DIR/jarvis-desktop.svg"
-
-# Update desktop database
-if command -v update-desktop-database &>/dev/null; then
-    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -x "$SCRIPT_DIR/install-kwin-rule.sh" ]; then
+  "$SCRIPT_DIR/install-kwin-rule.sh" --uninstall || true
 fi
-
-echo "=== Uninstallation complete ==="
-
-
-# Remove KWin script if installed
-if [ -x "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" ]; then
-    "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" --uninstall || true
-fi
+command -v update-desktop-database >/dev/null && update-desktop-database "$DESKTOP_DIR" || true
+echo "JARVIS Dynamic Island uninstalled. User data outside $INSTALL_DIR was left untouched."

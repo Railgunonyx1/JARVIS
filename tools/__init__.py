@@ -33,28 +33,8 @@ web_archive_read = _web_archive_mod.web_archive_read
 
 def build_default_registry() -> ToolRegistry:
     """Register the core M0 tool set (filesystem + shell) plus world monitor."""
-    from jbrowser.tools import (
-        browser_close_tab,
-        browser_find,
-        browser_new_tab,
-        browser_permissions,
-        browser_profile,
-        browser_read,
-        browser_scroll,
-        browser_switch_tab,
-        browser_tabs,
-    )
     from tools.api_collections import api_parse, api_run
     from tools.audit import run_audit
-    from tools.browser import (
-        browser_click,
-        browser_extract,
-        browser_open,
-        browser_screenshot,
-        browser_status,
-        browser_type,
-    )
-    from tools.browser_wait import browser_wait
     from tools.code_intelligence import (
         code_ast,
         code_callees,
@@ -677,8 +657,8 @@ def build_default_registry() -> ToolRegistry:
             name="snippet.store",
             description=(
                 "Espanso-style text expansion: manage :trigger → text snippets "
-                "with action=add/list/remove/expand. browser.type expands "
-                ":triggers in typed text automatically before entering it."
+                "with action=add/list/remove/expand. Text-entry workflows can expand "
+                ":triggers before submitting text to a tool."
             ),
             parameters={
                 "type": "object",
@@ -716,30 +696,6 @@ def build_default_registry() -> ToolRegistry:
             permission="web.search",
             handler=send_notification,
             category="system",
-        ),
-        Tool(
-            name="browser.wait",
-            description=(
-                "Wait for a condition on the active browser page instead of "
-                "blind sleeps: condition='selector' (CSS appears), 'text' "
-                "(substring visible), 'gone' (selector removed), or 'delay'. "
-                "Use after clicks and SPA navigations before reading."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "condition": {
-                        "type": "string", "enum": ["selector", "text", "gone", "delay"],
-                        "description": "What to wait for.",
-                    },
-                    "value": {"type": "string", "description": "CSS selector, text substring, or seconds for delay."},
-                    "timeout": {"type": "number", "description": "Max seconds to wait. Default 10, cap 30."},
-                },
-                "required": ["condition"],
-            },
-            permission="browser.read",
-            handler=browser_wait,
-            category="browser",
         ),
         # -- task pulse (repo-mine: healthchecks.io dead-man's switch) --
         Tool(
@@ -1192,235 +1148,6 @@ def build_default_registry() -> ToolRegistry:
             permission="world_monitor.read",
             handler=world_monitor_search,
             category="world",
-        ),
-        Tool(
-            name="browser.open",
-            description=(
-                "Open a URL and return the page title, visible text, and links. "
-                "Uses a full Playwright browser when available (handles JavaScript "
-                "heavy pages) and falls back to HTTP scraping otherwise. Use for "
-                "web research and reading pages."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "Full URL (http(s)://) or bare domain."},
-                },
-                "required": ["url"],
-            },
-            permission="browser.open",
-            handler=browser_open,
-            category="browser",
-        ),
-        Tool(
-            name="browser.screenshot",
-            description=(
-                "Take a screenshot of the current browser page and save it to disk. "
-                "Returns the file path. Requires Playwright + chromium."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Optional output path (defaults to temp dir)."},
-                },
-                "required": [],
-            },
-            permission="browser.screenshot",
-            handler=browser_screenshot,
-            category="browser",
-        ),
-        Tool(
-            name="browser.click",
-            description=(
-                "Click the first element matching a CSS selector on the current page. "
-                "Requires Playwright. Useful after browser.open for interactive pages."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "selector": {"type": "string", "description": "CSS selector."},
-                },
-                "required": ["selector"],
-            },
-            permission="browser.high",
-            handler=browser_click,
-            category="browser",
-        ),
-        Tool(
-            name="browser.type",
-            description=(
-                "Fill a text input matching a CSS selector on the current page. "
-                "Requires Playwright."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "selector": {"type": "string", "description": "CSS selector of the input."},
-                    "text": {"type": "string", "description": "Text to type."},
-                },
-                "required": ["selector", "text"],
-            },
-            permission="browser.high",
-            handler=browser_type,
-            category="browser",
-        ),
-        Tool(
-            name="browser.extract",
-            description=(
-                "Extract visible text from the current page, or a specific element "
-                "by CSS selector. Requires Playwright."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "selector": {"type": "string", "description": "Optional CSS selector."},
-                },
-                "required": [],
-            },
-            permission="browser.read",
-            handler=browser_extract,
-            category="browser",
-        ),
-        Tool(
-            name="browser.status",
-            description=(
-                "Report whether the full Playwright browser backend is available "
-                "or JARVIS is falling back to HTTP scraping."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-            permission="browser.read",
-            handler=browser_status,
-            category="browser",
-        ),
-        Tool(
-            name="browser.new_tab",
-            description=(
-                "Open a new browser tab (optionally at a URL) and return its stable "
-                "tab_id. Use for multi-tab research; tabs keep their own state."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "Optional URL to open in the new tab."},
-                },
-                "required": [],
-            },
-            permission="browser.low",
-            handler=browser_new_tab,
-            category="browser",
-        ),
-        Tool(
-            name="browser.close_tab",
-            description=("Close a browser tab by its tab_id."),
-            parameters={
-                "type": "object",
-                "properties": {"tab_id": {"type": "string", "description": "Stable tab id from browser.tabs/new_tab."}},
-                "required": ["tab_id"],
-            },
-            permission="browser.low",
-            handler=browser_close_tab,
-            category="browser",
-        ),
-        Tool(
-            name="browser.tabs",
-            description=(
-                "List all open browser tabs (id, session, title, url). Use to see "
-                "what research state exists before operating on a specific tab."
-            ),
-            parameters={"type": "object", "properties": {}, "required": []},
-            permission="browser.low",
-            handler=browser_tabs,
-            category="browser",
-        ),
-        Tool(
-            name="browser.switch_tab",
-            description=("Make a specific tab the active target for subsequent browser tools."),
-            parameters={
-                "type": "object",
-                "properties": {"tab_id": {"type": "string", "description": "Stable tab id."}},
-                "required": ["tab_id"],
-            },
-            permission="browser.low",
-            handler=browser_switch_tab,
-            category="browser",
-        ),
-        Tool(
-            name="browser.read",
-            description=(
-                "Read the current (or named) page as a structured context: URL, title, "
-                "interactive element handles [elN], links, forms, and visible text. "
-                "Prefer this over browser.extract for agent reasoning; use the [elN] "
-                "handles with browser.click/type."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {"tab_id": {"type": "string", "description": "Optional tab id."}},
-                "required": [],
-            },
-            permission="browser.low",
-            handler=browser_read,
-            category="browser",
-        ),
-        Tool(
-            name="browser.find",
-            description=("Find occurrences of a query in the page text of a tab."),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Text to search for."},
-                    "tab_id": {"type": "string", "description": "Optional tab id."},
-                },
-                "required": ["query"],
-            },
-            permission="browser.low",
-            handler=browser_find,
-            category="browser",
-        ),
-        Tool(
-            name="browser.scroll",
-            description=("Scroll a page: direction one of up/down/top/bottom."),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "direction": {"type": "string", "enum": ["up", "down", "top", "bottom"]},
-                    "amount": {"type": "integer", "description": "Pixels for up/down."},
-                    "tab_id": {"type": "string"},
-                },
-                "required": ["direction"],
-            },
-            permission="browser.low",
-            handler=browser_scroll,
-            category="browser",
-        ),
-        Tool(
-            name="browser.profile",
-            description=(
-                "Report the active browser session: persistent profile dir (cookies/"
-                "storage kept on disk so logged-in sessions survive restarts)."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {"session_id": {"type": "string"}},
-                "required": [],
-            },
-            permission="browser.low",
-            handler=browser_profile,
-            category="browser",
-        ),
-        Tool(
-            name="browser.permissions",
-            description=(
-                "Show which browser actions are low (auto), medium, or high risk "
-                "(high requires explicit approval before execution)."
-            ),
-            parameters={"type": "object", "properties": {}, "required": []},
-            permission="browser.low",
-            handler=browser_permissions,
-            category="browser",
         ),
         Tool(
             name="world_monitor.get_alerts",

@@ -1,42 +1,23 @@
-# JARVIS Orbit CI — three tiers, two OSes (G13).
-#
-#   fast          every push/PR on ubuntu + windows: safety lint (ubuntu),
-#                 import smoke, and the hermetic unit/security suites —
-#                 executor boundary, Orbit G8–G13 gates, memory store, and
-#                 the offline performance gate (timing deltas warn-only;
-#                 committed baseline is captured on the developer machine).
-#   browser       on push/PR: orbit-browser source-level tests + the
-#                 real-Electron runtime smoke under xvfb; both blocking.
-#   full          on PR + main: the entire pytest suite (live-browser tests
-#                 self-skip unless JARVIS_RUN_BROWSER_LIVE=1) on both OSes.
-#   security      on PR + main + weekly: dependency audit + secret scan.
-
-name: CI
+name: Dynamic Island CI
 
 on:
   push:
-    branches: [main, desktop-jarvis, dynamic-island, Dynamic-island]
+    branches: [dynamic-island, dynamic-island-cleanup]
   pull_request:
-  schedule:
-    - cron: "0 3 * * 1"  # weekly security sweep
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: dynamic-island-ci-${{ github.ref }}
   cancel-in-progress: true
-
-defaults:
-  run:
-    shell: bash
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
+  QT_QPA_PLATFORM: offscreen
+  PYTHONPATH: dynamic-island:.
 
-# Hermetic suites shared by the fast tier on both OSes. Live browser tests
-# (test_orbit_live / test_jbrowser_live) are excluded everywhere unless
-# JARVIS_RUN_BROWSER_LIVE=1 is set on a dedicated run.
 jobs:
-  fast:
-    name: "Fast (ubuntu: lint + unit + security + perf)"
+  quality:
+    name: Lint, tests and secret scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,131 +28,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest PySide6
-      - name: "Safety lint (real bugs: F821/F823/E9...)"
+          pip install -r requirements-dev.txt
+      - name: Safety lint
         run: ruff check . --select E9,F63,F7,F82
-      - name: Import smoke
-        run: python -c "import cli.main"
-      - name: Hermetic unit + security suites
-        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_benchmark.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_executor_e2e.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g8_vertical_slice.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
-      - name: Orbit latency gate (P50/P95/P99)
-        run: python -m benchmark.orbit_timing
-      - name: Normalized performance ledger
-        run: python -m benchmark.ledger
-      - name: Performance gate (offline; CI mode)
-        run: python -m benchmark.gate --baseline benchmark/baseline.json --ci
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: benchmark-results
-          path: benchmark/results/*.json
-          if-no-files-found: ignore
-
-  fast-windows:
-    name: "Fast (windows: unit + security)"
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Hermetic unit + security suites
-        run: python -m pytest tests/test_imports.py tests/test_security_fixes.py tests/test_executor_security.py tests/test_architecture_invariants.py tests/test_kernel_integration.py tests/test_orbit_foundation.py tests/test_orbit_dsh_foundation.py tests/test_orbit_cdp.py tests/test_orbit_g9_security.py tests/test_orbit_tools_security.py tests/test_g10_crash_recovery.py tests/test_g11_import_wizard.py tests/test_g12_selective_memory.py tests/test_g13_perf_gate.py tests/test_jbrowser_bridge.py tests/test_mem.py tests/test_contract_memory.py tests/test_memory_stage1.py -q
-
-  desktop:
-    name: Desktop (jarvis-desktop PySide6 tests)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest PySide6
-      - name: Desktop tests (offscreen)
-        run: QT_QPA_PLATFORM=offscreen python -m pytest tests/desktop/ -q -m "not e2e"
-
-  browser:
-    name: Browser (orbit-browser source + Electron smoke)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: orbit-browser/package-lock.json
-      - name: Install dependencies
-        working-directory: orbit-browser
-        run: npm ci
-      - name: Source-level browser tests (no display)
-        working-directory: orbit-browser
-        run: npm test
-      - name: Electron runtime smoke (real binary, xvfb)
-        working-directory: orbit-browser
-        run: xvfb-run -a npm run test:smoke
-
-  full:
-    name: Full test suite (ubuntu)
-    runs-on: ubuntu-latest
-    needs: fast
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest
-      - name: Full pytest suite
-        run: python -m pytest tests/ -q
-
-  full-windows:
-    name: Full test suite (windows)
-    runs-on: windows-latest
-    needs: fast-windows
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Full pytest suite
-        run: python -m pytest tests/ -q
-
-  security:
-    name: Security (deps + secrets)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Dependency audit
-        run: |
-          python -m pip install --upgrade pip
-          pip install pip-audit
-          pip-audit -r requirements.txt
-      - name: Secret scan (tracked files)
+      - name: Desktop and application tests
+        run: python -m pytest tests/ dynamic-island/tests/ -q
+      - name: Secret scan
         run: python scripts/scan_secrets.py

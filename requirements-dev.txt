@@ -1,18 +1,6 @@
-# JARVIS MK-X — development & test dependencies
-# The runtime import graph is requirements.txt (audit-verified).
-# These are needed only to run the test suite / lint:
-#   pytest            - test runner
-#   pytest-asyncio    - @pytest.mark.asyncio tests (json_repair, ollama provider)
-#   pytest-qt         - tests/desktop/* (needs PySide6 from requirements.txt)
-#   ruff              - lint + architecture style gate
-#   pandas            - tests/test_repo_mine_pass6.py (data tools)
-#   python-docx       - tests/test_repo_mine_pass6.py (doc report)
+# Development and test dependencies
+-r requirements.txt
 pytest
 pytest-asyncio
 pytest-qt
 ruff
-pandas
-python-docx
-# tests/test_bridge_security.py imports orbit-browser/python/server.py, which
-# needs the runtime WebSocket transport (requirements.txt) to collect.
-websockets==16.1.1  # duplicate of runtime, ensure test env has it

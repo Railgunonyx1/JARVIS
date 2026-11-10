@@ -1,58 +1,41 @@
-# JARVIS Desktop Companion — Packaging
+# JARVIS Dynamic Island — KDE Plasma 6
 
-Packaging for Bazzite Linux. Supports:
-- System installation via `install.sh` / `uninstall.sh`
-- Flatpak (manifest included, build with `flatpak-builder`)
+User-level packaging for the Dynamic Island overlay on KDE Plasma 6 / KWin.
 
-## System Installation
+## Install
 
 ```bash
-cd packaging
 chmod +x install.sh uninstall.sh
 ./install.sh
-jarvis-desktop
 ```
 
-Installs to `/opt/jarvis-desktop` by default. Wrapper script at `/usr/local/bin/jarvis-desktop`.
+The installer creates an isolated virtual environment under `~/.local/share/jarvis-desktop`, stages the project, installs the `jarvis-desktop-island` and `jarvis-island` commands, and registers the island desktop entry. It also attempts to install the KWin placement helper when running inside a KDE session.
 
-### Uninstall
+## Run
+
+```bash
+jarvis-desktop-island
+```
+
+## Uninstall
 
 ```bash
 ./uninstall.sh
 ```
 
-## Flatpak
+The uninstaller removes the installed application, launchers, desktop entry and JARVIS autostart entry. User data and provider credentials are not intentionally removed.
 
-```bash
-flatpak-builder --repo=repo --force-clean build-dir com.jarvis.desktop.flatpak.json
-flatpak build-bundle repo com.jarvis.desktop.flatpak com.jarvis.desktop
-flatpak install com.jarvis.desktop.flatpak
-flatpak run com.jarvis.desktop
-```
+## Optional permissions
 
-Requires `flatpak-builder` and the KDE runtime SDK.
+- Microphone: only while the user activates push-to-talk.
+- Camera: only after the user enables gesture mode.
+- Audio output: for TTS.
+- Session D-Bus and Wayland/X11 display sockets: desktop integration.
 
-## Permissions
-
-The app needs:
-- Camera access (gesture mode, on demand)
-- Microphone access (voice STT, push-to-talk)
-- Audio output (TTS playback)
-- Wayland/X11 socket (display)
-- Session D-Bus (desktop integration)
-
-## Configuration Persistence
-
-User configuration and memory are stored under `~/.jarvis/` by the parent
-JARVIS backend. The desktop app reuses this directory, so settings persist
-across upgrades.
-
-## Dependencies
+## Platform notes
 
 - Python 3.11+
-- PySide6 6.x
-- sounddevice, numpy (audio capture)
-- opencv-python-headless, mediapipe (hand tracking)
-- whisper-cpp-python or whisper-cli binary (local STT)
-
-All are installed by `install.sh` via pip if missing.
+- KDE Plasma 6 and KWin
+- PySide6 / Qt 6
+- Camera gesture dependencies are optional and installed separately.
+- Physical Wayland, audio and camera behaviour must be verified on the target machine.

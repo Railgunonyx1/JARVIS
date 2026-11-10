@@ -17,7 +17,6 @@ allowed = [
     "web.open",
     "web.navigate",
     "web.scrape",
-    "browser.control",
     "window.list",
     "window.focus",
     "window.minimize",

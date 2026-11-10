@@ -2,7 +2,7 @@
 primary_provider = "groq"
 fallback_provider = "local"
 groq_model = "whisper-large-v3"
-local_model = "base"  # faster-whisper model size
+local_model = "base"
 sample_rate = 16000
 chunk_duration_ms = 30
 
@@ -22,7 +22,8 @@ rate = "-5%"
 volume = "+0%"
 
 [wake_word]
-enabled = true
+# Background wake-word listening is intentionally disabled.
+enabled = false
 model = "hey_jarvis"
 sensitivity = 0.5
 timeout_seconds = 10

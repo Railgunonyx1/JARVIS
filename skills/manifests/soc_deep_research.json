@@ -4,7 +4,6 @@
   "instructions": "skills/instructions/soc/deep-research.md",
   "tools": [
     "web.search",
-    "browser.open",
     "filesystem.write",
     "filesystem.read",
     "shell.execute",

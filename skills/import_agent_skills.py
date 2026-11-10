@@ -58,16 +58,6 @@ def norm(name: str) -> str:
 
 # Curated mappings from the LIVE tool catalog (tools.build_default_registry).
 # Advisory skills map to [] — they shape behaviour, not tool calls.
-# NOTE: agent_browser stays read-only here; acting skills (click/type) are
-# gated by the browser_automation skill + permission system.
-_TOOL_MAP: dict[str, dict[str, object]] = {
-    "agent-browser": {
-        "tools": ["browser.open", "browser.read", "browser.extract",
-                  "browser.find", "browser.screenshot", "browser.status",
-                  "browser.tabs", "browser.new_tab", "browser.switch_tab",
-                  "browser.close_tab", "browser.scroll", "browser.wait"],
-        "risk": "medium", "tags": ["browser", "automation", "research"],
-    },
     "brainstorming": {"tools": [], "risk": "low", "tags": ["planning", "ideation"]},
     "convex-performance-audit": {"tools": [], "risk": "low", "tags": ["performance", "audit"]},
     "documentation-writer": {

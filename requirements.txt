@@ -1,57 +1,40 @@
-# JARVIS MK-X Requirements
-# Direct dependencies of the active runtime (audit-verified 2026-08-08).
-# Generated from an AST scan of the active tree; versions pinned to the venv.
-
-# === Config ===
+# JARVIS Dynamic Island runtime dependencies (Python 3.11+)
 toml==0.10.2
 PyYAML==6.0.3
 
-# === LLM Providers ===
+# Model providers and MCP
 groq==1.7.0
 google-genai==2.31.0
 openai==3.31.0
 ollama==0.6.3
-
-# === MCP ===
 mcp==2.3.0
 
-# === Transport / HTTP ===
+# HTTP, events, system and memory
 httpx==0.28.1
 orjson==3.13.0
-websockets==16.1.1  # WebSocket transport for browser/terminal clients
-
-# === System ===
+websockets==16.1.1
 psutil==7.2.2
 numpy>=1.26,<2.5
-filelock==4.2.1  # cross-process daemon single-instance lock
-sqlite-vec==0.1.9  # memory vector-store KNN index (memory/vector_store.py)
+filelock==4.2.1
+sqlite-vec==0.1.9
 
-# === CLI / UI ===
-typer==0.27.1
-rich==15.0.0
-textual==8.2.8
+# Desktop UI and push-to-talk voice
+PySide6>=6.8
+sounddevice==0.5.5
+kokoro-onnx>=0.4
+edge-tts>=7.2
+pydub>=0.25.1
 
-# === Optional (lazy, guarded imports) ===
-# playwright==1.48.0            # J-Browser Chromium engine (then: playwright install chromium)
-# cactus-needle                 # 26M-param local tool-call/extract/embed model, 8-29MB (validated 2026-09-20:
-#                               #   tool loop + extract + embed run on Windows CPU, ~100MB RAM, 128 tok/s decode;
-#                               #   no tree import yet — candidate for the tiny intent/router lane)
-# sentence-transformers==5.6.1   # memory embeddings (~2GB torch)
-# aiosqlite>=0.19.0              # runtime.telemetry persistence
-# sounddevice==0.5.5             # audio health check
-# pynvml>=11.0.0                 # GPU monitoring (core/resource_manager)
-
-# Repo-mine pass 2: PDF + doc export tools
+# Agent document/data tools
 pypdf
 pdfplumber
 markdownify
+pandas
+python-docx
 
-# Voice: local neural TTS (ElevenLabs SDK optional, install when keyed)
-kokoro-onnx>=0.4
-edge-tts>=7.2          # keyless neural TTS (unofficial Microsoft endpoint)
-pydub>=0.25.1          # MP3→WAV fallback for edge-tts when pydub available
-PySide6>=6.8
+# Optional: install separately only when enabling camera gestures
+# opencv-python-headless
+# mediapipe
 
-# Gestures: hand tracking (optional — camera-based)
-# mediapipe>=0.10     # hand landmark detection
-# opencv-python-headless>=4.9  # camera capture / frame processing
+# Optional local embedding stack (large download)
+# sentence-transformers

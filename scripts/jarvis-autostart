@@ -72,7 +72,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "enable":
-        ok = autostart.enable()
+        ok = autostart.enable(args.run_command)
         print(f"Autostart {('enabled' if ok else 'FAILED')}")
         return 0 if ok else 1
     if args.command == "disable":

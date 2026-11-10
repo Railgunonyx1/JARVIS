@@ -122,7 +122,7 @@ _HARNESS_PRESETS: dict[HarnessType, HarnessConfig] = {
     ),
     HarnessType.COMPUTER_USE: HarnessConfig(
         harness_type=HarnessType.COMPUTER_USE,
-        description="For tasks requiring screen interaction, browser, or GUI",
+        description="For tasks requiring desktop interaction or GUI",
         max_iterations=20,
         max_tool_calls_per_step=10,
         model_preference=("vision",),
@@ -215,7 +215,7 @@ class HarnessSelector:
             return self.select(HarnessType.RESEARCH)
         if any(w in goal_lower for w in ("code", "implement", "refactor", "write", "add feature")):
             return self.select(HarnessType.CODING)
-        if any(w in goal_lower for w in ("screen", "browser", "click", "screenshot")):
+        if any(w in goal_lower for w in ("screen", "click", "screenshot")):
             return self.select(HarnessType.COMPUTER_USE)
         return self.select(HarnessType.NATIVE)
 

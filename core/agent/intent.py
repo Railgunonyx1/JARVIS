@@ -47,7 +47,7 @@ _RESPONSES: dict[str, str] = {
     "good night": "Good night! Sleep well.",
     "what can you do": (
         "I can read, write, edit files, run commands, search code, "
-        "manage git, browse the web, and more."
+        "manage git, search the web, and more."
     ),
     "stop": "Stopped.",
     "cancel": "Cancelled.",
@@ -105,8 +105,6 @@ _COMMANDS: list[tuple[re.Pattern, str, dict[str, Any] | None]] = [
                 re.IGNORECASE), "web.search", None),
     (re.compile(r"^(what is|who is|how (?:do|to))\s+(?!my\b|the\s+time|your\b)(.+)$",
                 re.IGNORECASE), "web.search", None),
-    (re.compile(r"^(open|go to|navigate to|browse) (https?://.+)$", re.IGNORECASE),
-     "browser.open", None),
 ]
 
 _TOOL_SELECTION: list[tuple[re.Pattern, tuple[str, ...]]] = [

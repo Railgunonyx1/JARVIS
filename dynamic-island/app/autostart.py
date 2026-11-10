@@ -40,7 +40,7 @@ def _quote(argument: str) -> str:
 
 def _launch_command() -> str:
     existing = Path(sys.argv[0]).resolve()
-    if existing.name == "jarvis-desktop":
+    if existing.name in {"jarvis-desktop", "jarvis-desktop-island", "jarvis-island"}:
         return _quote(str(existing))
     return f"{_quote(sys.executable)} {_quote(str(existing))}"
 

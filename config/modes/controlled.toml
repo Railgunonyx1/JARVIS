@@ -9,8 +9,6 @@ allowed = [
     "system.volume",
     "clipboard.read",
     "clipboard.write",
-    "browser.open",
-    "browser.search",
     "window.manage",
     "screen.capture",
     "time.query",
@@ -36,7 +34,6 @@ blocked = [
     "startup.modify",
     "package.install",
     "package.remove",
-    "browser.download",
     "terminal.execute",
 ]
 

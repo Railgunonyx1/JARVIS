@@ -4,7 +4,6 @@
   "instructions": "skills/instructions/soc/search-first.md",
   "tools": [
     "web.search",
-    "browser.open",
     "filesystem.write",
     "filesystem.read",
     "search.code",

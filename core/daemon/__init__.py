@@ -362,7 +362,6 @@ class JARVISDaemon:
 
         # Check against known skill categories
         skill_keywords = {
-            "browser": ["browser", "open", "navigate", "visit", "website"],
             "filesystem": ["read", "write", "file", "create", "delete", "path"],
             "search": ["search", "find", "look up", "research"],
             "analysis": ["analyze", "examine", "inspect", "review"],
@@ -418,7 +417,6 @@ class JARVISDaemon:
     def _extract_tool_names_for_skill(self, skill_name: str) -> list[str]:
         """Extract tool names associated with a skill."""
         mappings = {
-            "browser": ["browser.open", "browser.navigate", "browser.snapshot"],
             "filesystem": ["filesystem.read", "filesystem.write", "filesystem.delete"],
             "search": ["repo.search", "web.search"],
             "analysis": [],
@@ -476,6 +474,7 @@ class JARVISDaemon:
         args: dict[str, Any] = {}
 
         if skill_name == "browser":
+            return []
             import re
             url_match = re.search(r"https?://\S+", user_message)
             if url_match:

@@ -44,42 +44,6 @@ _RISK_OVERRIDES: dict[str, str] = {
     "git.rebase": "medium",
 }
 
-# Canonical browser action -> risk. This is the SINGLE source of truth for
-# browser tools; jbrowser.permissions is a thin adapter over it (see below).
-# Browser mutations (click/type/submit/...) are HIGH + destructive so an agent
-# cannot silently mutate a page or trigger consequential actions.
-_BROWSER_ACTION_RISK: dict[str, str] = {
-    # low: observe / navigate / tab & session management
-    "open": "low", "navigate": "low", "read": "low", "extract": "low",
-    "screenshot": "low", "status": "low", "tabs": "low", "find": "low",
-    "scroll": "low", "switch_tab": "low", "new_tab": "low", "close_tab": "low",
-    "profile": "low", "permissions": "low",
-    # high: consequential / side-effecting / irreversible page actions
-    "click": "high", "type": "high", "select": "high", "submit": "high",
-    "send": "high", "delete": "high", "purchase": "high",
-    "account_change": "high", "execute_script": "high",
-}
-
-
-def browser_risk_for_tool(name: str) -> str:
-    """Map a ``browser.<verb>`` / ``orbit.<verb>`` tool to canonical risk.
-
-    ``_BROWSER_ACTION_RISK`` remains the single source of truth for browser
-    actions; the ``orbit.`` product namespace routes through it identically.
-    """
-    for prefix in ("browser.", "orbit."):
-        if name.startswith(prefix):
-            verb = name[len(prefix):]
-            break
-    else:
-        verb = name
-    verb = verb.replace(".", "_")
-    action = next(
-        (k for k in _BROWSER_ACTION_RISK if verb == k or verb.endswith("_" + k)),
-        verb,
-    )
-    return _BROWSER_ACTION_RISK.get(action, "low")
-
 _TIMEOUT_OVERRIDES: dict[str, float] = {
     "shell.execute": 120.0,
     "test.run": 300.0,
@@ -90,9 +54,6 @@ _TIMEOUT_OVERRIDES: dict[str, float] = {
     "security.scan_secrets": 180.0,
     "code.typecheck": 120.0,
     "world_monitor.search": 30.0,
-    "browser.open": 60.0,
-    "browser.navigate": 60.0,
-    "orbit.navigate": 60.0,
     # Inner search timeouts (8s Gemini / 6s HTML, raced in parallel) bound the
     # real work; a 15s tool ceiling gives headroom without ever walking a ~60s
     # serial chain.
@@ -111,7 +72,6 @@ _CAPABILITY_OVERRIDES: dict[str, tuple[str, ...]] = {
     "shell.execute": ("shell", "host"),
     "system.status": ("system_query",),
     "web.search": ("web", "research"),
-    "browser.open": ("web", "research"),
     "search.code": ("code_browsing", "code_search"),
     "search.find": ("code_browsing",),
     "git.status": ("code_browsing",),
@@ -169,8 +129,6 @@ def _derive_risk(name: str, permission: str, category: str) -> str:
         return "high"
     if permission.startswith(("filesystem.write", "shell", "git.write")):
         return "medium"
-    if category in ("browser", "orbit") and name.startswith(("browser.", "orbit.")):
-        return browser_risk_for_tool(name)
     if category in ("testing", "runtime", "memory", "web", "world", "search", "security", "code"):
         return "low"
     return "safe"
@@ -192,7 +150,7 @@ def _side_effects_for(name: str, permission: str) -> tuple[str, ...]:
         effects.append("fs_write")
     if permission in ("shell.execute", "shell.run"):
         effects.append("process_spawn")
-    if name.startswith("web.") or name.startswith("browser.") or name.startswith("orbit."):
+    if name.startswith("web."):
         effects.append("network_egress")
     if name.startswith("git."):
         effects.append("git_mutation")
@@ -221,45 +179,13 @@ def risk_level(risk: str) -> int:
 #   RESOURCE_LOCKED); this is the declarative scheduler hint.
 # ---------------------------------------------------------------------------
 
-_READ_VERBS = {
-    "read", "extract", "status", "tabs", "list", "list_tabs", "find",
-    "permissions", "profile", "search",
-}
-_IDEMPOTENT_VERBS = {"close_tab", "switch_tab", "activate_tab", "activate"}
-_CONDITIONAL_VERBS = {"open", "navigate", "reload", "scroll", "screenshot", "go"}
-
-
-def _orbit_verb(name: str) -> str:
-    for prefix in ("browser.", "orbit."):
-        if name.startswith(prefix):
-            verb = name[len(prefix):]
-            break
-    else:
-        verb = name
-    return verb.replace(".", "_")
-
-
 def _retry_semantics_for(name: str, category: str) -> str:
     if name in _RETRY_READS:
         return "READ"
-    if category in ("browser", "orbit") and name.startswith(("browser.", "orbit.")):
-        verb = _orbit_verb(name)
-        if verb in _READ_VERBS or verb.endswith(("_read", "_extract", "_find")):
-            return "READ"
-        if verb in _IDEMPOTENT_VERBS:
-            return "IDEMPOTENT"
-        if verb in _CONDITIONAL_VERBS:
-            return "CONDITIONALLY"
-        return "NON"
     return "non_idempotent"
 
 
 def _concurrency_for(name: str, category: str) -> str:
-    if category in ("browser", "orbit") and name.startswith(("browser.", "orbit.")):
-        verb = _orbit_verb(name)
-        if verb in _READ_VERBS or verb.endswith(("_read", "_extract", "_find")):
-            return "parallel"
-        return "serialized"
     return "parallel"
 
 

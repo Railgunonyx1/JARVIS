@@ -40,18 +40,10 @@ READ_ONLY_TOOLS = {
     "watch.run",
     # Secret refs — resolve returns masked handles only; never values (Infisical-style)
     "secret.ref", "secret.status",
-    # Browser wait (observe-only condition polling)
-    "browser.wait",
     # Remote storage — read-only inventory of rclone remotes (names only)
     "remote.status",
     # API collections — parse is read-only; run performs documented HTTP requests
     "api.parse", "api.run",
-    # Browser (read)
-    "browser.open", "browser.extract", "browser.screenshot", "browser.status",
-    # Browser (J-Browser platform: observe / navigate / tab & session management)
-    "browser.read", "browser.find", "browser.scroll", "browser.tabs",
-    "browser.new_tab", "browser.close_tab", "browser.switch_tab",
-    "browser.profile", "browser.permissions",
     # System (read)
     "system.status",
     # Runtime (read)
@@ -130,8 +122,6 @@ DANGEROUS_TOOLS = {
     "shell.execute",
     # Filesystem (dangerous)
     "filesystem.delete",
-    # Browser (write)
-    "browser.click", "browser.type",
 }
 
 ALL_RISK_TOOLS = READ_ONLY_TOOLS | MUTATING_TOOLS | DANGEROUS_TOOLS

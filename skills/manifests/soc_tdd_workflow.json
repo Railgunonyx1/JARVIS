@@ -3,9 +3,6 @@
   "description": "Use this skill when writing new features, fixing bugs, or refactoring code. Enforces test-driven development with 80%+ coverage including unit, integration, and E2E tests.",
   "instructions": "skills/instructions/soc/tdd-workflow.md",
   "tools": [
-    "browser.open",
-    "browser.click",
-    "browser.read",
     "shell.execute",
     "test.run",
     "test.discover",

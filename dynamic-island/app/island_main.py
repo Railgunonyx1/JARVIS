@@ -28,12 +28,6 @@ APP_ID = "jarvis-island"
 
 logger = logging.getLogger("jarvis.desktop.island")
 
-_DESKTOP_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "jarvis-desktop")
-)
-if _DESKTOP_ROOT not in sys.path:
-    sys.path.insert(0, _DESKTOP_ROOT)
-
 from app.settings import load
 
 # Load settings once before the autostart branches touch settings.get().
