@@ -91,6 +91,19 @@ class MockCamera:
         }
 
 
+class _FakeThread:
+    """Deterministic thread double for join-order assertions."""
+
+    def __init__(self):
+        self.join_calls = []
+
+    def join(self, timeout=None):
+        self.join_calls.append(timeout)
+
+    def is_alive(self):
+        return True
+
+
 # Minimal mock HandTracker class implementing shutdown protocol
 class MockHandTracker:
     """Mock HandTracker that respects the shutdown ordering invariant.
@@ -216,9 +229,7 @@ class TestCameraShutdownOrdering:
         tracker._stop_event = True
 
         # Create a mock thread
-        import threading
-        tracker._thread = threading.Thread()
-        tracker._thread.is_alive = lambda: True
+        tracker._thread = _FakeThread()
 
         # Call stop - should set stop event and join with timeout
         tracker.stop()
@@ -227,7 +238,7 @@ class TestCameraShutdownOrdering:
         assert tracker._stop_event == True
 
         # Verify thread join was attempted
-        assert tracker._thread is not None
+        assert tracker._thread.join_calls == [5.0]
 
     def test_coordinator_signals_camera_after_tracker_exit(self):
         """Coordinator must call camera.tracker_exit_confirmed() after HandTracker.stop()."""
@@ -270,9 +281,7 @@ class TestCameraShutdownOrdering:
         # First stop
         tracker._running = True
         tracker._stop_event = False
-        import threading
-        tracker._thread = threading.Thread()
-        tracker._thread.is_alive = lambda: True
+        tracker._thread = _FakeThread()
         tracker.stop()
 
         # Verify first stop worked
@@ -282,8 +291,7 @@ class TestCameraShutdownOrdering:
         # Second stop - configure and call
         tracker._running = True
         tracker._stop_event = False
-        tracker._thread = threading.Thread()
-        tracker._thread.is_alive = lambda: True
+        tracker._thread = _FakeThread()
         tracker.stop()
 
         # Verify second stop also worked
@@ -292,9 +300,6 @@ class TestCameraShutdownOrdering:
 
     def test_frame_source_none_handling(self):
         """Tracker handles None frame source gracefully."""
-        cam = MockCamera(device=0, width=160, height=120)
-        cam.start()
-
         tracker = MockHandTracker(max_hands=1)
         # Set frame source to None - tracker should handle gracefully
         tracker.set_frame_source = lambda: None
@@ -305,8 +310,8 @@ class TestCameraShutdownOrdering:
         # Stop should be safe even with None frame source
         tracker.stop()
 
-        # Verify state after stops
-        assert cam._running == False
+        # Verify the tracker stopped cleanly.
+        assert tracker._running is False
         tracker.__dict__.clear()
 
     def test_stop_before_start_is_noop(self):
