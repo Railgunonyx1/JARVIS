@@ -21,7 +21,7 @@ SAMPLES = [
     ("whsec_" + "c2VjcmV0c2VjcmV0c2VjcmV0", "Stripe webhook secret"),
     ("sk-ant-api03-" + "a1b2c3d4e5f6g7h8i9j0k1l2m3n4", "Anthropic key"),
     ("sk-or-v1-" + "1234567890abcdef1234567890abcdef", "OpenRouter key"),
-    ("sk-proj-abcdefghijklmnopqrstuvwxyz012345", "OpenAI-style secret key"),
+    ("sk-proj-" + "abcdefghijklmnopqrstuvwxyz" + "012345", "OpenAI-style secret key"),
     ("AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6q", "Google API key"),
     ("hf_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "Hugging Face token"),
     ("xoxb-" + "123456789012-abcdefghijklmnop", "Slack token"),
@@ -33,7 +33,7 @@ SAMPLES = [
     ("SG." + "aaaaaaaaaaaaaaaaaaaaaa" + "." + "bbbbbbbbbbbbbbbbbbbbbb", "SendGrid key"),
     ("key-" + "1234567890abcdef1234567890abcdef", "Mailgun key"),
     ("Bearer " + "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcdefghijklmnop", "Bearer token"),
-    ("-----BEGIN RSA PRIVATE KEY-----", "Private key block"),
+    ("-----BEGIN " + "RSA PRIVATE KEY" + "-----", "Private key block"),
 ]
 
 
@@ -55,7 +55,7 @@ def test_has_credential_leak_is_true_for_secrets():
 def test_clean_text_reports_nothing():
     from security.credentials import find_credential_leaks, has_credential_leak
 
-    clean = "JARVIS browses the web via CDP at 127.0.0.1:8170 and streams BusEvents."
+    clean = "JARVIS can query public web references and streams application events."
     assert find_credential_leaks(clean) == []
     assert not has_credential_leak(clean)
 
@@ -83,14 +83,14 @@ def test_redaction_keeps_surrounding_text_readable():
 def test_redaction_does_not_touch_plain_prose():
     from security.credentials import redact_credential_leaks
 
-    prose = "Use the CDP websocket to attach to the Orbit Chromium instance."
+    prose = "Use the web search provider to retrieve public references."
     assert redact_credential_leaks(prose) == prose
 
 
 def test_sensitive_redaction_layers_precise_pass_first():
     from security.redaction import redact_sensitive
 
-    secret = "sk-proj-abcdefghijklmnopqrstuvwxyz012345"
+    secret = "sk-proj-" + "abcdefghijklmnopqrstuvwxyz" + "012345"
     out = redact_sensitive(f"key {secret} used for the gateway")
     assert secret not in out
 
