@@ -52,7 +52,7 @@ def test_render_baseline_has_headline_numbers():
     from benchmark.report import render_baseline
 
     text = render_baseline(_synthetic_data())
-    assert "JARVIS PERFORMANCE BASELINE" in text
+    assert "JARVIS DYNAMIC ISLAND PERFORMANCE BASELINE" in text
     for needle in ("Startup", "Idle RAM", "Task", "Tool calls", "Context"):
         assert needle in text
 

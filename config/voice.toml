@@ -1,35 +1,31 @@
 [stt]
-primary_provider = "groq"
-fallback_provider = "local"
-groq_model = "whisper-large-v3"
-local_model = "base"
+primary_provider = "whisper.cpp"
+fallback_provider = "elevenlabs"
+model_size = "base"
+binary = "whisper-cli"
+model_path = "~/.jarvis/whisper/ggml-base.bin"
 sample_rate = 16000
-chunk_duration_ms = 30
+max_record_seconds = 30
+
+[elevenlabs]
+model = "scribe_v2"
+api_key_env = "ELEVENLABS_API_KEY"
 
 [tts]
-primary_provider = "piper"
-fallback_provider = "edge"
-default_voice = "en_US-lessac-medium"
-sample_rate = 22050
+primary_provider = "kokoro"
+fallback_provider = "edge-tts"
+voice = "af_sarah"
+speed = 1.0
 
-[piper]
-model_dir = "~/.jarvis/models/piper"
-default_speaker = "lessac"
+[kokoro]
+model_dir = "~/.jarvis/kokoro"
+model_file = "kokoro-v1.0.onnx"
+voices_file = "voices-v1.0.bin"
 
-[edge]
-default_voice = "en-GB-RyanNeural"
-rate = "-5%"
-volume = "+0%"
+[edge_tts]
+# edge-tts uses its service endpoint; no API key is required.
 
 [wake_word]
 # Background wake-word listening is intentionally disabled.
 enabled = false
-model = "hey_jarvis"
-sensitivity = 0.5
-timeout_seconds = 10
 
-[vad]
-enabled = true
-energy_threshold = 300
-silence_duration_ms = 800
-min_speech_duration_ms = 200

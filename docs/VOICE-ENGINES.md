@@ -1,110 +1,46 @@
-# Voice Engines
+# Voice engines — Dynamic Island
 
-JARVIS can speak and listen through several engines. You configure them with
-environment variables; nothing needs a code change, and nothing needs an
-account for the two local/keyless paths.
+The Dynamic Island voice path is implemented in `dynamic-island/app/voice/` and is coordinated by `VoiceManager`.
 
-`GET /v1/voice/status` reports every engine with a live `available` flag and,
-when it is unavailable, the exact `reason` and the `key_env` that would turn
-it on. The Orbit picker renders that list directly: unavailable engines are
-greyed out with the reason as their tooltip, never silently hidden.
-
----
-
-## Text to speech
-
-| Engine | Needs | Free tier | Quality |
-|---|---|---|---|
-| **elevenlabs** | `ELEVENLABS_API_KEY` | 10k credits/mo | Most natural; free plan is **non-commercial** |
-| **azure** | `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | 500k chars/mo (F0, card required) | Very good, 100+ locales |
-| **polly** | AWS credentials + `pip install boto3` | 12mo of 5M std / 1M neural chars/mo **for AWS accounts created before 15 Jul 2025**; newer accounts get $200 credit | Very good |
-| **google** | `GOOGLE_API_KEY` | 1M chars/mo Chirp 3 HD, 4M WaveNet/Standard (billing must be enabled) | Very good, SSML support |
-| **edge** | nothing (`pip install edge-tts`) | Unlimited | Good; unofficial Microsoft endpoint |
-| **kokoro** | nothing (`kokoro-onnx` in requirements) | Unlimited | Good; local, offline, benchmarks at rtf 0.71 |
-| **sapi** | nothing (Windows) | Unlimited | Robotic; the guaranteed last resort |
-
-### Choosing
-
-`voice_model: "auto"` walks every **available** engine, best quality first:
-ElevenLabs → Azure → Polly → Google → Edge → Kokoro → SAPI. If one fails
-mid-turn the next one is tried, so a flaky network provider cannot leave you
-without a voice. SAPI closes the chain, so a machine with no keys and no
-network still speaks.
-
-Pinning `voice_model` runs **only** that engine, so an explicit choice
-surfaces its real error instead of quietly answering from a different one.
-
-### Benchmarks
-
-Kokoro-82M on an i5-10210U (4C/8T): p50 real-time factor 0.71, meaning
-synthesis runs faster than real time. See [TTS-BASELINE.md](TTS-BASELINE.md).
-Override the thread count with `JARVIS_TTS_THREADS`.
-
----
+**Voice is push-to-talk only.** The microphone is not opened during idle startup, and there is no background wake-word listener.
 
 ## Speech to text
 
-**STT has no local default.** With no keys configured, push-to-talk returns
-503 and names the variables that would fix it. This is the one part of the
-voice stack that needs an account.
+1. **Local:** whisper.cpp, invoked through `whisper-cli`.
+2. **Cloud fallback:** ElevenLabs Scribe v2, using `ELEVENLABS_API_KEY`.
 
-| Engine | Needs | Free tier |
-|---|---|---|
-| **groq** | `GROQ_API_KEY` | 20 req/min, 2,000/day, 7,200 audio-sec/hour, 28,800/day, 25 MB, 10s minimum billed |
-| **deepgram** | `DEEPGRAM_API_KEY` | $200 account credit on signup |
-| **elevenlabs** | `ELEVENLABS_API_KEY` | Shares the 10k TTS credit pool |
+Configuration:
+- `JARVIS_WHISPER_CPP`: path to the whisper.cpp executable (default: `whisper-cli`).
+- `JARVIS_WHISPER_MODEL`: model size (default: `base`).
+- `JARVIS_WHISPER_MODEL_PATH`: explicit model path. Default: `~/.jarvis/whisper/ggml-base.bin`.
+- `ELEVENLABS_API_KEY`: enables cloud transcription fallback.
 
-`GROQ_API_KEY` is already a first-class key in this project — it heads the
-provider router's default fallback chain — so it is the cheapest way to make
-push-to-talk work without a new signup. When `engine` is not specified the
-server picks the first available engine.
+The local model must be downloaded separately. Recording is capped at 30 seconds. If local transcription is unavailable, the same captured audio is sent to the cloud fallback when a key is configured.
 
-`POST /v1/stt` accepts an optional `engine` field (`groq`, `deepgram`,
-`elevenlabs`). Pinning to an unconfigured engine names *that* engine's missing
-variable rather than falling back to another provider silently.
+## Text to speech
 
----
+1. **Local:** Kokoro ONNX, loaded on demand.
+2. **Fallback:** edge-tts.
 
-## Setup
+Kokoro model files are expected at:
+- `~/.jarvis/kokoro/kokoro-v1.0.onnx`
+- `~/.jarvis/kokoro/voices-v1.0.bin`
 
-Add whichever keys you want to your environment (no `.env` loader is
-required — the process reads them directly):
+Environment variables:
+- `JARVIS_KOKORO_VOICE`: Kokoro voice ID (default: `af_sarah`).
+- `JARVIS_TTS_THREADS`: reserved for model/runtime thread tuning where supported.
 
-```bash
-# Zero config: Edge TTS + Kokoro already work out of the box.
-# Cheapest STT:
-export GROQ_API_KEY=gsk_...
+Kokoro is preferred when its model files are available. If it cannot initialize or synthesize, the manager falls back to edge-tts. Audio is normalized to WAV where the MP3 decoder is available.
 
-# Optional cloud TTS:
-export ELEVENLABS_API_KEY=...       # best quality, non-commercial on free tier
-export GOOGLE_API_KEY=...           # 1M chars/mo free (enable billing)
-export AZURE_SPEECH_KEY=...         # both of these, or neither works
-export AZURE_SPEECH_REGION=eastus
-```
+## Dependencies
 
-Restart the bridge and check what it sees:
+The runtime requirements include `sounddevice`, `kokoro-onnx`, `edge-tts` and `pydub`. Install `whisper-cli` separately and download the selected whisper.cpp model. Kokoro model files are also downloaded separately; they are not bundled in the repository.
 
-```bash
-curl -s -X POST http://127.0.0.1:8170/v1/voice/status | python -m json.tool
-```
+## Privacy and lifecycle
 
----
+- Audio capture begins only after explicit push-to-talk activation.
+- Recording stops when the user releases/cancels the interaction.
+- No always-on microphone, wake-word process or automatic camera activation is part of the voice path.
+- Voice shutdown must stop recording and speech output threads cleanly.
 
-## Free-tier caveats
-
-These allowances are **published vendor numbers as of 2026-09, not
-contractual capacity.** Rate limits bite before monetary limits do:
-
-- Groq counts a **minimum of 10 seconds** per request, so many two-second
-  voice commands burn allowance faster than their real duration.
-- Amazon's 12-month Polly tier only applies to accounts created **before
-  15 July 2025**. Newer accounts get $200 of AWS credits instead.
-- Google's free STT minutes apply to Speech-to-Text **V1 only** — V2 is
-  billed from the first minute.
-- Azure's F0 quota is a development allowance, not a production capacity
-  promise.
-- Edge TTS uses an undocumented Microsoft endpoint. It is excellent for
-  personal use but can break without notice, which is why it is never the
-  only thing standing between you and silence.
-
-Recheck before depending on any of these.
+The current implementation does not expose the legacy browser bridge's HTTP voice routes or its old multi-provider TTS picker. Do not use those retired interfaces in new UI code.

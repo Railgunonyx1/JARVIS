@@ -37,13 +37,13 @@ TINY = [99.5] * 50
 
 class TestDeltaMath:
     def test_lower_is_better_improvement_sign(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         assert rec.ratio == pytest.approx(0.9)
         assert rec.improvement == pytest.approx(0.1)
         assert rec.verdict == "supported"
 
     def test_regression_never_reads_as_improvement(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, WORSE)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, WORSE)
         assert rec.improvement == pytest.approx(-0.1)
         assert rec.verdict == "refuted"
 
@@ -165,35 +165,35 @@ class TestHotspotRanking:
 
 class TestVerificationGate:
     def test_supported_receipt_passes(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         result = verify_optimization_evidence(rec)
         assert result.passed is True
         assert result.exit_code == 0
         assert "improved" in result.summary
-        assert "orbit.dispatch_ms" in result.summary
+        assert "agent.tool_dispatch_ms" in result.summary
 
     def test_receipt_path_accepted(self, tmp_path):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         path = write_receipt(rec, tmp_path)
         assert verify_optimization_evidence(path).passed is True
         assert verify_optimization_evidence(str(path)).passed is True
 
     def test_refuted_receipt_fails_with_evidence(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, WORSE)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, WORSE)
         result = verify_optimization_evidence(rec)
         assert result.passed is False
         assert result.exit_code == 1
         assert "refuted" in result.summary
-        assert "orbit.dispatch_ms" in result.error
+        assert "agent.tool_dispatch_ms" in result.error
 
     def test_inconclusive_receipt_fails(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, TINY)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, TINY)
         result = verify_optimization_evidence(rec)
         assert result.passed is False
         assert "inconclusive" in result.summary
 
     def test_below_required_threshold_fails(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         result = verify_optimization_evidence(rec, min_improvement=0.5)
         assert result.passed is False
         assert "below required" in result.summary
@@ -204,7 +204,7 @@ class TestVerificationGate:
         assert "no evidence receipt" in result.summary
 
     def test_tampered_receipt_fails_integrity(self, tmp_path):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         path = write_receipt(rec, tmp_path)
         data = json.loads(path.read_text(encoding="utf-8"))
         data["improvement"] = 9.99
@@ -214,7 +214,7 @@ class TestVerificationGate:
         assert "integrity" in result.summary
 
     def test_unsealed_object_fails_integrity(self):
-        rec = build_receipt("orbit.dispatch_ms", BASE, BETTER)
+        rec = build_receipt("agent.tool_dispatch_ms", BASE, BETTER)
         result = verify_optimization_evidence(dataclasses.replace(rec, content_sha256=""))
         assert result.passed is False
         assert "integrity" in result.summary

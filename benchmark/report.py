@@ -52,7 +52,7 @@ def render_baseline(data: dict[str, Any]) -> str:
     s = summarize(data)
     ttft = "n/a (offline)" if not s["online"] else "see task records"
     lines = [
-        "JARVIS PERFORMANCE BASELINE",
+        "JARVIS DYNAMIC ISLAND PERFORMANCE BASELINE",
         "────────────────────────────",
         f"Startup (launcher): {s['startup_ms']:>7.1f} ms",
         f"Kernel ready:       {s['kernel_ms']:>7.1f} ms",
