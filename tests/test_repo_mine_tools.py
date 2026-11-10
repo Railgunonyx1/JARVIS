@@ -1,7 +1,7 @@
 """Tests for repo-mine pass-2 tools: pdf, doc export, page watch, notify, wait.
 
 All network/filesystem effects are hermetic: PDFs are generated in-memory with
-pypdf, HTTP is monkeypatched, and browser.wait is tested against stubbed
+pypdf and HTTP are monkeypatched for the retained document and web tools
 controllers.
 """
 
@@ -23,7 +23,7 @@ def test_new_tools_registered():
     registry = build_default_registry()
     for name in (
         "pdf.extract_text", "pdf.extract_tables", "pdf.split", "pdf.merge",
-        "docs.to_markdown", "page.watch", "notify.send", "browser.wait",
+        "docs.to_markdown", "page.watch", "notify.send",
     ):
         tool = registry.get(name)
         assert tool is not None, f"{name} missing from registry"
@@ -263,57 +263,3 @@ def test_doc_export_html(tmp_path, monkeypatch):
     assert "# Tile" in res.output or "Tile" in res.output
 
 
-# ------------------------------------------------------------- browser.wait
-
-class _FakeController:
-    """Controller whose execute_script returns scripted values."""
-
-    def __init__(self, results):
-        self._results = list(results)
-        self.calls = []
-
-    def execute_script(self, script, tab_id=None):
-        self.calls.append(script)
-        return self._results.pop(0) if self._results else "true"
-
-
-def test_browser_wait_selector_immediate(monkeypatch):
-    import tools.browser_wait as bw
-
-    monkeypatch.setattr(
-        "jbrowser.controller.get_controller",
-        lambda: _FakeController(["true"]),
-    )
-    res = bw.browser_wait({"condition": "selector", "value": "#btn", "timeout": 2})
-    assert res.success, res.error
-    assert "document.querySelector" in res.output or res.metadata["condition"] == "selector"
-
-
-def test_browser_wait_text_after_polls(monkeypatch):
-    import tools.browser_wait as bw
-
-    fake = _FakeController(["false", "false", "true"])
-    monkeypatch.setattr("jbrowser.controller.get_controller", lambda: fake)
-    res = bw.browser_wait({"condition": "text", "value": "Loaded", "timeout": 5})
-    assert res.success, res.error
-    assert len(fake.calls) == 3
-
-
-def test_browser_wait_timeout(monkeypatch):
-    import tools.browser_wait as bw
-
-    monkeypatch.setattr(
-        "jbrowser.controller.get_controller",
-        lambda: _FakeController(["false"] * 100),
-    )
-    res = bw.browser_wait({"condition": "selector", "value": "#never", "timeout": 0.5})
-    assert res.success is False
-    assert "Timeout" in res.error
-
-
-def test_browser_wait_validation():
-    import tools.browser_wait as bw
-
-    assert bw.browser_wait({"condition": "bogus"}).success is False
-    assert bw.browser_wait({"condition": "selector"}).success is False  # no value
-    assert bw.browser_wait({}).success is False

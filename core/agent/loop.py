@@ -203,6 +203,16 @@ class AgentLoop:
         self._tool_verifier._tool_service = self._tool_service
         self._tool_verifier._enabled = self._verification_enabled
 
+    @property
+    def model_gateway(self):
+        """The canonical model gateway wired by the runtime kernel."""
+        return self._model_gateway
+
+    @property
+    def harness(self):
+        """The active execution harness wired by the runtime kernel."""
+        return self._harness
+
     # ── Mode management (delegates to ToolExecutionService) ────────────────
 
     @property

@@ -402,7 +402,7 @@ def test_quarantined_modules_relocated():
     root = Path(__file__).resolve().parents[1]
     for old_path in ("core/executor.py", "core/task_queue.py", "workflows"):
         assert not (root / old_path).exists(), f"{old_path} must be quarantined"
-        assert (root / "_quarantine").exists()
+        assert not (root / "_quarantine").exists(), "obsolete quarantine tree should be removed"
 
 
 def test_code_scan_is_canonical_security_home():

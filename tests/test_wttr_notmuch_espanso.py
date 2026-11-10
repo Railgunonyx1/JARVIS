@@ -202,19 +202,3 @@ def test_snippet_expand_leaves_unknown_tokens(workspace):
     assert expanded == []
 
 
-def test_browser_type_expands_snippets(workspace, monkeypatch):
-    """The espanso integration: browser.type expands :triggers before typing."""
-    from tools import browser as bt
-
-    sn.snippet_add({"trigger": "handle", "text": "@aayan"})
-
-    captured = {}
-
-    class FakeController:
-        def type_selector(self, selector, text):
-            captured["text"] = text
-
-    monkeypatch.setattr(bt, "_controller", lambda: FakeController())
-    res = bt.browser_type({"selector": "#search", "text": "ping :handle"})
-    assert res.success
-    assert captured["text"] == "ping @aayan"        # expanded before typing

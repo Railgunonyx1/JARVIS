@@ -91,13 +91,13 @@ def test_agent_state_tracks_active_skills():
     from core.agent.state import AgentState
 
     state = AgentState(task_id="t", goal="g")
-    state.record_tool("skills.load", "1", True, 1.0, metadata={"skill": "webapp_testing"})
-    state.record_tool("skills.load", "2", True, 1.0, metadata={"skill": "webapp_testing"})
+    state.record_tool("skills.load", "1", True, 1.0, metadata={"skill": "python_app_testing"})
+    state.record_tool("skills.load", "2", True, 1.0, metadata={"skill": "python_app_testing"})
     state.record_tool("skills.load", "3", True, 1.0, metadata={"skill": "other"})
     state.record_tool("shell.execute", "4", True, 1.0, metadata={})
 
-    assert state.active_skills == ["webapp_testing", "other"]
-    assert state.to_dict()["active_skills"] == ["webapp_testing", "other"]
+    assert state.active_skills == ["python_app_testing", "other"]
+    assert state.to_dict()["active_skills"] == ["python_app_testing", "other"]
 
 
 def test_loop_merges_active_skill_steps():
@@ -105,7 +105,7 @@ def test_loop_merges_active_skill_steps():
     from core.agent.verification import VerificationEngine, VerificationStep
 
     class _State:
-        active_skills = ["webapp_testing"]
+        active_skills = ["python_app_testing"]
 
     engine = VerificationEngine()
     engine.add_step(VerificationStep(name="python-import", command="x"))
@@ -119,7 +119,7 @@ def test_loop_merge_adds_unknown_skill_step():
     from core.agent.verification import VerificationEngine, VerificationStep
 
     class _State:
-        active_skills = ["webapp_testing"]
+        active_skills = ["python_app_testing"]
 
     engine = VerificationEngine()
     AgentLoop._add_skill_verification(None, _State(), engine, VerificationStep)
