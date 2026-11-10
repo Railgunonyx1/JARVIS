@@ -45,7 +45,7 @@ The launcher is `jarvis-desktop-island` (also exposed as `jarvis-island`).
 
 - **Cloud AI:** configure provider credentials using environment variables or the supported JARVIS configuration. Never commit API keys.
 - **Local AI:** configure an Ollama endpoint and model in the provider configuration.
-- **Voice:** audio capture uses `sounddevice`; TTS engines are loaded on demand. Model downloads may be required for local engines.
+- **Voice:** audio capture uses `sounddevice`; TTS engines are loaded on demand. Install the system `ffmpeg` binary for edge-tts MP3 conversion. Whisper and Kokoro model downloads are separate.
 - **Gestures:** install optional `opencv-python-headless` and `mediapipe` dependencies when enabling camera controls.
 - **3D workspace:** requires the Qt Quick 3D modules available for the installed PySide6/Qt version.
 

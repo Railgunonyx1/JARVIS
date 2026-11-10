@@ -30,7 +30,7 @@ Environment variables:
 - `JARVIS_KOKORO_VOICE`: Kokoro voice ID (default: `af_sarah`).
 - `JARVIS_TTS_THREADS`: reserved for model/runtime thread tuning where supported.
 
-Kokoro is preferred when its model files are available. If it cannot initialize or synthesize, the manager falls back to edge-tts. Audio is normalized to WAV where the MP3 decoder is available.
+Kokoro is preferred when its model files are available. If it cannot initialize or synthesize, the manager falls back to edge-tts. Audio is normalized to WAV where the MP3 decoder is available. Install the system `ffmpeg` binary for reliable edge-tts MP3 decoding and conversion.
 
 ## Dependencies
 

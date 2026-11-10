@@ -37,5 +37,6 @@ The uninstaller removes the installed application, launchers, desktop entry and 
 - Python 3.11+
 - KDE Plasma 6 and KWin
 - PySide6 / Qt 6
+- `ffmpeg` binary for edge-tts MP3 decoding and WAV conversion
 - Camera gesture dependencies are optional and installed separately.
 - Physical Wayland, audio and camera behaviour must be verified on the target machine.

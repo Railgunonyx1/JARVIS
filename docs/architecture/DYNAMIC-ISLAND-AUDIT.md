@@ -2,7 +2,7 @@
 
 **Scope:** full product isolation on `dynamic-island-cleanup`, based on the `dynamic-island` branch.  
 **Audit basis:** recursive Git tree and source/configuration inspection.  
-**Execution limitation:** GitHub tree and file operations were available; no local checkout or target KDE session was available in this run. CI tests, packaging execution, and runtime behaviour are therefore not claimed as verified.
+**Execution:** source audit and cleanup were performed through the GitHub integration. The updated GitHub Actions workflow passed on Ubuntu; no local checkout or target KDE session was available, so KDE/Wayland and physical-device behaviour remain manual verification items.
 
 ## Findings
 
@@ -42,11 +42,11 @@ Git history is preserved. This is a branch-level source-tree cleanup, not a hist
 
 1. **KDE Wayland placement:** test KWin helper on the target Plasma version and multiple display layouts.
 2. **Installer consistency:** execute install/uninstall on a clean user account; confirm launcher paths, autostart and permissions.
-3. **Voice:** verify capture device selection, STT fallback, TTS playback and cancellation on actual audio hardware.
-4. **Gestures:** install optional camera dependencies and verify explicit enable/disable and camera shutdown.
-5. **3D workspace:** verify Qt Quick 3D module availability and failure isolation on the target GPU/driver.
+3. **Voice:** CI covers the desktop voice fallback path. Verify capture-device selection, local/cloud STT, TTS playback and cancellation on actual audio hardware.
+4. **Gestures:** CI verifies deterministic camera/tracker shutdown and idempotent stop behaviour. Install optional camera dependencies and verify actual camera access and shutdown on target hardware.
+5. **3D workspace:** CI now exercises Qt Quick scene loading, visibility transitions, idempotent load, missing-scene handling and shutdown. Actual GPU/driver rendering and performance still require target-machine verification.
 6. **AI backend:** run with no provider configured (island remains usable), then with each intended provider; verify approval, cancellation, tool execution and shutdown.
-7. **CI:** run the updated workflow. This audit did not execute the test suite.
+7. **CI:** [successful GitHub Actions run](https://github.com/Railgunonyx1/JARVIS/actions/runs/42799353096): Ruff passed; root suite 1,057 passed / 9 skipped; Dynamic Island suite 31 passed / 1 manual test skipped; secret scan clean.
 
 ## Cleanup principle
 
