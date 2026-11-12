@@ -37,9 +37,11 @@ tar -C "$REPO_ROOT" \
 
 # Keep the KWin placement helper and its script payload with the installed
 # application. This allows maintenance after the source checkout is removed.
-mkdir -p "$KWIN_PACKAGE_DIR"
+mkdir -p "$KWIN_PACKAGE_DIR/kwin"
 install -m 755 "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"
-cp -a "$REPO_ROOT/packaging/desktop/kwin" "$KWIN_PACKAGE_DIR/"
+# Copy directory contents rather than the directory itself so repeated
+# installs do not create a nested kwin/kwin tree.
+cp -a "$REPO_ROOT/packaging/desktop/kwin/." "$KWIN_PACKAGE_DIR/kwin/"
 
 # Thin wrappers keep the install root explicit, including custom INSTALL_DIRs.
 cat > "$BIN_DIR/jarvis-desktop-island" <<EOF
@@ -73,7 +75,6 @@ fi
 # Only record KWin integration as installed when this invocation succeeds.
 # The uninstaller uses this marker to avoid removing an unrelated/pre-existing
 # KWin script when installation skipped or failed the helper step.
-rm -f "$KWIN_INSTALLED_MARKER"
 if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" ]; then
   if "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"; then
     touch "$KWIN_INSTALLED_MARKER"
