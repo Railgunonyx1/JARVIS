@@ -9,17 +9,21 @@ ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALLED_KWIN_HELPER="$INSTALL_DIR/jarvis-repo/packaging/desktop/install-kwin-rule.sh"
+KWIN_INSTALLED_MARKER="$INSTALL_DIR/jarvis-repo/.kwin-helper-installed"
 
 if [ -x "$BIN_DIR/jarvis-autostart" ]; then
   "$BIN_DIR/jarvis-autostart" disable || true
 fi
 
-# Prefer the copy staged with the application so uninstallation does not
-# depend on the original source checkout still existing.
-if [ -x "$INSTALLED_KWIN_HELPER" ]; then
-  "$INSTALLED_KWIN_HELPER" --uninstall || true
-elif [ -x "$SCRIPT_DIR/install-kwin-rule.sh" ]; then
-  "$SCRIPT_DIR/install-kwin-rule.sh" --uninstall || true
+# Remove KWin integration only if this installation recorded successfully
+# enabling it. This avoids deleting a pre-existing script when installation
+# skipped the KWin step (for example, in a headless smoke test).
+if [ -f "$KWIN_INSTALLED_MARKER" ]; then
+  if [ -x "$INSTALLED_KWIN_HELPER" ]; then
+    "$INSTALLED_KWIN_HELPER" --uninstall || true
+  elif [ -x "$SCRIPT_DIR/install-kwin-rule.sh" ]; then
+    "$SCRIPT_DIR/install-kwin-rule.sh" --uninstall || true
+  fi
 fi
 
 rm -f "$BIN_DIR/jarvis-desktop-island" "$BIN_DIR/jarvis-island" "$BIN_DIR/jarvis-autostart"
