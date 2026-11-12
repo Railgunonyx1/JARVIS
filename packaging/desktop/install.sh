@@ -11,6 +11,7 @@ ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
 KWIN_PACKAGE_DIR="$REPO_DIR/packaging/desktop"
+KWIN_INSTALLED_MARKER="$REPO_DIR/.kwin-helper-installed"
 
 command -v python3 >/dev/null || { echo "ERROR: python3 is required"; exit 1; }
 mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
@@ -35,8 +36,7 @@ tar -C "$REPO_ROOT" \
   -cf - . | tar -C "$REPO_DIR" -xf -
 
 # Keep the KWin placement helper and its script payload with the installed
-# application. This allows install/uninstall maintenance after the checkout
-# used for installation is no longer available.
+# application. This allows maintenance after the source checkout is removed.
 mkdir -p "$KWIN_PACKAGE_DIR"
 install -m 755 "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"
 cp -a "$REPO_ROOT/packaging/desktop/kwin" "$KWIN_PACKAGE_DIR/"
@@ -70,9 +70,16 @@ fi
 # Write a valid login command that invokes the actual island executable.
 "$BIN_DIR/jarvis-autostart" enable --run "$BIN_DIR/jarvis-desktop-island"
 
+# Only record KWin integration as installed when this invocation succeeds.
+# The uninstaller uses this marker to avoid removing an unrelated/pre-existing
+# KWin script when installation skipped or failed the helper step.
+rm -f "$KWIN_INSTALLED_MARKER"
 if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" ]; then
-  "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" || \
+  if "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"; then
+    touch "$KWIN_INSTALLED_MARKER"
+  else
     echo "WARNING: KWin placement helper was not installed; compositor placement will be used."
+  fi
 fi
 
 command -v update-desktop-database >/dev/null && update-desktop-database "$DESKTOP_DIR" || true
