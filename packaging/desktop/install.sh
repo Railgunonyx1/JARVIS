@@ -10,6 +10,7 @@ DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
+KWIN_PACKAGE_DIR="$REPO_DIR/packaging/desktop"
 
 command -v python3 >/dev/null || { echo "ERROR: python3 is required"; exit 1; }
 mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
@@ -32,6 +33,13 @@ tar -C "$REPO_ROOT" \
   --exclude='./tests' --exclude='./dynamic-island/tests' \
   --exclude='./packaging' --exclude='./.github' \
   -cf - . | tar -C "$REPO_DIR" -xf -
+
+# Keep the KWin placement helper and its script payload with the installed
+# application. This allows install/uninstall maintenance after the checkout
+# used for installation is no longer available.
+mkdir -p "$KWIN_PACKAGE_DIR"
+install -m 755 "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"
+cp -a "$REPO_ROOT/packaging/desktop/kwin" "$KWIN_PACKAGE_DIR/"
 
 # Thin wrappers keep the install root explicit, including custom INSTALL_DIRs.
 cat > "$BIN_DIR/jarvis-desktop-island" <<EOF
@@ -62,8 +70,8 @@ fi
 # Write a valid login command that invokes the actual island executable.
 "$BIN_DIR/jarvis-autostart" enable --run "$BIN_DIR/jarvis-desktop-island"
 
-if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" ]; then
-  "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" || \
+if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" ]; then
+  "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" || \
     echo "WARNING: KWin placement helper was not installed; compositor placement will be used."
 fi
 
