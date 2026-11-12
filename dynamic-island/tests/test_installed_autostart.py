@@ -1,4 +1,4 @@
-"""Regression tests for the installed-layout autostart command."""
+"""Regression tests for installed autostart and uninstall behaviour."""
 
 from __future__ import annotations
 
@@ -65,3 +65,67 @@ def test_installed_autostart_enable_status_disable(tmp_path: Path) -> None:
     assert disabled.returncode == 0, disabled.stdout + disabled.stderr
     assert "Autostart disabled" in disabled.stdout
     assert not entry.exists()
+
+
+def _run_uninstaller(tmp_path: Path, *, kwin_marker: bool) -> tuple[subprocess.CompletedProcess[str], Path]:
+    repo_root = Path(__file__).resolve().parents[2]
+    install_dir = tmp_path / "install"
+    repo_dir = install_dir / "jarvis-repo"
+    helper_dir = repo_dir / "packaging" / "desktop"
+    helper_dir.mkdir(parents=True)
+    helper = helper_dir / "install-kwin-rule.sh"
+    helper.write_text(
+        "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"$KWIN_CALL_LOG\"\n",
+        encoding="utf-8",
+    )
+    helper.chmod(0o755)
+
+    marker = repo_dir / ".kwin-helper-installed"
+    if kwin_marker:
+        marker.touch()
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    autostart = bin_dir / "jarvis-autostart"
+    autostart.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    autostart.chmod(0o755)
+
+    desktop_dir = tmp_path / "applications"
+    icon_dir = tmp_path / "icons"
+    config_home = tmp_path / "config"
+    for path in (desktop_dir, icon_dir, config_home / "autostart"):
+        path.mkdir(parents=True, exist_ok=True)
+
+    call_log = tmp_path / "kwin-calls.log"
+    env = os.environ.copy()
+    env.update(
+        {
+            "INSTALL_DIR": str(install_dir),
+            "BIN_DIR": str(bin_dir),
+            "DESKTOP_DIR": str(desktop_dir),
+            "ICON_DIR": str(icon_dir),
+            "XDG_CONFIG_HOME": str(config_home),
+            "KWIN_CALL_LOG": str(call_log),
+        }
+    )
+    result = subprocess.run(
+        ["bash", str(repo_root / "packaging" / "desktop" / "uninstall.sh")],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result, call_log
+
+
+def test_uninstaller_preserves_unowned_kwin_integration(tmp_path: Path) -> None:
+    result, call_log = _run_uninstaller(tmp_path, kwin_marker=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not call_log.exists()
+
+
+def test_uninstaller_removes_owned_kwin_integration(tmp_path: Path) -> None:
+    result, call_log = _run_uninstaller(tmp_path, kwin_marker=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert call_log.read_text(encoding="utf-8").strip() == "--uninstall"
