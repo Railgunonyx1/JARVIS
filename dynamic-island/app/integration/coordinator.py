@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Callable
 from enum import StrEnum
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from app.desktop.actions import DesktopActionLayer
 from app.gestures.camera import Camera
@@ -244,11 +244,13 @@ class AppCoordinator(QObject):
         logger.info("AppCoordinator started")
 
     def shutdown_ui_resources(self) -> None:
-        """Release Qt-owned workspace widgets on the GUI thread.
+        """Release Qt-owned workspace widgets on their owning GUI thread.
 
         Call this before moving the remaining blocking subsystem shutdown to
         a worker thread. The workspace is lazy-created and may be absent.
         """
+        if QThread.currentThread() != self.thread():
+            raise RuntimeError("Workspace widgets must be shut down on the GUI thread")
         workspace = self._workspace
         self._workspace = None
         self._workspace_visible = False
@@ -276,16 +278,22 @@ class AppCoordinator(QObject):
                     pass
             self._voice = None
         if self._workspace:
-            # Preserve compatibility for callers that still invoke shutdown()
-            # directly from the GUI thread without a prior UI-resource phase.
-            self.shutdown_ui_resources()
+            if QThread.currentThread() == self.thread():
+                # Preserve compatibility for direct GUI-thread callers.
+                self.shutdown_ui_resources()
+            else:
+                # Never call QWidget/QQuickWidget methods from a worker thread.
+                logger.error(
+                    "Workspace cleanup was not prepared on the GUI thread; "
+                    "leaving it for process teardown"
+                )
         if self._backend:
             try:
                 if not self._backend.stop():
                     logger.warning("Agent backend did not stop before its shutdown timeout")
             except Exception:
                 logger.exception("Agent backend shutdown failed")
-        logger.info("AppCoordinator shutdown")
+        logger.info("AppCoordinator shutdown sequence finished")
 
     def _action_confirmation(
         self,
