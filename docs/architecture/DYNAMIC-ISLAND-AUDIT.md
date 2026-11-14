@@ -98,3 +98,24 @@ The installer's own `pip install` could not reach PyPI from this host; the lifec
 - KDE runtime behaviour (real placement, focus handling, reconfigure against a live session) — requires per-operation approval and has not been performed.
 - `kwriteconfig5` path — the binary is absent from this host; only `kwriteconfig6` was exercised.
 - CI runs Python 3.11; this host runs 3.14.9. The interpreter gap is the likely cause of the layout failure above.
+
+### KDE runtime check — read-only, live session
+
+Session reports **KWin 6.8.2** (Plasma 6), so `kwriteconfig6` is the correct backend on this machine.
+
+Observed state before the check, read-only:
+
+- `~/.config/kwinrc` — `f7c3d86f…`, 2652 bytes, containing `[Plugins] jarvis-islandEnabled=false`.
+- `~/.local/share/kwin/scripts/jarvis-island` — present.
+
+So the existing live installation has the KWin script deployed but **disabled**: the island currently falls back to compositor placement. That is the observable symptom the wrong-`kwinrc` defect produces, and it is why the helper's "Enabled in:" line could be true while the rule was inactive.
+
+The helper was then run against a *copy* of `kwinrc` (`KWINRC_PATH`, `KWIN_SCRIPT_DIR` redirected; `qdbus6` stubbed so no reconfigure reached the session):
+
+| Action | Result |
+| --- | --- |
+| `--install` | exit 0; copy gained exactly one line, `jarvis-islandEnabled` `false` → `true`; payload staged as `contents/` + `metadata.json`; one `org.kde.KWin /KWin reconfigure` call, stubbed |
+| `--uninstall` | exit 0; key back to `false`; script directory removed |
+| real `kwinrc` | sha256 identical before and after — `f7c3d86f…` |
+
+Not performed, by design: writing the real `kwinrc`, calling `reconfigure` against the live session, and observing island placement or focus. Those require per-operation approval and remain the only unverified items in Package-01.
