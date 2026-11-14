@@ -456,29 +456,68 @@ class AppCoordinator(QObject):
         self._recognizer = None
         self._gesture_active = False
         self._gesture_state = False
-        # Stop tracker/camera without joining from tracker thread if possible
+
+        tracker_thread = getattr(tracker, "_thread", None) if tracker else None
+        camera_thread = getattr(camera, "_capture_thread", None) if camera else None
+
+        tracker_stopped = tracker is None
+        camera_stopped = camera is None
         try:
-            if tracker:
-                import threading
-                if threading.current_thread() is getattr(tracker, "_thread", None):
-                    try:
-                        from PySide6.QtCore import QTimer
-                        QTimer.singleShot(0, tracker.stop)
-                    except Exception:
-                        pass
-                else:
-                    tracker.stop()
+            if tracker is not None:
+                tracker_stopped = bool(tracker.stop())
+                tracker_thread = getattr(tracker, "_thread", tracker_thread)
+                if tracker_thread is not None:
+                    tracker_stopped = not tracker_thread.is_alive()
         except Exception:
-            pass
+            logger.exception("Failed to stop hand tracker")
+            tracker_stopped = False
+
         try:
-            if camera:
-                camera.stop()
+            if camera is not None:
+                camera_stopped = bool(camera.stop())
+                camera_thread = getattr(camera, "_capture_thread", camera_thread)
+                if camera_thread is not None:
+                    camera_stopped = not camera_thread.is_alive()
         except Exception:
-            pass
+            logger.exception("Failed to stop gesture camera")
+            camera_stopped = False
+
+        def _release_after_workers_exit() -> None:
+            # The camera must not be released while either worker can still
+            # access it. If a bounded join timed out, this watcher waits for
+            # actual thread termination before releasing the device.
+            for worker in (tracker_thread, camera_thread):
+                if worker is not None and worker is not threading.current_thread():
+                    worker.join()
+            workers_alive = any(
+                worker is not None and worker.is_alive()
+                for worker in (tracker_thread, camera_thread)
+            )
+            if camera is not None and not workers_alive:
+                try:
+                    camera.tracker_exit_confirmed()
+                except Exception:
+                    logger.exception("Camera release failed after worker shutdown")
+            elif workers_alive:
+                logger.error("Gesture workers remain active; camera was not released")
+
+        if camera is not None:
+            if tracker_stopped and camera_stopped:
+                try:
+                    camera.tracker_exit_confirmed()
+                except Exception:
+                    logger.exception("Camera release failed after worker shutdown")
+            else:
+                threading.Thread(
+                    target=_release_after_workers_exit,
+                    name="jarvis-gesture-shutdown",
+                    daemon=True,
+                ).start()
+
         try:
             self._set_state(AppState.IDLE)
         except Exception:
-            pass
+            logger.exception("Failed to publish idle state after gesture shutdown")
 
     def _on_gesture(self, event: GestureEvent) -> None:
         if self._mapper:
