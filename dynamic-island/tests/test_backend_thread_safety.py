@@ -1,0 +1,186 @@
+"""Concurrency and lifecycle tests for the desktop agent backend."""
+
+from __future__ import annotations
+
+import asyncio
+import queue
+import sys
+from types import ModuleType, SimpleNamespace
+
+import pytest
+
+from app.integration.jarvis_backend import BackendState, JarvisBackend
+
+
+class _FakeTask:
+    def __init__(self):
+        self.cancel_calls = 0
+
+    def done(self):
+        return False
+
+    def cancel(self):
+        self.cancel_calls += 1
+
+
+class _ClosedLoop:
+    def call_soon_threadsafe(self, *_args):
+        raise RuntimeError("event loop is closed")
+
+
+class _FakeThread:
+    def __init__(self, *, alive: bool, ident: int | None = 1):
+        self.alive = alive
+        self.ident = ident
+        self.join_calls = []
+
+    def is_alive(self):
+        return self.alive
+
+    def join(self, timeout=None):
+        self.join_calls.append(timeout)
+
+
+def test_full_queue_does_not_consume_request_id():
+    backend = JarvisBackend()
+    backend._state = BackendState.READY
+    backend._request_id_counter = 12
+    backend._input_queue = queue.Queue(maxsize=1)
+    backend._input_queue.put_nowait((99, "already queued"))
+
+    assert backend.send_message("rejected") is None
+    assert backend._request_id_counter == 12
+    assert backend._input_queue.get_nowait() == (99, "already queued")
+
+
+def test_cancel_request_never_cancels_task_from_caller_thread():
+    backend = JarvisBackend()
+    task = _FakeTask()
+    backend._tasks_by_id[7] = task
+    backend._loop = _ClosedLoop()
+
+    assert backend.cancel_request(7) is False
+    assert task.cancel_calls == 0
+
+
+def test_stop_never_cancels_task_directly_when_loop_is_closed():
+    backend = JarvisBackend()
+    task = _FakeTask()
+    worker = _FakeThread(alive=False)
+    backend._state = BackendState.READY
+    backend._current_task = task
+    backend._loop = _ClosedLoop()
+    backend._thread = worker
+
+    assert backend.stop(timeout=0.01) is True
+    assert task.cancel_calls == 0
+    assert worker.join_calls == [0.01]
+    assert backend.state is BackendState.STOPPED
+
+
+def test_stop_checks_worker_even_if_state_already_says_stopped():
+    backend = JarvisBackend()
+    worker = _FakeThread(alive=True)
+    backend._state = BackendState.STOPPED
+    backend._thread = worker
+
+    assert backend.stop(timeout=0.01) is False
+    assert backend.state is BackendState.STOPPING
+    assert worker.join_calls == [0.01]
+
+
+def test_set_model_is_scheduled_on_agent_loop_thread():
+    backend = JarvisBackend()
+    calls = []
+    router = SimpleNamespace(set_default_model=lambda model: calls.append(model))
+
+    class Loop:
+        def call_soon_threadsafe(self, callback, *args):
+            calls.append((callback, args))
+
+    backend._state = BackendState.READY
+    backend._loop = Loop()
+    backend._agent_loop = SimpleNamespace(router=router)
+
+    assert backend.set_model("provider/model") is True
+    callback, args = calls.pop()
+    callback(*args)
+    assert calls == ["provider/model"]
+
+
+def test_shutdown_during_kernel_build_does_not_transition_to_ready(monkeypatch):
+    backend = JarvisBackend()
+    runtime = SimpleNamespace(agent_loop=object())
+    closed = []
+
+    runtime_package = ModuleType("runtime")
+    runtime_package.__path__ = []
+    kernel_module = ModuleType("runtime.kernel")
+
+    def build_kernel(**_kwargs):
+        backend._shutdown_event.set()
+        return runtime
+
+    kernel_module.build_kernel = build_kernel
+    kernel_module.close_kernel = lambda value: closed.append(value)
+    monkeypatch.setitem(sys.modules, "runtime", runtime_package)
+    monkeypatch.setitem(sys.modules, "runtime.kernel", kernel_module)
+
+    asyncio.run(backend._main())
+
+    assert closed == [runtime]
+    assert backend.state is BackendState.STOPPED
+    assert backend._runtime is None
+    assert backend._agent_loop is None
+
+
+def test_shutdown_requested_before_kernel_build_skips_build(monkeypatch):
+    backend = JarvisBackend()
+    backend._shutdown_event.set()
+    build_calls = []
+
+    runtime_package = ModuleType("runtime")
+    runtime_package.__path__ = []
+    kernel_module = ModuleType("runtime.kernel")
+    kernel_module.build_kernel = lambda **kwargs: build_calls.append(kwargs)
+    kernel_module.close_kernel = lambda _runtime: None
+    monkeypatch.setitem(sys.modules, "runtime", runtime_package)
+    monkeypatch.setitem(sys.modules, "runtime.kernel", kernel_module)
+
+    asyncio.run(backend._main())
+
+    assert build_calls == []
+    assert backend.state is BackendState.STOPPED
+
+
+def test_start_rejects_a_previous_live_worker():
+    backend = JarvisBackend()
+    backend._state = BackendState.STOPPED
+    backend._thread = _FakeThread(alive=True)
+
+    with pytest.raises(RuntimeError, match="still shutting down"):
+        backend.start(wait=False)
+
+
+def test_start_reports_thread_creation_failure(monkeypatch):
+    backend = JarvisBackend()
+
+    class FailedThread:
+        ident = None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            raise RuntimeError("thread start failed")
+
+    monkeypatch.setattr("app.integration.jarvis_backend.threading.Thread", FailedThread)
+
+    with pytest.raises(RuntimeError, match="thread start failed"):
+        backend.start(wait=False)
+
+    assert backend.state is BackendState.ERROR
+    assert str(backend.startup_error) == "thread start failed"
