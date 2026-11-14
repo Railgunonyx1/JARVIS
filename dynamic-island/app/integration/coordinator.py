@@ -199,6 +199,7 @@ class AppCoordinator(QObject):
         # Connect backend signals to coordinator methods
         self._backend.chunk_ready.connect(self._on_backend_chunk)
         self._backend.response_ready.connect(self._on_backend_response)
+        self._backend.request_cancelled.connect(self._on_backend_request_cancelled)
         self._backend.status_changed.connect(self._on_backend_status)
         self._backend.state_changed.connect(self._on_backend_state)
         # Deferred model: apply after the backend reports READY,
@@ -317,13 +318,27 @@ class AppCoordinator(QObject):
         return self._confirmation_handler(action_name, arguments or {}, approval_id)
 
     # ── Chat ────────────────────────────────────────────────────
-    def send_message(self, text: str) -> None:
-        """Send a text message to the agent."""
+    def send_message(self, text: str) -> int | None:
+        """Queue a text message and return its request ID when accepted."""
         if not self._backend or not text.strip():
-            return
+            return None
+        request_id = self._backend.send_message(text)
+        if request_id is None:
+            return None
         self._set_state(AppState.CHATTING)
         self.chat_message.emit("user", text)
-        self._backend.send_message(text)
+        return request_id
+
+    def cancel_request(self, request_id: int) -> bool:
+        """Cancel one active or queued request by its exact request ID."""
+        return bool(self._backend and self._backend.cancel_request(request_id))
+
+    def _on_backend_request_cancelled(self, request_id: int) -> None:
+        """Finish a request cancelled before it reached the agent loop."""
+        self._buffer = ""
+        self._voice_turn_active = False
+        self.chat_message.emit("jarvis", f"[Cancelled request {request_id}]")
+        self._set_state(AppState.IDLE)
 
     def _on_backend_chunk(self, request_id: int, chunk: str) -> None:
         self._buffer += chunk
