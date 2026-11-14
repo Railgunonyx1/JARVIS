@@ -10,6 +10,8 @@ DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../" && pwd)"
+KWIN_PACKAGE_DIR="$REPO_DIR/packaging/desktop"
+KWIN_INSTALLED_MARKER="$REPO_DIR/.kwin-helper-installed"
 
 command -v python3 >/dev/null || { echo "ERROR: python3 is required"; exit 1; }
 mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
@@ -32,6 +34,14 @@ tar -C "$REPO_ROOT" \
   --exclude='./tests' --exclude='./dynamic-island/tests' \
   --exclude='./packaging' --exclude='./.github' \
   -cf - . | tar -C "$REPO_DIR" -xf -
+
+# Keep the KWin placement helper and its script payload with the installed
+# application. This allows maintenance after the source checkout is removed.
+mkdir -p "$KWIN_PACKAGE_DIR/kwin"
+install -m 755 "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"
+# Copy directory contents rather than the directory itself so repeated
+# installs do not create a nested kwin/kwin tree.
+cp -a "$REPO_ROOT/packaging/desktop/kwin/." "$KWIN_PACKAGE_DIR/kwin/"
 
 # Thin wrappers keep the install root explicit, including custom INSTALL_DIRs.
 cat > "$BIN_DIR/jarvis-desktop-island" <<EOF
@@ -62,9 +72,15 @@ fi
 # Write a valid login command that invokes the actual island executable.
 "$BIN_DIR/jarvis-autostart" enable --run "$BIN_DIR/jarvis-desktop-island"
 
-if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" ]; then
-  "$REPO_ROOT/packaging/desktop/install-kwin-rule.sh" || \
+# Only record KWin integration as installed when this invocation succeeds.
+# The uninstaller uses this marker to avoid removing an unrelated/pre-existing
+# KWin script when installation skipped or failed the helper step.
+if [ -n "${XDG_CURRENT_DESKTOP:-}" ] && [ -x "$KWIN_PACKAGE_DIR/install-kwin-rule.sh" ]; then
+  if "$KWIN_PACKAGE_DIR/install-kwin-rule.sh"; then
+    touch "$KWIN_INSTALLED_MARKER"
+  else
     echo "WARNING: KWin placement helper was not installed; compositor placement will be used."
+  fi
 fi
 
 command -v update-desktop-database >/dev/null && update-desktop-database "$DESKTOP_DIR" || true

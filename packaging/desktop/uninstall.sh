@@ -7,19 +7,39 @@ BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 DESKTOP_DIR="${DESKTOP_DIR:-$HOME/.local/share/applications}"
 ICON_DIR="${ICON_DIR:-$HOME/.local/share/icons/hicolor/scalable/apps}"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALLED_KWIN_HELPER="$INSTALL_DIR/jarvis-repo/packaging/desktop/install-kwin-rule.sh"
+KWIN_INSTALLED_MARKER="$INSTALL_DIR/jarvis-repo/.kwin-helper-installed"
 
 if [ -x "$BIN_DIR/jarvis-autostart" ]; then
   "$BIN_DIR/jarvis-autostart" disable || true
 fi
+
+# Remove KWin integration only if this installation recorded successfully
+# enabling it. This avoids deleting a pre-existing script when installation
+# skipped the KWin step (for example, in a headless smoke test).
+if [ -f "$KWIN_INSTALLED_MARKER" ]; then
+  if [ -x "$INSTALLED_KWIN_HELPER" ]; then
+    "$INSTALLED_KWIN_HELPER" --uninstall || true
+  elif [ -x "$SCRIPT_DIR/install-kwin-rule.sh" ]; then
+    "$SCRIPT_DIR/install-kwin-rule.sh" --uninstall || true
+  fi
+fi
+
 rm -f "$BIN_DIR/jarvis-desktop-island" "$BIN_DIR/jarvis-island" "$BIN_DIR/jarvis-autostart"
 rm -f "$DESKTOP_DIR/com.jarvis.island.desktop"
 rm -f "$AUTOSTART_DIR/jarvis-desktop.desktop"
 rm -f "$ICON_DIR/jarvis-desktop.svg"
 rm -rf "$INSTALL_DIR"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -x "$SCRIPT_DIR/install-kwin-rule.sh" ]; then
-  "$SCRIPT_DIR/install-kwin-rule.sh" --uninstall || true
-fi
 command -v update-desktop-database >/dev/null && update-desktop-database "$DESKTOP_DIR" || true
+
+# update-desktop-database rewrites mimeinfo.cache next to the desktop entries.
+# That cache can list applications we do not own, so remove it only when it
+# holds nothing but its header. Never delete foreign entries, and never remove
+# the applications directory itself.
+if [ -f "$DESKTOP_DIR/mimeinfo.cache" ] && ! grep -q '=' "$DESKTOP_DIR/mimeinfo.cache"; then
+  rm -f "$DESKTOP_DIR/mimeinfo.cache"
+fi
+
 echo "JARVIS Dynamic Island uninstalled. User data outside $INSTALL_DIR was left untouched."
