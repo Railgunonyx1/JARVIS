@@ -67,8 +67,9 @@ The first lifecycle corrections are now implemented on `dynamic-island-core`:
 - Gesture shutdown checks both tracker and camera worker termination before releasing the camera. Timed-out workers are joined by a cleanup watcher.
 - Escape collapses the expanded island from the conversation input and returns focus to the island. Explicit expansion activates the window and focuses the input.
 - The idle-width tests now compare against the configured `_IDLE_W` constant rather than an unrelated hard-coded threshold.
+- Settings persistence now treats `JARVIS_DESKTOP_HOME` consistently as a directory, creates the actual settings-file parent, and uses unique same-directory temporary files for atomic concurrent saves.
 
-The source-level lifecycle changes pass the repository CI suites. Physical KDE Wayland, camera-device and target-hardware validation remain separate acceptance checks.
+The source-level lifecycle and settings changes pass the repository CI suites. Physical KDE Wayland, camera-device and target-hardware validation remain separate acceptance checks.
 
 ### Benchmark acceptance criteria
 
