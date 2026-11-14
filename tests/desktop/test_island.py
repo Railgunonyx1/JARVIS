@@ -168,15 +168,17 @@ def test_island_hide_and_quit_lifecycle(qapp):
     island.hide_island()
     assert island.isHidden() is True
 
-    called = []
+    import threading
+
+    called = threading.Event()
 
     class _FakeCoord:
         def shutdown(self):
-            called.append(True)
+            called.set()
 
     island._controller = type("C", (), {"coordinator": _FakeCoord()})()
     island.quit_application()
-    assert called == [True]
+    assert called.wait(timeout=1.0)
 
 
 def test_island_status_from_controller(qapp):
