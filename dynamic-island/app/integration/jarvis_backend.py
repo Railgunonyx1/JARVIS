@@ -364,10 +364,10 @@ class JarvisBackend(QObject):
                 not self._shutdown_event.is_set()
                 and self.state in (BackendState.READY, BackendState.RUNNING)
             ):
-                try:
-                    item = self._input_queue.get(timeout=0.1)
-                except queue.Empty:
-                    continue
+                # Never block the asyncio event loop on the thread-safe
+                # producer queue. This keeps cancellation and model-change
+                # callbacks responsive while the backend is idle.
+                item = await asyncio.to_thread(self._input_queue.get)
                 request_id, text = item
                 if not text or not str(text).strip():
                     continue
