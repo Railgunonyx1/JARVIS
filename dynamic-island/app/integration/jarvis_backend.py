@@ -4,9 +4,8 @@ Runs AgentLoop in a dedicated worker thread with its own asyncio event loop.
 The Qt main thread never blocks on agent I/O — communication is via
 thread-safe queues and Qt signals.
 
-All public signals are emitted from the worker thread but are safe to connect
-to Qt slots on the main thread — Qt automatically delivers them via
-queued connections when crossing threads.
+Backend signals may originate from the worker or caller thread. Qt safely
+delivers cross-thread signals to slots according to receiver affinity.
 """
 
 from __future__ import annotations
