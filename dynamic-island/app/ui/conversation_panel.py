@@ -93,6 +93,7 @@ class ConversationPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._max_blocks = 500
+        self._request_running = False
         # Map approval_id -> ApprovalSink; each sink handles one decision only
         self._approval_sinks: dict[str, ApprovalSink] = {}
         self._build()
@@ -381,7 +382,6 @@ class ConversationPanel(QWidget):
         self.send_btn.setToolTip("Send message (Enter)")
         self.send_btn.clicked.connect(self._on_send)
         self._update_send_icon()
-        self.input_field.returnPressed.connect(self._on_send)
         il.addWidget(self.send_btn)
 
         root.addWidget(input_bar)
@@ -449,19 +449,34 @@ class ConversationPanel(QWidget):
                 "QPushButton:checked:hover { background: #0071E3; }"
             )
 
-    def _on_send(self, text: str = "") -> None:
-        """Handle send button / Enter in the input field.
+    def set_request_running(self, running: bool) -> None:
+        """Toggle the input between sending and stopping an active response."""
+        self._request_running = bool(running)
+        self.input_field.setEnabled(not self._request_running)
+        self.mic_btn.setEnabled(not self._request_running)
+        self.send_btn.setEnabled(True)
+        if self._request_running:
+            self.send_btn.setText("■")
+            self.send_btn.setToolTip("Stop response")
+        else:
+            self._update_send_icon()
+            self.send_btn.setToolTip("Send message (Enter)")
 
-        Emits the send_requested signal so the overlay window routes the
-        message through the coordinator/backend. The placeholder default
-        keeps unit tests that call this method without forwarding an
-        argument working.
-        """
-        if not isinstance(text, str): text = self.input_field.text()
-        text = text.strip()
-        if text:
+    def set_request_cancelling(self) -> None:
+        """Prevent repeated stop requests while cancellation is completing."""
+        self.send_btn.setEnabled(False)
+        self.send_btn.setToolTip("Cancelling…")
+
+    def _on_send(self, text: str | bool | None = None) -> None:
+        """Send the input, or request cancellation while a response is active."""
+        if self._request_running:
+            self.cancel_requested.emit()
+            return
+
+        message = text.strip() if isinstance(text, str) and text.strip() else self.input_field.text().strip()
+        if message:
             self.input_field.clear()
-            self.send_requested.emit(text)
+            self.send_requested.emit(message)
 
     def _on_mic(self) -> None:
         """Handle push-to-talk button toggle."""
