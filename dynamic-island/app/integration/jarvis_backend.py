@@ -327,28 +327,32 @@ class JarvisBackend(QObject):
             return True
 
     async def _main(self) -> None:
-        """Build the agent through the canonical composition root."""
+        """Build and run the agent through the canonical composition root."""
         if self._shutdown_event.is_set():
             return
         from runtime.kernel import build_kernel, close_kernel
 
-        self._runtime = build_kernel(
-            mode=self._mode,
-            max_iterations=self._max_iterations,
-            confirmation_handler=self._confirmation_handler,
-        )
-        self._agent_loop = self._runtime.agent_loop
-
-        # A stop can arrive while build_kernel() is still running. Do not
-        # transition back to READY or enter the request loop after shutdown.
-        if self._shutdown_event.is_set():
-            return
-
-        self._set_state(BackendState.READY)
-        self.status_changed.emit("ready")
-        self._started_event.set()
-
         try:
+            # Re-check after importing the composition root; shutdown may have
+            # been requested while the module was being imported.
+            if self._shutdown_event.is_set():
+                return
+            self._runtime = build_kernel(
+                mode=self._mode,
+                max_iterations=self._max_iterations,
+                confirmation_handler=self._confirmation_handler,
+            )
+            self._agent_loop = self._runtime.agent_loop
+
+            # A stop can arrive while build_kernel() is running. The finally
+            # block below still closes the newly created runtime.
+            if self._shutdown_event.is_set():
+                return
+
+            self._set_state(BackendState.READY)
+            self.status_changed.emit("ready")
+            self._started_event.set()
+
             while (
                 not self._shutdown_event.is_set()
                 and self.state in (BackendState.READY, BackendState.RUNNING)
@@ -360,7 +364,6 @@ class JarvisBackend(QObject):
                 request_id, text = item
                 if not text or not str(text).strip():
                     continue
-                # Track the current task for possible cancellation
                 task = self._loop.create_task(self._run_agent_with_id(text, request_id))
                 with self._state_lock:
                     self._current_task = task
@@ -380,10 +383,13 @@ class JarvisBackend(QObject):
                         self._set_state(BackendState.READY)
         finally:
             runtime = self._runtime
-            close_kernel(runtime)
-            with self._state_lock:
-                self._runtime = None
-                self._agent_loop = None
+            try:
+                if runtime is not None:
+                    close_kernel(runtime)
+            finally:
+                with self._state_lock:
+                    self._runtime = None
+                    self._agent_loop = None
 
     async def _run_agent_with_id(self, text: str, request_id: int) -> None:
         """Execute one agent run with a request ID and support cancellation."""
