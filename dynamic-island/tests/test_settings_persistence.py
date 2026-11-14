@@ -70,3 +70,16 @@ def test_save_uses_unique_temporary_files_for_concurrent_writes(tmp_path, monkey
     stored = json.loads(target.read_text(encoding="utf-8"))
     assert stored in payloads
     assert list(target.parent.glob(".jarvis-settings-tmp*")) == []
+
+def test_save_reports_directory_creation_failure(monkeypatch):
+    settings = _load_settings_module("jarvis_settings_directory_error_test")
+
+    def fail_directory_creation():
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(settings, "_ensure_dir", fail_directory_creation)
+    result = settings.save({"schema_version": "1.0"})
+
+    assert result.success is False
+    assert result.error_code == "io_error"
+    assert "permission denied" in result.message
