@@ -445,8 +445,12 @@ class JarvisBackend(QObject):
                 request_id=request_id,
             ))
 
-    def set_model(self, model: str) -> bool:
-        """Schedule a model change on the agent's owning event-loop thread."""
+    def set_model(self, model: str, timeout: float = 2.0) -> bool:
+        """Apply a model change on the agent loop and wait for completion.
+
+        Callers outside the agent thread retain synchronous semantics. Calls
+        already running on the agent loop execute directly to avoid deadlock.
+        """
         with self._state_lock:
             loop = self._loop
             agent_loop = self._agent_loop
@@ -456,12 +460,45 @@ class JarvisBackend(QObject):
                 or self._state not in (BackendState.READY, BackendState.RUNNING)
             ):
                 return False
+
         try:
-            loop.call_soon_threadsafe(agent_loop.router.set_default_model, model)
-            return True
+            current_loop = asyncio.get_running_loop()
         except RuntimeError:
-            logger.warning("Could not schedule model change; backend loop is stopping")
+            current_loop = None
+
+        setter = agent_loop.router.set_default_model
+        if current_loop is loop:
+            try:
+                setter(model)
+                return True
+            except Exception:
+                logger.exception("Could not apply model change on agent loop")
+                return False
+
+        completed = threading.Event()
+        errors: list[Exception] = []
+
+        def apply_model() -> None:
+            try:
+                setter(model)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                completed.set()
+
+        try:
+            loop.call_soon_threadsafe(apply_model)
+        except Exception:
+            logger.exception("Could not schedule model change; backend loop is stopping")
             return False
+
+        if not completed.wait(timeout=max(0.0, timeout)):
+            logger.warning("Timed out waiting for model change to complete")
+            return False
+        if errors:
+            logger.error("Model change failed: %s", errors[0])
+            return False
+        return True
 
     def _set_state(self, state: BackendState, error: Exception | None = None) -> None:
         with self._state_lock:
