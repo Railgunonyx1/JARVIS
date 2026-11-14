@@ -85,9 +85,23 @@ case "${1:-}" in
         ;;
 esac
 
+if [ ! -d "$PKG" ]; then
+    echo "error: KWin script payload missing: $PKG" >&2
+    exit 1
+fi
+
+# Stage beside the destination and rename, so a failed or partial copy can never
+# leave the previously installed script deleted.
 mkdir -p "$(dirname "$DEST")"
+STAGE="$DEST.new.$$"
+trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
+rm -rf "$STAGE"
+if ! cp -r "$PKG" "$STAGE"; then
+    echo "error: cannot stage KWin script from $PKG" >&2
+    exit 1
+fi
 rm -rf "$DEST"
-cp -r "$PKG" "$DEST"
+mv "$STAGE" "$DEST"
 set_kwin_key true
 reconfigure
 

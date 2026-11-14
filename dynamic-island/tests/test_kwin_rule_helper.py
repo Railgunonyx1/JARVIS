@@ -71,7 +71,7 @@ def _fake_backend_bin(tmp_path: Path, *, name: str = "kwriteconfig6") -> tuple[P
     # tool must be absent from PATH (not merely failing) for a clean selection.
     other = "kwriteconfig5" if name == "kwriteconfig6" else "kwriteconfig6"
     assert not (bin_dir / other).exists()
-    for tool in ("dirname", "mkdir", "rm", "cp", "cat", "python3"):
+    for tool in ("dirname", "mkdir", "rm", "cp", "mv", "cat", "python3"):
         real = shutil.which(tool)
         if real is not None and not (bin_dir / tool).exists():
             (bin_dir / tool).symlink_to(real)
@@ -84,7 +84,7 @@ def _restricted_bin(tmp_path: Path) -> Path:
     """PATH containing the utilities the helper needs but no kwriteconfig6/5."""
     bin_dir = tmp_path / "restricted-bin"
     bin_dir.mkdir(exist_ok=True)
-    for tool in ("dirname", "mkdir", "rm", "cp", "cat", "python3"):
+    for tool in ("dirname", "mkdir", "rm", "cp", "mv", "cat", "python3"):
         real = shutil.which(tool)
         if real is not None:
             link = bin_dir / tool
@@ -103,6 +103,7 @@ def _run(
     args: tuple[str, ...] = (),
     cwd: Path | None = None,
     include_system_path: bool = False,
+    helper: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     workdir = tmp_path / "cwd"
     workdir.mkdir(exist_ok=True)
@@ -124,7 +125,7 @@ def _run(
         env["KWIN_ARGV_LOG"] = str(argv_log)
     (tmp_path / "fake-home").mkdir(exist_ok=True)
     return subprocess.run(
-        ["/bin/sh", str(HELPER), *args],
+        ["/bin/sh", str(helper or HELPER), *args],
         cwd=str(cwd or workdir),
         env=env,
         capture_output=True,
@@ -348,3 +349,98 @@ def test_real_kwriteconfig6_writes_the_helper_target(tmp_path: Path) -> None:
     assert str(target) in result.stdout
     assert PAYLOAD.is_dir()
     assert os.access(target, os.W_OK)
+
+
+def _stage_helper(tmp_path: Path) -> tuple[Path, Path]:
+    """Copy the helper plus payload into tmp so tests control the payload directory."""
+    package_dir = tmp_path / "package" / "desktop"
+    payload = package_dir / "kwin" / "jarvis-island"
+    payload.parent.mkdir(parents=True)
+    shutil.copytree(PAYLOAD, payload)
+    helper = package_dir / "install-kwin-rule.sh"
+    shutil.copy2(HELPER, helper)
+    helper.chmod(0o755)
+    return helper, payload
+
+
+def _install_twice(
+    tmp_path: Path,
+    helper: Path,
+    bin_dir: Path,
+    argv_log: Path,
+) -> tuple[Path, Path, list[str]]:
+    """Install once, mark the result, and return the paths a reinstall must preserve."""
+    target = tmp_path / "kwinrc-path" / "kwinrc"
+    scripts_root = tmp_path / "kwin-scripts"
+    dest = scripts_root / "jarvis-island"
+    first = _run(
+        tmp_path,
+        helper=helper,
+        path_dir=bin_dir,
+        kwinrc_path=str(target),
+        xdg_config_home=tmp_path / "xdg",
+        argv_log=argv_log,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+    sentinel = dest / "user-marker.txt"
+    sentinel.write_text("keep me\n", encoding="utf-8")
+    installed = sorted(p.name for p in dest.iterdir())
+    assert "metadata.json" in installed
+    return dest, sentinel, installed
+
+
+def test_missing_payload_preserves_installed_script(tmp_path: Path) -> None:
+    """A removed payload must abort before the existing install is deleted."""
+    bin_dir, argv_log = _fake_backend_bin(tmp_path)
+    helper, payload = _stage_helper(tmp_path)
+    dest, sentinel, installed = _install_twice(tmp_path, helper, bin_dir, argv_log)
+
+    shutil.rmtree(payload)
+
+    second = _run(
+        tmp_path,
+        helper=helper,
+        path_dir=bin_dir,
+        kwinrc_path=str(tmp_path / "kwinrc-path" / "kwinrc"),
+        xdg_config_home=tmp_path / "xdg",
+        argv_log=argv_log,
+    )
+
+    assert second.returncode != 0
+    assert "payload missing" in second.stderr
+    assert dest.is_dir(), "existing KWin script was deleted by a failed reinstall"
+    assert sentinel.read_text(encoding="utf-8") == "keep me\n"
+    assert sorted(p.name for p in dest.iterdir()) == installed
+    assert not list((tmp_path / "kwin-scripts").glob("jarvis-island.new.*"))
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="permission bits do not restrict root",
+)
+def test_failed_copy_preserves_installed_script(tmp_path: Path) -> None:
+    """A partial copy must be discarded, leaving the previous install intact."""
+    bin_dir, argv_log = _fake_backend_bin(tmp_path)
+    helper, payload = _stage_helper(tmp_path)
+    dest, sentinel, installed = _install_twice(tmp_path, helper, bin_dir, argv_log)
+
+    unreadable = payload / "contents" / "code" / "main.js"
+    unreadable.chmod(0o000)
+    try:
+        second = _run(
+            tmp_path,
+            helper=helper,
+            path_dir=bin_dir,
+            kwinrc_path=str(tmp_path / "kwinrc-path" / "kwinrc"),
+            xdg_config_home=tmp_path / "xdg",
+            argv_log=argv_log,
+        )
+
+        assert second.returncode != 0
+        assert "cannot stage" in second.stderr
+        assert dest.is_dir(), "existing KWin script was deleted by a partial copy"
+        assert sentinel.read_text(encoding="utf-8") == "keep me\n"
+        assert sorted(p.name for p in dest.iterdir()) == installed
+        assert not list((tmp_path / "kwin-scripts").glob("jarvis-island.new.*"))
+    finally:
+        unreadable.chmod(0o644)
