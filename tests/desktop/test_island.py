@@ -179,6 +179,9 @@ def test_island_hide_and_quit_lifecycle(qapp):
     island._controller = type("C", (), {"coordinator": _FakeCoord()})()
     island.quit_application()
     assert called.wait(timeout=1.0)
+    assert island._shutdown_thread is not None
+    island._shutdown_thread.join(timeout=1.0)
+    assert not island._shutdown_thread.is_alive()
 
 
 def test_island_status_from_controller(qapp):
