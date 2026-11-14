@@ -487,7 +487,11 @@ class AppCoordinator(QObject):
             # access it. If a bounded join timed out, this watcher waits for
             # actual thread termination before releasing the device.
             for worker in (tracker_thread, camera_thread):
-                if worker is not None and worker is not threading.current_thread():
+                if (
+                    worker is not None
+                    and worker is not threading.current_thread()
+                    and worker.is_alive()
+                ):
                     worker.join()
             workers_alive = any(
                 worker is not None and worker.is_alive()
