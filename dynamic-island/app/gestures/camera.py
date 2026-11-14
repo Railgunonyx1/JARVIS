@@ -90,33 +90,20 @@ class Camera:
             self._running = False
             return False
 
-    def stop(self) -> None:
-        """Stop camera capture and release resources.
+    def stop(self) -> bool:
+        """Request capture shutdown and report whether its worker has exited.
 
-        1. Request stop via _running flag.
-        2. Wait for capture thread to confirm exit (join with timeout).
-        3. Do NOT release camera hardware yet — wait for the coordinator to
-           confirm that the tracker worker has exited.
-        4. Idempotent: second call is a no-op if already stopped.
-
-        This method does NOT set _tracker_exit_confirmed — that is the
-        coordinator's responsibility. The coordinator must call
-        camera.tracker_exit_confirmed() after the tracker worker has stopped.
+        Camera hardware is deliberately not released here. The coordinator
+        must first stop the tracker, then wait for both worker threads to exit,
+        and only then call tracker_exit_confirmed().
         """
-        if not self._running:
-            return
         self._running = False
-        # Wait for capture thread to exit
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=3.0)
-        # Do NOT release camera hardware here. The coordinator will call
-        # camera.tracker_exit_confirmed() after the tracker worker has
-        # confirmed its own exit. Releasing the camera before the tracker
-        # has stopped would race with the tracker reading frames.
-        # Only after the coordinator signals tracker exit confirmation do we
-        # release the capture object.
-        # NOTE: Camera.release() is deferred to the coordinator's
-        # tracker_exit_confirmed() callback path.
+        thread = self._capture_thread
+        if thread is not None and thread.is_alive():
+            if thread is threading.current_thread():
+                return False
+            thread.join(timeout=3.0)
+        return thread is None or not thread.is_alive()
 
     def read(self) -> np.ndarray | None:
         """Get the latest frame (non-blocking)."""
@@ -168,8 +155,12 @@ class Camera:
         then the coordinator confirms it to the camera, then the camera
         releases the hardware.
         """
+        capture_thread = self._capture_thread
+        if capture_thread is not None and capture_thread.is_alive():
+            raise RuntimeError(
+                "Cannot release camera while the capture worker is still running"
+            )
         self._tracker_exit_confirmed_by_coordinator = True
-        # Now safe to release the camera
         self._release_camera()
 
     def _release_camera(self) -> None:
