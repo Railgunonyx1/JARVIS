@@ -74,7 +74,7 @@ Verified by execution, not inspection: the same staged layout exits 1 with `Modu
 | `install.sh` | exit 0; autostart entry written with absolute `Exec=`; KWin script installed; `Enabled in: <root>/xdg/kwinrc`; `org.kde.KWin /KWin reconfigure` invoked (stubbed) |
 | installed `jarvis-autostart status` | exit 0, `autostart enabled` |
 | `uninstall.sh` | exit 0; autostart entry removed; KWin script removed; `INSTALL_DIR` deleted |
-| residue | `DESKTOP_DIR/mimeinfo.cache` remains (written by `update-desktop-database`, not by JARVIS) |
+| residue | none, after `ac58db57`: `mimeinfo.cache` is removed only when it holds nothing but its header; foreign entries and the directory itself are always preserved |
 
 The installer's own `pip install` could not reach PyPI from this host; the lifecycle run used a local wheelhouse (`PIP_NO_INDEX=1`, `PIP_FIND_LINKS=…`) built from the pip cache. This is an environment limitation, not an installer defect.
 
@@ -84,10 +84,10 @@ The installer's own `pip install` could not reach PyPI from this host; the lifec
 | --- | --- |
 | `ruff check . --select E9,F63,F7,F82` | pass |
 | `python -m pytest tests/ -q` | 1054 passed, 2 failed, 10 skipped |
-| `python -m pytest dynamic-island/tests/ -q` | 44 passed, 1 skipped |
+| `python -m pytest dynamic-island/tests/ -q` | 46 passed, 1 skipped |
 | `python scripts/scan_secrets.py` | clean |
 
-`dynamic-island/tests` is 44 because `test_kwin_rule_helper.py` (10 tests) was added here; the 34 pre-existing cases are unchanged.
+`dynamic-island/tests` is 46 because `test_kwin_rule_helper.py` (10 tests) and two uninstall-cache cases were added here; the 34 pre-existing cases are unchanged.
 
 ### Known baseline failure — not introduced here
 
@@ -119,3 +119,9 @@ The helper was then run against a *copy* of `kwinrc` (`KWINRC_PATH`, `KWIN_SCRIP
 | real `kwinrc` | sha256 identical before and after — `f7c3d86f…` |
 
 Not performed, by design: writing the real `kwinrc`, calling `reconfigure` against the live session, and observing island placement or focus. Those require per-operation approval and remain the only unverified items in Package-01.
+
+### Decisions recorded with this evidence
+
+- **Supported platform is Plasma 6.** `kwriteconfig6` is the verified backend (KWin 6.8.2). The `kwriteconfig5` path exists in the helper but is unexercised, because the binary is absent from every machine used so far. Plasma 5 is therefore **not** a claimed supported target until that backend is tested; dropping it from the matrix is equally acceptable.
+- **Documentation structure.** This file and `docs/architecture/ARCHITECTURE.md` are canonical. No competing root-level `ARCHITECTURE.md`, `ROADMAP.md` or `DEVELOPMENT_LOG.md` is created: evidence belongs with the record it qualifies, and a separate development log is added only if the volume of history genuinely requires one.
+- **Version drift.** CI runs Python 3.11 with an unpinned `PySide6>=6.8`; this host runs 3.14.9 with PySide6 6.12.0. That gap is the likely cause of the two baseline layout failures, and it means CI alone cannot establish desktop correctness.
