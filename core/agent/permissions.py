@@ -173,6 +173,22 @@ class PermissionEngine:
             return True
         return getattr(tool, "risk", "safe") in ("high", "critical")
 
+    def _security_requires_confirmation(self, permission: str) -> bool:
+        """Return whether the active security policy already owns confirmation."""
+        try:
+            _level, rule = self.security.policy.check_permission(permission)
+            return bool(rule and rule.requires_confirmation)
+        except Exception:
+            # An unreadable policy must not be treated as proof that approval
+            # is unnecessary. The caller's other fail-closed gates still apply.
+            self.logger.record("permission-policy", events.PERMISSION_CHECKED, {
+                "tool": permission,
+                "allowed": False,
+                "reason": "Could not inspect security confirmation policy",
+                "gate": "policy_inspection",
+            })
+            return False
+
     def _record_denial(self, tool: Tool, trace_id: str, reason: str, gate: str) -> None:
         self.logger.record(trace_id, events.PERMISSION_CHECKED, {
             "tool": tool.name, "allowed": False, "reason": reason,
@@ -243,20 +259,9 @@ class PermissionEngine:
         arguments: dict[str, Any],
         trace_id: str,
     ) -> tuple[bool, str]:
-        """Two-key trust gate for MCP-sourced tools (qwen-code pattern).
-
-        A tool from an external MCP server may only ride its declared
-        low-risk / read-only status to auto-approval when BOTH keys are
-        present: the server is explicitly trusted AND the workspace is
-        trusted. Missing either key degrades the call to explicit consent;
-        with no consent channel wired it fails closed — independent of mode
-        (invariant 9: consent is mode-independent). Destructive/high-risk MCP
-        tools are untouched here: they already flow through the risk gate.
-        """
+        """Enforce two-key MCP trust without duplicating another approval gate."""
         source = str(getattr(tool, "source", "") or "")
-        if not source.startswith(_MCP_SOURCE_PREFIX):
-            return True, ""
-        if self._is_risky(tool):
+        if not source.startswith(_MCP_SOURCE_PREFIX) or self._is_risky(tool):
             return True, ""
         server = source[len(_MCP_SOURCE_PREFIX):] or "unknown"
         if server in self._trusted_mcp_servers and self.trusted_workspace:
@@ -271,6 +276,18 @@ class PermissionEngine:
                 "trusted_workspace=True)"
             )
         base = f"MCP tool '{tool.name}' claimed low-risk, but " + " and ".join(missing)
+
+        # Let the single mode/risk gate or the security policy own the prompt.
+        # If no consent handler exists, the MCP trust gate itself must still
+        # fail closed rather than inherit Agent mode's implicit approval.
+        if self.mode_manager.requires_confirmation(tool.permission, self.mode):
+            return True, ""
+        if self._security_requires_confirmation(tool.permission):
+            if self.confirmation_handler is not None:
+                return True, ""
+            reason = base + " — no consent channel wired (fail closed)"
+            self._record_denial(tool, trace_id, reason, "mcp_trust")
+            return False, reason
 
         handler = self.confirmation_handler
         if handler is None:
@@ -294,35 +311,49 @@ class PermissionEngine:
         trace_id: str,
         session_id: str,
     ) -> tuple[bool, str]:
-        """Opt-in confirmation gate for risky destructive tools.
-
-        Only activates when a confirmation handler is wired AND the tool is
-        classified destructive/high-risk AND its permission is not already
-        confirmation-gated by the current mode config. With no handler wired
-        this is a no-op (returns allowed), so default agent autonomy is
-        preserved. Commands the SAME decision vocabulary as the security
-        engine: once/run = allow, deny = deny.
-        """
-        if not self._is_risky(tool):
+        """Enforce mode and risk consent once, deferring to policy when it owns it."""
+        risky = self._is_risky(tool)
+        mode_requires = self.mode_manager.requires_confirmation(tool.permission, self.mode)
+        if not risky and not mode_requires:
             return True, ""
-        if self.confirmation_handler is None:
-            if self.fail_closed_risky:
+
+        security_requires = self._security_requires_confirmation(tool.permission)
+        if security_requires:
+            # SecurityEngine.check_permission() will issue the one approval.
+            # An explicit mode requirement still fails closed if no handler is
+            # wired, even in autonomous Agent mode.
+            if mode_requires and self.confirmation_handler is None:
+                reason = (
+                    f"Tool '{tool.name}' requires explicit mode approval "
+                    "(no consent channel wired — fail closed)"
+                )
+                self._record_denial(tool, trace_id, reason, "mode_confirmation")
+                return False, reason
+            return True, ""
+
+        handler = self.confirmation_handler
+        if handler is None:
+            if mode_requires or (risky and self.fail_closed_risky):
                 reason = (
                     f"Tool '{tool.name}' requires explicit operator approval "
                     "(no consent channel wired — fail closed)"
                 )
-                self._record_denial(tool, trace_id, reason, "risk")
+                self._record_denial(
+                    tool, trace_id, reason,
+                    "mode_confirmation" if mode_requires else "risk",
+                )
                 return False, reason
             return True, ""
-        if self.mode_manager.requires_confirmation(tool.permission, self.mode):
-            return True, ""
 
-        decision = self.confirmation_handler(tool.name, arguments)
+        decision = handler(tool.name, arguments)
         if decision not in ("once", "run", "deny"):
             decision = "deny"
         if decision == "deny":
-            reason = f"User denied confirmation for risky tool '{tool.name}'"
-            self._record_denial(tool, trace_id, reason, "risk")
+            reason = f"User denied confirmation for tool '{tool.name}'"
+            self._record_denial(
+                tool, trace_id, reason,
+                "mode_confirmation" if mode_requires else "risk",
+            )
             return False, reason
         return True, ""
 
