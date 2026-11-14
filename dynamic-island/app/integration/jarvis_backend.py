@@ -66,7 +66,7 @@ class JarvisBackend(QObject):
     response_ready = Signal(object)              # AgentResponse
     status_changed = Signal(str)                 # status string
     state_changed = Signal(object)               # BackendState
-    shutdown_complete = Signal()                 # emitted when stop() finishes gracefully
+    shutdown_complete = Signal()                 # emitted only after the worker has exited
 
     def __init__(self, *, mode: str = "agent", max_iterations: int = 10,
                  confirmation_handler: Callable[[str, dict], str] | None = None):
@@ -237,8 +237,8 @@ class JarvisBackend(QObject):
                 logger.exception("Backend failed to report stopped state")
 
 
-    def stop(self, wait: bool = True, timeout: float = 10.0) -> None:
-        """Stop the worker thread gracefully.
+    def stop(self, wait: bool = True, timeout: float = 10.0) -> bool:
+        """Stop the worker thread gracefully and report confirmed termination.
 
         The shutdown sequence is deliberately bounded:
 
@@ -247,8 +247,8 @@ class JarvisBackend(QObject):
         3. Let the worker finish its current iteration and release asyncio
            resources on its own thread.
         4. Wait for the worker thread to terminate, with an explicit timeout.
-        5. Report the honest outcome: STOPPED only when the thread actually
-           terminated, otherwise STOPPING with the completion signal emitted.
+        5. Emit shutdown_complete only when the thread actually terminated.
+           A timeout leaves the state STOPPING and returns False.
 
         The method never calls loop.stop() from another thread as normal
         control flow. If the worker still has work in flight when the timeout
@@ -257,7 +257,7 @@ class JarvisBackend(QObject):
         with self._state_lock:
             if self._state == BackendState.STOPPED:
                 self.shutdown_complete.emit()
-                return
+                return True
             self._state = BackendState.STOPPING
             # Cancel the currently executing request on the worker's own loop,
             # so shutdown is deterministic instead of hoping inference finishes.
@@ -288,8 +288,7 @@ class JarvisBackend(QObject):
                     "remaining work was not forcibly cancelled."
                 )
                 self._state = BackendState.STOPPING
-                self.shutdown_complete.emit()
-                return
+                return False
             self._state = BackendState.STOPPED
             self._agent_loop = None
             self._loop = None
@@ -297,6 +296,7 @@ class JarvisBackend(QObject):
             self._tasks_by_id.clear()
             self._input_queue = queue.Queue(maxsize=self._max_queue_size)
             self.shutdown_complete.emit()
+            return True
 
     async def _main(self) -> None:
         """Build the agent through the canonical composition root."""
