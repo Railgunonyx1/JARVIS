@@ -200,6 +200,7 @@ class IslandWindow(QWidget):
         self._panel = None
         self._controller = controller
         self._quitting = False
+        self._shutdown_thread: threading.Thread | None = None
         # Registry: approval_id -> ApprovalRecord, protects against stale events
         self._approval_registry: dict[str, ApprovalRecord] = {}
         self._approval_registry_mutex = QMutex()
@@ -721,13 +722,15 @@ class IslandWindow(QWidget):
                 self._shutdown_finished.emit()
 
         try:
-            threading.Thread(
+            self._shutdown_thread = threading.Thread(
                 target=_shutdown_worker,
                 name="jarvis-island-shutdown",
                 daemon=True,
-            ).start()
+            )
+            self._shutdown_thread.start()
         except Exception:
             logger.exception("Could not start asynchronous shutdown worker")
+            self._shutdown_thread = None
             self.setEnabled(True)
             self._quitting = False
 
