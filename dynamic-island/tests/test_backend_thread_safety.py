@@ -240,3 +240,21 @@ def test_restart_clears_stale_backend_state(monkeypatch):
     assert backend._agent_loop is None
     assert backend._runtime is None
     assert backend._loop is None
+
+
+def test_event_loop_creation_failure_sets_backend_error(monkeypatch):
+    backend = JarvisBackend()
+    backend._state = BackendState.STARTING
+
+    def fail_new_loop():
+        raise RuntimeError("event loop unavailable")
+
+    monkeypatch.setattr(
+        "app.integration.jarvis_backend.asyncio.new_event_loop",
+        fail_new_loop,
+    )
+
+    backend._run_loop()
+
+    assert backend.state is BackendState.ERROR
+    assert str(backend.startup_error) == "event loop unavailable"
