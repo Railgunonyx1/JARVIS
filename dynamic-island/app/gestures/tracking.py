@@ -122,7 +122,9 @@ class HandTracker:
                 min_detection_confidence=self._detection_confidence,
                 min_tracking_confidence=self._tracking_confidence,
             )
-            self._mp_owning_thread = threading.current_thread()
+            # The tracking worker becomes the sole owner of process/close
+            # operations once it starts.
+            self._mp_owning_thread = None
             self._running = True
             self._stop_event = threading.Event()
             self._thread = threading.Thread(
@@ -133,7 +135,13 @@ class HandTracker:
             return True
         except Exception as e:
             logger.error("Hand tracker start failed: %s", e)
+            mp_instance = self._mp
             self._mp = None
+            if mp_instance is not None:
+                try:
+                    mp_instance.close()
+                except Exception:
+                    logger.exception("Failed to close MediaPipe after tracker startup failure")
             self._running = False
             self._mp_owning_thread = None
             return False
@@ -164,10 +172,11 @@ class HandTracker:
     def _track_loop(self) -> None:
         """Background tracking loop.
 
-        Checks _stop_event each iteration. Only the worker thread closes MediaPipe.
-        Camera release happens only after the worker exits (enforced by stop()).
-        Idempotent start/stop: rapid double activate/deactivate creates no leaks.
+        Checks _stop_event each iteration. The worker owns MediaPipe processing
+        and closes that resource in its finally block. Camera release happens
+        only after this worker exits.
         """
+        self._mp_owning_thread = threading.current_thread()
         try:
             while self._running:
                 # Check stop event first — if set, exit loop gracefully
