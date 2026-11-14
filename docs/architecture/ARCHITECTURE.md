@@ -57,9 +57,18 @@ The prototype must use equivalent visuals, states, input behaviour and animation
 - The island must remain usable when AI providers, network access, camera hardware and optional 3D rendering are unavailable.
 - No Plasma Plasmoid migration is planned for this phase.
 
-### Core-phase priority
+### Core-phase lifecycle implementation
 
-Before changing the rendering stack, fix and verify lifecycle behaviour in the existing implementation. In particular, `IslandWindow.quit_application()` currently calls `AppCoordinator.shutdown()` synchronously from the UI path. The coordinator stops gestures, voice, workspace and backend in sequence; `JarvisBackend.stop()` may join its worker thread for up to ten seconds. This requires a bounded, observable shutdown design and tests so that the UI does not become unresponsive or report completion while a worker is still alive.
+The first lifecycle corrections are now implemented on `dynamic-island-core`:
+
+- `IslandWindow.quit_application()` starts coordinator shutdown on a dedicated worker so voice, camera and backend joins do not block the Qt event loop.
+- The QQuickWidget workspace is released through `shutdown_ui_resources()` on the GUI thread before worker shutdown begins. The coordinator enforces this thread-affinity contract and refuses to manipulate workspace widgets from a worker.
+- `JarvisBackend.stop()` returns a boolean and emits `shutdown_complete` only after the backend worker has actually exited. A timeout remains an observable STOPPING state.
+- Gesture shutdown checks both tracker and camera worker termination before releasing the camera. Timed-out workers are joined by a cleanup watcher.
+- Escape collapses the expanded island from the conversation input and returns focus to the island. Explicit expansion activates the window and focuses the input.
+- The idle-width tests now compare against the configured `_IDLE_W` constant rather than an unrelated hard-coded threshold.
+
+The source-level lifecycle changes pass the repository CI suites. Physical KDE Wayland, camera-device and target-hardware validation remain separate acceptance checks.
 
 ### Benchmark acceptance criteria
 
