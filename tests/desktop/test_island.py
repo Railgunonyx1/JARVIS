@@ -17,8 +17,9 @@ if _DESKTOP_ROOT not in sys.path:
 
 os.environ.setdefault("JARVIS_DESKTOP_HOME", "/tmp/jarvis-island-test-root")
 
-from app.ui.overlay_window import IslandState  # noqa: E402
-from PySide6.QtCore import QRect
+from app.ui.overlay_window import IslandState, _IDLE_W  # noqa: E402
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtTest import QTest
 
 import pytest  # noqa: E402
 
@@ -39,7 +40,7 @@ def test_island_constructs_idle(qapp):
     qapp.processEvents()
     assert island._state is IslandState.IDLE
     # Card width includes the window margin and the frame border.
-    assert island._card.width() >= 185
+    assert island._card.width() >= _IDLE_W
     island.close()
 
 
@@ -50,12 +51,30 @@ def test_island_constructs_idle_and_expands(qapp):
     island.show()
     qapp.processEvents()
     assert island._state is IslandState.IDLE
-    assert island._card.width() >= 185
+    assert island._card.width() >= _IDLE_W
     island.expand()
     qapp.processEvents()
     assert island._state is IslandState.EXPANDED
     island.collapse()
     qapp.processEvents()
+    assert island._state is IslandState.IDLE
+    island.close()
+
+
+def test_escape_collapses_expanded_island_from_input(qapp):
+    """Escape returns focus from the input field to the compact island."""
+    from app.ui.overlay_window import IslandWindow
+
+    island = IslandWindow()
+    island.show()
+    qapp.processEvents()
+    island.expand()
+    qapp.processEvents()
+    assert island._state is IslandState.EXPANDED
+
+    QTest.keyClick(island._panel.input_field, Qt.Key.Key_Escape)
+    qapp.processEvents()
+
     assert island._state is IslandState.IDLE
     island.close()
 
