@@ -230,17 +230,18 @@ class JarvisBackend(QObject):
     def _run_loop(self) -> None:
         """Worker thread entry: own asyncio event loop."""
         worker_error: Exception | None = None
-        loop = asyncio.new_event_loop()
-        with self._state_lock:
-            self._loop = loop
+        loop: asyncio.AbstractEventLoop | None = None
         try:
+            loop = asyncio.new_event_loop()
+            with self._state_lock:
+                self._loop = loop
             asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(self._main())
-            except Exception as exc:
-                worker_error = exc
-                logger.exception("Backend worker failed")
-            finally:
+            loop.run_until_complete(self._main())
+        except Exception as exc:
+            worker_error = exc
+            logger.exception("Backend worker failed")
+        finally:
+            if loop is not None:
                 try:
                     loop.close()
                 except Exception:
@@ -249,7 +250,7 @@ class JarvisBackend(QObject):
                     if self._loop is loop:
                         self._loop = None
                 asyncio.set_event_loop(None)
-        finally:
+
             if worker_error is not None and not self._shutdown_event.is_set():
                 try:
                     self._set_state(BackendState.ERROR, error=worker_error)
