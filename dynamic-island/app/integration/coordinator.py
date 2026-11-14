@@ -376,9 +376,9 @@ class AppCoordinator(QObject):
         if state == BackendState.ERROR:
             self._set_state(AppState.IDLE)
         elif state == BackendState.READY and self._pending_model:
-            # Apply the model that was requested before the backend existed.
-            self._backend.set_model(self._pending_model)
-            self._pending_model = ""
+            # Retain the pending selection if the loop is not ready to accept it.
+            if self._backend.set_model(self._pending_model):
+                self._pending_model = ""
 
     # ── Voice ───────────────────────────────────────────────────
     def toggle_voice(self) -> None:
@@ -402,10 +402,12 @@ class AppCoordinator(QObject):
             self._voice = None
 
     def set_model(self, model: str) -> None:
-        """Apply a model selection to the backend."""
-        if self._backend and model:
-            self._backend.set_model(model)
-        elif model:
+        """Apply a model selection or retain it until the backend is ready."""
+        if not model:
+            return
+        if self._backend and self._backend.set_model(model):
+            self._pending_model = ""
+        else:
             self._pending_model = model
 
     def stop_speaking(self) -> None:
