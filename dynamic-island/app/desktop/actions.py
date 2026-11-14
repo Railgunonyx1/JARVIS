@@ -143,12 +143,22 @@ class DesktopActionLayer:
         self.register("window_close", "Close window", ActionRisk.MEDIUM,
                       lambda: self._wmctrl("-c", ":ACTIVE:"),
                       require_confirmation=True, category="window")
-        self.register("window_maximize", "Maximize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "maximized"),
-                      category="window")
-        self.register("window_minimize", "Minimize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "hidden"),
-                      category="window")
+        self.register(
+            "window_maximize",
+            "Maximize window",
+            ActionRisk.MEDIUM,
+            lambda: self._wmctrl(
+                "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"
+            ),
+            category="window",
+        )
+        self.register(
+            "window_minimize",
+            "Minimize window",
+            ActionRisk.MEDIUM,
+            lambda: self._wmctrl("-r", ":ACTIVE:", "-b", "add,hidden"),
+            category="window",
+        )
 
         # Application launching
         self.register("app_terminal", "Open terminal", ActionRisk.MEDIUM,
