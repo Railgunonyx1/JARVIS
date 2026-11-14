@@ -313,7 +313,11 @@ class JarvisBackend(QObject):
         if worker is threading.current_thread():
             logger.warning("Backend stop was requested from its own worker thread")
             return False
-        if worker is not None and worker.ident is not None and wait:
+        if (
+            worker is not None
+            and wait
+            and (getattr(worker, "ident", None) is not None or not hasattr(worker, "ident"))
+        ):
             worker.join(timeout=timeout)
 
         with self._state_lock:
