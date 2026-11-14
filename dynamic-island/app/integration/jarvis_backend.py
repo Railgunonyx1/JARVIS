@@ -117,12 +117,25 @@ class JarvisBackend(QObject):
         with self._state_lock:
             if self._state in (BackendState.STARTING, BackendState.READY, BackendState.RUNNING):
                 return
+            if self._thread is not None and self._thread.is_alive():
+                raise RuntimeError("Previous agent worker is still shutting down")
             self._state = BackendState.STARTING
             self._startup_error = None
             self._started_event.clear()
+            self._shutdown_event.clear()
+            self._thread = threading.Thread(
+                target=self._run_loop,
+                name="jarvis-agent",
+                daemon=True,
+            )
+            worker = self._thread
 
-        self._thread = threading.Thread(target=self._run_loop, name="jarvis-agent", daemon=True)
-        self._thread.start()
+        try:
+            worker.start()
+        except Exception as exc:
+            self._set_state(BackendState.ERROR, error=exc)
+            self._started_event.set()
+            raise
 
         if wait:
             self._wait_until_ready(timeout)
@@ -142,23 +155,20 @@ class JarvisBackend(QObject):
         the outcome honestly, rather than falling back to the current request
         and pretending the named request was cancelled.
         """
-        task = None
-        loop = None
         with self._state_lock:
-            if request_id in self._tasks_by_id and not self._tasks_by_id[request_id].done():
-                task = self._tasks_by_id[request_id]
+            task = self._tasks_by_id.get(request_id)
             loop = self._loop
-        if task is None or loop is None:
-            return False
+            if task is None or task.done() or loop is None:
+                return False
         try:
             loop.call_soon_threadsafe(task.cancel)
             return True
-        except Exception:
-            try:
-                task.cancel()
-                return True
-            except Exception:
-                return False
+        except RuntimeError:
+            # asyncio Tasks must only be cancelled on their owning loop.
+            # If scheduling is no longer possible, report failure rather than
+            # mutating the Task from the caller's thread.
+            logger.warning("Could not schedule cancellation for request %s", request_id)
+            return False
 
 
     def send_message(self, text: str, *, request_id: int | None = None) -> int | None:
@@ -175,20 +185,25 @@ class JarvisBackend(QObject):
         with self._state_lock:
             if self._state not in (BackendState.READY, BackendState.RUNNING):
                 return None
-            if request_id is None:
-                self._request_id_counter += 1
-                request_id = self._request_id_counter
+            assigned_id = request_id
+            if assigned_id is None:
+                assigned_id = self._request_id_counter + 1
 
-        try:
-            self._input_queue.put_nowait((request_id, text))
-        except queue.Full:
-            logger.debug(
-                "Input queue full, rejecting message "
-                f"(queue size: {self._input_queue.qsize()}, request_id: {request_id})"
-            )
-            return None
+            try:
+                # Queue insertion is non-blocking; keeping it under the state
+                # lock makes ID allocation and acceptance one atomic operation.
+                self._input_queue.put_nowait((assigned_id, text))
+            except queue.Full:
+                logger.debug(
+                    "Input queue full, rejecting message "
+                    f"(queue size: {self._input_queue.qsize()}, request_id: {assigned_id})"
+                )
+                return None
 
-        return request_id
+            if isinstance(assigned_id, int):
+                self._request_id_counter = max(self._request_id_counter, assigned_id)
+
+        return assigned_id
 
 
     def _wait_until_ready(self, timeout: float = 10.0) -> None:
@@ -215,7 +230,7 @@ class JarvisBackend(QObject):
                 self._loop.run_until_complete(self._main())
             except Exception as e:
                 startup_error = e
-                logger.exception("Backend startup failed")
+                logger.exception("Backend worker failed")
             finally:
                 try:
                     self._loop.close()
@@ -225,11 +240,11 @@ class JarvisBackend(QObject):
         finally:
             pass
 
-        if startup_error is not None:
+        if startup_error is not None and not self._shutdown_event.is_set():
             try:
                 self._set_state(BackendState.ERROR, error=startup_error)
             except Exception:
-                logger.exception("Backend failed to report startup error")
+                logger.exception("Backend failed to report worker error")
         elif self.state != BackendState.STOPPED:
             try:
                 self._set_state(BackendState.STOPPED)
@@ -255,22 +270,31 @@ class JarvisBackend(QObject):
         expires, that is reported rather than forcibly cut off.
         """
         with self._state_lock:
-            if self._state == BackendState.STOPPED:
-                self.shutdown_complete.emit()
-                return True
-            self._state = BackendState.STOPPING
-            # Cancel the currently executing request on the worker's own loop,
-            # so shutdown is deterministic instead of hoping inference finishes.
-            task = self._current_task
-            loop = self._loop
+            worker = self._thread
+            if self._state == BackendState.STOPPED and (
+                worker is None or not worker.is_alive()
+            ):
+                already_stopped = True
+                task = None
+                loop = None
+            else:
+                already_stopped = False
+                self._state = BackendState.STOPPING
+                # Cancel the current request on the worker's own loop.
+                task = self._current_task
+                loop = self._loop
+        if already_stopped:
+            self.shutdown_complete.emit()
+            return True
+        self._shutdown_event.set()
         if task is not None and loop is not None and not task.done():
             try:
                 loop.call_soon_threadsafe(task.cancel)
-            except Exception:
-                try:
-                    task.cancel()
-                except Exception:
-                    pass
+            except RuntimeError:
+                # Do not call Task.cancel() directly from this thread. The
+                # shutdown event and queue wake-up still let the worker exit
+                # once its current operation returns.
+                logger.warning("Could not schedule cancellation during backend shutdown")
 
         # Wake the worker loop out of a blocking input-queue get(), if any.
         try:
@@ -278,11 +302,11 @@ class JarvisBackend(QObject):
         except Exception:
             pass
 
-        if self._thread is not None and wait:
-            self._thread.join(timeout=timeout)
+        if worker is not None and wait:
+            worker.join(timeout=timeout)
 
         with self._state_lock:
-            if self._thread is not None and self._thread.is_alive():
+            if worker is not None and worker.is_alive():
                 logger.warning(
                     "Backend thread did not stop gracefully within timeout; "
                     "remaining work was not forcibly cancelled."
@@ -309,12 +333,20 @@ class JarvisBackend(QObject):
         )
         self._agent_loop = self._runtime.agent_loop
 
+        # A stop can arrive while build_kernel() is still running. Do not
+        # transition back to READY or enter the request loop after shutdown.
+        if self._shutdown_event.is_set():
+            return
+
         self._set_state(BackendState.READY)
         self.status_changed.emit("ready")
         self._started_event.set()
 
         try:
-            while self.state in (BackendState.READY, BackendState.RUNNING):
+            while (
+                not self._shutdown_event.is_set()
+                and self.state in (BackendState.READY, BackendState.RUNNING)
+            ):
                 try:
                     item = self._input_queue.get(timeout=0.1)
                 except queue.Empty:
@@ -326,15 +358,20 @@ class JarvisBackend(QObject):
                 task = self._loop.create_task(self._run_agent_with_id(text, request_id))
                 with self._state_lock:
                     self._current_task = task
+                    self._current_request_id = request_id
                     if isinstance(request_id, int):
                         self._tasks_by_id[request_id] = task
+                self._set_state(BackendState.RUNNING)
                 try:
                     await task
                 finally:
                     with self._state_lock:
                         self._current_task = None
+                        self._current_request_id = None
                         if isinstance(request_id, int):
                             self._tasks_by_id.pop(request_id, None)
+                    if not self._shutdown_event.is_set():
+                        self._set_state(BackendState.READY)
         finally:
             runtime = self._runtime
             close_kernel(runtime)
@@ -377,10 +414,23 @@ class JarvisBackend(QObject):
                 request_id=request_id,
             ))
 
-    def set_model(self, model: str) -> None:
-        """Set the active model for subsequent agent runs."""
-        if self._agent_loop:
-            self._agent_loop.router.set_default_model(model)
+    def set_model(self, model: str) -> bool:
+        """Schedule a model change on the agent's owning event-loop thread."""
+        with self._state_lock:
+            loop = self._loop
+            agent_loop = self._agent_loop
+            if (
+                loop is None
+                or agent_loop is None
+                or self._state not in (BackendState.READY, BackendState.RUNNING)
+            ):
+                return False
+        try:
+            loop.call_soon_threadsafe(agent_loop.router.set_default_model, model)
+            return True
+        except RuntimeError:
+            logger.warning("Could not schedule model change; backend loop is stopping")
+            return False
 
     def _set_state(self, state: BackendState, error: Exception | None = None) -> None:
         with self._state_lock:
