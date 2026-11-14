@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess
+from types import SimpleNamespace
 
 from app.desktop.actions import DesktopActionLayer
 
@@ -56,3 +56,50 @@ def test_browser_uses_system_default(monkeypatch):
 
     assert DesktopActionLayer._launch_browser() is True
     assert calls == [("about:blank", 2)]
+
+
+
+def test_window_maximize_uses_wmctrl_state_syntax(monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("app.desktop.actions.subprocess.run", fake_run)
+    layer = DesktopActionLayer()
+
+    assert layer.execute("window_maximize") is True
+    assert calls[0][0] == [
+        "wmctrl", "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"
+    ]
+
+
+def test_window_minimize_uses_wmctrl_state_syntax(monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("app.desktop.actions.subprocess.run", fake_run)
+    layer = DesktopActionLayer()
+
+    assert layer.execute("window_minimize") is True
+    assert calls[0][0] == ["wmctrl", "-r", ":ACTIVE:", "-b", "add,hidden"]
+
+
+def test_window_close_still_requires_confirmation(monkeypatch):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("app.desktop.actions.subprocess.run", fake_run)
+    layer = DesktopActionLayer()
+
+    assert layer.execute("window_close") is False
+    assert calls == []
+    assert layer.execute("window_close", confirmed=True) is True
+    assert calls[0][0] == ["wmctrl", "-c", ":ACTIVE:"]
