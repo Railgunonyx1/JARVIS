@@ -123,6 +123,13 @@ class JarvisBackend(QObject):
             self._startup_error = None
             self._started_event.clear()
             self._shutdown_event.clear()
+            self._input_queue = queue.Queue(maxsize=self._max_queue_size)
+            self._tasks_by_id.clear()
+            self._current_task = None
+            self._current_request_id = None
+            self._agent_loop = None
+            self._runtime = None
+            self._loop = None
             self._thread = threading.Thread(
                 target=self._run_loop,
                 name="jarvis-agent",
