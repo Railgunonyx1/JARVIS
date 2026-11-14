@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import sys
+import threading
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -89,23 +90,42 @@ def test_stop_checks_worker_even_if_state_already_says_stopped():
     assert worker.join_calls == [0.01]
 
 
-def test_set_model_is_scheduled_on_agent_loop_thread():
+def test_set_model_is_applied_on_agent_loop_thread():
     backend = JarvisBackend()
-    calls = []
-    router = SimpleNamespace(set_default_model=lambda model: calls.append(model))
+    applied = []
+    router = SimpleNamespace(
+        set_default_model=lambda model: applied.append(
+            (model, threading.get_ident())
+        )
+    )
 
     class Loop:
-        def call_soon_threadsafe(self, callback, *args):
-            calls.append((callback, args))
+        def call_soon_threadsafe(self, callback):
+            self.worker = threading.Thread(target=callback)
+            self.worker.start()
 
+    loop = Loop()
     backend._state = BackendState.READY
-    backend._loop = Loop()
+    backend._loop = loop
     backend._agent_loop = SimpleNamespace(router=router)
 
+    caller_thread = threading.get_ident()
     assert backend.set_model("provider/model") is True
-    callback, args = calls.pop()
-    callback(*args)
-    assert calls == ["provider/model"]
+    loop.worker.join(timeout=1.0)
+
+    assert applied == [("provider/model", loop.worker.ident)]
+    assert applied[0][1] != caller_thread
+
+
+def test_set_model_returns_false_when_loop_cannot_schedule():
+    backend = JarvisBackend()
+    backend._state = BackendState.READY
+    backend._loop = _ClosedLoop()
+    backend._agent_loop = SimpleNamespace(
+        router=SimpleNamespace(set_default_model=lambda _model: None)
+    )
+
+    assert backend.set_model("provider/model", timeout=0.01) is False
 
 
 def test_shutdown_during_kernel_build_does_not_transition_to_ready(monkeypatch):
