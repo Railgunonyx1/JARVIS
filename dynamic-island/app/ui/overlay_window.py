@@ -199,6 +199,7 @@ class IslandWindow(QWidget):
         self._state = IslandState.IDLE
         self._panel = None
         self._controller = controller
+        self._active_request_id: int | None = None
         self._quitting = False
         self._shutdown_thread: threading.Thread | None = None
         # Registry: approval_id -> ApprovalRecord, protects against stale events
@@ -371,6 +372,7 @@ class IslandWindow(QWidget):
             self._panel = ConversationPanel()
             self._panel.input_field.installEventFilter(self)
             self._panel.send_requested.connect(self._on_send)
+            self._panel.cancel_requested.connect(self._on_cancel)
             self._panel.mic_toggled.connect(self._on_mic)
             # Bind coordinator signals if available
             try:
@@ -562,8 +564,30 @@ class IslandWindow(QWidget):
         return text
 
     def _on_send(self, text: str) -> None:
-        if self._controller and self._controller.coordinator is not None:
-            self._controller.coordinator.send_message(text)
+        panel = self._ensure_panel()
+        coordinator = getattr(self._controller, "coordinator", None) if self._controller else None
+        if coordinator is None:
+            panel.append_message("error", "JARVIS backend is not ready.")
+            return
+        request_id = coordinator.send_message(text)
+        if request_id is None:
+            panel.append_message("error", "Message was not accepted. Check that JARVIS is ready.")
+            return
+        self._active_request_id = request_id
+        panel.set_request_running(True)
+
+    def _on_cancel(self) -> None:
+        panel = self._ensure_panel()
+        request_id = self._active_request_id
+        coordinator = getattr(self._controller, "coordinator", None) if self._controller else None
+        if request_id is None or coordinator is None:
+            panel.set_request_running(False)
+            return
+        panel.set_request_cancelling()
+        if not coordinator.cancel_request(request_id):
+            self._active_request_id = None
+            panel.set_request_running(False)
+            panel.append_message("error", "That request is no longer active.")
 
     def _on_mic(self) -> None:
         if self._controller and self._controller.coordinator is not None:
@@ -580,6 +604,9 @@ class IslandWindow(QWidget):
             panel.append_chunk(text)
         else:
             panel.append_message(role, text)
+            if role == "jarvis":
+                self._active_request_id = None
+                panel.set_request_running(False)
 
     def _on_stream_chunk(self, text: str) -> None:
         self._ensure_panel().append_chunk(text)
