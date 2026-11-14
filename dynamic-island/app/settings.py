@@ -122,10 +122,10 @@ def save(settings: dict) -> SettingsSaveResult:
     file is preserved. Uses a unique temp file in the same directory, fsync,
     and atomic replace.
     """
-    _ensure_dir()
     target = SETTINGS_FILE
     tmp: Path | None = None
     try:
+        _ensure_dir()
         # Unique same-directory staging prevents concurrent saves from
         # clobbering one another's temporary file.
         fd, tmp_name = tempfile.mkstemp(
