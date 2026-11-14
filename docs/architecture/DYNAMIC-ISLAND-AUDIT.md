@@ -153,4 +153,18 @@ This is source-level and CI-verifiable lifecycle work. It does not replace physi
 
 ### CI evidence
 
-The architecture-only PR is #5. The core-phase CI run for the current implementation commit is run `43582519015` (run #273); it was in progress at the time this note was written. No pass is claimed until its final conclusion and job logs are inspected.
+The initial core-phase run #278 (`43582819933`) terminated with a Qt/Python SIGBUS (exit 135) during the root test suite. It was not classified as a baseline assertion failure. The shutdown test was corrected to retain and join its worker thread, and the test disconnects the process-wide `QApplication.quit()` slot so it cannot terminate the pytest application's event loop.
+
+The subsequent full CI run #280 passed:
+- Safety lint: pass.
+- Root suite: 1,058 passed, 9 skipped, 1 warning.
+- Dynamic Island suite: 49 passed, 2 skipped.
+- Secret scan: clean.
+
+The latest full CI run #282, on commit `616e388e3dbb72d0456b0683402591502d1d013a`, also passed:
+- Safety lint: pass.
+- Root suite: 1,058 passed, 9 skipped, 1 warning.
+- Dynamic Island suite: 50 passed, 2 skipped.
+- Secret scan: clean.
+
+Run #279 was cancelled by a subsequent branch update; it was not a test failure. The CI environment is Ubuntu, Python 3.11 and Qt offscreen. These runs verify source and automated tests, not live KWin placement, keyboard focus under Wayland, physical camera release or GPU performance.
