@@ -67,6 +67,7 @@ class JarvisBackend(QObject):
     status_changed = Signal(str)                 # status string
     state_changed = Signal(object)               # BackendState
     shutdown_complete = Signal()                 # emitted only after the worker has exited
+    request_cancelled = Signal(int)               # queued request cancelled before execution
 
     def __init__(self, *, mode: str = "agent", max_iterations: int = 10,
                  confirmation_handler: Callable[[str, dict], str] | None = None):
@@ -87,6 +88,8 @@ class JarvisBackend(QObject):
         self._current_request_id: int | None = None
         self._current_task: asyncio.Task | None = None
         self._tasks_by_id: dict[int, asyncio.Task] = {}
+        self._queued_request_ids: set[int] = set()
+        self._cancelled_request_ids: set[int] = set()
         self._startup_error: Exception | None = None
         self._started_event = threading.Event()
         self._shutdown_event = threading.Event()
@@ -125,6 +128,8 @@ class JarvisBackend(QObject):
             self._shutdown_event.clear()
             self._input_queue = queue.Queue(maxsize=self._max_queue_size)
             self._tasks_by_id.clear()
+            self._queued_request_ids.clear()
+            self._cancelled_request_ids.clear()
             self._current_task = None
             self._current_request_id = None
             self._agent_loop = None
@@ -150,31 +155,30 @@ class JarvisBackend(QObject):
 
 
     def cancel_request(self, request_id: int) -> bool:
-        """Request cancellation of a specific in-flight agent run.
-
-        This operation is request-scoped: the cancellation token is wired to
-        the task created for that request ID, not to the agent loop as a
-        whole. Cancelling one request leaves other in-flight or queued requests
-        alone.
-
-        Returns True only when the backend found an active, not-yet-done task
-        for that exact request ID and scheduled cancellation on the worker loop.
-        When the backend has no task for that ID it returns False and reports
-        the outcome honestly, rather than falling back to the current request
-        and pretending the named request was cancelled.
-        """
+        """Cancel one active request or mark one queued request for skipping."""
+        queued = False
         with self._state_lock:
             task = self._tasks_by_id.get(request_id)
             loop = self._loop
-            if task is None or task.done() or loop is None:
+            if task is not None and not task.done() and loop is not None:
+                pass
+            elif request_id in self._queued_request_ids:
+                self._cancelled_request_ids.add(request_id)
+                queued = True
+            else:
                 return False
+
+        if queued:
+            # The UI can finish its stop state immediately. _main() skips this
+            # exact queue entry when it reaches it.
+            self.request_cancelled.emit(request_id)
+            return True
+
         try:
             loop.call_soon_threadsafe(task.cancel)
             return True
-        except RuntimeError:
+        except Exception:
             # asyncio Tasks must only be cancelled on their owning loop.
-            # If scheduling is no longer possible, report failure rather than
-            # mutating the Task from the caller's thread.
             logger.warning("Could not schedule cancellation for request %s", request_id)
             return False
 
@@ -210,6 +214,7 @@ class JarvisBackend(QObject):
 
             if isinstance(assigned_id, int):
                 self._request_id_counter = max(self._request_id_counter, assigned_id)
+                self._queued_request_ids.add(assigned_id)
 
         return assigned_id
 
@@ -377,11 +382,19 @@ class JarvisBackend(QObject):
                 # callbacks responsive while the backend is idle.
                 item = await asyncio.to_thread(self._input_queue.get)
                 request_id, text = item
-                if not text or not str(text).strip():
-                    continue
                 with self._state_lock:
+                    if isinstance(request_id, int):
+                        self._queued_request_ids.discard(request_id)
+                        was_cancelled = request_id in self._cancelled_request_ids
+                        self._cancelled_request_ids.discard(request_id)
+                    else:
+                        was_cancelled = False
                     # Re-check after queue.get(): stop() may have changed the
                     # state while this worker was waiting for an item.
+                    if was_cancelled:
+                        continue
+                    if not text or not str(text).strip():
+                        continue
                     if (
                         self._shutdown_event.is_set()
                         or self._state not in (BackendState.READY, BackendState.RUNNING)
