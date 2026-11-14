@@ -2,7 +2,7 @@ name: Dynamic Island CI
 
 on:
   push:
-    branches: [dynamic-island, dynamic-island-cleanup]
+    branches: [dynamic-island, dynamic-island-cleanup, dynamic-island-core]
   pull_request:
   workflow_dispatch:
 
