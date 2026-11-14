@@ -184,3 +184,39 @@ def test_start_reports_thread_creation_failure(monkeypatch):
 
     assert backend.state is BackendState.ERROR
     assert str(backend.startup_error) == "thread start failed"
+
+
+def test_restart_clears_stale_backend_state(monkeypatch):
+    backend = JarvisBackend()
+    backend._state = BackendState.ERROR
+    backend._input_queue.put_nowait((5, "stale"))
+    backend._tasks_by_id[5] = _FakeTask()
+    backend._current_task = _FakeTask()
+    backend._current_request_id = 5
+    backend._agent_loop = object()
+    backend._runtime = object()
+
+    class NotStartedThread:
+        ident = None
+
+        def __init__(self, **_kwargs):
+            pass
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            return None
+
+    monkeypatch.setattr("app.integration.jarvis_backend.threading.Thread", NotStartedThread)
+
+    backend.start(wait=False)
+
+    assert backend.state is BackendState.STARTING
+    assert backend._input_queue.empty()
+    assert backend._tasks_by_id == {}
+    assert backend._current_task is None
+    assert backend._current_request_id is None
+    assert backend._agent_loop is None
+    assert backend._runtime is None
+    assert backend._loop is None
