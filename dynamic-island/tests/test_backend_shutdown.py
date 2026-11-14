@@ -68,3 +68,34 @@ def test_coordinator_releases_qt_workspace_on_calling_thread():
     assert called_on == [threading.current_thread()]
     assert coordinator._workspace is None
     assert coordinator._workspace_visible is False
+
+
+
+def test_workspace_shutdown_rejects_non_gui_thread():
+    import threading
+
+    coordinator = AppCoordinator(mode="test")
+    shutdown_calls = []
+
+    class Workspace:
+        def shutdown(self):
+            shutdown_calls.append(threading.current_thread())
+
+    workspace = Workspace()
+    coordinator._workspace = workspace
+    errors = []
+
+    def wrong_thread_call():
+        try:
+            coordinator.shutdown_ui_resources()
+        except RuntimeError as exc:
+            errors.append(str(exc))
+
+    worker = threading.Thread(target=wrong_thread_call)
+    worker.start()
+    worker.join(timeout=1.0)
+
+    assert not worker.is_alive()
+    assert errors == ["Workspace widgets must be shut down on the GUI thread"]
+    assert shutdown_calls == []
+    assert coordinator._workspace is workspace
