@@ -182,6 +182,7 @@ class IslandWindow(QWidget):
 
     _approval_requested = Signal(str, object, str)
     _approval_finished = Signal(str)
+    _shutdown_finished = Signal()
 
     def __init__(self, controller=None) -> None:
         super().__init__()
@@ -229,6 +230,7 @@ class IslandWindow(QWidget):
         self._reposition()
         self._approval_requested.connect(self._show_approval)
         self._approval_finished.connect(self._on_approval_finished)
+        self._shutdown_finished.connect(self._finish_shutdown)
 
         app = QApplication.instance()
         if app is not None:
@@ -684,14 +686,53 @@ class IslandWindow(QWidget):
         self.hide()
 
     def quit_application(self) -> None:
-        """Full shutdown: stop the runtime, then exit the process."""
+        """Shut down without blocking the Qt event loop on worker joins."""
+        if self._quitting:
+            return
         self._quitting = True
         self._deny_pending()
-        if self._controller and self._controller.coordinator is not None:
+        coordinator = (
+            self._controller.coordinator
+            if self._controller is not None
+            else None
+        )
+        if coordinator is None:
+            QApplication.quit()
+            return
+
+        # Workspace3D owns a QQuickWidget, so release it on the GUI thread
+        # before moving the blocking voice/camera/agent shutdown off-thread.
+        prepare_ui_shutdown = getattr(coordinator, "shutdown_ui_resources", None)
+        if callable(prepare_ui_shutdown):
             try:
-                self._controller.coordinator.shutdown()
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Coordinator shutdown failed: %s", e)
+                prepare_ui_shutdown()
+            except Exception:
+                logger.exception("Failed to release GUI-owned workspace resources")
+
+        self.set_status("Shutting down", "#8E8E93")
+        self.setEnabled(False)
+
+        def _shutdown_worker() -> None:
+            try:
+                coordinator.shutdown()
+            except Exception:
+                logger.exception("Coordinator shutdown failed")
+            finally:
+                self._shutdown_finished.emit()
+
+        try:
+            threading.Thread(
+                target=_shutdown_worker,
+                name="jarvis-island-shutdown",
+                daemon=True,
+            ).start()
+        except Exception:
+            logger.exception("Could not start asynchronous shutdown worker")
+            self.setEnabled(True)
+            self._quitting = False
+
+    def _finish_shutdown(self) -> None:
+        """Called on the GUI thread after the shutdown worker returns."""
         QApplication.quit()
 
     def _on_view_changed(self, view) -> None:
