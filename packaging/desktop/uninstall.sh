@@ -33,4 +33,13 @@ rm -f "$ICON_DIR/jarvis-desktop.svg"
 rm -rf "$INSTALL_DIR"
 
 command -v update-desktop-database >/dev/null && update-desktop-database "$DESKTOP_DIR" || true
+
+# update-desktop-database rewrites mimeinfo.cache next to the desktop entries.
+# That cache can list applications we do not own, so remove it only when it
+# holds nothing but its header. Never delete foreign entries, and never remove
+# the applications directory itself.
+if [ -f "$DESKTOP_DIR/mimeinfo.cache" ] && ! grep -q '=' "$DESKTOP_DIR/mimeinfo.cache"; then
+  rm -f "$DESKTOP_DIR/mimeinfo.cache"
+fi
+
 echo "JARVIS Dynamic Island uninstalled. User data outside $INSTALL_DIR was left untouched."
