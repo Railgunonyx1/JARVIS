@@ -13,8 +13,11 @@ Security model:
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import subprocess
 import time
+import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -140,18 +143,28 @@ class DesktopActionLayer:
         self.register("window_close", "Close window", ActionRisk.MEDIUM,
                       lambda: self._wmctrl("-c", ":ACTIVE:"),
                       require_confirmation=True, category="window")
-        self.register("window_maximize", "Maximize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "maximized"),
-                      category="window")
-        self.register("window_minimize", "Minimize window", ActionRisk.MEDIUM,
-                      lambda: self._wmctrl("-r", ":ACTIVE:", "add", "hidden"),
-                      category="window")
+        self.register(
+            "window_maximize",
+            "Maximize window",
+            ActionRisk.MEDIUM,
+            lambda: self._wmctrl(
+                "-r", ":ACTIVE:", "-b", "add,maximized_vert,maximized_horz"
+            ),
+            category="window",
+        )
+        self.register(
+            "window_minimize",
+            "Minimize window",
+            ActionRisk.MEDIUM,
+            lambda: self._wmctrl("-r", ":ACTIVE:", "-b", "add,hidden"),
+            category="window",
+        )
 
         # Application launching
         self.register("app_terminal", "Open terminal", ActionRisk.MEDIUM,
-                      lambda: self._launch("foot"), category="app")
+                      self._launch_terminal, category="app")
         self.register("app_browser", "Open browser", ActionRisk.MEDIUM,
-                      lambda: self._launch("firefox"), category="app")
+                      self._launch_browser, category="app")
 
     @staticmethod
     def _pactl(*args: str) -> bool:
@@ -169,11 +182,36 @@ class DesktopActionLayer:
         return result.returncode == 0
 
     @staticmethod
-    def _launch(cmd: str) -> bool:
+    def _launch_terminal() -> bool:
+        """Launch the user's available terminal without assuming a specific one."""
+        candidates = ["xdg-terminal-exec", "foot", "kitty", "alacritty", "gnome-terminal", "xterm"]
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+        if "kde" in desktop or "plasma" in desktop:
+            candidates.insert(0, "konsole")
+
+        for candidate in dict.fromkeys(candidates):
+            executable = shutil.which(candidate)
+            if not executable:
+                continue
+            try:
+                subprocess.Popen(
+                    [executable],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except OSError:
+                logger.exception("Could not launch terminal candidate %s", candidate)
+        logger.warning("No supported terminal emulator was found")
+        return False
+
+    @staticmethod
+    def _launch_browser() -> bool:
+        """Open a blank tab in the user's configured default browser."""
         try:
-            subprocess.Popen([cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
-        except FileNotFoundError:
+            return bool(webbrowser.open("about:blank", new=2))
+        except Exception:
+            logger.exception("Could not open the default browser")
             return False
 
     def get_actions(self, category: str | None = None) -> list[Action]:

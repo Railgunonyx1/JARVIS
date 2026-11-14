@@ -20,7 +20,7 @@ import uuid
 from collections.abc import Callable
 from enum import StrEnum
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
 from app.desktop.actions import DesktopActionLayer
 from app.gestures.camera import Camera
@@ -243,8 +243,29 @@ class AppCoordinator(QObject):
         self._set_state(AppState.IDLE)
         logger.info("AppCoordinator started")
 
+    def shutdown_ui_resources(self) -> None:
+        """Release Qt-owned workspace widgets on their owning GUI thread.
+
+        Call this before moving the remaining blocking subsystem shutdown to
+        a worker thread. The workspace is lazy-created and may be absent.
+        """
+        if QThread.currentThread() != self.thread():
+            raise RuntimeError("Workspace widgets must be shut down on the GUI thread")
+        workspace = self._workspace
+        self._workspace = None
+        self._workspace_visible = False
+        if workspace is not None:
+            try:
+                workspace.shutdown()
+            except Exception:
+                logger.exception("Workspace shutdown failed")
+
     def shutdown(self) -> None:
-        """Stop all subsystems gracefully."""
+        """Stop non-UI subsystems gracefully.
+
+        Call shutdown_ui_resources() from the GUI thread before invoking this
+        method from a worker thread.
+        """
         self._running = False
         self._stop_gestures()
         if self._voice:
@@ -257,16 +278,22 @@ class AppCoordinator(QObject):
                     pass
             self._voice = None
         if self._workspace:
-            try:
-                self._workspace.shutdown()
-            except Exception:
-                pass
+            if QThread.currentThread() == self.thread():
+                # Preserve compatibility for direct GUI-thread callers.
+                self.shutdown_ui_resources()
+            else:
+                # Never call QWidget/QQuickWidget methods from a worker thread.
+                logger.error(
+                    "Workspace cleanup was not prepared on the GUI thread; "
+                    "leaving it for process teardown"
+                )
         if self._backend:
             try:
-                self._backend.stop()
+                if not self._backend.stop():
+                    logger.warning("Agent backend did not stop before its shutdown timeout")
             except Exception:
-                pass
-        logger.info("AppCoordinator shutdown")
+                logger.exception("Agent backend shutdown failed")
+        logger.info("AppCoordinator shutdown sequence finished")
 
     def _action_confirmation(
         self,
@@ -349,9 +376,9 @@ class AppCoordinator(QObject):
         if state == BackendState.ERROR:
             self._set_state(AppState.IDLE)
         elif state == BackendState.READY and self._pending_model:
-            # Apply the model that was requested before the backend existed.
-            self._backend.set_model(self._pending_model)
-            self._pending_model = ""
+            # Retain the pending selection if the loop is not ready to accept it.
+            if self._backend.set_model(self._pending_model):
+                self._pending_model = ""
 
     # ── Voice ───────────────────────────────────────────────────
     def toggle_voice(self) -> None:
@@ -375,10 +402,12 @@ class AppCoordinator(QObject):
             self._voice = None
 
     def set_model(self, model: str) -> None:
-        """Apply a model selection to the backend."""
-        if self._backend and model:
-            self._backend.set_model(model)
-        elif model:
+        """Apply a model selection or retain it until the backend is ready."""
+        if not model:
+            return
+        if self._backend and self._backend.set_model(model):
+            self._pending_model = ""
+        else:
             self._pending_model = model
 
     def stop_speaking(self) -> None:
@@ -456,29 +485,72 @@ class AppCoordinator(QObject):
         self._recognizer = None
         self._gesture_active = False
         self._gesture_state = False
-        # Stop tracker/camera without joining from tracker thread if possible
+
+        tracker_thread = getattr(tracker, "_thread", None) if tracker else None
+        camera_thread = getattr(camera, "_capture_thread", None) if camera else None
+
+        tracker_stopped = tracker is None
+        camera_stopped = camera is None
         try:
-            if tracker:
-                import threading
-                if threading.current_thread() is getattr(tracker, "_thread", None):
-                    try:
-                        from PySide6.QtCore import QTimer
-                        QTimer.singleShot(0, tracker.stop)
-                    except Exception:
-                        pass
-                else:
-                    tracker.stop()
+            if tracker is not None:
+                tracker_stopped = bool(tracker.stop())
+                tracker_thread = getattr(tracker, "_thread", tracker_thread)
+                if tracker_thread is not None:
+                    tracker_stopped = not tracker_thread.is_alive()
         except Exception:
-            pass
+            logger.exception("Failed to stop hand tracker")
+            tracker_stopped = False
+
         try:
-            if camera:
-                camera.stop()
+            if camera is not None:
+                camera_stopped = bool(camera.stop())
+                camera_thread = getattr(camera, "_capture_thread", camera_thread)
+                if camera_thread is not None:
+                    camera_stopped = not camera_thread.is_alive()
         except Exception:
-            pass
+            logger.exception("Failed to stop gesture camera")
+            camera_stopped = False
+
+        def _release_after_workers_exit() -> None:
+            # The camera must not be released while either worker can still
+            # access it. If a bounded join timed out, this watcher waits for
+            # actual thread termination before releasing the device.
+            for worker in (tracker_thread, camera_thread):
+                if (
+                    worker is not None
+                    and worker is not threading.current_thread()
+                    and worker.is_alive()
+                ):
+                    worker.join()
+            workers_alive = any(
+                worker is not None and worker.is_alive()
+                for worker in (tracker_thread, camera_thread)
+            )
+            if camera is not None and not workers_alive:
+                try:
+                    camera.tracker_exit_confirmed()
+                except Exception:
+                    logger.exception("Camera release failed after worker shutdown")
+            elif workers_alive:
+                logger.error("Gesture workers remain active; camera was not released")
+
+        if camera is not None:
+            if tracker_stopped and camera_stopped:
+                try:
+                    camera.tracker_exit_confirmed()
+                except Exception:
+                    logger.exception("Camera release failed after worker shutdown")
+            else:
+                threading.Thread(
+                    target=_release_after_workers_exit,
+                    name="jarvis-gesture-shutdown",
+                    daemon=True,
+                ).start()
+
         try:
             self._set_state(AppState.IDLE)
         except Exception:
-            pass
+            logger.exception("Failed to publish idle state after gesture shutdown")
 
     def _on_gesture(self, event: GestureEvent) -> None:
         if self._mapper:

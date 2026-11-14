@@ -6,37 +6,29 @@ import fcntl
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
 logger = logging.getLogger("jarvis.desktop.settings")
 
-# XDG-compatible configuration home. Falls back to JARVIS_DESKTOP_HOME or
-# ~/.jarvis-desktop. Kept for test compatibility.
+# The settings directory can be overridden by the installer or test harness.
+# Preserve the existing per-user default for compatibility with prior installs.
 HOME_ENV = "JARVIS_DESKTOP_HOME"
 DEFAULT_SETTINGS_DIR = Path.home() / ".jarvis-desktop"
+DEFAULT_SETTINGS_DIR_PATH = DEFAULT_SETTINGS_DIR
+DEFAULT_SETTINGS_FILE_PATH = DEFAULT_SETTINGS_DIR_PATH / "settings.json"
 
 # A schema version key that tolerates unknown future keys without crashing.
 SCHEMA_VERSION = "1.0"
 
-# Module-level attributes for test compatibility (monkeypatchable).
-# These are computed from __file__ so the module is importable standalone.
-# Derive JARVIS_DESKTOP_HOME from the settings file location.
-DEFAULT_SETTINGS_DIR = Path.home() / ".jarvis-desktop"
-
-# XDG-aware single source of truth: the settings file always lives directly
-# under JARVIS_DESKTOP_HOME, and the directory is derived from the file
-# itself so a fresh install never hits a missing-directory save failure.
-_SETTINGS_FILE_PARENT = Path(__file__).resolve().parent
-JARVIS_DESKTOP_HOME = _SETTINGS_FILE_PARENT
-DEFAULT_SETTINGS_FILE = Path(str(JARVIS_DESKTOP_HOME) + "/settings.json")
-
-# Module-level attributes for test compatibility (monkeypatchable).
-DEFAULT_SETTINGS_DIR_PATH = Path(str(DEFAULT_SETTINGS_DIR))
-DEFAULT_SETTINGS_FILE_PATH = DEFAULT_SETTINGS_DIR_PATH / "settings.json"
-
-SETTINGS_DIR = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_DIR_PATH)))
-SETTINGS_FILE = Path(os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_FILE_PATH)))
+# JARVIS_DESKTOP_HOME is a directory, never the settings file itself.
+JARVIS_DESKTOP_HOME = Path(
+    os.environ.get(HOME_ENV, str(DEFAULT_SETTINGS_DIR_PATH))
+).expanduser()
+SETTINGS_DIR = JARVIS_DESKTOP_HOME
+SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+DEFAULT_SETTINGS_FILE = DEFAULT_SETTINGS_FILE_PATH
 
 DEFAULTS = {
     "schema_version": SCHEMA_VERSION,
@@ -65,12 +57,13 @@ _PENDING_TMP_PREFIX = ".jarvis-settings-tmp"
 
 
 def _ensure_dir() -> Path:
-    """Ensure the settings directory exists, return the path."""
+    """Ensure the directory containing the active settings file exists."""
+    settings_dir = SETTINGS_FILE.parent
     try:
-        JARVIS_DESKTOP_HOME.mkdir(parents=True, exist_ok=True)
-        return JARVIS_DESKTOP_HOME
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        return settings_dir
     except OSError as e:
-        logger.error("Cannot create settings directory %s: %s", JARVIS_DESKTOP_HOME, e)
+        logger.error("Cannot create settings directory %s: %s", settings_dir, e)
         raise
 
 
@@ -129,27 +122,22 @@ def save(settings: dict) -> SettingsSaveResult:
     file is preserved. Uses a unique temp file in the same directory, fsync,
     and atomic replace.
     """
-    _ensure_dir()
     target = SETTINGS_FILE
-    # Unique temp file in the same directory for atomic replace
-    tmp = target.parent / f"{_PENDING_TMP_PREFIX}{os.getpid()}{target.suffix}"
-
+    tmp: Path | None = None
     try:
-        f = None
-        try:
-            f = open(tmp, "w", encoding="utf-8")
+        _ensure_dir()
+        # Unique same-directory staging prevents concurrent saves from
+        # clobbering one another's temporary file.
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=_PENDING_TMP_PREFIX,
+            suffix=target.suffix,
+            dir=str(target.parent),
+        )
+        tmp = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(json.dumps(settings, indent=2))
             f.flush()
-            try:
-                os.fsync(f.fileno())
-            except Exception:
-                pass
-        finally:
-            if f is not None:
-                try:
-                    f.close()
-                except Exception:
-                    pass
+            os.fsync(f.fileno())
 
         # Atomic replace — old file preserved if this fails.
         os.replace(tmp, target)
@@ -159,7 +147,7 @@ def save(settings: dict) -> SettingsSaveResult:
         logger.warning("Failed to save settings: %s", e)
         # Clean up temp file if it exists
         try:
-            if tmp.exists():
+            if tmp is not None and tmp.exists():
                 tmp.unlink()
         except Exception:
             pass
@@ -171,7 +159,7 @@ def save(settings: dict) -> SettingsSaveResult:
         logger.warning("Unexpected error saving settings: %s", e)
         # Clean up temp file if it exists
         try:
-            if tmp.exists():
+            if tmp is not None and tmp.exists():
                 tmp.unlink()
         except Exception:
             pass

@@ -8,14 +8,23 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PKG="$SCRIPT_DIR/kwin/jarvis-island"
 # Target the real user session, not sandbox-redirected XDG_* overrides.
 DEST="${KWIN_SCRIPT_DIR:-$HOME/.local/share/kwin/scripts}/jarvis-island"
-KWINRC="${KWINRC_PATH:-$HOME/.config/kwinrc}"
+# Resolve one absolute kwinrc for every backend. kwriteconfig6/5 interpret a
+# relative --file against $XDG_CONFIG_HOME rather than the working directory, so
+# a bare "kwinrc" silently diverged from KWINRC_PATH and from the python3 branch.
+# The default follows XDG_CONFIG_HOME too, because that is where KDE reads it.
+KWINRC="${KWINRC_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/kwinrc}"
+case "$KWINRC" in
+    /*) ;;
+    *) KWINRC="$(pwd)/$KWINRC" ;;
+esac
 KEY="jarvis-islandEnabled"
 
 set_kwin_key() {
+    mkdir -p "$(dirname "$KWINRC")"
     if command -v kwriteconfig6 >/dev/null 2>&1; then
-        kwriteconfig6 --file kwinrc --group Plugins --key "$KEY" "$1"
+        kwriteconfig6 --file "$KWINRC" --group Plugins --key "$KEY" "$1"
     elif command -v kwriteconfig5 >/dev/null 2>&1; then
-        kwriteconfig5 --file kwinrc --group Plugins --key "$KEY" "$1"
+        kwriteconfig5 --file "$KWINRC" --group Plugins --key "$KEY" "$1"
     elif command -v python3 >/dev/null 2>&1; then
         python3 - "$KWINRC" "$KEY" "$1" <<'PY'
 import sys
@@ -76,9 +85,23 @@ case "${1:-}" in
         ;;
 esac
 
+if [ ! -d "$PKG" ]; then
+    echo "error: KWin script payload missing: $PKG" >&2
+    exit 1
+fi
+
+# Stage beside the destination and rename, so a failed or partial copy can never
+# leave the previously installed script deleted.
 mkdir -p "$(dirname "$DEST")"
+STAGE="$DEST.new.$$"
+trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
+rm -rf "$STAGE"
+if ! cp -r "$PKG" "$STAGE"; then
+    echo "error: cannot stage KWin script from $PKG" >&2
+    exit 1
+fi
 rm -rf "$DEST"
-cp -r "$PKG" "$DEST"
+mv "$STAGE" "$DEST"
 set_kwin_key true
 reconfigure
 

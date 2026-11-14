@@ -122,7 +122,9 @@ class HandTracker:
                 min_detection_confidence=self._detection_confidence,
                 min_tracking_confidence=self._tracking_confidence,
             )
-            self._mp_owning_thread = threading.current_thread()
+            # The tracking worker becomes the sole owner of process/close
+            # operations once it starts.
+            self._mp_owning_thread = None
             self._running = True
             self._stop_event = threading.Event()
             self._thread = threading.Thread(
@@ -133,48 +135,48 @@ class HandTracker:
             return True
         except Exception as e:
             logger.error("Hand tracker start failed: %s", e)
+            mp_instance = self._mp
             self._mp = None
+            if mp_instance is not None:
+                try:
+                    mp_instance.close()
+                except Exception:
+                    logger.exception("Failed to close MediaPipe after tracker startup failure")
             self._running = False
             self._mp_owning_thread = None
             return False
 
-    def stop(self) -> None:
-        """Stop tracking and release resources.
+    def stop(self) -> bool:
+        """Request worker shutdown and report whether the worker has exited.
 
-        1. Request stop via the stop event (thread-safe, no race with loop check).
-        2. Wait for the worker thread to confirm it has exited (join with timeout).
-        3. Return immediately — the coordinator will call
-           camera.tracker_exit_confirmed() after this, telling the camera
-           it's safe to release hardware.
-        4. Idempotent: second call is a no-op.
-
-        This method does NOT close MediaPipe or signal the camera — the
-        coordinator handles those responsibilities after confirming worker
-        exit.
+        The worker owns and closes its MediaPipe resource in _track_loop's
+        finally block. The coordinator must not release the camera until this
+        method's worker has actually exited.
         """
-        if not self._running:
-            return
         self._running = False
         self._stop_event.set()
-        # Wait for worker thread to exit (it checks _stop_event each iteration)
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5.0)
-        # Worker thread has exited. Do NOT close MediaPipe or signal camera
-        # here — the coordinator owns _tracker_exit_confirmed and will call
-        # camera.tracker_exit_confirmed() at the appropriate time.
-        # Only clear refs safely.
-        self._mp_owning_thread = None
-        with self._lock:
-            self._hands = []
-        logger.info("Hand tracker stopped (worker exited)")
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            if thread is threading.current_thread():
+                return False
+            thread.join(timeout=5.0)
+        stopped = thread is None or not thread.is_alive()
+        if stopped:
+            with self._lock:
+                self._hands = []
+            logger.info("Hand tracker stopped (worker exit confirmed)")
+        else:
+            logger.warning("Hand tracker worker did not exit within the stop timeout")
+        return stopped
 
     def _track_loop(self) -> None:
         """Background tracking loop.
 
-        Checks _stop_event each iteration. Only the worker thread closes MediaPipe.
-        Camera release happens only after the worker exits (enforced by stop()).
-        Idempotent start/stop: rapid double activate/deactivate creates no leaks.
+        Checks _stop_event each iteration. The worker owns MediaPipe processing
+        and closes that resource in its finally block. Camera release happens
+        only after this worker exits.
         """
+        self._mp_owning_thread = threading.current_thread()
         try:
             while self._running:
                 # Check stop event first — if set, exit loop gracefully
@@ -225,12 +227,16 @@ class HandTracker:
                         break
                     time.sleep(0.05)
         finally:
-            # Worker thread exits here. MediaPipe close is handled by stop()
-            # to avoid double-close races. Just clear refs.
-            try:
-                pass  # _mp close is done in stop() only to avoid races
-            except Exception:
-                pass
+            # MediaPipe is owned by the tracking worker and must be closed
+            # there, after the final process() call has completed.
+            mp_instance = self._mp
+            self._mp = None
+            if mp_instance is not None:
+                try:
+                    mp_instance.close()
+                except Exception:
+                    logger.exception("Failed to close MediaPipe Hands")
+            self._mp_owning_thread = None
             with self._lock:
                 self._hands = []
 

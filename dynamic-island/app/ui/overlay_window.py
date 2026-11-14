@@ -22,6 +22,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QMutexLocker,
+    QEvent,
     QRect,
     Qt,
     QTimer,
@@ -181,6 +182,7 @@ class IslandWindow(QWidget):
 
     _approval_requested = Signal(str, object, str)
     _approval_finished = Signal(str)
+    _shutdown_finished = Signal()
 
     def __init__(self, controller=None) -> None:
         super().__init__()
@@ -192,11 +194,13 @@ class IslandWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._state = IslandState.IDLE
         self._panel = None
         self._controller = controller
         self._quitting = False
+        self._shutdown_thread: threading.Thread | None = None
         # Registry: approval_id -> ApprovalRecord, protects against stale events
         self._approval_registry: dict[str, ApprovalRecord] = {}
         self._approval_registry_mutex = QMutex()
@@ -227,6 +231,7 @@ class IslandWindow(QWidget):
         self._reposition()
         self._approval_requested.connect(self._show_approval)
         self._approval_finished.connect(self._on_approval_finished)
+        self._shutdown_finished.connect(self._finish_shutdown)
 
         app = QApplication.instance()
         if app is not None:
@@ -364,6 +369,7 @@ class IslandWindow(QWidget):
         if self._panel is None:
             from app.ui.conversation_panel import ConversationPanel
             self._panel = ConversationPanel()
+            self._panel.input_field.installEventFilter(self)
             self._panel.send_requested.connect(self._on_send)
             self._panel.mic_toggled.connect(self._on_mic)
             # Bind coordinator signals if available
@@ -665,7 +671,11 @@ class IslandWindow(QWidget):
     def expand(self) -> None:
         self._set_state(IslandState.EXPANDED)
         if self._panel is not None:
-            self._panel.input_field.setFocus()
+            # This method is reached from an explicit user click or keyboard
+            # action, so activating the window here is intentional. Hover
+            # expansion remains non-activating.
+            self.activateWindow()
+            self._panel.input_field.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def collapse(self) -> None:
         self._set_state(IslandState.IDLE)
@@ -677,14 +687,55 @@ class IslandWindow(QWidget):
         self.hide()
 
     def quit_application(self) -> None:
-        """Full shutdown: stop the runtime, then exit the process."""
+        """Shut down without blocking the Qt event loop on worker joins."""
+        if self._quitting:
+            return
         self._quitting = True
         self._deny_pending()
-        if self._controller and self._controller.coordinator is not None:
+        coordinator = (
+            self._controller.coordinator
+            if self._controller is not None
+            else None
+        )
+        if coordinator is None:
+            QApplication.quit()
+            return
+
+        # Workspace3D owns a QQuickWidget, so release it on the GUI thread
+        # before moving the blocking voice/camera/agent shutdown off-thread.
+        prepare_ui_shutdown = getattr(coordinator, "shutdown_ui_resources", None)
+        if callable(prepare_ui_shutdown):
             try:
-                self._controller.coordinator.shutdown()
-            except Exception as e:  # noqa: BLE001
-                logger.warning("Coordinator shutdown failed: %s", e)
+                prepare_ui_shutdown()
+            except Exception:
+                logger.exception("Failed to release GUI-owned workspace resources")
+
+        self.set_status("Shutting down", "#8E8E93")
+        self.setEnabled(False)
+
+        def _shutdown_worker() -> None:
+            try:
+                coordinator.shutdown()
+            except Exception:
+                logger.exception("Coordinator shutdown failed")
+            finally:
+                self._shutdown_finished.emit()
+
+        try:
+            self._shutdown_thread = threading.Thread(
+                target=_shutdown_worker,
+                name="jarvis-island-shutdown",
+                daemon=True,
+            )
+            self._shutdown_thread.start()
+        except Exception:
+            logger.exception("Could not start asynchronous shutdown worker")
+            self._shutdown_thread = None
+            self.setEnabled(True)
+            self._quitting = False
+
+    def _finish_shutdown(self) -> None:
+        """Called on the GUI thread after the shutdown worker returns."""
         QApplication.quit()
 
     def _on_view_changed(self, view) -> None:
@@ -742,6 +793,27 @@ class IslandWindow(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self._state is not IslandState.EXPANDED:
                 self.expand()
+
+    def eventFilter(self, watched, event) -> bool:
+        input_field = getattr(self._panel, "input_field", None)
+        if (
+            watched is input_field
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Escape
+            and self._state is IslandState.EXPANDED
+        ):
+            self.collapse()
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape and self._state is IslandState.EXPANDED:
+            self.collapse()
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu(self)

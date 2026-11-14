@@ -22,3 +22,72 @@ The UI depends on the integration layer. The integration layer may call the shar
 ## Startup contract
 
 The island must start without API keys, local model services, camera hardware or a 3D-capable GPU. Missing optional capabilities should produce a recoverable status, not prevent the compact island from appearing.
+
+
+## Dynamic Island core architecture decision — 2026-11-14
+
+### Decision
+
+Keep the production island on **PySide6 QWidget** during the core reliability phase. Do not migrate the production overlay to QML or a Plasma Plasmoid on the basis of benchmark claims that have not been reproduced on the target laptop.
+
+A separate, non-production prototype may compare:
+
+1. The current QWidget overlay.
+2. A QWidget host containing QQuickWidget.
+3. A dedicated QQuickWindow controlled by a Python QObject backend.
+
+The prototype must use equivalent visuals, states, input behaviour and animation timings. The result must be measured on the target Plasma 6 / Wayland machine before a rendering-stack migration is considered.
+
+### Evidence and corrections
+
+- The island UI is currently implemented in `dynamic-island/app/ui/overlay_window.py` (767 lines at this decision point), not the approximately 2,100 lines quoted in the earlier comparison.
+- `IslandController` is a QObject presentation adapter. It exposes an `IslandView` snapshot and Qt signals; it contains no agent execution or permission logic.
+- `JarvisBackend` owns the agent worker thread and asyncio loop. It communicates with the Qt application through signals.
+- `Workspace3D` already uses a lazily-created QQuickWidget for a separate 3D workspace. That is evidence of existing Qt Quick integration, not evidence that the island itself is QML.
+- QML's scene graph can use hardware-accelerated rendering, but GPU acceleration and lower memory use are not guaranteed for every workload or host. No valid target-hardware benchmark currently establishes a performance advantage over the QWidget overlay.
+- A Kirigami/Plasmoid compact/full representation is a Plasma applet pattern. It is not a drop-in implementation of a standalone always-on-top overlay.
+- QQuickWidget and QQuickWindow are different hosting architectures. QQuickWidget embeds Qt Quick in a QWidget and has an offscreen-rendering path; QQuickWindow is a native Qt Quick window and requires separate lifecycle, focus and platform-window handling. They must not be treated as interchangeable.
+
+### Stable boundaries
+
+- Python remains the application and integration backend.
+- `IslandController` remains the presentation-state adapter.
+- AgentLoop, JarvisBackend, coordinator, permissions, tools, memory, voice and gestures are not ported to QML.
+- The existing KWin script remains responsible for KDE Wayland placement.
+- The island must remain usable when AI providers, network access, camera hardware and optional 3D rendering are unavailable.
+- No Plasma Plasmoid migration is planned for this phase.
+
+### Core-phase lifecycle implementation
+
+The first lifecycle corrections are now implemented on `dynamic-island-core`:
+
+- `IslandWindow.quit_application()` starts coordinator shutdown on a dedicated worker so voice, camera and backend joins do not block the Qt event loop.
+- The QQuickWidget workspace is released through `shutdown_ui_resources()` on the GUI thread before worker shutdown begins. The coordinator enforces this thread-affinity contract and refuses to manipulate workspace widgets from a worker.
+- `JarvisBackend.stop()` returns a boolean and emits `shutdown_complete` only after the backend worker has actually exited. A timeout remains an observable STOPPING state.
+- Gesture shutdown checks both tracker and camera worker termination before releasing the camera. Timed-out workers are joined by a cleanup watcher.
+- Escape collapses the expanded island from the conversation input and returns focus to the island. Explicit expansion activates the window and focuses the input.
+- The idle-width tests now compare against the configured `_IDLE_W` constant rather than an unrelated hard-coded threshold.
+- Settings persistence now treats `JARVIS_DESKTOP_HOME` consistently as a directory, creates the actual settings-file parent, and uses unique same-directory temporary files for atomic concurrent saves.
+
+The source-level lifecycle and settings changes pass the repository CI suites. Physical KDE Wayland, camera-device and target-hardware validation remain separate acceptance checks.
+
+### Benchmark acceptance criteria
+
+A prototype comparison is valid only when all candidates use the same state transitions and visual workload. Record:
+
+- Startup-to-first-visible-frame time.
+- Idle and animated CPU usage.
+- Resident memory after warm-up.
+- Frame-time distribution during expand/collapse (not only average FPS).
+- Window positioning and resize behaviour under Plasma 6 / Wayland.
+- Pointer, keyboard and focus behaviour.
+- Clean shutdown time and surviving thread/process count.
+
+Do not use offscreen CI results as a substitute for target GPU/compositor measurements. Until these measurements exist, QWidget remains the production baseline.
+
+
+### Python compatibility and desktop-action portability
+
+CI now runs the complete quality gate on Python 3.11 and 3.14. Both versions pass. This covers the user's Python 3.14 runtime more directly than the previous Python-3.11-only workflow.
+
+The desktop action layer now resolves the installed terminal emulator and uses the system default browser. Its X11 `wmctrl` maximize/minimize arguments are corrected. Native Wayland window management remains a separate integration: the current `wmctrl` backend can only be relied on for X11/XWayland windows, not arbitrary native Wayland clients. A KWin-native implementation must be verified before claiming full Plasma Wayland window control.
