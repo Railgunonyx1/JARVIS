@@ -129,13 +129,14 @@ class JarvisBackend(QObject):
                 daemon=True,
             )
             worker = self._thread
-
-        try:
-            worker.start()
-        except Exception as exc:
-            self._set_state(BackendState.ERROR, error=exc)
-            self._started_event.set()
-            raise
+            try:
+                # Start while holding the state lock so stop() cannot observe
+                # an unstarted Thread and then race with worker.start().
+                worker.start()
+            except Exception as exc:
+                self._set_state(BackendState.ERROR, error=exc)
+                self._started_event.set()
+                raise
 
         if wait:
             self._wait_until_ready(timeout)
@@ -302,7 +303,7 @@ class JarvisBackend(QObject):
         except Exception:
             pass
 
-        if worker is not None and wait:
+        if worker is not None and worker.ident is not None and wait:
             worker.join(timeout=timeout)
 
         with self._state_lock:
