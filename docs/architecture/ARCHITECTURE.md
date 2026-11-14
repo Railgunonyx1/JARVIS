@@ -84,3 +84,10 @@ A prototype comparison is valid only when all candidates use the same state tran
 - Clean shutdown time and surviving thread/process count.
 
 Do not use offscreen CI results as a substitute for target GPU/compositor measurements. Until these measurements exist, QWidget remains the production baseline.
+
+
+### Python compatibility and desktop-action portability
+
+CI now runs the complete quality gate on Python 3.11 and 3.14. Both versions pass. This covers the user's Python 3.14 runtime more directly than the previous Python-3.11-only workflow.
+
+The desktop action layer now resolves the installed terminal emulator and uses the system default browser. Its X11 `wmctrl` maximize/minimize arguments are corrected. Native Wayland window management remains a separate integration: the current `wmctrl` backend can only be relied on for X11/XWayland windows, not arbitrary native Wayland clients. A KWin-native implementation must be verified before claiming full Plasma Wayland window control.
