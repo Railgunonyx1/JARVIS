@@ -161,10 +161,25 @@ The subsequent full CI run #280 passed:
 - Dynamic Island suite: 49 passed, 2 skipped.
 - Secret scan: clean.
 
-The latest full CI run #282, on commit `616e388e3dbb72d0456b0683402591502d1d013a`, also passed:
+The latest full CI run #284, on commit `5ccd4c27c3ba5b928647a4b8ac50c36568ec32b0`, passed:
 - Safety lint: pass.
 - Root suite: 1,058 passed, 9 skipped, 1 warning.
-- Dynamic Island suite: 50 passed, 2 skipped.
+- Dynamic Island suite: 53 passed, 2 skipped.
 - Secret scan: clean.
 
-Run #279 was cancelled by a subsequent branch update; it was not a test failure. The CI environment is Ubuntu, Python 3.11 and Qt offscreen. These runs verify source and automated tests, not live KWin placement, keyboard focus under Wayland, physical camera release or GPU performance.
+The dynamic suite now includes tests for coordinator camera-release ordering, delayed worker shutdown, backend completion-signal semantics, GUI-thread workspace cleanup, settings-directory resolution and concurrent settings saves. The CI environment is Ubuntu, Python 3.11 and Qt offscreen. These runs verify source and automated tests, not live KWin placement, keyboard focus under Wayland, physical camera release or GPU performance.
+
+
+## Settings persistence audit — 2026-11-14
+
+A source audit found that `JARVIS_DESKTOP_HOME` had inconsistent semantics: it was assigned to the source-code directory in one constant, then used as a file path in another. `_ensure_dir()` created that source directory rather than the parent of the active settings file. On a fresh installation this could leave `~/.jarvis-desktop` absent and make saves fail; when the environment override was set to a directory, the code attempted to replace that directory as though it were a file.
+
+The fix on `dynamic-island-core` establishes one contract:
+
+- `JARVIS_DESKTOP_HOME` is a directory override.
+- The settings file is always `SETTINGS_DIR / "settings.json"`.
+- The directory created by `_ensure_dir()` is derived from `SETTINGS_FILE.parent`, so tests and callers that override the file path remain isolated.
+- Atomic saves use unique same-directory temporary files, preventing concurrent saves from overwriting the same staging file.
+- The existing default location `~/.jarvis-desktop/settings.json` is preserved for compatibility.
+
+Regression tests cover the environment override, fresh default-directory creation and concurrent saves. CI run #284 passed these tests. The settings file path was not tested against the user's actual home directory; no local settings were read or modified.
