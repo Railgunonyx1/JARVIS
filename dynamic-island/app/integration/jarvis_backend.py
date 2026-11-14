@@ -229,36 +229,37 @@ class JarvisBackend(QObject):
 
     def _run_loop(self) -> None:
         """Worker thread entry: own asyncio event loop."""
-        startup_error: Exception | None = None
+        worker_error: Exception | None = None
+        loop = asyncio.new_event_loop()
+        with self._state_lock:
+            self._loop = loop
         try:
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-
+            asyncio.set_event_loop(loop)
             try:
-                self._loop.run_until_complete(self._main())
-            except Exception as e:
-                startup_error = e
+                loop.run_until_complete(self._main())
+            except Exception as exc:
+                worker_error = exc
                 logger.exception("Backend worker failed")
             finally:
                 try:
-                    self._loop.close()
+                    loop.close()
                 except Exception:
-                    pass
-                self._loop = None
+                    logger.exception("Could not close backend event loop")
+                with self._state_lock:
+                    if self._loop is loop:
+                        self._loop = None
+                asyncio.set_event_loop(None)
         finally:
-            pass
-
-        if startup_error is not None and not self._shutdown_event.is_set():
-            try:
-                self._set_state(BackendState.ERROR, error=startup_error)
-            except Exception:
-                logger.exception("Backend failed to report worker error")
-        elif self.state != BackendState.STOPPED:
-            try:
-                self._set_state(BackendState.STOPPED)
-            except Exception:
-                logger.exception("Backend failed to report stopped state")
-
+            if worker_error is not None and not self._shutdown_event.is_set():
+                try:
+                    self._set_state(BackendState.ERROR, error=worker_error)
+                except Exception:
+                    logger.exception("Backend failed to report worker error")
+            elif self.state != BackendState.STOPPED:
+                try:
+                    self._set_state(BackendState.STOPPED)
+                except Exception:
+                    logger.exception("Backend failed to report stopped state")
 
     def stop(self, wait: bool = True, timeout: float = 10.0) -> bool:
         """Stop the worker thread gracefully and report confirmed termination.
@@ -348,12 +349,14 @@ class JarvisBackend(QObject):
             # been requested while the module was being imported.
             if self._shutdown_event.is_set():
                 return
-            self._runtime = build_kernel(
+            runtime = build_kernel(
                 mode=self._mode,
                 max_iterations=self._max_iterations,
                 confirmation_handler=self._confirmation_handler,
             )
-            self._agent_loop = self._runtime.agent_loop
+            with self._state_lock:
+                self._runtime = runtime
+                self._agent_loop = runtime.agent_loop
 
             # A stop can arrive while build_kernel() is running. The finally
             # block below still closes the newly created runtime.
@@ -405,7 +408,8 @@ class JarvisBackend(QObject):
                         ):
                             self._set_state(BackendState.READY)
         finally:
-            runtime = self._runtime
+            with self._state_lock:
+                runtime = self._runtime
             try:
                 if runtime is not None:
                     close_kernel(runtime)
