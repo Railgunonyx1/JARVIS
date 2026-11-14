@@ -241,26 +241,90 @@ class TestCameraShutdownOrdering:
         assert tracker._thread.join_calls == [5.0]
 
     def test_coordinator_signals_camera_after_tracker_exit(self):
-        """Coordinator must call camera.tracker_exit_confirmed() after HandTracker.stop()."""
-        cam = MockCamera(device=0, width=160, height=120)
+        """Exercise the real coordinator path and verify cleanup ordering."""
+        from app.integration.coordinator import AppCoordinator
 
-        # Start camera
-        cam.start()
+        events = []
 
-        # Create tracker with camera as frame source
-        tracker = MockHandTracker(max_hands=1)
-        tracker.set_frame_source=lambda: cam.read()
-        tracker.start()
+        class OrderedTracker:
+            _thread = None
 
-        # Stop tracker - worker exits
-        tracker.stop()
+            def stop(self):
+                events.append("tracker.stop")
+                return True
 
-        # NOW call camera.tracker_exit_confirmed() - authorizes camera release
-        # Correct ordering: tracker exit first, then camera release
-        cam.tracker_exit_confirmed()
+        class OrderedCamera:
+            _capture_thread = None
 
-        # If we reach here without exception, ordering invariant is verified
-        assert cam._tracker_exit_confirmed_by_coordinator == True
+            def stop(self):
+                events.append("camera.stop")
+                return True
+
+            def tracker_exit_confirmed(self):
+                events.append("camera.release")
+
+        coordinator = AppCoordinator(mode="test")
+        coordinator._tracker = OrderedTracker()
+        coordinator._camera = OrderedCamera()
+
+        coordinator._stop_gestures()
+
+        assert events == ["tracker.stop", "camera.stop", "camera.release"]
+        assert coordinator._tracker is None
+        assert coordinator._camera is None
+
+    def test_coordinator_defers_camera_release_until_timed_out_workers_exit(self):
+        """A timed-out worker must not cause early camera release."""
+        import threading
+        from app.integration.coordinator import AppCoordinator
+
+        allow_exit = threading.Event()
+        released = threading.Event()
+
+        class DelayedThread:
+            def __init__(self):
+                self.alive = True
+
+            def join(self, timeout=None):
+                if timeout is None:
+                    allow_exit.wait(timeout=2.0)
+                    self.alive = False
+
+            def is_alive(self):
+                return self.alive
+
+        class DelayedTracker:
+            def __init__(self):
+                self._thread = DelayedThread()
+
+            def stop(self):
+                self._thread.join(timeout=5.0)
+                return False
+
+        class DelayedCamera:
+            def __init__(self):
+                self._capture_thread = DelayedThread()
+
+            def stop(self):
+                self._capture_thread.join(timeout=3.0)
+                return False
+
+            def tracker_exit_confirmed(self):
+                assert not tracker._thread.is_alive()
+                assert not self._capture_thread.is_alive()
+                released.set()
+
+        coordinator = AppCoordinator(mode="test")
+        tracker = DelayedTracker()
+        camera = DelayedCamera()
+        coordinator._tracker = tracker
+        coordinator._camera = camera
+
+        coordinator._stop_gestures()
+        assert not released.wait(timeout=0.05)
+
+        allow_exit.set()
+        assert released.wait(timeout=2.0)
 
     def test_idempotent_camera_stop(self):
         """Camera.stop() is idempotent - second call is no-op if already stopped."""
