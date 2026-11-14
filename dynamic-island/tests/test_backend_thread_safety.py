@@ -258,3 +258,26 @@ def test_event_loop_creation_failure_sets_backend_error(monkeypatch):
 
     assert backend.state is BackendState.ERROR
     assert str(backend.startup_error) == "event loop unavailable"
+
+
+
+def test_queued_request_can_be_cancelled_before_execution():
+    backend = JarvisBackend()
+    backend._state = BackendState.READY
+    cancelled = []
+    backend.request_cancelled.connect(cancelled.append)
+
+    request_id = backend.send_message("queued request")
+    assert request_id is not None
+
+    assert backend.cancel_request(request_id) is True
+    assert cancelled == [request_id]
+    assert request_id in backend._cancelled_request_ids
+    assert backend._input_queue.get_nowait() == (request_id, "queued request")
+
+
+def test_unknown_request_cannot_be_cancelled():
+    backend = JarvisBackend()
+    backend._state = BackendState.READY
+
+    assert backend.cancel_request(9999) is False
