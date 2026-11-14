@@ -91,3 +91,10 @@ Do not use offscreen CI results as a substitute for target GPU/compositor measur
 CI now runs the complete quality gate on Python 3.11 and 3.14. Both versions pass. This covers the user's Python 3.14 runtime more directly than the previous Python-3.11-only workflow.
 
 The desktop action layer now resolves the installed terminal emulator and uses the system default browser. Its X11 `wmctrl` maximize/minimize arguments are corrected. Native Wayland window management remains a separate integration: the current `wmctrl` backend can only be relied on for X11/XWayland windows, not arbitrary native Wayland clients. A KWin-native implementation must be verified before claiming full Plasma Wayland window control.
+
+
+### Agent backend and conversation controls
+
+The backend's thread-safe input queue is consumed through `asyncio.to_thread()`, not by blocking the asyncio event loop. Request IDs are committed only after successful queue insertion. Active tasks are cancelled on their owning loop; queued requests can be marked and skipped by exact ID. Model changes are scheduled on the agent loop while retaining synchronous completion semantics for the caller.
+
+The conversation panel sends on Enter exactly once and exposes a stop-response control while a request is active. The overlay tracks the active request ID and routes cancellation through the coordinator. A backend failure produces a user-visible terminal status instead of leaving the panel indefinitely in its running state.
