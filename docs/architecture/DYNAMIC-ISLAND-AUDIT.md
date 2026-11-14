@@ -183,3 +183,21 @@ The fix on `dynamic-island-core` establishes one contract:
 - The existing default location `~/.jarvis-desktop/settings.json` is preserved for compatibility.
 
 Regression tests cover the environment override, fresh default-directory creation and concurrent saves. CI run #284 passed these tests. The settings file path was not tested against the user's actual home directory; no local settings were read or modified.
+
+
+## Desktop action portability audit — 2026-11-14
+
+- Terminal launch no longer assumes `foot`; it prefers `konsole` in KDE sessions and otherwise searches supported installed terminal emulators.
+- Browser launch uses Python's system-default browser integration and opens a blank tab rather than assuming Firefox.
+- The `wmctrl` maximize/minimize invocations were using malformed argument sequences. They now use the documented `-b add,<state>` form and have regression tests.
+- `wmctrl` remains an X11/XWayland mechanism. The current target is KDE Plasma Wayland, so native Wayland window actions remain an explicit integration gap. No unsupported claim of full Wayland window management is made. A KWin scripting backend is the candidate, but it requires a tested command bridge before implementation.
+
+### Python compatibility CI
+
+Workflow `.github/workflows/ci.yml` now runs the same gate on Python 3.11 and 3.14.
+
+Run #289 passed on both:
+- Python 3.11: 1,058 root tests passed, 9 skipped; 61 Dynamic Island tests passed, 2 skipped; lint and secret scan clean.
+- Python 3.14: 1,058 root tests passed, 9 skipped; 61 Dynamic Island tests passed, 2 skipped; lint and secret scan clean.
+
+This confirms test-suite compatibility on both Python versions in Ubuntu/Qt-offscreen CI. It does not establish identical performance or live desktop behaviour on the target laptop.
