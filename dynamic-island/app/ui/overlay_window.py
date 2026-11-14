@@ -22,6 +22,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QMutexLocker,
+    QEvent,
     QRect,
     Qt,
     QTimer,
@@ -192,6 +193,7 @@ class IslandWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._state = IslandState.IDLE
         self._panel = None
@@ -364,6 +366,7 @@ class IslandWindow(QWidget):
         if self._panel is None:
             from app.ui.conversation_panel import ConversationPanel
             self._panel = ConversationPanel()
+            self._panel.input_field.installEventFilter(self)
             self._panel.send_requested.connect(self._on_send)
             self._panel.mic_toggled.connect(self._on_mic)
             # Bind coordinator signals if available
@@ -665,7 +668,11 @@ class IslandWindow(QWidget):
     def expand(self) -> None:
         self._set_state(IslandState.EXPANDED)
         if self._panel is not None:
-            self._panel.input_field.setFocus()
+            # This method is reached from an explicit user click or keyboard
+            # action, so activating the window here is intentional. Hover
+            # expansion remains non-activating.
+            self.activateWindow()
+            self._panel.input_field.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def collapse(self) -> None:
         self._set_state(IslandState.IDLE)
@@ -742,6 +749,27 @@ class IslandWindow(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             if self._state is not IslandState.EXPANDED:
                 self.expand()
+
+    def eventFilter(self, watched, event) -> bool:
+        input_field = getattr(self._panel, "input_field", None)
+        if (
+            watched is input_field
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Escape
+            and self._state is IslandState.EXPANDED
+        ):
+            self.collapse()
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape and self._state is IslandState.EXPANDED:
+            self.collapse()
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def contextMenuEvent(self, event) -> None:
         menu = QMenu(self)
