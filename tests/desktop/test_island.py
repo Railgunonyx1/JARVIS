@@ -177,6 +177,9 @@ def test_island_hide_and_quit_lifecycle(qapp):
             called.set()
 
     island._controller = type("C", (), {"coordinator": _FakeCoord()})()
+    # Do not request QApplication.quit() from a unit test; this test validates
+    # the worker lifecycle, not process-wide event-loop termination.
+    island._shutdown_finished.disconnect(island._finish_shutdown)
     island.quit_application()
     assert called.wait(timeout=1.0)
     assert island._shutdown_thread is not None
