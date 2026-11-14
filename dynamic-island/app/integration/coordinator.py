@@ -243,8 +243,27 @@ class AppCoordinator(QObject):
         self._set_state(AppState.IDLE)
         logger.info("AppCoordinator started")
 
+    def shutdown_ui_resources(self) -> None:
+        """Release Qt-owned workspace widgets on the GUI thread.
+
+        Call this before moving the remaining blocking subsystem shutdown to
+        a worker thread. The workspace is lazy-created and may be absent.
+        """
+        workspace = self._workspace
+        self._workspace = None
+        self._workspace_visible = False
+        if workspace is not None:
+            try:
+                workspace.shutdown()
+            except Exception:
+                logger.exception("Workspace shutdown failed")
+
     def shutdown(self) -> None:
-        """Stop all subsystems gracefully."""
+        """Stop non-UI subsystems gracefully.
+
+        Call shutdown_ui_resources() from the GUI thread before invoking this
+        method from a worker thread.
+        """
         self._running = False
         self._stop_gestures()
         if self._voice:
@@ -257,15 +276,15 @@ class AppCoordinator(QObject):
                     pass
             self._voice = None
         if self._workspace:
-            try:
-                self._workspace.shutdown()
-            except Exception:
-                pass
+            # Preserve compatibility for callers that still invoke shutdown()
+            # directly from the GUI thread without a prior UI-resource phase.
+            self.shutdown_ui_resources()
         if self._backend:
             try:
-                self._backend.stop()
+                if not self._backend.stop():
+                    logger.warning("Agent backend did not stop before its shutdown timeout")
             except Exception:
-                pass
+                logger.exception("Agent backend shutdown failed")
         logger.info("AppCoordinator shutdown")
 
     def _action_confirmation(
