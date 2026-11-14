@@ -201,3 +201,21 @@ Run #289 passed on both:
 - Python 3.14: 1,058 root tests passed, 9 skipped; 61 Dynamic Island tests passed, 2 skipped; lint and secret scan clean.
 
 This confirms test-suite compatibility on both Python versions in Ubuntu/Qt-offscreen CI. It does not establish identical performance or live desktop behaviour on the target laptop.
+
+
+## Agent backend and conversation-panel reliability — 2026-11-14
+
+The backend audit found and corrected the following defects:
+
+- Blocking `queue.Queue.get()` inside the asyncio coroutine prevented idle-loop callbacks from running. The consumer now awaits `asyncio.to_thread(queue.get)`, allowing model changes and cancellation callbacks to execute while idle.
+- A rejected message previously consumed a request ID. Queue insertion and ID commitment now occur under the same lock; a full queue leaves the counter unchanged.
+- Task cancellation is scheduled only through the owning event loop. No fallback calls `Task.cancel()` from the caller thread.
+- Shutdown requested during kernel construction is checked before the backend enters READY, and the partially created runtime is still closed.
+- Worker startup is serialized with stop requests; stale state is cleared before restart, and a worker that has not terminated cannot be replaced.
+- Runtime and event-loop references are published and cleared under the state lock.
+- Model changes are applied on the agent loop. The synchronous API waits for completion and returns failure if scheduling or execution fails.
+- Cancellation now covers both active tasks and queued request IDs. A queued cancellation emits a dedicated signal and the consumer skips that exact request.
+- The conversation panel's Enter handler was connected twice and used an empty-string default that prevented Return from reading the input field. It now connects once and sends the field contents.
+- The unused cancellation signal is wired to a stop-response button. The overlay tracks the active request ID and restores input after a final response or backend failure.
+
+Regression tests were added for queue saturation, request cancellation, startup/shutdown races, loop creation failure, model selection, terminal/browser selection, window command syntax, Enter-to-send and cancellation controls. The latest complete CI result for these changes is pending; earlier Python 3.11/3.14 matrix results do not cover these later commits.
