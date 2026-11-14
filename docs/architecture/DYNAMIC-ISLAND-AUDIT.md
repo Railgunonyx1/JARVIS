@@ -129,3 +129,28 @@ Not performed, by design: writing the real `kwinrc`, calling `reconfigure` again
 ### Intermittent Qt teardown abort (observed, not reproducible)
 
 One `python -m pytest dynamic-island/tests/ -q` run terminated with signal 6 (`rc=134`, Python fatal abort after the extension modules `shiboken6`, `PySide6.QtCore/QtGui/QtWidgets/QtTest`, `numpy`, `psutil` were loaded) immediately after the main suite had finished. Four consecutive re-runs of the same command passed with `46 passed, 1 skipped`. It occurred on a documentation-only change, so the two events are unrelated, but a teardown-time abort on a headless Qt platform is exactly the kind of instability the reliable-startup/shutdown work must reproduce deliberately rather than inherit.
+
+
+## Dynamic Island core phase — gesture shutdown audit (2026-11-14)
+
+A read-only source audit found a gap in the camera/tracker shutdown contract:
+
+- `HandTracker.stop()` waited up to five seconds but did not check whether the worker was still alive before logging that it had stopped.
+- `Camera.stop()` waited up to three seconds but did not report whether the capture worker had actually exited.
+- `AppCoordinator._stop_gestures()` stopped the tracker and camera but never called `camera.tracker_exit_confirmed()`, despite that being the documented release gate in both classes.
+- The previous test named `test_coordinator_signals_camera_after_tracker_exit` manually called `camera.tracker_exit_confirmed()`; it did not invoke `AppCoordinator`. It therefore did not test the coordinator behaviour its name claimed to cover.
+- `HandTracker._track_loop()` had a placeholder in its `finally` block where the comment said MediaPipe was closed, but no close call existed.
+
+### Correction committed on `dynamic-island-core`
+
+- `HandTracker.stop()` and `Camera.stop()` now return whether their respective worker has actually exited. Repeated stop calls still check/join an existing worker.
+- MediaPipe is closed from the tracking worker's `finally` block, after its final processing call; startup-failure cleanup also closes an already-created instance.
+- The coordinator now releases the camera only after both tracker and capture workers have exited. If a bounded join times out, a daemon cleanup watcher waits for actual termination before calling `tracker_exit_confirmed()`.
+- `Camera.tracker_exit_confirmed()` rejects release while its capture worker is still alive.
+- The coordinator test now exercises the real `AppCoordinator._stop_gestures()` path, and a delayed-worker test verifies that a timeout cannot cause early release.
+
+This is source-level and CI-verifiable lifecycle work. It does not replace physical camera validation on the target laptop. A capture driver that blocks indefinitely may keep the cleanup watcher waiting; in that case the implementation deliberately prefers not to release a device still potentially in use.
+
+### CI evidence
+
+The architecture-only PR is #5. The core-phase CI run for the current implementation commit is run `43582519015` (run #273); it was in progress at the time this note was written. No pass is claimed until its final conclusion and job logs are inspected.
