@@ -364,13 +364,22 @@ class JarvisBackend(QObject):
                 request_id, text = item
                 if not text or not str(text).strip():
                     continue
-                task = self._loop.create_task(self._run_agent_with_id(text, request_id))
                 with self._state_lock:
+                    # Re-check after queue.get(): stop() may have changed the
+                    # state while this worker was waiting for an item.
+                    if (
+                        self._shutdown_event.is_set()
+                        or self._state not in (BackendState.READY, BackendState.RUNNING)
+                    ):
+                        break
+                    task = self._loop.create_task(
+                        self._run_agent_with_id(text, request_id)
+                    )
                     self._current_task = task
                     self._current_request_id = request_id
                     if isinstance(request_id, int):
                         self._tasks_by_id[request_id] = task
-                self._set_state(BackendState.RUNNING)
+                    self._set_state(BackendState.RUNNING)
                 try:
                     await task
                 finally:
@@ -379,8 +388,11 @@ class JarvisBackend(QObject):
                         self._current_request_id = None
                         if isinstance(request_id, int):
                             self._tasks_by_id.pop(request_id, None)
-                    if not self._shutdown_event.is_set():
-                        self._set_state(BackendState.READY)
+                        if (
+                            not self._shutdown_event.is_set()
+                            and self._state != BackendState.STOPPING
+                        ):
+                            self._set_state(BackendState.READY)
         finally:
             runtime = self._runtime
             try:
