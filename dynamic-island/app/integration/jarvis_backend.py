@@ -291,7 +291,7 @@ class JarvisBackend(QObject):
         if task is not None and loop is not None and not task.done():
             try:
                 loop.call_soon_threadsafe(task.cancel)
-            except RuntimeError:
+            except Exception:
                 # Do not call Task.cancel() directly from this thread. The
                 # shutdown event and queue wake-up still let the worker exit
                 # once its current operation returns.
@@ -303,6 +303,9 @@ class JarvisBackend(QObject):
         except Exception:
             pass
 
+        if worker is threading.current_thread():
+            logger.warning("Backend stop was requested from its own worker thread")
+            return False
         if worker is not None and worker.ident is not None and wait:
             worker.join(timeout=timeout)
 
@@ -325,6 +328,8 @@ class JarvisBackend(QObject):
 
     async def _main(self) -> None:
         """Build the agent through the canonical composition root."""
+        if self._shutdown_event.is_set():
+            return
         from runtime.kernel import build_kernel, close_kernel
 
         self._runtime = build_kernel(
