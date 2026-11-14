@@ -389,6 +389,12 @@ class AppCoordinator(QObject):
     def _on_backend_state(self, state: BackendState) -> None:
         """React to backend lifecycle changes."""
         if state == BackendState.ERROR:
+            self._buffer = ""
+            self._voice_turn_active = False
+            self.chat_message.emit(
+                "jarvis",
+                "JARVIS backend stopped unexpectedly. Check the application logs.",
+            )
             self._set_state(AppState.IDLE)
         elif state == BackendState.READY and self._pending_model:
             # Retain the pending selection if the loop is not ready to accept it.
